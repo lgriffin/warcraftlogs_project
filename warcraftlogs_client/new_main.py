@@ -87,13 +87,20 @@ def run_full_report():
                 for spell_name, count in dispels.items():
                     print(f"  - {spell_name}: {count} casts")
 
+            resources = SpellBreakdown.get_resources_used(cast_entries)
+            if resources:
+                print(f"\n🔋 Resources Used:")
+                for r_name, count in resources.items():
+                    print(f"  - {r_name}: {count}")
+
             summary.append({
                 "name": name,
                 "healing": total_healing,
                 "overhealing": total_overhealing,
                 "spells": per_character_spells,
                 "dispels": dispels,
-                "fear_ward": fear_ward["casts"] if fear_ward else 0
+                "fear_ward": fear_ward["casts"] if fear_ward else 0,
+                "resources": resources
             })
 
         except Exception as e:
@@ -116,7 +123,7 @@ def new_table_view(summary, spell_names):
     header = (
         f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
         "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-        f"{'Dispel Magic':>16} {'Abolish Disease':>18} {'Fear Ward':>12}"
+        f"{'Dispel Magic':>16} {'Abolish Disease':>18} {'Fear Ward':>12} {'Restore Mana':>16} {'Dark Rune':>12}"
     )
     print(header)
     print("-" * len(header))
@@ -128,10 +135,12 @@ def new_table_view(summary, spell_names):
         dispel_magic = row["dispels"].get("Dispel Magic", 0)
         abolish_disease = row["dispels"].get("Abolish Disease", 0)
         fear_ward = row["fear_ward"]
+        restore_mana = row["resources"].get("Major Mana Potion", 0)
+        dark_rune = row["resources"].get("Dark Rune", 0)
 
         print(
             f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
-            f"{spell_counts}{dispel_magic:>16}{abolish_disease:>18}{fear_ward:>12}"
+            f"{spell_counts}{dispel_magic:>16}{abolish_disease:>18}{fear_ward:>12}{restore_mana:>16}{dark_rune:>12}"
         )
 
 if __name__ == "__main__":

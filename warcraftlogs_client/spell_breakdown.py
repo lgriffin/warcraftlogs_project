@@ -54,7 +54,7 @@ class SpellBreakdown:
             canonical_guid = spell_id_aliases.get(guid, guid)
 
             # Debug print
-            print(f"🔍 DEBUG ENTRY: GUID={guid}, Name={name}, Canonical={canonical_guid}, HitCount={entry.get('hitCount')}, Total={entry.get('total')}")
+           # print(f"🔍 DEBUG ENTRY: GUID={guid}, Name={name}, Canonical={canonical_guid}, HitCount={entry.get('hitCount')}, Total={entry.get('total')}")
 
             casts = entry.get("hitCount")
             if casts is None:
@@ -71,6 +71,20 @@ class SpellBreakdown:
         id_to_name[15290] = "Vampiric Embrace"
 
         return id_to_name, id_to_casts, entries
+    @staticmethod
+    def get_resources_used(cast_entries):
+        resources = {
+            17531: "Major Mana Potion",  # Major Mana Potion
+            27869: "Dark Rune"
+        }
+
+        used = {}
+        for entry in cast_entries:
+            spell_id = entry.get("guid")
+            if spell_id in resources:
+                used[resources[spell_id]] = entry.get("hitCount") or entry.get("total", 0)
+
+        return used
 
     @staticmethod
     def get_fear_ward_usage(cast_entries):
