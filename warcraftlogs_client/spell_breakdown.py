@@ -49,6 +49,7 @@ class SpellBreakdown:
         id_to_name[27805] = "Holy Nova"
         id_to_name[15290] = "Vampiric Embrace"
 
+        
         return id_to_name, id_to_casts, entries
     
     @staticmethod

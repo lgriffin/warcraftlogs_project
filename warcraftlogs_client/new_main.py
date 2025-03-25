@@ -42,6 +42,7 @@ def run_full_report():
     }
 
     summary = []
+    all_spell_names = set()
 
     for name, source_id in name_to_id.items():
         print(f"\n============================")
@@ -59,16 +60,18 @@ def run_full_report():
             spell_map, spell_casts, cast_entries = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
             spell_totals = SpellBreakdown.calculate(healing_events)
 
-            # Filter out spells that contributed no healing
+            # Filter out spells with no healing
             spell_totals = {k: v for k, v in spell_totals.items() if v > 0}
 
-            # Print individual breakdown
             print(f"\n{name}'s Spell Healing Breakdown")
             print(f"{'Spell':<30} {'Healing':>15} {'Casts':>10}")
             print("-" * 60)
+            per_character_spells = {}
             for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
-                spell_name = spell_map.get(spell_id, f"(ID {spell_id})")
+                spell_name = str(spell_map.get(spell_id, f"(ID {spell_id})"))
                 casts = spell_casts.get(spell_id, 0)
+                all_spell_names.add(spell_name)
+                per_character_spells[spell_name] = casts
                 print(f"{spell_name:<30} {amount:>15,} {casts:>10}")
 
             print(f"\n✅ Total Healing: {total_healing:,}")
@@ -84,11 +87,11 @@ def run_full_report():
                 for spell_name, count in dispels.items():
                     print(f"  - {spell_name}: {count} casts")
 
-            # Collect summary
             summary.append({
                 "name": name,
                 "healing": total_healing,
                 "overhealing": total_overhealing,
+                "spells": per_character_spells,
                 "dispels": dispels,
                 "fear_ward": fear_ward["casts"] if fear_ward else 0
             })
@@ -97,7 +100,7 @@ def run_full_report():
             print(f"❌ Error processing {name}: {e}")
 
     if USE_NEW_VIEW:
-        new_table_view(summary)
+        new_table_view(summary, sorted(all_spell_names))
     else:
         old_table_view(summary)
 
@@ -108,17 +111,27 @@ def old_table_view(summary):
     for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
         print(f"{row['name']:<20} {row['healing']:>15,} {row['overhealing']:>15,}")
 
-def new_table_view(summary):
+def new_table_view(summary, spell_names):
     print("\n=== Final Summary Table ===")
-    print(f"{'Character':<15} {'Healing':>12} {'Overheal':>12} {'Dispel Magic':>15} {'Abolish Disease':>18} {'Fear Ward':>12}")
-    print("-" * 85)
+    header = (
+        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
+        "".join(f"{spell[:14]:>16}" for spell in spell_names) +
+        f"{'Dispel Magic':>16} {'Abolish Disease':>18} {'Fear Ward':>12}"
+    )
+    print(header)
+    print("-" * len(header))
+
     for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
+        spell_counts = "".join(
+            f"{row['spells'].get(spell, 0):>16}" for spell in spell_names
+        )
         dispel_magic = row["dispels"].get("Dispel Magic", 0)
         abolish_disease = row["dispels"].get("Abolish Disease", 0)
         fear_ward = row["fear_ward"]
+
         print(
             f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
-            f"{dispel_magic:>15} {abolish_disease:>18} {fear_ward:>12}"
+            f"{spell_counts}{dispel_magic:>16}{abolish_disease:>18}{fear_ward:>12}"
         )
 
 if __name__ == "__main__":
