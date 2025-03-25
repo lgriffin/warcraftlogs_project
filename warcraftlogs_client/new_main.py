@@ -1,0 +1,125 @@
+from .auth import TokenManager
+from .client import WarcraftLogsClient, get_healing_data
+from .characters import Characters
+from .loader import load_config
+from .spell_breakdown import SpellBreakdown
+from .healing import OverallHealing
+
+# Toggle view type
+USE_NEW_VIEW = True
+
+def get_master_data(client, report_id):
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          masterData {{
+            actors {{
+              id
+              name
+            }}
+          }}
+        }}
+      }}
+    }}
+    """
+    result = client.run_query(query)
+    return result["data"]["reportData"]["report"]["masterData"]["actors"]
+
+def run_full_report():
+    config = load_config()
+    report_id = config["report_id"]
+
+    token_mgr = TokenManager(config["client_id"], config["client_secret"])
+    client = WarcraftLogsClient(token_mgr)
+
+    characters = Characters("characters.json")
+    master_actors = get_master_data(client, report_id)
+    name_to_id = {
+        actor["name"]: actor["id"]
+        for actor in master_actors
+        if actor["name"] in characters.character_names
+    }
+
+    summary = []
+
+    for name, source_id in name_to_id.items():
+        print(f"\n============================")
+        print(f"📊 Spell Breakdown for {name}")
+        print(f"============================")
+
+        try:
+            healing_data = get_healing_data(client, report_id, source_id)
+            healing_events = healing_data["data"]["reportData"]["report"]["events"]["data"]
+
+            print(f"Total healing events received: {len(healing_events)}")
+
+            total_healing, total_overhealing = OverallHealing.calculate(healing_events)
+
+            spell_map, spell_casts, cast_entries = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+            spell_totals = SpellBreakdown.calculate(healing_events)
+
+            # Filter out spells that contributed no healing
+            spell_totals = {k: v for k, v in spell_totals.items() if v > 0}
+
+            # Print individual breakdown
+            print(f"\n{name}'s Spell Healing Breakdown")
+            print(f"{'Spell':<30} {'Healing':>15} {'Casts':>10}")
+            print("-" * 60)
+            for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
+                spell_name = spell_map.get(spell_id, f"(ID {spell_id})")
+                casts = spell_casts.get(spell_id, 0)
+                print(f"{spell_name:<30} {amount:>15,} {casts:>10}")
+
+            print(f"\n✅ Total Healing: {total_healing:,}")
+            print(f"💤 Total Overhealing: {total_overhealing:,}")
+
+            fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
+            if fear_ward and fear_ward["casts"] > 0:
+                print(f"\n🛡️  Fear Ward Casts: {fear_ward['casts']}")
+
+            dispels = SpellBreakdown.calculate_dispels(cast_entries)
+            if any(dispels.values()):
+                print(f"\n🧹 Dispels:")
+                for spell_name, count in dispels.items():
+                    print(f"  - {spell_name}: {count} casts")
+
+            # Collect summary
+            summary.append({
+                "name": name,
+                "healing": total_healing,
+                "overhealing": total_overhealing,
+                "dispels": dispels,
+                "fear_ward": fear_ward["casts"] if fear_ward else 0
+            })
+
+        except Exception as e:
+            print(f"❌ Error processing {name}: {e}")
+
+    if USE_NEW_VIEW:
+        new_table_view(summary)
+    else:
+        old_table_view(summary)
+
+def old_table_view(summary):
+    print("\n=== Summary Table ===")
+    print(f"{'Character':<20} {'Total Healing':>15} {'Overhealing':>15}")
+    print("-" * 55)
+    for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
+        print(f"{row['name']:<20} {row['healing']:>15,} {row['overhealing']:>15,}")
+
+def new_table_view(summary):
+    print("\n=== Final Summary Table ===")
+    print(f"{'Character':<15} {'Healing':>12} {'Overheal':>12} {'Dispel Magic':>15} {'Abolish Disease':>18} {'Fear Ward':>12}")
+    print("-" * 85)
+    for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
+        dispel_magic = row["dispels"].get("Dispel Magic", 0)
+        abolish_disease = row["dispels"].get("Abolish Disease", 0)
+        fear_ward = row["fear_ward"]
+        print(
+            f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
+            f"{dispel_magic:>15} {abolish_disease:>18} {fear_ward:>12}"
+        )
+
+if __name__ == "__main__":
+    run_full_report()
