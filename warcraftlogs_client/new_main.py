@@ -70,9 +70,14 @@ def run_full_report():
             for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
                 spell_name = str(spell_map.get(spell_id, f"(ID {spell_id})"))
                 casts = spell_casts.get(spell_id, 0)
+
+                # Special case for Fire Protection (ID 17543) — show healing, but omit casts
+                cast_display = "-" if spell_id == 17543 and casts == 0 else casts
+
                 all_spell_names.add(spell_name)
                 per_character_spells[spell_name] = casts
-                print(f"{spell_name:<30} {amount:>15,} {casts:>10}")
+                print(f"{spell_name:<30} {amount:>15,} {cast_display:>10}")
+
 
             print(f"\n✅ Total Healing: {total_healing:,}")
             print(f"💤 Total Overhealing: {total_overhealing:,}")
@@ -92,6 +97,11 @@ def run_full_report():
                 print(f"\n🔋 Resources Used:")
                 for r_name, count in resources.items():
                     print(f"  - {r_name}: {count}")
+            # Build healing_by_name: spell name -> healing amount
+            healing_by_name = {
+                str(spell_map.get(spell_id, f"(ID {spell_id})")): amount
+                for spell_id, amount in spell_totals.items()
+            }
 
             summary.append({
                 "name": name,
@@ -100,7 +110,8 @@ def run_full_report():
                 "spells": per_character_spells,
                 "dispels": dispels,
                 "fear_ward": fear_ward["casts"] if fear_ward else 0,
-                "resources": resources
+                "resources": resources,
+                "healing_spells": healing_by_name,
             })
 
         except Exception as e:
@@ -129,9 +140,15 @@ def new_table_view(summary, spell_names):
     print("-" * len(header))
 
     for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
-        spell_counts = "".join(
-            f"{row['spells'].get(spell, 0):>16}" for spell in spell_names
-        )
+        spell_counts = ""
+        for spell in spell_names:
+            if spell == "Fire Protection":
+                healing = row.get("healing_spells", {}).get("Fire Protection", 0)
+                spell_counts += f"{healing:>16,}"
+            else:
+                casts = row["spells"].get(spell, 0)
+                spell_counts += f"{casts:>16}"
+
         dispel_magic = row["dispels"].get("Dispel Magic", 0)
         abolish_disease = row["dispels"].get("Abolish Disease", 0)
         fear_ward = row["fear_ward"]
