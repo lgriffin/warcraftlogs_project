@@ -29,36 +29,56 @@ class SpellBreakdown:
         }}
         """
         result = client.run_query(query)
-
         raw_table = result["data"]["reportData"]["report"]["table"]
-        entries = raw_table.get("data", {}).get("entries", [])
+
+        # Handle both formats
+        entries = []
+        if isinstance(raw_table, dict):
+            if "data" in raw_table and "entries" in raw_table["data"]:
+                entries = raw_table["data"]["entries"]
+            elif "entries" in raw_table:
+                entries = raw_table["entries"]
 
         id_to_name = {}
         id_to_casts = {}
 
+        # Aliases: maps alternate spell IDs to canonical spell IDs (usually the one used in healing events)
+        spell_id_aliases = {
+            27801: 27805,  # Holy Nova rank vs base ID
+            # Add more if needed
+        }
+
         for entry in entries:
             guid = entry.get("guid")
             name = entry.get("name")
-            casts = entry.get("total")  # Total number of times cast (usually hitCount)
+            canonical_guid = spell_id_aliases.get(guid, guid)
 
-            if guid and name:
-                id_to_name[guid] = name
-                id_to_casts[guid] = casts
-            # Manually patch missing spell names (if not provided by the API)
+            # Debug print
+            print(f"🔍 DEBUG ENTRY: GUID={guid}, Name={name}, Canonical={canonical_guid}, HitCount={entry.get('hitCount')}, Total={entry.get('total')}")
+
+            casts = entry.get("hitCount")
+            if casts is None:
+                casts = entry.get("total", 0)
+
+            if canonical_guid and name:
+                # Ensure name is attached to canonical ID
+                id_to_name[canonical_guid] = name
+                id_to_casts[canonical_guid] = id_to_casts.get(canonical_guid, 0) + casts
+
+        # Manually patch known IDs (in case they were never found in the table)
         id_to_name[17543] = "Fire Protection"
         id_to_name[27805] = "Holy Nova"
         id_to_name[15290] = "Vampiric Embrace"
 
-        
         return id_to_name, id_to_casts, entries
-    
+
     @staticmethod
     def get_fear_ward_usage(cast_entries):
         for entry in cast_entries:
             if entry.get("guid") == 6346:
                 return {
                     "spell": "Fear Ward",
-                    "casts": entry.get("total", 0)
+                    "casts": entry.get("total") or entry.get("hitCount", 0)
                 }
         return None
 
@@ -73,12 +93,6 @@ class SpellBreakdown:
         for entry in cast_entries:
             spell_id = entry.get("guid")
             if spell_id in dispel_ids:
-                dispels[dispel_ids[spell_id]] = entry.get("total", 0)
+                dispels[dispel_ids[spell_id]] = entry.get("total") or entry.get("hitCount", 0)
 
         return dispels
-
-
-
-
-
-
