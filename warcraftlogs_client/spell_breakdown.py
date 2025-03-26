@@ -10,6 +10,10 @@ class SpellBreakdown:
             ability_id = event.get("abilityGameID")
             amount = event.get("amount")
 
+            # Exclude unwanted abilities
+            if ability_id == 20343:
+                continue
+
             if ability_id is not None and amount is not None:
                 spells[ability_id] += amount
             else:
@@ -23,7 +27,7 @@ class SpellBreakdown:
         {{
         reportData {{
             report(code: "{report_id}") {{
-            table(dataType: Casts, sourceID: {source_id}, startTime: 0, endTime: 999999999)
+                table(dataType: Casts, sourceID: {source_id}, startTime: 0, endTime: 999999999)
             }}
         }}
         }}
@@ -31,7 +35,6 @@ class SpellBreakdown:
         result = client.run_query(query)
         raw_table = result["data"]["reportData"]["report"]["table"]
 
-        # Handle both formats
         entries = []
         if isinstance(raw_table, dict):
             if "data" in raw_table and "entries" in raw_table["data"]:
@@ -42,10 +45,12 @@ class SpellBreakdown:
         id_to_name = {}
         id_to_casts = {}
 
-        # Aliases: maps alternate spell IDs to canonical spell IDs (usually the one used in healing events)
+        # Aliases: maps alternate spell IDs to canonical spell IDs
         spell_id_aliases = {
-            27801: 27805,  # Holy Nova rank vs base ID
-            # Add more if needed
+            27801: 27805,     # Holy Nova (ranked)
+            19943: 19993,     # Flash of Light (alias to canonical)
+            20930: 25903,     # Holy Shock
+            10329: 19968,     # Holy Light
         }
 
         for entry in entries:
@@ -53,28 +58,32 @@ class SpellBreakdown:
             name = entry.get("name")
             canonical_guid = spell_id_aliases.get(guid, guid)
 
-            # Debug print
-           # print(f"🔍 DEBUG ENTRY: GUID={guid}, Name={name}, Canonical={canonical_guid}, HitCount={entry.get('hitCount')}, Total={entry.get('total')}")
+            if guid == 20343:
+                continue  # explicitly ignore
 
-            casts = entry.get("hitCount")
-            if casts is None:
-                casts = entry.get("total", 0)
+            casts = entry.get("hitCount", entry.get("total", 0))
+          #  print(f"🔍 DEBUG PALADIN ENTRY: GUID={guid}, Name={name}, HitCount={entry.get('hitCount')}, Total={entry.get('total')}, Casts Used={casts}")
+
+
 
             if canonical_guid and name:
-                # Ensure name is attached to canonical ID
                 id_to_name[canonical_guid] = name
                 id_to_casts[canonical_guid] = id_to_casts.get(canonical_guid, 0) + casts
 
-        # Manually patch known IDs (in case they were never found in the table)
+        # Manually patch known IDs
         id_to_name[17543] = "Fire Protection"
         id_to_name[27805] = "Holy Nova"
         id_to_name[15290] = "Vampiric Embrace"
+        id_to_name[19968] = "Holy Light"
+        id_to_name[19993] = "Flash of Light"
+        id_to_name[25903] = "Holy Shock"
 
         return id_to_name, id_to_casts, entries
+
     @staticmethod
     def get_resources_used(cast_entries):
         resources = {
-            17531: "Major Mana Potion",  # Major Mana Potion
+            17531: "Major Mana Potion",
             27869: "Dark Rune"
         }
 
@@ -99,8 +108,11 @@ class SpellBreakdown:
     @staticmethod
     def calculate_dispels(cast_entries):
         dispel_ids = {
-            988: "Dispel Magic",
-            552: "Abolish Disease"
+            988: "Dispel Magic",         # Priest
+            552: "Abolish Disease",      # Priest
+            4987: "Cleanse",             # Paladin
+            2782: "Remove Curse",        # Druid
+            2893: "Abolish Poison"       # Druid
         }
 
         dispels = {}

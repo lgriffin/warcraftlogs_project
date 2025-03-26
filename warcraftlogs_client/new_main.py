@@ -4,9 +4,7 @@ from .characters import Characters
 from .loader import load_config
 from .spell_breakdown import SpellBreakdown
 from .healing import OverallHealing
-
-# Toggle view type
-USE_NEW_VIEW = True
+from collections import defaultdict
 
 def get_master_data(client, report_id):
     query = f"""
@@ -38,11 +36,11 @@ def run_full_report():
     name_to_id = {
         actor["name"]: actor["id"]
         for actor in master_actors
-        if actor["name"] in characters.character_names
+        if actor["name"] in characters.get_names()
     }
 
     summary = []
-    all_spell_names = set()
+    class_spell_names = defaultdict(set)
 
     for name, source_id in name_to_id.items():
         print(f"\n============================")
@@ -59,25 +57,23 @@ def run_full_report():
 
             spell_map, spell_casts, cast_entries = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
             spell_totals = SpellBreakdown.calculate(healing_events)
-
-            # Filter out spells with no healing
             spell_totals = {k: v for k, v in spell_totals.items() if v > 0}
 
             print(f"\n{name}'s Spell Healing Breakdown")
             print(f"{'Spell':<30} {'Healing':>15} {'Casts':>10}")
             print("-" * 60)
+
             per_character_spells = {}
+            healing_by_name = {}
+
             for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
                 spell_name = str(spell_map.get(spell_id, f"(ID {spell_id})"))
                 casts = spell_casts.get(spell_id, 0)
-
-                # Special case for Fire Protection (ID 17543) — show healing, but omit casts
                 cast_display = "-" if spell_id == 17543 and casts == 0 else casts
-
-                all_spell_names.add(spell_name)
-                per_character_spells[spell_name] = casts
                 print(f"{spell_name:<30} {amount:>15,} {cast_display:>10}")
-
+                per_character_spells[spell_name] = casts
+                healing_by_name[spell_name] = amount
+                class_spell_names[characters.get_class(name)].add(spell_name)
 
             print(f"\n✅ Total Healing: {total_healing:,}")
             print(f"💤 Total Overhealing: {total_overhealing:,}")
@@ -97,14 +93,10 @@ def run_full_report():
                 print(f"\n🔋 Resources Used:")
                 for r_name, count in resources.items():
                     print(f"  - {r_name}: {count}")
-            # Build healing_by_name: spell name -> healing amount
-            healing_by_name = {
-                str(spell_map.get(spell_id, f"(ID {spell_id})")): amount
-                for spell_id, amount in spell_totals.items()
-            }
 
             summary.append({
                 "name": name,
+                "class": characters.get_class(name),
                 "healing": total_healing,
                 "overhealing": total_overhealing,
                 "spells": per_character_spells,
@@ -117,47 +109,54 @@ def run_full_report():
         except Exception as e:
             print(f"❌ Error processing {name}: {e}")
 
-    if USE_NEW_VIEW:
-        new_table_view(summary, sorted(all_spell_names))
-    else:
-        old_table_view(summary)
+    priest_view(summary, sorted(class_spell_names["Priest"]))
+    paladin_view(summary, sorted(class_spell_names["Paladin"]))
+    druid_view(summary, sorted(class_spell_names["Druid"]))
 
-def old_table_view(summary):
-    print("\n=== Summary Table ===")
-    print(f"{'Character':<20} {'Total Healing':>15} {'Overhealing':>15}")
-    print("-" * 55)
-    for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
-        print(f"{row['name']:<20} {row['healing']:>15,} {row['overhealing']:>15,}")
+def priest_view(summary, spell_names):
+    print("\n======= Priest Team =======")
+    print_table(summary, spell_names, "Priest", ["Dispel Magic", "Abolish Disease"], True)
 
-def new_table_view(summary, spell_names):
-    print("\n=== Final Summary Table ===")
+def paladin_view(summary, spell_names):
+    print("\n======= Paladin Team =======")
+    print_table(summary, spell_names, "Paladin", ["Cleanse"], False)
+
+def druid_view(summary, spell_names):
+    print("\n======= Druid Team =======")
+    print_table(summary, spell_names, "Druid", ["Remove Curse", "Abolish Poison"], False)
+
+def print_table(summary, spell_names, class_name, dispel_keys, show_fear_ward):
     header = (
         f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
         "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-        f"{'Dispel Magic':>16} {'Abolish Disease':>18} {'Fear Ward':>12} {'Restore Mana':>16} {'Dark Rune':>12}"
+        "".join(f"{key:>16}" for key in dispel_keys)
     )
+    if show_fear_ward:
+        header += f"{'Fear Ward':>12}"
+    header += f"{'Restore Mana':>16} {'Dark Rune':>12}"
     print(header)
     print("-" * len(header))
 
     for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
+        if row["class"] != class_name:
+            continue
+
         spell_counts = ""
         for spell in spell_names:
             if spell == "Fire Protection":
                 healing = row.get("healing_spells", {}).get("Fire Protection", 0)
                 spell_counts += f"{healing:>16,}"
             else:
-                casts = row["spells"].get(spell, 0)
-                spell_counts += f"{casts:>16}"
+                spell_counts += f"{row['spells'].get(spell, 0):>16}"
 
-        dispel_magic = row["dispels"].get("Dispel Magic", 0)
-        abolish_disease = row["dispels"].get("Abolish Disease", 0)
-        fear_ward = row["fear_ward"]
-        restore_mana = row["resources"].get("Major Mana Potion", 0)
+        dispel_values = "".join(f"{row['dispels'].get(d, 0):>16}" for d in dispel_keys)
+        fear_ward_val = f"{row['fear_ward']:>12}" if show_fear_ward else ""
+        restore_mana = row["resources"].get("Restore Mana", 0)
         dark_rune = row["resources"].get("Dark Rune", 0)
 
         print(
             f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
-            f"{spell_counts}{dispel_magic:>16}{abolish_disease:>18}{fear_ward:>12}{restore_mana:>16}{dark_rune:>12}"
+            f"{spell_counts}{dispel_values}{fear_ward_val}{restore_mana:>16}{dark_rune:>12}"
         )
 
 if __name__ == "__main__":

@@ -1,9 +1,15 @@
 {
-    "characters": [
-      "Hadur",
-      "Darkholy",
-      "Nath",
-      "Yesdaddy"
-    ]
-  }
-  
+  "characters": [
+    { "name": "Hadur", "class": "Priest" },
+    { "name": "Darkholy", "class": "Priest" },
+    { "name": "Nath", "class": "Priest" },
+    { "name": "Yesdaddy", "class": "Priest" },
+    { "name": "Llanee", "class": "Paladin" },
+    { "name": "Blix", "class": "Paladin" },
+    { "name": "Paladinbror", "class": "Paladin" },
+    { "name": "Baedan", "class": "Paladin" },
+    { "name": "Gdo", "class": "Paladin" },
+    { "name": "Moripally", "class": "Paladin" },
+    { "name": "Druideka", "class": "Druid" }
+  ]
+}
