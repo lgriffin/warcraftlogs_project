@@ -1,10 +1,12 @@
+import datetime
+import argparse
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data
 from .characters import Characters
 from .loader import load_config
 from .spell_breakdown import SpellBreakdown
 from .healing import OverallHealing
-import datetime
+
 
 def get_master_data(client, report_id):
     query = f"""
@@ -23,6 +25,7 @@ def get_master_data(client, report_id):
     """
     result = client.run_query(query)
     return result["data"]["reportData"]["report"]["masterData"]["actors"]
+
 
 def get_report_metadata(client, report_id):
     query = f"""
@@ -53,7 +56,6 @@ def get_report_metadata(client, report_id):
     }
 
 
-
 def print_report_metadata(metadata, present, all_characters):
     print("\n========================")
     print("📝 Report Metadata")
@@ -66,10 +68,11 @@ def print_report_metadata(metadata, present, all_characters):
     absent = [char["name"] for char in all_characters if char["name"] not in present]
     print(f"🚫 Absent Characters: {', '.join(absent)}")
 
-def new_table_view(summary, spell_names, class_name):
-    print(f"\n======= {class_name} Team =======")
-    
-    # Collect all dispel spell names
+
+def new_table_view(summary, spell_names, class_name, output_lines=None):
+    header_line = f"\n======= {class_name} Team ======="
+    output = [header_line]
+
     all_dispels = set()
     for row in summary:
         all_dispels.update(row["dispels"].keys())
@@ -80,8 +83,8 @@ def new_table_view(summary, spell_names, class_name):
         "".join(f"{spell[:14]:>16}" for spell in spell_names) +
         f"{dispel_headers}{'Fear Ward':>12} {'Restore Mana':>16} {'Dark Rune':>12}"
     )
-    print(header)
-    print("-" * len(header))
+    output.append(header)
+    output.append("-" * len(header))
 
     for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
         spell_counts = ""
@@ -101,12 +104,36 @@ def new_table_view(summary, spell_names, class_name):
         restore_mana = row["resources"].get("Major Mana Potion", 0)
         dark_rune = row["resources"].get("Dark Rune", 0)
 
-        print(
+        output.append(
             f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
             f"{spell_counts}{dispel_counts}{fear_ward:>12}{restore_mana:>16}{dark_rune:>12}"
         )
 
-def run_full_report():
+    if output_lines is not None:
+        output_lines.extend(output)
+    else:
+        print("\n".join(output))
+
+
+def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, output_path="report.md"):
+    lines = [
+        f"# 📝 Report Metadata",
+        f"- **Title**: {metadata['title']}",
+        f"- **Owner**: {metadata['owner']}",
+        f"- **Date**: {datetime.datetime.fromtimestamp(metadata['start'] / 1000).strftime('%A, %d %B %Y %H:%M:%S')}",
+        "",
+    ]
+
+    for class_type in ["Priest", "Paladin", "Druid"]:
+        if grouped_summary[class_type]:
+            new_table_view(grouped_summary[class_type], sorted(all_spell_names_by_class[class_type]), class_type, lines)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    print(f"\n✅ Markdown report saved to: {output_path}")
+
+
+def run_full_report(markdown=False):
     config = load_config()
     report_id = config["report_id"]
 
@@ -200,5 +227,12 @@ def run_full_report():
         if grouped_summary[class_type]:
             new_table_view(grouped_summary[class_type], sorted(all_spell_names_by_class[class_type]), class_type)
 
+    if markdown:
+        export_markdown_report(metadata, grouped_summary, all_spell_names_by_class)
+
+
 if __name__ == "__main__":
-    run_full_report()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--md", action="store_true", help="Export the report as Markdown to report.md")
+    args = parser.parse_args()
+    run_full_report(markdown=args.md)
