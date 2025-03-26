@@ -4,7 +4,7 @@ from .characters import Characters
 from .loader import load_config
 from .spell_breakdown import SpellBreakdown
 from .healing import OverallHealing
-from collections import defaultdict
+import datetime
 
 def get_master_data(client, report_id):
     query = f"""
@@ -24,6 +24,88 @@ def get_master_data(client, report_id):
     result = client.run_query(query)
     return result["data"]["reportData"]["report"]["masterData"]["actors"]
 
+def get_report_metadata(client, report_id):
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          title
+          owner {{
+            name
+          }}
+          startTime
+        }}
+      }}
+    }}
+    """
+    result = client.run_query(query)
+
+    if "data" not in result:
+        print("❌ Error retrieving report metadata:")
+        print(result)
+        raise KeyError("Missing 'data' in response. Check if the report ID is valid or if the token has expired.")
+
+    report = result["data"]["reportData"]["report"]
+    return {
+        "title": report["title"],
+        "owner": report["owner"]["name"],
+        "start": report["startTime"]
+    }
+
+
+
+def print_report_metadata(metadata, present, all_characters):
+    print("\n========================")
+    print("📝 Report Metadata")
+    print("========================")
+    print(f"📄 Title: {metadata['title']}")
+    print(f"👤 Owner: {metadata['owner']}")
+    dt = datetime.datetime.fromtimestamp(metadata['start'] / 1000)
+    print(f"📆 Date: {dt.strftime('%A, %d %B %Y %H:%M:%S')}")
+    print(f"\n👥 Characters Present: {', '.join(present)}")
+    absent = [char["name"] for char in all_characters if char["name"] not in present]
+    print(f"🚫 Absent Characters: {', '.join(absent)}")
+
+def new_table_view(summary, spell_names, class_name):
+    print(f"\n======= {class_name} Team =======")
+    
+    # Collect all dispel spell names
+    all_dispels = set()
+    for row in summary:
+        all_dispels.update(row["dispels"].keys())
+
+    dispel_headers = "".join(f"{dispel[:16]:>16}" for dispel in sorted(all_dispels))
+    header = (
+        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
+        "".join(f"{spell[:14]:>16}" for spell in spell_names) +
+        f"{dispel_headers}{'Fear Ward':>12} {'Restore Mana':>16} {'Dark Rune':>12}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
+        spell_counts = ""
+        for spell in spell_names:
+            if spell == "Fire Protection":
+                healing = row.get("healing_spells", {}).get("Fire Protection", 0)
+                spell_counts += f"{healing:>16,}"
+            else:
+                casts = row["spells"].get(spell, 0)
+                spell_counts += f"{casts:>16}"
+
+        dispel_counts = "".join(
+            f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels)
+        )
+
+        fear_ward = row["fear_ward"]
+        restore_mana = row["resources"].get("Major Mana Potion", 0)
+        dark_rune = row["resources"].get("Dark Rune", 0)
+
+        print(
+            f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
+            f"{spell_counts}{dispel_counts}{fear_ward:>12}{restore_mana:>16}{dark_rune:>12}"
+        )
+
 def run_full_report():
     config = load_config()
     report_id = config["report_id"]
@@ -32,17 +114,22 @@ def run_full_report():
     client = WarcraftLogsClient(token_mgr)
 
     characters = Characters("characters.json")
+    metadata = get_report_metadata(client, report_id)
     master_actors = get_master_data(client, report_id)
+
     name_to_id = {
         actor["name"]: actor["id"]
         for actor in master_actors
-        if actor["name"] in characters.get_names()
+        if actor["name"] in characters.get_all_names()
     }
 
-    summary = []
-    class_spell_names = defaultdict(set)
+    print_report_metadata(metadata, name_to_id.keys(), characters.get_all())
+
+    grouped_summary = {"Priest": [], "Paladin": [], "Druid": []}
+    all_spell_names_by_class = {"Priest": set(), "Paladin": set(), "Druid": set()}
 
     for name, source_id in name_to_id.items():
+        char_class = characters.get_class(name)
         print(f"\n============================")
         print(f"📊 Spell Breakdown for {name}")
         print(f"============================")
@@ -62,18 +149,14 @@ def run_full_report():
             print(f"\n{name}'s Spell Healing Breakdown")
             print(f"{'Spell':<30} {'Healing':>15} {'Casts':>10}")
             print("-" * 60)
-
             per_character_spells = {}
-            healing_by_name = {}
-
             for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
                 spell_name = str(spell_map.get(spell_id, f"(ID {spell_id})"))
                 casts = spell_casts.get(spell_id, 0)
                 cast_display = "-" if spell_id == 17543 and casts == 0 else casts
-                print(f"{spell_name:<30} {amount:>15,} {cast_display:>10}")
+                all_spell_names_by_class[char_class].add(spell_name)
                 per_character_spells[spell_name] = casts
-                healing_by_name[spell_name] = amount
-                class_spell_names[characters.get_class(name)].add(spell_name)
+                print(f"{spell_name:<30} {amount:>15,} {cast_display:>10}")
 
             print(f"\n✅ Total Healing: {total_healing:,}")
             print(f"💤 Total Overhealing: {total_overhealing:,}")
@@ -82,7 +165,7 @@ def run_full_report():
             if fear_ward and fear_ward["casts"] > 0:
                 print(f"\n🛡️  Fear Ward Casts: {fear_ward['casts']}")
 
-            dispels = SpellBreakdown.calculate_dispels(cast_entries)
+            dispels = SpellBreakdown.calculate_dispels(cast_entries, char_class)
             if any(dispels.values()):
                 print(f"\n🧹 Dispels:")
                 for spell_name, count in dispels.items():
@@ -94,9 +177,13 @@ def run_full_report():
                 for r_name, count in resources.items():
                     print(f"  - {r_name}: {count}")
 
-            summary.append({
+            healing_by_name = {
+                str(spell_map.get(spell_id, f"(ID {spell_id})")): amount
+                for spell_id, amount in spell_totals.items()
+            }
+
+            grouped_summary[char_class].append({
                 "name": name,
-                "class": characters.get_class(name),
                 "healing": total_healing,
                 "overhealing": total_overhealing,
                 "spells": per_character_spells,
@@ -109,55 +196,9 @@ def run_full_report():
         except Exception as e:
             print(f"❌ Error processing {name}: {e}")
 
-    priest_view(summary, sorted(class_spell_names["Priest"]))
-    paladin_view(summary, sorted(class_spell_names["Paladin"]))
-    druid_view(summary, sorted(class_spell_names["Druid"]))
-
-def priest_view(summary, spell_names):
-    print("\n======= Priest Team =======")
-    print_table(summary, spell_names, "Priest", ["Dispel Magic", "Abolish Disease"], True)
-
-def paladin_view(summary, spell_names):
-    print("\n======= Paladin Team =======")
-    print_table(summary, spell_names, "Paladin", ["Cleanse"], False)
-
-def druid_view(summary, spell_names):
-    print("\n======= Druid Team =======")
-    print_table(summary, spell_names, "Druid", ["Remove Curse", "Abolish Poison"], False)
-
-def print_table(summary, spell_names, class_name, dispel_keys, show_fear_ward):
-    header = (
-        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
-        "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-        "".join(f"{key:>16}" for key in dispel_keys)
-    )
-    if show_fear_ward:
-        header += f"{'Fear Ward':>12}"
-    header += f"{'Restore Mana':>16} {'Dark Rune':>12}"
-    print(header)
-    print("-" * len(header))
-
-    for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
-        if row["class"] != class_name:
-            continue
-
-        spell_counts = ""
-        for spell in spell_names:
-            if spell == "Fire Protection":
-                healing = row.get("healing_spells", {}).get("Fire Protection", 0)
-                spell_counts += f"{healing:>16,}"
-            else:
-                spell_counts += f"{row['spells'].get(spell, 0):>16}"
-
-        dispel_values = "".join(f"{row['dispels'].get(d, 0):>16}" for d in dispel_keys)
-        fear_ward_val = f"{row['fear_ward']:>12}" if show_fear_ward else ""
-        restore_mana = row["resources"].get("Restore Mana", 0)
-        dark_rune = row["resources"].get("Dark Rune", 0)
-
-        print(
-            f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
-            f"{spell_counts}{dispel_values}{fear_ward_val}{restore_mana:>16}{dark_rune:>12}"
-        )
+    for class_type in ["Priest", "Paladin", "Druid"]:
+        if grouped_summary[class_type]:
+            new_table_view(grouped_summary[class_type], sorted(all_spell_names_by_class[class_type]), class_type)
 
 if __name__ == "__main__":
     run_full_report()

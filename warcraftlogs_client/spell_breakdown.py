@@ -45,12 +45,12 @@ class SpellBreakdown:
         id_to_name = {}
         id_to_casts = {}
 
-        # Aliases: maps alternate spell IDs to canonical spell IDs
         spell_id_aliases = {
-            27801: 27805,     # Holy Nova (ranked)
-            19943: 19993,     # Flash of Light (alias to canonical)
-            20930: 25903,     # Holy Shock
-            10329: 19968,     # Holy Light
+            27801: 27805,    # Holy Nova
+            19943: 19993,    # Flash of Light
+            20930: 25903,    # Holy Shock variant
+            25914: 25903,    # Another Holy Shock variant
+            10329: 19968     # Holy Light
         }
 
         for entry in entries:
@@ -59,12 +59,9 @@ class SpellBreakdown:
             canonical_guid = spell_id_aliases.get(guid, guid)
 
             if guid == 20343:
-                continue  # explicitly ignore
+                continue
 
             casts = entry.get("hitCount", entry.get("total", 0))
-          #  print(f"🔍 DEBUG PALADIN ENTRY: GUID={guid}, Name={name}, HitCount={entry.get('hitCount')}, Total={entry.get('total')}, Casts Used={casts}")
-
-
 
             if canonical_guid and name:
                 id_to_name[canonical_guid] = name
@@ -77,6 +74,8 @@ class SpellBreakdown:
         id_to_name[19968] = "Holy Light"
         id_to_name[19993] = "Flash of Light"
         id_to_name[25903] = "Holy Shock"
+        id_to_name[7242]  = "Shadow Protection"
+        id_to_name[10901] = "Power Word: Shield"
 
         return id_to_name, id_to_casts, entries
 
@@ -106,7 +105,7 @@ class SpellBreakdown:
         return None
 
     @staticmethod
-    def calculate_dispels(cast_entries):
+    def calculate_dispels(cast_entries, class_type):
         dispel_ids = {
             988: "Dispel Magic",         # Priest
             552: "Abolish Disease",      # Priest
