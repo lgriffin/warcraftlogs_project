@@ -93,8 +93,12 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
                 healing = row.get("healing_spells", {}).get("Fire Protection", 0)
                 spell_counts += f"{healing:>16,}"
             else:
-                casts = row["spells"].get(spell, 0)
-                spell_counts += f"{casts:>16}"
+                # If duplicates exist, sum them
+                cast_total = sum(
+                    count for name, count in row["spells"].items()
+                    if name == spell
+                )
+                spell_counts += f"{cast_total:>16}"
 
         dispel_counts = "".join(
             f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels)
@@ -182,7 +186,7 @@ def run_full_report(markdown=False):
                 casts = spell_casts.get(spell_id, 0)
                 cast_display = "-" if spell_id == 17543 and casts == 0 else casts
                 all_spell_names_by_class[char_class].add(spell_name)
-                per_character_spells[spell_name] = casts
+                per_character_spells[spell_name] = per_character_spells.get(spell_name, 0) + casts
                 print(f"{spell_name:<30} {amount:>15,} {cast_display:>10}")
 
             print(f"\n✅ Total Healing: {total_healing:,}")
