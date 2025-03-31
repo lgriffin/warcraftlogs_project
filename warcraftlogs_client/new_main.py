@@ -17,6 +17,8 @@ def get_master_data(client, report_id):
             actors {{
               id
               name
+              type
+              subType
             }}
           }}
         }}
@@ -24,7 +26,17 @@ def get_master_data(client, report_id):
     }}
     """
     result = client.run_query(query)
-    return result["data"]["reportData"]["report"]["masterData"]["actors"]
+
+    if "data" not in result:
+        print("❌ Error retrieving master data:")
+        print(result)
+        raise KeyError("Missing 'data' in response.")
+
+    return [
+        actor for actor in result["data"]["reportData"]["report"]["masterData"]["actors"]
+        if actor["type"] == "Player"
+    ]
+
 
 
 def get_report_metadata(client, report_id):
@@ -147,6 +159,10 @@ def run_full_report(markdown=False):
     characters = Characters("characters.json")
     metadata = get_report_metadata(client, report_id)
     master_actors = get_master_data(client, report_id)
+    print("\n🎭 Actor Roles:")
+    for actor in master_actors:
+        print(f"- {actor['name']} (ID: {actor['id']}): {actor.get('type', 'Player')}")
+
 
     name_to_id = {
         actor["name"]: actor["id"]
@@ -160,7 +176,8 @@ def run_full_report(markdown=False):
     all_spell_names_by_class = {"Priest": set(), "Paladin": set(), "Druid": set()}
 
     for name, source_id in name_to_id.items():
-        char_class = characters.get_class(name)
+        char_class = next((actor["subType"] for actor in master_actors if actor["name"] == name), "Unknown")
+
         print(f"\n============================")
         print(f"📊 Spell Breakdown for {name}")
         print(f"============================")
