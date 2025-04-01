@@ -92,10 +92,11 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
         all_dispels.update(row["dispels"].keys())
 
     dispel_headers = "".join(f"{dispel[:16]:>16}" for dispel in sorted(all_dispels))
+    fear_ward_header = f"{'Fear Ward':>12}" if class_name == "Priest" else ""
     header = (
         f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
         "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-        f"{dispel_headers}{'Fear Ward':>12} {'Restore Mana':>16} {'Dark Rune':>12}"
+        f"{dispel_headers}{fear_ward_header}{'Restore Mana':>16} {'Dark Rune':>12}"
     )
     output.append(header)
     output.append("-" * len(header))
@@ -107,7 +108,6 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
                 healing = row.get("healing_spells", {}).get("Fire Protection", 0)
                 spell_counts += f"{healing:>16,}"
             else:
-                # If duplicates exist, sum them
                 cast_total = sum(
                     count for name, count in row["spells"].items()
                     if name == spell
@@ -118,21 +118,20 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
             f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels)
         )
 
-        fear_ward = row["fear_ward"]
+        fear_ward = row.get("fear_ward", "-") if class_name == "Priest" else ""
+        fear_ward_value = f"{fear_ward:>12}" if class_name == "Priest" else ""
         restore_mana = row["resources"].get("Major Mana Potion", 0)
         dark_rune = row["resources"].get("Dark Rune", 0)
 
         output.append(
             f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
-            f"{spell_counts}{dispel_counts}{fear_ward:>12}{restore_mana:>16}{dark_rune:>12}"
+            f"{spell_counts}{dispel_counts}{fear_ward_value}{restore_mana:>16}{dark_rune:>12}"
         )
 
     if output_lines is not None:
         output_lines.extend(output)
     else:
         print("\n".join(output))
-
-
 def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, output_path="report.md"):
     lines = [
         f"# 📝 Report Metadata",
@@ -248,16 +247,18 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
                 for spell_id, amount in spell_totals.items()
             }
 
-            grouped_summary[char_class].append({
+            character_summary = {
                 "name": name,
                 "healing": total_healing,
                 "overhealing": total_overhealing,
                 "spells": per_character_spells,
                 "dispels": dispels,
-                "fear_ward": fear_ward["casts"] if fear_ward else 0,
                 "resources": resources,
                 "healing_spells": healing_by_name,
-            })
+            }
+            if char_class == "Priest":
+                character_summary["fear_ward"] = fear_ward["casts"] if fear_ward else 0
+            grouped_summary[char_class].append(character_summary)
 
         except Exception as e:
             print(f"❌ Error processing {name}: {e}")
@@ -300,4 +301,3 @@ if __name__ == "__main__":
     parser.add_argument("--use-dynamic-roles", action="store_true", help="Use dynamic healer classification (ignore characters.json)")
     args = parser.parse_args()
     run_full_report(markdown=args.md, use_dynamic_roles=args.use_dynamic_roles)
-
