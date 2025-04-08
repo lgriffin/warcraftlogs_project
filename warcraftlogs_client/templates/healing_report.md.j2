@@ -10,10 +10,10 @@
 {% for class_type, rows in summary_by_class.items() %}
 ### {{ class_type }} Team
 
-| Character | Class | Total Healing | Overhealing | {% for spell in rows[0].spells.keys() %}{{ spell }} | {% endfor %}{% if class_type == "Priest" %}Fear Ward |{% endif %} Major Mana Potion | Dark Rune |
-|-----------|--------|----------------|--------------|{% for spell in rows[0].spells.keys() %}-------------|{% endfor %}{% if class_type == "Priest" %}-----------|{% endif %}---------------------|------------|
+| Character | Class | Total Healing | Overhealing | {% for spell in rows[0].spells.keys() %}{{ spell }} | {% endfor %}{% for dispel in dispels_all[class_type] %}{{ dispel }} | {% endfor %}{% if class_type == "Priest" %}Fear Ward |{% endif %} Major Mana Potion | Dark Rune |
+|-----------|--------|----------------|--------------|{% for spell in rows[0].spells.keys() %}-------------|{% endfor %}{% for dispel in dispels_all[class_type] %}-------------|{% endfor %}{% if class_type == "Priest" %}-----------|{% endif %}---------------------|------------|
 {% for row in rows -%}
-| {{ row.name }} | {{ class_type }} | {{ row.healing }} | {{ row.overhealing }} | {% for spell in row.spells.values() %}{{ spell }} | {% endfor %}{% if class_type == "Priest" %}{{ row.fear_ward }} |{% endif %} {{ row.mana_potions }} | {{ row.dark_runes }} |
+| {{ row.name }} | {{ class_type }} | {{ row.healing }} | {{ row.overhealing }} | {% for spell in row.spells.values() %}{{ spell }} | {% endfor %}{% for dispel in dispels_all[class_type] %}{{ row.dispels.get(dispel, "-") }} | {% endfor %}{% if class_type == "Priest" %}{{ row.fear_ward }} |{% endif %} {{ row.mana_potions }} | {{ row.dark_runes }} |
 {% endfor %}
 
 {% endfor %}

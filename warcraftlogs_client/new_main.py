@@ -151,8 +151,9 @@ def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, 
         f.write("\n".join(lines))
     print(f"\n✅ Markdown report saved to: {output_path}")
 
+
 def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_class, output_path="reports/healing_report.md"):
-     # Use absolute path to the template directory
+    # Use absolute path to the template directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     template_dir = os.path.join(base_dir, "templates")
 
@@ -164,6 +165,7 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
         "version": "2.0",
         "log_url": f"https://www.warcraftlogs.com/reports/{load_config()['report_id']}",
         "summary_by_class": {},
+        "dispels_all": {},
         "priests": [],
         "paladins": [],
         "druids": []
@@ -171,19 +173,35 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
 
     for class_type in ["Priest", "Paladin", "Druid"]:
         context["summary_by_class"][class_type] = []
+        context["dispels_all"][class_type] = set()
 
         for row in grouped_summary.get(class_type, []):
-            # Prepare spell columns
-            spells = {}
-            for spell in sorted(all_spell_names_by_class[class_type]):
-                spells[spell] = row["spells"].get(spell, "-")
+            # Track all dispel names seen
+            context["dispels_all"][class_type].update(row["dispels"].keys())
 
-            # Summary Table Row
+    for cls in context["dispels_all"]:
+        context["dispels_all"][cls] = sorted(context["dispels_all"][cls])
+
+    for class_type in ["Priest", "Paladin", "Druid"]:
+        for row in grouped_summary.get(class_type, []):
+            # Prepare spells
+            spells = {
+                spell: row["spells"].get(spell, "-")
+                for spell in sorted(all_spell_names_by_class[class_type])
+            }
+
+            # Prepare dispels for all known types
+            dispels = {
+                dispel: row["dispels"].get(dispel, "-")
+                for dispel in context["dispels_all"][class_type]
+            }
+
             summary_row = {
                 "name": row["name"],
                 "healing": f"{row['healing']:,}",
                 "overhealing": f"{row['overhealing']:,}",
                 "spells": spells,
+                "dispels": dispels,
                 "fear_ward": row.get("fear_ward", "-") if class_type == "Priest" else None,
                 "mana_potions": row["resources"].get("Major Mana Potion", 0),
                 "dark_runes": row["resources"].get("Dark Rune", 0),
@@ -191,7 +209,6 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
 
             context["summary_by_class"][class_type].append(summary_row)
 
-            # Detailed Character Report Row
             spell_table = "\n".join(
                 f"| {spell} | {count} | {row['healing_spells'].get(spell, 0):,} |"
                 for spell, count in sorted(row["spells"].items())
@@ -220,6 +237,8 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
         f.write(rendered)
 
     print(f"\n✅ Markdown report exported to: {output_path}")
+
+
 
 def run_full_report(markdown=False, use_dynamic_roles=False):
     config = load_config()

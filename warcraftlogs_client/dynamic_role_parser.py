@@ -18,6 +18,8 @@ def group_players_by_class(master_actors):
         print(f"\n🧙 Class: {class_name}")
         for player in players:
             print(f"  - {player['name']} (ID: {player['id']})")
+    return class_groups
+
 
 
 # dynamic_role_parser.py
