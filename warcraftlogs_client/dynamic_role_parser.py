@@ -10,7 +10,8 @@ def group_players_by_class(master_actors):
             class_name = actor.get("subType", "Unknown")
             class_groups[class_name].append({
                 "name": actor["name"],
-                "id": actor["id"]
+                "id": actor["id"],
+                "subType": class_name  # ✅ Add this line
             })
 
     print("\n📚 Players Grouped by Class:")
