@@ -4,6 +4,8 @@ from .auth import TokenManager
 from .client import WarcraftLogsClient
 from .client import get_damage_done_data
 from .loader import load_config
+from .spell_breakdown import SpellBreakdown
+
 from . import dynamic_role_parser  # uses `subType` to classify
 from collections import defaultdict
 import sys
@@ -129,6 +131,8 @@ def run_melee_report():
 
             try:
                 events = get_damage_done_data(client, report_id, source_id)
+                spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+
 
                 total_damage = 0
                 damage_by_ability = defaultdict(int)
@@ -141,8 +145,9 @@ def run_melee_report():
                         continue
 
                     amount = e.get("amount", 0)
-                    ability = e.get("ability", {})
-                    ability_name = ability.get("name", "(unknown)")
+                    spell_id = e.get("abilityGameID")
+                    ability_name = spell_map.get(spell_id, f"(ID {spell_id})")
+
 
                     total_damage += amount
                     damage_by_ability[ability_name] += amount
