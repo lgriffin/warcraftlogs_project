@@ -5,6 +5,7 @@ from .client import WarcraftLogsClient
 from .client import get_damage_done_data
 from .loader import load_config
 from . import dynamic_role_parser  # uses `subType` to classify
+from collections import defaultdict
 import sys
 import json
 
@@ -105,23 +106,15 @@ def run_melee_report():
     metadata = get_report_metadata(client, report_id)
     master_actors = get_master_data(client, report_id)
 
-    # Group by class (subType)
     class_groups = dynamic_role_parser.group_players_by_class(master_actors)
-
-    # Define melee classes of interest
     melee_classes = {"Rogue", "Warrior"}
-
-    # Extract only Rogue and Warrior players
     melee_players_by_class = {
         cls: class_groups.get(cls, []) for cls in melee_classes
     }
 
-    # Flatten all present player names
     all_melee_names = [p["name"] for players in melee_players_by_class.values() for p in players]
-
     print_report_metadata(metadata, all_melee_names)
 
-    # Process each class
     for melee_class, players in melee_players_by_class.items():
         if not players:
             continue
@@ -135,26 +128,38 @@ def run_melee_report():
             source_id = player["id"]
 
             try:
-               # print(f"📡 Fetching damage events for {name} (sourceID: {source_id})")
                 events = get_damage_done_data(client, report_id, source_id)
 
-                total_damage = sum(
-                    e.get("amount", 0)
-                    for e in events
-                    if isinstance(e, dict) and e.get("type") == "damage"
-                )
+                total_damage = 0
+                damage_by_ability = defaultdict(int)
+                casts_by_ability = defaultdict(int)
+
+                for e in events:
+                    if not isinstance(e, dict):
+                        continue
+                    if e.get("type") != "damage":
+                        continue
+
+                    amount = e.get("amount", 0)
+                    ability = e.get("ability", {})
+                    ability_name = ability.get("name", "(unknown)")
+
+                    total_damage += amount
+                    damage_by_ability[ability_name] += amount
+                    casts_by_ability[ability_name] += 1
 
                 print(f"{name:<15} {total_damage:>15,}")
-
-                # Debug output: show first few events
-               # print(f"\n🔍 First damage events for {name}:")
-               # for i, e in enumerate(events):
-               #     if i == 5:
-               #         break
-               #     print(e)
+                print(f"{'Ability':<30} {'Damage':>12} {'Casts':>8}")
+                print("-" * 55)
+                for ability in sorted(damage_by_ability, key=damage_by_ability.get, reverse=True):
+                    dmg = damage_by_ability[ability]
+                    casts = casts_by_ability[ability]
+                    print(f"{ability:<30} {dmg:>12,} {casts:>8}")
+                print()
 
             except Exception as e:
-                print(f"❌ Error processing {name}: {e}")
+                print(f"Error processing {name}: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate melee damage summary for Rogues.")
