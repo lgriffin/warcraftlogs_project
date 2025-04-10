@@ -67,7 +67,7 @@ class SpellBreakdown:
                 id_to_name[canonical_guid] = name
                 id_to_casts[canonical_guid] = id_to_casts.get(canonical_guid, 0) + casts
 
-        # Manually patch known IDs
+        # Manually patch known IDs as the casts table often only returns the ID
         id_to_name[17543] = "Fire Protection"
         id_to_name[27805] = "Holy Nova"
         id_to_name[15290] = "Vampiric Embrace"
@@ -76,6 +76,20 @@ class SpellBreakdown:
         id_to_name[25903] = "Holy Shock"
         id_to_name[7242]  = "Shadow Protection"
         id_to_name[10901] = "Power Word: Shield"
+        id_to_name[11337] = "Instant Poison VI"
+        id_to_name[11354] = "Deadly Poison IV"
+        id_to_name[22482] = "Blade Flurry"
+        id_to_name[15851] = "Dragonbreath Chili"
+        id_to_name[11351] = "Fire Shield"
+        id_to_name[23267] = "Firebolt"
+        id_to_name[1]     = "Melee"
+        id_to_name[20647] = "Execute"
+        id_to_name[1680] = "Whirlwind"
+        id_to_name[12721] = "Deep Wound"
+        id_to_name[20615] = "Intercept"
+        id_to_name[7922] = "Charge"
+        id_to_name[5530] = "Mace Stun"
+
 
         return id_to_name, id_to_casts, entries
 
