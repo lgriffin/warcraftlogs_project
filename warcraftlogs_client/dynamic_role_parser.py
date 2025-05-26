@@ -22,11 +22,8 @@ def group_players_by_class(master_actors):
     return class_groups
 
 
-
-# dynamic_role_parser.py
-
 def identify_healers(master_actors, healing_totals, threshold=50000):
-    healing_classes = {"Priest", "Paladin", "Druid"}
+    healing_classes = {"Priest", "Paladin", "Druid", "Shaman"}
 
     healers = []
     for actor in master_actors:
@@ -53,4 +50,3 @@ def identify_healers(master_actors, healing_totals, threshold=50000):
         print(f"- {healer['name']} ({healer['class']}): {healer['healing']:,} healing")
     print("\n💉 Excluding anyone that hasn't breached 50k healing:")
     return healers
-

@@ -240,6 +240,10 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
 
 
 
+# new_main.py
+
+# ... (imports remain unchanged)
+
 def run_full_report(markdown=False, use_dynamic_roles=False):
     config = load_config()
     report_id = config["report_id"]
@@ -247,12 +251,8 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
     client = WarcraftLogsClient(token_mgr)
 
-
     metadata = get_report_metadata(client, report_id)
     master_actors = get_master_data(client, report_id)
-   # print("\n🎭 Actor Roles:")
-   # dynamic_role_parser.group_players_by_class(master_actors)
-
 
     if not use_dynamic_roles:
         characters = Characters("characters.json")
@@ -264,26 +264,22 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
         all_characters = characters.get_all()
         print("📦 Using pre-defined characters in characters.json.")
         print("⚠️  Please ensure all relevant characters are added or they will be skipped.\n")
-
     else:
         characters = None
         name_to_id = {actor["name"]: actor["id"] for actor in master_actors}
-        all_characters = [{"name": name} for name in name_to_id.keys()]  # Fakes a characters.json structure
+        all_characters = [{"name": name} for name in name_to_id.keys()]
 
-    # ✅ This now works for both modes
     print_report_metadata(metadata, name_to_id.keys(), all_characters)
 
-
-    grouped_summary = {"Priest": [], "Paladin": [], "Druid": []}
-    all_spell_names_by_class = {"Priest": set(), "Paladin": set(), "Druid": set()}
-
+    # ✅ Shaman added here
+    grouped_summary = {"Priest": [], "Paladin": [], "Druid": [], "Shaman": []}
+    all_spell_names_by_class = {"Priest": set(), "Paladin": set(), "Druid": set(), "Shaman": set()}
 
     for name, source_id in name_to_id.items():
         char_class = next((actor["subType"] for actor in master_actors if actor["name"] == name), "Unknown")
-        # Skip non-healer-capable classes early
-        if char_class not in {"Priest", "Paladin", "Druid"}:
-            continue
 
+        if char_class not in {"Priest", "Paladin", "Druid", "Shaman"}:
+            continue
 
         print(f"\n============================")
         print(f"📊 Spell Breakdown for {name}")
@@ -348,26 +344,21 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
             }
             if char_class == "Priest":
                 character_summary["fear_ward"] = fear_ward["casts"] if fear_ward else 0
+
             grouped_summary[char_class].append(character_summary)
 
         except Exception as e:
             print(f"❌ Error processing {name}: {e}")
 
-
-    # 🧠 Post-processing summary grouping
     if use_dynamic_roles:
-        # Build healing_totals for dynamic healer identification
         healing_totals = {
             summary["name"]: summary["healing"]
             for group in grouped_summary.values()
             for summary in group
         }
-
-        # Identify actual healers based on healing done
         healers = dynamic_role_parser.identify_healers(master_actors, healing_totals)
 
-        # Filter grouped_summary to only include identified healers
-        filtered_summary = {"Priest": [], "Paladin": [], "Druid": []}
+        filtered_summary = {"Priest": [], "Paladin": [], "Druid": [], "Shaman": []}
         for healer in healers:
             for row in grouped_summary.get(healer["class"], []):
                 if row["name"] == healer["name"]:
@@ -379,7 +370,6 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
         if grouped_summary[class_type]:
             spell_names = sorted(all_spell_names_by_class.get(class_type, []))
             new_table_view(grouped_summary[class_type], spell_names, class_type)
-
 
     if markdown:
         export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_class)
