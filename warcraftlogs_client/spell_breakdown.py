@@ -92,6 +92,14 @@ class SpellBreakdown:
         id_to_name[5530] = "Mace Stun"
         id_to_name[21140] = "Fatal Wound"
         id_to_name[22845] = "Frenzied Regeneration"
+        id_to_name[21151] = "Gutgore Ripper"
+        id_to_name[24388] = "Brain Damage"
+        id_to_name[16624] = "Thorium Shield Spike"
+        id_to_name[9910] = "Thorns"
+        id_to_name[11374] = "Gift of Arthras"
+        id_to_name[7919] = "Shoot Crossbow"
+        id_to_name[22600] = "Force Reactive Disk"
+
 
 
         return id_to_name, id_to_casts, entries
