@@ -74,6 +74,7 @@ class SpellBreakdown:
         id_to_name[19968] = "Holy Light"
         id_to_name[19993] = "Flash of Light"
         id_to_name[25903] = "Holy Shock"
+        id_to_name[25914] = "Holy Shock" #temp putting this here as that's now 3x IDs using it
         id_to_name[7242]  = "Shadow Protection"
         id_to_name[10901] = "Power Word: Shield"
         id_to_name[11337] = "Instant Poison VI"
@@ -89,6 +90,16 @@ class SpellBreakdown:
         id_to_name[20615] = "Intercept"
         id_to_name[7922] = "Charge"
         id_to_name[5530] = "Mace Stun"
+        id_to_name[21140] = "Fatal Wound"
+        id_to_name[22845] = "Frenzied Regeneration"
+        id_to_name[21151] = "Gutgore Ripper"
+        id_to_name[24388] = "Brain Damage"
+        id_to_name[16624] = "Thorium Shield Spike"
+        id_to_name[9910] = "Thorns"
+        id_to_name[11374] = "Gift of Arthras"
+        id_to_name[7919] = "Shoot Crossbow"
+        id_to_name[22600] = "Force Reactive Disk"
+
 
 
         return id_to_name, id_to_casts, entries
