@@ -100,6 +100,21 @@ class SpellBreakdown:
         id_to_name[7919] = "Shoot Crossbow"
         id_to_name[22600] = "Force Reactive Disk"
 
+        # Damage Received abilities
+        id_to_name[22442] = "Growing Flames"
+        id_to_name[22275] = "Flamestrike"
+        id_to_name[23341] = "Flame Buffet"
+        id_to_name[22275] = "Flamestrike"
+        id_to_name[22442] = "Growing Flames"
+        id_to_name[22275] = "Flamestrike"
+        id_to_name[22442] = "Growing Flames"
+        id_to_name[22275] = "Flamestrike"
+        id_to_name[22442] = "Growing Flames"
+        id_to_name[22275] = "Flamestrike"
+        id_to_name[22442] = "Growing Flames"
+        id_to_name[22275] = "Flamestrike"
+
+
 
 
         return id_to_name, id_to_casts, entries
