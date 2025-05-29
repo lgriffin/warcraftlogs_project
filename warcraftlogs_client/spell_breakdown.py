@@ -11,7 +11,7 @@ class SpellBreakdown:
             amount = event.get("amount")
 
             # Exclude unwanted abilities
-            if ability_id == 20343:
+            if ability_id == 20343: # Judgement of Light
                 continue
 
             if ability_id is not None and amount is not None:
@@ -45,12 +45,56 @@ class SpellBreakdown:
         id_to_name = {}
         id_to_casts = {}
 
+        # Classic has a number of ranks for spells
+        # but also similar spell names but different IDs
+        # Here we map them and the right hand number becomes
+        # our cannonical name so we aggregate on it
         spell_id_aliases = {
             27801: 27805,    # Holy Nova
+            23458: 27805,
             19943: 19993,    # Flash of Light
             20930: 25903,    # Holy Shock variant
             25914: 25903,    # Another Holy Shock variant
-            10329: 19968     # Holy Light
+            10329: 19968,     # Holy Light
+
+            # Cleave variants
+            20569: 15663,
+            15754: 15663,
+            19983: 15663,
+            19632: 15663,
+            20605: 15663,
+
+            # Fire Nova
+            20602: 23462,
+
+            # Fire Shield
+            19627: 11351,
+
+            # Holy Shock
+            25914: 25903,
+
+            # Melee normalization
+            -4: 1,
+            -32: 1,
+
+            # Shadow Bolt
+            22336: 21077,
+            24668: 21077,
+            19728: 21077,
+
+            # Shadow Flame
+            22985: 22979,
+            22980: 22979,
+
+            # Strike
+            19644: 19730,
+            22591: 19730,
+
+            # Sunder Armor
+            24333: 24317,
+
+            # Shadow Shock
+            19460: 20603
         }
 
         for entry in entries:
@@ -99,21 +143,211 @@ class SpellBreakdown:
         id_to_name[11374] = "Gift of Arthras"
         id_to_name[7919] = "Shoot Crossbow"
         id_to_name[22600] = "Force Reactive Disk"
+        
+        id_to_name[19675] = "Feral Charge"
+        id_to_name[2480] = "Shoot Bow"
+        id_to_name[23063] = "Dense Dynamite"
+  
+        id_to_name[11556] = "Demoralising Shout"
+        id_to_name[20560] = "Mocking Blow"
+        id_to_name[20240] = "Retaliation"
+        id_to_name[20569] = "Cleave"
+        id_to_name[23454] = "Stun"
+        id_to_name[1161] = "Challenging Shout"
 
-        # Damage Received abilities
+        # Damage Received abilities (BWL centric)
         id_to_name[22442] = "Growing Flames"
         id_to_name[22275] = "Flamestrike"
         id_to_name[23341] = "Flame Buffet"
-        id_to_name[22275] = "Flamestrike"
-        id_to_name[22442] = "Growing Flames"
-        id_to_name[22275] = "Flamestrike"
-        id_to_name[22442] = "Growing Flames"
-        id_to_name[22275] = "Flamestrike"
-        id_to_name[22442] = "Growing Flames"
-        id_to_name[22275] = "Flamestrike"
-        id_to_name[22442] = "Growing Flames"
-        id_to_name[22275] = "Flamestrike"
+        id_to_name[22311] = "Brood Power Bronze"
+        id_to_name[15663] = "Cleave"
 
+        id_to_name[15754] = "Cleave" #2nd cleave ID
+        id_to_name[16806] = "Conflagration"
+        id_to_name[20623] = "Fireblast"
+        id_to_name[22979] = "Shadow Flame"
+        id_to_name[22985] = "Shadow Flame" #2nd shadow flame ID
+        id_to_name[23023] = "Conflagration" #2nd conflag
+        id_to_name[23462] = "Fire Nova"
+        id_to_name[22980] = "Shadow Flame" #3rd shadow flame ID
+
+        
+        id_to_name[13241] = "Goblin Sapper Charge"
+        id_to_name[24375] = "War Stomp"
+        id_to_name[22289] = "Brood Power Green"
+        id_to_name[369330] = "Rain of Fire"
+        id_to_name[22436] = "Aura of Flames"
+        id_to_name[22334] = "Bomb"
+        id_to_name[22559] = "Brood Power: Blue"
+        id_to_name[22336] = "Shadow Bolt"
+        id_to_name[22539] = "Shadow Flame"
+        id_to_name[22290] = "Brood Power Blue"
+        id_to_name[15580] = "Strike"
+
+        id_to_name[22433] = "Flame Buffet"
+        id_to_name[22273] = "Arcane Missiles"
+        id_to_name[22425] = "Fireball Volley"
+        id_to_name[24573] = "Mortal Strike"
+        id_to_name[18670] = "Knock Away"
+        id_to_name[23331] = "Blast Wave"
+        id_to_name[23339] = "Wing Buffet"
+        id_to_name[23187] = "Frost Burn"
+        id_to_name[22560] = "Brood Power Black"
+        id_to_name[23169] = "Brood Affliction Green"
+        id_to_name[22284] = "Brood Power Red"
+        id_to_name[22686] = "Bellowing Roar"
+        id_to_name[17290] = "Fireball"
+        id_to_name[22271] = "Arcane Explosion"
+        id_to_name[19632] = "Cleave"
+        id_to_name[6788] = "Weakened Soul"
+        id_to_name[22975] = "Shadow Flame"
+
+        id_to_name[23461] = "Flame Breath"
+        id_to_name[19983] = "Cleave"
+        id_to_name[17289] = "Shadow Shock"
+        id_to_name[16636] = "Berserker Charge"
+        id_to_name[15622] = "Cleave"
+        id_to_name[16782] = "Lightning Bolt"
+        id_to_name[22335] = "Bottle of Poison"
+        id_to_name[23316] = "Ignite Flesh"
+        id_to_name[22312] = "Brood Power Black"
+        id_to_name[22424] = "Blast Wave"
+
+        # MC Centric Abilities
+        id_to_name[19771] = "Serrated Blade"
+        id_to_name[-4] = "Melee"
+        id_to_name[13880] = "Magma Splash"
+        id_to_name[15502] = "Sunder Armor"
+        id_to_name[15732] = "Immolate"
+        id_to_name[18944] = "Smash"
+        id_to_name[18945] = "Knock Away"
+        id_to_name[19129] = "Massive Tremor"
+        id_to_name[19196] = "Surge"
+        id_to_name[19272] = "Lava Breath"
+        id_to_name[19319] = "Lava Burst"
+        id_to_name[19393] = "Soul Burn"
+        id_to_name[19428] = "Conflagration"
+        id_to_name[19497] = "Eruption"
+        id_to_name[19627] = "Fire Shield"
+        id_to_name[19628] = "Flames"
+        id_to_name[19630] = "Cone of Fire"
+        id_to_name[19631] = "Melt Armor"
+        id_to_name[19641] = "Pyroclast Barrage"
+        id_to_name[19642] = "Cleave"
+        id_to_name[19644] = "Strike"
+        id_to_name[19698] = "Inferno"
+        id_to_name[19712] = "Arcane Explosion"
+        id_to_name[19730] = "Strike"
+        id_to_name[19771] = "Serrated Blade"
+        id_to_name[19780] = "Hand of Ragnaros"
+        id_to_name[19781] = "Flame Spear"
+        id_to_name[19820] = "Mangle"
+        id_to_name[20276] = "Knockdown" #done
+        id_to_name[20277] = "Fist of Ragnaros"
+        id_to_name[20564] = "Elemental Fire"
+        id_to_name[20602] = "Fire Nova"
+        id_to_name[20603] = "Shadow Shock"
+        id_to_name[21155] = "Intense Heat"
+        id_to_name[21158] = "Lava Burst"
+        id_to_name[21333] = "Lava Breath"
+        id_to_name[19450] = "Magma Spit"
+
+        id_to_name[19460] = "Shadow Shock"
+        id_to_name[19728] = "Shadow Bolt"
+        id_to_name[20229] = "Blast Wave"
+        id_to_name[19408] = "Panic"
+        id_to_name[19496] = "Magma Shackles"
+        id_to_name[20476] = "Explosion"
+        id_to_name[19635] = "Incite Flames"
+        id_to_name[20605] = "Cleave"
+        id_to_name[19367] = "Withering Heat"
+        id_to_name[20294] = "Immolate"
+        id_to_name[19777] = "Dark Strike"
+        id_to_name[19776] = "Shadow Word Pain"
+        id_to_name[3] = "Falling Damage"
+        id_to_name[6] = "Lava Damage"
+        id_to_name[5] = "Fire Damage"
+        id_to_name[19369] = "Ancient Despair"
+        id_to_name[19785] = "Throw"
+        id_to_name[19365] = "Ancient Dread"
+        id_to_name[20420] = "Fireball"
+        id_to_name[19637] = "Fire Blossom"
+        id_to_name[19659] = "Ignite Mana"
+        id_to_name[21077] = "Shadow Bolt"
+
+
+        #ZG
+
+        id_to_name[-32] = "Melee" # a few odd ones like this
+        id_to_name[3604] = "Tendon Rip"
+        id_to_name[8355] = "Exploit Weakness"
+        id_to_name[11130] = "Knock Away"
+        id_to_name[12097] = "Pierce Armor"
+        id_to_name[12540] = "Gouge"
+        id_to_name[12723] = "Sweeping Strikes"
+        id_to_name[12826] = "Polymorph"
+        id_to_name[13445] = "Rend"
+        id_to_name[13730] = "Demoralizing Shout"
+        id_to_name[14290] = "Multi Shot"
+        id_to_name[15232] = "Shadow Bolt"
+        id_to_name[15588] = "Thunderclap"
+        id_to_name[15589] = "Whirlwind"
+        id_to_name[15614] = "Kick"
+        id_to_name[15655] = "Shield Slam"
+        id_to_name[15708] = "Mortal Strike"
+        id_to_name[16790] = "Knockdown"
+        id_to_name[16856] = "Mortal Strike"
+        id_to_name[20545] = "Lightning Shield"
+        id_to_name[20741] = "Shadow Bolt Volley"
+        id_to_name[21390] = "Multi Shot"
+        id_to_name[22412] = "Virulent Poison"
+        id_to_name[22591] = "Strike"
+        id_to_name[22644] = "Blood Leech"
+        id_to_name[22859] = "Mortal Cleave"
+        id_to_name[22886] = "Berserker Charge"
+        id_to_name[22887] = "Throw"
+        id_to_name[22908] = "Volley"
+        id_to_name[23858] = "Holy Nova"
+        id_to_name[23861] = "Poison Cloud"
+        id_to_name[23918] = "Sonic Burst"
+        id_to_name[23919] = "Swoop"
+        id_to_name[23979] = "Holy Wrath"
+        id_to_name[24011] = "Venom Spit"
+        id_to_name[24023] = "Charge"
+        id_to_name[24048] = "Whirling Trip"
+        id_to_name[24049] = "Impale"
+        id_to_name[24050] = "Sonic Burst"
+        id_to_name[24097] = "Poison"
+        id_to_name[24099] = "Poison Bolt Volley"
+        id_to_name[24189] = "Force Punch"
+        id_to_name[24192] = "Speed Slash"
+        id_to_name[24306] = "Delusions of Jin'do"
+        id_to_name[24317] = "Sunder Armor"
+        id_to_name[24321] = "Poisonous Blood"
+        id_to_name[24332] = "Rake"
+        id_to_name[24339] = "Infected Bite"
+        id_to_name[24407] = "Overpower"
+        id_to_name[24437] = "Blood Leech"
+        id_to_name[24611] = "Fireball"
+        id_to_name[24612] = "Flamestrike"
+        id_to_name[24616] = "Shadow Shock"
+        id_to_name[24668] = "Shadow Bolt"
+        id_to_name[24669] = "Rain of Fire"
+        id_to_name[24671] = "Snap Kick"
+        id_to_name[24685] = "Earth Shock"
+        id_to_name[24673] = "Curse of Blood"
+        id_to_name[16496] = "Magma Shackles"
+        id_to_name[23860] = "Holy Fire"
+        id_to_name[24333] = "Ravage"
+        id_to_name[15801] = "Lightning Bolt"
+        id_to_name[24003] = "Tranquilizing Poison"
+        id_to_name[24016] = "Exploit Weakness"
+        id_to_name[24071] = "Axe Flurry"
+        id_to_name[19448] = "Poison"
+        id_to_name[24674] = "Veil of Shadow"
+        id_to_name[15581] = "Sinsiter Strike"
+        id_to_name[24300] = "Drain Life"
+        id_to_name[16508] = "Intimidating Roar"
 
 
 
