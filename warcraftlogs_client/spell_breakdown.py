@@ -205,9 +205,14 @@ class SpellBreakdown:
         id_to_name[22985] = "Shadow Flame" #2nd shadow flame ID
         id_to_name[23023] = "Conflagration" #2nd conflag
         id_to_name[23462] = "Fire Nova"
+        id_to_name[24585] = "Drain Life"
         id_to_name[22980] = "Shadow Flame" #3rd shadow flame ID
         id_to_name[22687] = "Veil of Shadow"
         id_to_name[22665] = "Shadow Bolt Volley"
+        id_to_name[13496] = "Dazed"
+        id_to_name[13897] = "Fiery Weapon"
+        id_to_name[14157] = "Ruthlessness"
+        id_to_name[24251] = "Zulian Slice"
         
         id_to_name[13241] = "Goblin Sapper Charge"
         id_to_name[24375] = "War Stomp"
