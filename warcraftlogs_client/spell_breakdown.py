@@ -81,6 +81,10 @@ class SpellBreakdown:
             22336: 21077,
             24668: 21077,
             19728: 21077,
+            19729: 20177,
+
+            # Shadow Bolt Volley
+            22665: 20741,
 
             # Shadow Flame
             22985: 22979,
@@ -94,7 +98,10 @@ class SpellBreakdown:
             24333: 24317,
 
             # Shadow Shock
-            19460: 20603
+            19460: 20603,
+
+            # Rain of Fire
+            369330: 19717
         }
 
         for entry in entries:
@@ -113,6 +120,8 @@ class SpellBreakdown:
 
         # Manually patch known IDs as the casts table often only returns the ID
         id_to_name[17543] = "Fire Protection"
+        id_to_name[17548] = "Shadow Protection"
+        id_to_name[17549] = "Arcane Protection"
         id_to_name[27805] = "Holy Nova"
         id_to_name[15290] = "Vampiric Embrace"
         id_to_name[19968] = "Holy Light"
@@ -134,6 +143,10 @@ class SpellBreakdown:
         id_to_name[20615] = "Intercept"
         id_to_name[7922] = "Charge"
         id_to_name[5530] = "Mace Stun"
+        id_to_name[10461] = "Healing Stream"
+        id_to_name[19364] = "Ground Stomp"
+        id_to_name[26363] = "Lightning Shield"
+        id_to_name[19729] = "Shadow Bolt"
         id_to_name[21140] = "Fatal Wound"
         id_to_name[22845] = "Frenzied Regeneration"
         id_to_name[21151] = "Gutgore Ripper"
@@ -141,6 +154,8 @@ class SpellBreakdown:
         id_to_name[16624] = "Thorium Shield Spike"
         id_to_name[9910] = "Thorns"
         id_to_name[11374] = "Gift of Arthras"
+        id_to_name[694] = "Mocking Blow"
+        id_to_name[7373] = "Hamstring"
         id_to_name[7919] = "Shoot Crossbow"
         id_to_name[22600] = "Force Reactive Disk"
         id_to_name[11682] = "Hellfire"
@@ -149,6 +164,20 @@ class SpellBreakdown:
         id_to_name[24579] = "Screech"
         id_to_name[17800] = "Shadow Vulnerability"
         id_to_name[14268] = "Wing Clip"
+        id_to_name[21992] = "Thunderfury"
+        id_to_name[18104] = "Wrath"
+        id_to_name[20253] = "Intercept Stun"
+        id_to_name[23687] = "Lightning Strike"
+        id_to_name[12579] = "Winter's Chill"
+        id_to_name[14315] = "Explosive Trap"
+        id_to_name[17261] = "Bite"
+        id_to_name[17258] = "Bite"
+        id_to_name[3010] = "Claw"
+        id_to_name[25012] = "Lightning Breath"
+        id_to_name[26654] = "Sweeping Strikes"
+        id_to_name[20004] = "Life Steal"
+        id_to_name[18398] = "Frost Blast"
+
         
         id_to_name[19675] = "Feral Charge"
         id_to_name[2480] = "Shoot Bow"
@@ -167,6 +196,7 @@ class SpellBreakdown:
         id_to_name[23341] = "Flame Buffet"
         id_to_name[22311] = "Brood Power Bronze"
         id_to_name[15663] = "Cleave"
+        id_to_name[19366] = "Cauterizing Flames"
 
         id_to_name[15754] = "Cleave" #2nd cleave ID
         id_to_name[16806] = "Conflagration"
@@ -176,12 +206,14 @@ class SpellBreakdown:
         id_to_name[23023] = "Conflagration" #2nd conflag
         id_to_name[23462] = "Fire Nova"
         id_to_name[22980] = "Shadow Flame" #3rd shadow flame ID
-
+        id_to_name[22687] = "Veil of Shadow"
+        id_to_name[22665] = "Shadow Bolt Volley"
         
         id_to_name[13241] = "Goblin Sapper Charge"
         id_to_name[24375] = "War Stomp"
         id_to_name[22289] = "Brood Power Green"
         id_to_name[369330] = "Rain of Fire"
+        id_to_name[19717] = "Rain of Fire"
         id_to_name[22436] = "Aura of Flames"
         id_to_name[22334] = "Bomb"
         id_to_name[22559] = "Brood Power: Blue"
@@ -201,12 +233,24 @@ class SpellBreakdown:
         id_to_name[22560] = "Brood Power Black"
         id_to_name[23169] = "Brood Affliction Green"
         id_to_name[22284] = "Brood Power Red"
+        id_to_name[23154] = "Brood Affliction: Black"
+        id_to_name[23155] = "Brood Affliction: Red"
+        id_to_name[23153] = "Brood Affliction: Blue"
+        id_to_name[23603] = "Wild Polymorph"
+
         id_to_name[22686] = "Bellowing Roar"
         id_to_name[17290] = "Fireball"
         id_to_name[22271] = "Arcane Explosion"
         id_to_name[19632] = "Cleave"
         id_to_name[6788] = "Weakened Soul"
         id_to_name[22975] = "Shadow Flame"
+        id_to_name[23315] = "Ignite Flesh"
+        id_to_name[23402] = "Corrupted Healing"
+        id_to_name[22423] = "Flame Shock"
+        id_to_name[23189] = "Forst Burn"
+        id_to_name[23364] = "Tail Lash"
+       
+
 
         id_to_name[23461] = "Flame Breath"
         id_to_name[19983] = "Cleave"
