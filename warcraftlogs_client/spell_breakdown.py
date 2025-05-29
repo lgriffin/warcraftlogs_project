@@ -143,6 +143,12 @@ class SpellBreakdown:
         id_to_name[11374] = "Gift of Arthras"
         id_to_name[7919] = "Shoot Crossbow"
         id_to_name[22600] = "Force Reactive Disk"
+        id_to_name[11682] = "Hellfire"
+        id_to_name[3009] = "Claw"
+        id_to_name[14921] = "Growl"
+        id_to_name[24579] = "Screech"
+        id_to_name[17800] = "Shadow Vulnerability"
+        id_to_name[14268] = "Wing Clip"
         
         id_to_name[19675] = "Feral Charge"
         id_to_name[2480] = "Shoot Bow"
