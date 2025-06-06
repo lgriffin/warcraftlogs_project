@@ -56,6 +56,11 @@ def get_report_metadata(client, report_id):
         print(result)
         raise KeyError("Missing 'data' in response.")
     report = result["data"]["reportData"]["report"]
+    if report is None:
+        print(f"[ERROR] Report ID '{report_id}' not found or is inaccessible.")
+        print("🔍 Please double-check the report ID and try again.")
+        exit(1)
+        
     return {
     "title": report["title"],
     "owner": report["owner"]["name"],
