@@ -1,7 +1,7 @@
 {
-    "client_id": "9e7bfab5-7623-4300-8f56-d02c2d555a33",
-    "client_secret": "mQ0wVlyF8QDYgqCHVpEgytPZ8icx5rkWggWGFzFL",
-    "report_id": "aR6xTALMQZ8cNKJn",
+    "client_id": "insert your client_id",
+    "client_secret": "insert your client_secret",
+    "report_id": "bNPKVt4dTYG76ahF",
     "role_thresholds": {
     "healer_min_healing": 50000,
     "tank_min_taken": 150000,
