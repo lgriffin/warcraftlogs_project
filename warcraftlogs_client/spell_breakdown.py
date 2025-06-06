@@ -157,6 +157,7 @@ class SpellBreakdown:
         id_to_name[21151] = "Gutgore Ripper"
         id_to_name[23894] = "Bloodthirst"
         id_to_name[24388] = "Brain Damage"
+        id_to_name[11201] = "Crippling Poison"
         id_to_name[16624] = "Thorium Shield Spike"
         id_to_name[9910] = "Thorns"
         id_to_name[11374] = "Gift of Arthras"
