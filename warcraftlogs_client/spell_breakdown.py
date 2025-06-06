@@ -52,6 +52,7 @@ class SpellBreakdown:
         spell_id_aliases = {
             27801: 27805,    # Holy Nova
             23458: 27805,
+            27803: 27805,
             19943: 19993,    # Flash of Light
             20930: 25903,    # Holy Shock variant
             25914: 25903,    # Another Holy Shock variant
@@ -96,6 +97,8 @@ class SpellBreakdown:
 
             # Sunder Armor
             24333: 24317,
+            15502: 24317,
+            11597: 24317,
 
             # Shadow Shock
             19460: 20603,
@@ -123,6 +126,7 @@ class SpellBreakdown:
         id_to_name[17548] = "Shadow Protection"
         id_to_name[17549] = "Arcane Protection"
         id_to_name[27805] = "Holy Nova"
+        id_to_name[27803] = "Holy Nova"
         id_to_name[15290] = "Vampiric Embrace"
         id_to_name[19968] = "Holy Light"
         id_to_name[19993] = "Flash of Light"
@@ -138,6 +142,7 @@ class SpellBreakdown:
         id_to_name[23267] = "Firebolt"
         id_to_name[1]     = "Melee"
         id_to_name[20647] = "Execute"
+        id_to_name[11601] = "Revenge"
         id_to_name[1680] = "Whirlwind"
         id_to_name[12721] = "Deep Wound"
         id_to_name[20615] = "Intercept"
@@ -150,6 +155,7 @@ class SpellBreakdown:
         id_to_name[21140] = "Fatal Wound"
         id_to_name[22845] = "Frenzied Regeneration"
         id_to_name[21151] = "Gutgore Ripper"
+        id_to_name[23894] = "Bloodthirst"
         id_to_name[24388] = "Brain Damage"
         id_to_name[16624] = "Thorium Shield Spike"
         id_to_name[9910] = "Thorns"
@@ -160,11 +166,13 @@ class SpellBreakdown:
         id_to_name[22600] = "Force Reactive Disk"
         id_to_name[11682] = "Hellfire"
         id_to_name[3009] = "Claw"
+        id_to_name[355] = "Taunt"
         id_to_name[14921] = "Growl"
         id_to_name[24579] = "Screech"
         id_to_name[17800] = "Shadow Vulnerability"
         id_to_name[14268] = "Wing Clip"
         id_to_name[21992] = "Thunderfury"
+        id_to_name[13237] = "Goblin Mortar"
         id_to_name[18104] = "Wrath"
         id_to_name[20253] = "Intercept Stun"
         id_to_name[23687] = "Lightning Strike"
@@ -177,6 +185,8 @@ class SpellBreakdown:
         id_to_name[26654] = "Sweeping Strikes"
         id_to_name[20004] = "Life Steal"
         id_to_name[18398] = "Frost Blast"
+        id_to_name[11567] = "Heroic Strike"
+
 
         
         id_to_name[19675] = "Feral Charge"
@@ -273,6 +283,7 @@ class SpellBreakdown:
         id_to_name[-4] = "Melee"
         id_to_name[13880] = "Magma Splash"
         id_to_name[15502] = "Sunder Armor"
+        id_to_name[11597] = "Sunder Armor"
         id_to_name[15732] = "Immolate"
         id_to_name[18944] = "Smash"
         id_to_name[18945] = "Knock Away"
