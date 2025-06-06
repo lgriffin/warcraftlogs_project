@@ -1,5 +1,11 @@
-### healing_report.md.j2
+
+![Logo](logo.png)
+
 # {{ report_title }}
+
+Author: Hadur@Spineshatter EU Alliance
+
+---
 
 **Log Date:** `{{ log_date }}`
 **Log URL:** [View Full Log]({{ log_url }})
@@ -10,75 +16,82 @@
 ## ✨ Healing Summary
 
 {% for class_type, rows in summary_by_class.items() %}
+{% set spells = spell_names.get(class_type, []) %}
+{% set dispels = dispels_all.get(class_type, []) %}
+{% if rows and spells %}
 ### {{ class_type }} Team
 
-| Character | Total Healing | Overhealing | {% for spell in rows[0].spells.keys() %}{{ spell }} |{% endfor %}{% for dispel in dispels_all[class_type] %}{{ dispel }} |{% endfor %}{% if class_type == "Priest" %}Fear Ward |{% endif %} Mana Pots | Dark Runes |
-|-----------|----------------|--------------|{% for spell in rows[0].spells.keys() %}-------------|{% endfor %}{% for dispel in dispels_all[class_type] %}-------------|{% endfor %}{% if class_type == "Priest" %}-----------|{% endif %}------------|------------|
-{% for row in rows -%}
-| {{ row.name }} | {{ row.healing }} | {{ row.overhealing }} | {% for s in row.spells.values() %}{{ s }} |{% endfor %}{% for d in row.dispels.values() %}{{ d }} |{% endfor %}{% if class_type == "Priest" %}{{ row.fear_ward }} |{% endif %} {{ row.mana_potions }} | {{ row.dark_runes }} |
+| Character | Total Healing | Overhealing | {% for spell in spells %}{{ spell }} |{% endfor %}{% for dispel in dispels %}{{ dispel }} |{% endfor %}{% if class_type == "Priest" %}Fear Ward |{% endif %}Mana Pots | Dark Runes |
+|-----------|----------------|--------------|{% for _ in spells %}-------------|{% endfor %}{% for _ in dispels %}-------------|{% endfor %}{% if class_type == "Priest" %}-----------|{% endif %}-----------|------------|
+{% for row in rows %}
+| {{ row.name }} | {{ row.healing }} | {{ row.overhealing }} | {% for spell in spells %}{{ row.spells.get(spell, '') }} |{% endfor %}{% for dispel in dispels %}{{ row.dispels.get(dispel, '') }} |{% endfor %}{% if class_type == "Priest" %}{{ row.fear_ward or '' }} |{% endif %}{{ row.mana_potions or '' }} | {{ row.dark_runes or '' }} |
 {% endfor %}
-{% endfor %}
 
----
-
-## 🧙 Individual Views
-
-{% for group, players in {"priests": priests, "paladins": paladins, "druids": druids}.items() %}
-{% if players %}
-### {{ group|capitalize }}
-
-{% for p in players %}
-#### **{{ p.name }}**
-- Total Healing: `{{ p.total_healing }}`
-- Overhealing: `{{ p.overhealing }}`
-
-| Spell | Casts | Healing |
-|-------|-------|---------|
-{{ p.spell_table }}
-
-- 💊 Mana Pots: `{{ p.mana_potions }}`
-- 💀 Dark Runes: `{{ p.dark_runes }}`
-
----
-{% endfor %}
 {% endif %}
 {% endfor %}
 {% endif %}
 
-{% if include_melee %}
+---
+
+{% if tank_summary %}
+## 🛡️ Tank Summary – Damage Taken by Ability
+
+| Character | {{ tank_abilities | join(' | ') }} |
+|-----------|{% for _ in tank_abilities %}-------------|{% endfor %}
+
+{% for row in tank_summary %}
+| {{ row.name }} | {{ row.abilities | join(' | ') }} |
+{% endfor %}
+{% endif %}
 
 ---
 
+{% if tank_damage_summary %}
+## 🛡️ Tank Summary – Damage Done by Ability
+
+{% for tank_class in tank_damage_summary %}
+{% if tank_class.players and tank_class.abilities %}
+### {{ tank_class.class_name }}
+
+| Character | {% for spell in tank_class.abilities %}{{ spell }} Dmg | {{ spell }} Casts |{% endfor %}{{ '\n' }}|-----------|{% for _ in tank_class.abilities %}-------------|-------------|{% endfor %}
+{% for player in tank_class.players -%}
+{{ '\n' }}| {{ player.name }} | {{ player.damage | join(' | ') }} | {{ player.casts | join(' | ') }} |
+{%- endfor %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+---
+
+{% if melee_classes %}
 ## ⚔️ Melee Summary
 
 {% for group in melee_classes %}
-### {{ group.class_name }} Melee Team
-
-| Name | Total Damage | {% for s in group.players[0].spells %}{{ s.name }} (casts) |{% endfor %}
-|------|---------------|{% for s in group.players[0].spells %}----------------------|{% endfor %}
-{% for player in group.players -%}
-| {{ player.name }} | {{ player.damage }} | {% for s in player.spells %}{{ s.damage }} ({{ s.casts }}) |{% endfor %}
-{% endfor %}
-{% endfor %}
-
----
-
-## 🧙 Individual Melee Views
-
-{% for group in melee_classes %}
+{% if group.players and group.players[0].spells %}
 ### {{ group.class_name }}
 
-{% for p in group.players %}
-#### **{{ p.name }}**
-- Total Damage: `{{ p.damage }}`
+| Name | Total Damage | {% for s in group.players[0].spells %}{{ s.name }} Dmg | {{ s.name }} Casts |{% endfor %}{{ '\n' }}|------|---------------|{% for _ in group.players[0].spells %}-------------|-------------|{% endfor %}
+{% for player in group.players -%}
+{{ '\n' }}| {{ player.name }} | {{ player.damage }} | {% for s in player.spells %}{{ s.damage }} | {{ s.casts }} |{% endfor %}
+{%- endfor %}
 
-| Spell | Casts | Damage |
-|-------|-------|--------|
-{% for s in p.spells %}
-| {{ s.name }} | {{ s.casts }} | {{ s.damage }} |
+{% endif %}
 {% endfor %}
-
+{% endif %}
 ---
-{% endfor %}
+
+{% if ranged_classes %}
+## 🏹 Ranged Summary
+
+{% for group in ranged_classes %}
+{% if group.players and group.players[0].spells %}
+### {{ group.class_name }}
+
+| Name | Total Damage | {% for s in group.players[0].spells %}{{ s.name }} Dmg | {{ s.name }} Casts |{% endfor %}{{ '\n' }}|------|---------------|{% for _ in group.players[0].spells %}-------------|-------------|{% endfor %}
+{% for player in group.players -%}
+{{ '\n' }}| {{ player.name }} | {{ player.damage }} | {% for s in player.spells %}{{ s.damage }} | {{ s.casts }} |{% endfor %}
+{%- endfor %}
+
+{% endif %}
 {% endfor %}
 {% endif %}

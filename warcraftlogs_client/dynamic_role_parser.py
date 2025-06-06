@@ -22,7 +22,7 @@ def group_players_by_class(master_actors):
     return class_groups
 
 
-def identify_healers(master_actors, healing_totals, threshold=50000):
+def identify_healers(master_actors, healing_totals, threshold):
     healing_classes = {"Priest", "Paladin", "Druid", "Shaman"}
 
     healers = []
@@ -45,8 +45,8 @@ def identify_healers(master_actors, healing_totals, threshold=50000):
                 "healing": total_healing,
             })
 
-    print("\n💉 Identified Healers (Healing > 50,000):")
-    for healer in healers:
-        print(f"- {healer['name']} ({healer['class']}): {healer['healing']:,} healing")
-    print("\n💉 Excluding anyone that hasn't breached 50k healing:")
+   # print("\n💉 Identified Healers (Healing > 50,000):")
+   # for healer in healers:
+   #     print(f"- {healer['name']} ({healer['class']}): {healer['healing']:,} healing")
+   # print("\n💉 Excluding anyone that hasn't breached 50k healing:")
     return healers
