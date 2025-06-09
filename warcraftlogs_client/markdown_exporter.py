@@ -28,8 +28,8 @@ def export_combined_markdown(
         "report_title": report_title,
         "log_date": datetime.datetime.fromtimestamp(metadata["start"] / 1000).strftime("%Y-%m-%d"),
         "log_url": f"https://www.warcraftlogs.com/reports/{metadata['report_id']}",
-        "summary_by_class": healer_summary,
-        "dispels_all": {},  # assumed precomputed if needed
+        "summary_by_class": {},
+        "dispels_all": {},
         "melee_classes": [],
         "ranged_classes": [],
         "tank_summary": tank_summary,
@@ -40,42 +40,64 @@ def export_combined_markdown(
         "include_melee": True
     }
 
-    # Populate melee_classes
+    # Populate healer summary_by_class
+    for class_type, class_rows in healer_summary.items():
+        dispel_set = set()
+        for row in class_rows:
+            dispel_set.update(row["dispels"].keys())
+        context["dispels_all"][class_type] = sorted(dispel_set)
+        context["summary_by_class"][class_type] = []
+
+        for row in class_rows:
+            context["summary_by_class"][class_type].append({
+                "name": row["name"],
+                "healing": f"{row['healing']:,}",
+                "overhealing": f"{row['overhealing']:,}",
+                "spells": row["spells"],
+                "dispels": row["dispels"],
+                "fear_ward": row.get("fear_ward", "") if class_type == "Priest" else "",
+                "mana_potions": row.get("mana_potions") or row.get("resources", {}).get("Major Mana Potion", 0),
+                "dark_runes": row.get("dark_runes") or row.get("resources", {}).get("Dark Rune", 0)
+            })
+
+    # Populate melee_classes with unified spell headers
     for class_name in melee_summary:
+        all_spells = set()
+        for row in melee_summary[class_name]:
+            all_spells.update(spell for spell, count in row["casts"].items() if count > 0)
+
+        sorted_spells = sorted(all_spells)
         context["melee_classes"].append({
             "class_name": class_name,
+            "spells": sorted_spells,
             "players": []
         })
+
         for row in melee_summary[class_name]:
             context["melee_classes"][-1]["players"].append({
                 "name": row["name"],
                 "damage": f"{row['total']:,}",
-                "spells": [
-                    {
-                        "name": spell,
-                        "casts": row["casts"].get(spell, 0),
-                        "damage": "-"
-                    } for spell in sorted(spell_names[class_name])
-                ]
+                "spells_map": { spell: row["casts"].get(spell, 0) for spell in sorted_spells }
             })
 
-    # Populate ranged_classes
+    # Populate ranged_classes with unified spell headers
     for class_name in ranged_summary:
+        all_spells = set()
+        for row in ranged_summary[class_name]:
+            all_spells.update(spell for spell, count in row["casts"].items() if count > 0)
+
+        sorted_spells = sorted(all_spells)
         context["ranged_classes"].append({
             "class_name": class_name,
+            "spells": sorted_spells,
             "players": []
         })
+
         for row in ranged_summary[class_name]:
             context["ranged_classes"][-1]["players"].append({
                 "name": row["name"],
                 "damage": f"{row['total']:,}",
-                "spells": [
-                    {
-                        "name": spell,
-                        "casts": row["casts"].get(spell, 0),
-                        "damage": "-"
-                    } for spell in sorted(spell_names[class_name])
-                ]
+                "spells_map": { spell: row["casts"].get(spell, 0) for spell in sorted_spells }
             })
 
     rendered = template.render(context)

@@ -24,7 +24,7 @@ Author: Hadur@Spineshatter EU Alliance
 | Character | Total Healing | Overhealing | {% for spell in spells %}{{ spell }} |{% endfor %}{% for dispel in dispels %}{{ dispel }} |{% endfor %}{% if class_type == "Priest" %}Fear Ward |{% endif %}Mana Pots | Dark Runes |
 |-----------|----------------|--------------|{% for _ in spells %}-------------|{% endfor %}{% for _ in dispels %}-------------|{% endfor %}{% if class_type == "Priest" %}-----------|{% endif %}-----------|------------|
 {% for row in rows %}
-| {{ row.name }} | {{ row.healing }} | {{ row.overhealing }} | {% for spell in spells %}{{ row.spells.get(spell, '') }} |{% endfor %}{% for dispel in dispels %}{{ row.dispels.get(dispel, '') }} |{% endfor %}{% if class_type == "Priest" %}{{ row.fear_ward or '' }} |{% endif %}{{ row.mana_potions or '' }} | {{ row.dark_runes or '' }} |
+| {{ row.name }} | {{ row.healing }} | {{ row.overhealing }} | {% for spell in spells %}{{ row.spells.get(spell, '') }} |{% endfor %}{% for dispel in dispels %}{{ row.dispels.get(dispel, '') }} |{% endfor %}{% if class_type == "Priest" %}{{ row.fear_ward or '' }} |{% endif %}{{ row.mana_potions }} | {{ row.dark_runes }}|
 {% endfor %}
 
 {% endif %}
@@ -67,12 +67,12 @@ Author: Hadur@Spineshatter EU Alliance
 ## ⚔️ Melee Summary
 
 {% for group in melee_classes %}
-{% if group.players and group.players[0].spells %}
+{% if group.players and group.spells %}
 ### {{ group.class_name }}
 
-| Name | Total Damage | {% for s in group.players[0].spells %}{{ s.name }} Dmg | {{ s.name }} Casts |{% endfor %}{{ '\n' }}|------|---------------|{% for _ in group.players[0].spells %}-------------|-------------|{% endfor %}
+| Name | Total Damage | {% for s in group.spells %}{{ s }} Casts |{% endfor %}{{ '\n' }}|------|---------------|{% for _ in group.spells %}-------------|{% endfor %}
 {% for player in group.players -%}
-{{ '\n' }}| {{ player.name }} | {{ player.damage }} | {% for s in player.spells %}{{ s.damage }} | {{ s.casts }} |{% endfor %}
+{{ '\n' }}| {{ player.name }} | {{ player.damage }} | {% for spell_name in group.spells %}{{ player.spells_map.get(spell_name, 0) }} |{% endfor %}
 {%- endfor %}
 
 {% endif %}
@@ -81,17 +81,18 @@ Author: Hadur@Spineshatter EU Alliance
 ---
 
 {% if ranged_classes %}
-## 🏹 Ranged Summary
+## 🌹 Ranged Summary
 
 {% for group in ranged_classes %}
-{% if group.players and group.players[0].spells %}
+{% if group.players and group.spells %}
 ### {{ group.class_name }}
 
-| Name | Total Damage | {% for s in group.players[0].spells %}{{ s.name }} Dmg | {{ s.name }} Casts |{% endfor %}{{ '\n' }}|------|---------------|{% for _ in group.players[0].spells %}-------------|-------------|{% endfor %}
+| Name | Total Damage | {% for s in group.spells %}{{ s }} Casts |{% endfor %}{{ '\n' }}|------|---------------|{% for _ in group.spells %}-------------|{% endfor %}
 {% for player in group.players -%}
-{{ '\n' }}| {{ player.name }} | {{ player.damage }} | {% for s in player.spells %}{{ s.damage }} | {{ s.casts }} |{% endfor %}
+{{ '\n' }}| {{ player.name }} | {{ player.damage }} | {% for spell_name in group.spells %}{{ player.spells_map.get(spell_name, 0) }} |{% endfor %}
 {%- endfor %}
 
 {% endif %}
 {% endfor %}
 {% endif %}
+

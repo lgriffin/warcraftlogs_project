@@ -9,9 +9,6 @@ from .spell_breakdown import SpellBreakdown
 from .healing import OverallHealing
 from . import dynamic_role_parser
 from .markdown_exporter import export_combined_markdown
-from .cache import load_cached_data, save_cache
-
-
 
 def get_master_data(client, report_id):
     query = f"""
@@ -356,27 +353,56 @@ def run_unified_report(args):
     print_class_summary_table("Ranged", ranged_summary, all_ranged_spells)
 
     # ========================= HEALER SUMMARY TABLES
-    def print_healer_table(class_name, summary, spell_names):
-        if not summary:
-            return
+    def print_healer_table(summary, spell_names, class_name):
         print(f"\n📊 Healer Summary: {class_name}")
+
+        all_dispels = set()
+        for row in summary:
+            all_dispels.update(row["dispels"].keys())
+
+        dispel_headers = "".join(f"{dispel[:16]:>16}" for dispel in sorted(all_dispels))
+        fear_ward_header = f"{'Fear Ward':>12}" if class_name == "Priest" else ""
         header = (
-            f"{'Character':<15} {'Healing':>12} {'Overheal':>12}" +
-            "".join(f"{spell[:14]:>16}" for spell in spell_names)
+            f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
+            "".join(f"{spell[:14]:>16}" for spell in spell_names) +
+            f"{dispel_headers}{fear_ward_header}{'Restore Mana':>16} {'Dark Rune':>12}"
         )
         print(header)
         print("-" * len(header))
+
         for row in sorted(summary, key=lambda x: x["healing"], reverse=True):
-            line = f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
+            spell_counts = ""
             for spell in spell_names:
-                count = row["spells"].get(spell, 0)
-                line += f"{count:>16}"
-            print(line)
+                if spell == "Fire Protection":
+                    healing = row.get("healing_spells", {}).get("Fire Protection", 0)
+                    spell_counts += f"{healing:>16,}"
+                else:
+                    cast_total = sum(
+                        count for name, count in row["spells"].items()
+                        if name == spell
+                    )
+                    spell_counts += f"{cast_total:>16}"
+
+            dispel_counts = "".join(
+                f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels)
+            )
+
+            fear_ward = row.get("fear_ward", "-") if class_name == "Priest" else ""
+            fear_ward_value = f"{fear_ward:>12}" if class_name == "Priest" else ""
+            restore_mana = row["resources"].get("Major Mana Potion", 0)
+            dark_rune = row["resources"].get("Dark Rune", 0)
+
+            print(
+                f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
+                f"{spell_counts}{dispel_counts}{fear_ward_value}{restore_mana:>16}{dark_rune:>12}"
+            )
+
 
     for class_name in ["Priest", "Paladin", "Druid", "Shaman"]:
         summary = grouped_summary.get(class_name, [])
         spell_names = sorted(all_spell_names_by_class.get(class_name, []))
-        print_healer_table(class_name, summary, spell_names)
+        if summary:
+            print_healer_table(summary, spell_names, class_name)
 
     # ========================= TANK SUMMARY TABLE
     print("\n📊 Tank Summary: Damage Taken by Ability")
