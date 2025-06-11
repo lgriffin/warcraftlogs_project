@@ -50,17 +50,18 @@ Author: Hadur@Spineshatter EU Alliance
 ## 🛡️ Tank Summary – Damage Done by Ability
 
 {% for tank_class in tank_damage_summary %}
-{% if tank_class.players and tank_class.abilities %}
+{% if tank_class.players and tank_class.spells %}
 ### {{ tank_class.class_name }}
 
-| Character | {% for spell in tank_class.abilities %}{{ spell }} Dmg | {{ spell }} Casts |{% endfor %}{{ '\n' }}|-----------|{% for _ in tank_class.abilities %}-------------|-------------|{% endfor %}
+| Character | {% for spell in tank_class.spells %}{{ spell }} Casts |{% endfor %}{{ '\n' }}|-----------|{% for _ in tank_class.spells %}-------------|{% endfor %}
 {% for player in tank_class.players -%}
-{{ '\n' }}| {{ player.name }} | {{ player.damage | join(' | ') }} | {{ player.casts | join(' | ') }} |
+{{ '\n' }}| {{ player.name }} | {% for spell in tank_class.spells %}{{ player.spells_map.get(spell, 0) }} |{% endfor %}
 {%- endfor %}
 
 {% endif %}
 {% endfor %}
 {% endif %}
+
 ---
 
 {% if melee_classes %}

@@ -1,6 +1,20 @@
 from collections import defaultdict
 
 class SpellBreakdown:
+    spell_id_aliases = {
+        27801: 27805, 23458: 27805, 27803: 27805,
+        19943: 19993, 20930: 25903, 25914: 25903, 10329: 19968,
+        20569: 15663, 15754: 15663, 19983: 15663, 19632: 15663, 20605: 15663,
+        20602: 23462, 19627: 11351,
+        -4: 1, -32: 1,
+        22336: 21077, 24668: 21077, 19728: 21077,
+        22665: 20741,
+        22985: 22979, 22980: 22979,
+        19644: 19730, 22591: 19730,
+        24333: 24317, 15502: 24317, 11597: 24317,
+        19460: 20603,
+        369330: 19717
+    }
     @staticmethod
     def calculate(healing_events):
         spells = defaultdict(int)
@@ -45,72 +59,10 @@ class SpellBreakdown:
         id_to_name = {}
         id_to_casts = {}
 
-        # Classic has a number of ranks for spells
-        # but also similar spell names but different IDs
-        # Here we map them and the right hand number becomes
-        # our cannonical name so we aggregate on it
-        spell_id_aliases = {
-            27801: 27805,    # Holy Nova
-            23458: 27805,
-            27803: 27805,
-            19943: 19993,    # Flash of Light
-            20930: 25903,    # Holy Shock variant
-            25914: 25903,    # Another Holy Shock variant
-            10329: 19968,     # Holy Light
-
-            # Cleave variants
-            20569: 15663,
-            15754: 15663,
-            19983: 15663,
-            19632: 15663,
-            20605: 15663,
-
-            # Fire Nova
-            20602: 23462,
-
-            # Fire Shield
-            19627: 11351,
-
-            # Holy Shock
-            25914: 25903,
-
-            # Melee normalization
-            -4: 1,
-            -32: 1,
-
-            # Shadow Bolt
-            22336: 21077,
-            24668: 21077,
-            19728: 21077,
-            19729: 20177,
-
-            # Shadow Bolt Volley
-            22665: 20741,
-
-            # Shadow Flame
-            22985: 22979,
-            22980: 22979,
-
-            # Strike
-            19644: 19730,
-            22591: 19730,
-
-            # Sunder Armor
-            24333: 24317,
-            15502: 24317,
-            11597: 24317,
-
-            # Shadow Shock
-            19460: 20603,
-
-            # Rain of Fire
-            369330: 19717
-        }
-
         for entry in entries:
             guid = entry.get("guid")
             name = entry.get("name")
-            canonical_guid = spell_id_aliases.get(guid, guid)
+            canonical_guid = SpellBreakdown.spell_id_aliases.get(guid, guid)
 
             if guid == 20343:
                 continue
@@ -462,3 +414,16 @@ class SpellBreakdown:
                 dispels[dispel_ids[spell_id]] = entry.get("total") or entry.get("hitCount", 0)
 
         return dispels
+
+    @staticmethod
+    def log_cleave_ids(events):
+        print("\n[CLEAVE ID CHECK] Scanning damage taken for known and unknown Cleave IDs:")
+        for e in events:
+            if e.get("type") == "damage":
+                spell_id = e.get("abilityGameID")
+                if spell_id in SpellBreakdown.spell_id_aliases and SpellBreakdown.spell_id_aliases[spell_id] == 15663:
+                    print(f"  - Found mapped Cleave ID: {spell_id} -> 15663")
+                elif spell_id == 15663:
+                    print(f"  - Found direct Cleave ID: {spell_id}")
+                elif "cleave" in str(e.get("ability", "")).lower():
+                    print(f"  - Potential Cleave variant: {spell_id} — name: {e.get('ability')}")

@@ -1,6 +1,7 @@
 import argparse
 import datetime
 from collections import defaultdict
+from collections import OrderedDict
 
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data, get_damage_done_data
@@ -158,7 +159,7 @@ def run_unified_report(args):
     master_actors = get_master_data(client, report_id)
 
     tanks = identify_tanks(client, report_id, master_actors, tank_min_taken, tank_min_mitigation)
-
+    alias_map = SpellBreakdown.spell_id_aliases
     # Identify Healers
     healing_totals = {}
     for actor in master_actors:
@@ -189,13 +190,15 @@ def run_unified_report(args):
         print(f"✅ Total Taken: {tank['taken']:,}")
         print(f"🛡️  Total Mitigated: {tank['mitigated']:,} ({tank['percent']}%)")
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, tank_id)
+        SpellBreakdown.log_cleave_ids(tank["events"])
 
         # Damage Taken
         damage_taken_counts = defaultdict(int)
         for e in tank["events"]:
             if e.get("type") == "damage":
                 spell_id = e.get("abilityGameID")
-                damage_taken_counts[spell_id] += 1
+                canonical_id = alias_map.get(spell_id, spell_id)
+                damage_taken_counts[canonical_id] += 1
 
         print("💥 Damage Taken Breakdown:")
         for spell_id, count in sorted(damage_taken_counts.items(), key=lambda x: -x[1]):
@@ -207,7 +210,9 @@ def run_unified_report(args):
             used_counts = defaultdict(int)
             for e in done_events:
                 if e.get("type") == "damage":
-                    used_counts[e["abilityGameID"]] += 1
+                    spell_id = e.get("abilityGameID")
+                    canonical_id = alias_map.get(spell_id, spell_id)
+                    used_counts[canonical_id] += 1
             for spell_id, count in sorted(used_counts.items(), key=lambda x: -x[1]):
                 print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} uses")
         except Exception as e:
@@ -412,22 +417,43 @@ def run_unified_report(args):
         damage_counts = defaultdict(int)
         for e in tank["events"]:
             if e.get("type") == "damage":
-                spell_id = e.get("abilityGameID")
-                damage_counts[spell_id] += 1
-                all_taken_abilities.add(spell_id)
+                sid = e.get("abilityGameID")
+                canonical_sid = alias_map.get(sid, sid)
+                damage_counts[canonical_sid] += 1
+                all_taken_abilities.add(canonical_sid)
         tank_rows.append((tank["name"], tank["id"], damage_counts))
 
     if tank_rows:
         sample_id = tank_rows[0][1]
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, sample_id)
-        spell_names = [spell_map.get(sid, f"(ID {sid})") for sid in sorted(all_taken_abilities)]
+        name_by_id = OrderedDict()
+        aggregated_ids_by_name = defaultdict(list)
+        for sid in sorted(all_taken_abilities):
+            canonical_id = alias_map.get(sid, sid)
+            if canonical_id == 15663:
+                name = "Cleave"  # enforce canonical name
+            else:
+                name = spell_map.get(canonical_id, f"(ID {canonical_id})")
+            if name not in name_by_id:
+              #  print(f"[SUMMARY MAPPING] Adding spell name: {name} from ID: {sid}")
+                name_by_id[name] = canonical_id
+            aggregated_ids_by_name[name].append(canonical_id)
+         #   else:
+             #   print(f"[DUPLICATE SPELL NAME] Skipping name '{name}' from ID {sid} — already mapped.")
+
+
+        spell_names = list(name_by_id.keys())
+
         header = f"{'Character':<15}" + "".join(f"{spell[:14]:>16}" for spell in spell_names)
         print(header)
         print("-" * len(header))
         for name, _, dmg_dict in tank_rows:
             row = f"{name:<15}"
-            for sid in sorted(all_taken_abilities):
-                row += f"{dmg_dict.get(sid, 0):>16}"
+           # print(f"[SUMMARY ROW] {name} damage dict keys: {list(dmg_dict.keys())}")
+            for spell_name in spell_names:
+                total = sum(dmg_dict.get(sid, 0) for sid in aggregated_ids_by_name[spell_name])
+                row += f"{total:>16}"
+
             print(row)
 
     # ========================= TANK DAMAGE DONE SUMMARY TABLE
@@ -487,18 +513,36 @@ def run_unified_report(args):
             tank_summary=[{"name": name, "abilities": [dmg_dict.get(sid, 0) for sid in sorted(all_taken_abilities)]} for name, _, dmg_dict in tank_rows],
             tank_abilities=[spell_map.get(sid, f"(ID {sid})") for sid in sorted(all_taken_abilities)],
             tank_damage_summary=[
-                {
-                    "class_name": cls,
-                    "abilities": [spell_map.get(ability, f"(ID {ability})") for ability in sorted(all_abilities_by_class[cls])],
-                    "players": [
-                        {
-                            "name": row["name"],
-                            "casts": [row["casts"].get(ability, 0) for ability in sorted(all_abilities_by_class[cls])]
-                        } for row in class_tables[cls]
-                    ]
-                }
-                for cls in class_tables
-            ],
+            {
+                "class_name": cls,
+                "abilities": [
+                    spell_map.get(canonical_id, f"(ID {canonical_id})")
+                    for canonical_id in sorted({
+                        SpellBreakdown.spell_id_aliases.get(a, a)
+                        for a in all_abilities_by_class[cls]
+                    })
+                ],
+                "players": [
+                    {
+                        "name": row["name"],
+                        "casts": [
+                            sum(
+                                row["casts"].get(var_id, 0)
+                                for var_id in all_abilities_by_class[cls]
+                                if SpellBreakdown.spell_id_aliases.get(var_id, var_id) == canonical_id
+                            )
+                            for canonical_id in sorted({
+                                SpellBreakdown.spell_id_aliases.get(a, a)
+                                for a in all_abilities_by_class[cls]
+                            })
+                        ]
+                    }
+                    for row in class_tables[cls]
+                ]
+            }
+            for cls in class_tables
+        ],
+
             spell_names=all_spell_names_by_class,
             report_title=metadata["title"]
         )

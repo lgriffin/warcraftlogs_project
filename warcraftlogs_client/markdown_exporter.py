@@ -32,9 +32,10 @@ def export_combined_markdown(
         "dispels_all": {},
         "melee_classes": [],
         "ranged_classes": [],
+        "tank_classes": [],
         "tank_summary": tank_summary,
         "tank_abilities": tank_abilities,
-        "tank_damage_summary": tank_damage_summary,
+        "tank_damage_summary": [],
         "spell_names": spell_names,
         "include_healer": True,
         "include_melee": True
@@ -99,6 +100,29 @@ def export_combined_markdown(
                 "damage": f"{row['total']:,}",
                 "spells_map": { spell: row["casts"].get(spell, 0) for spell in sorted_spells }
             })
+
+    # Aggregate tank damage summary (merge duplicate spell names)
+    for tank_class in tank_damage_summary:
+        abilities = tank_class["abilities"]
+        spell_names = abilities
+
+        class_group = {
+            "class_name": tank_class["class_name"],
+            "spells": spell_names,
+            "players": []
+        }
+
+        for player in tank_class["players"]:
+            class_group["players"].append({
+                "name": player["name"],
+                "damage": "-",
+                "spells_map": {
+                    spell: player["casts"][i] for i, spell in enumerate(spell_names)
+                }
+            })
+
+        context["tank_damage_summary"].append(class_group)
+
 
     rendered = template.render(context)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
