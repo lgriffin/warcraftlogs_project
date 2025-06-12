@@ -490,9 +490,6 @@ def run_unified_report(args):
             f"{spell_map.get(ability, f'(ID {ability})')[:14]:>16}"
             for ability in sorted(all_abilities_by_class[class_name])
         )
-        print(header)
-        print("-" * len(header))
-
         for row in class_tables[class_name]:
             line = f"{row['name']:<15}"
             for ability in sorted(all_abilities_by_class[class_name]):
@@ -505,44 +502,61 @@ def run_unified_report(args):
         for cls in all_ranged_spells:
             all_spell_names_by_class[cls] = sorted(all_ranged_spells[cls])
 
+        # ===== Aggregation for Tank Summary: Damage Taken =====
+        aggregated_ids_by_name = defaultdict(list)
+        name_by_id = OrderedDict()
+        for sid in sorted(all_taken_abilities):
+            canonical_sid = SpellBreakdown.spell_id_aliases.get(sid, sid)
+            name = "Cleave" if canonical_sid == 15663 else spell_map.get(canonical_sid, f"(ID {canonical_sid})")
+            aggregated_ids_by_name[name].append(sid)
+            name_by_id[name] = canonical_sid
+
+        tank_summary = [
+            {
+                "name": name,
+                "abilities": [
+                    sum(dmg_dict.get(sid, 0) for sid in aggregated_ids_by_name[spell_name])
+                    for spell_name in name_by_id.keys()
+                ]
+            }
+            for name, _, dmg_dict in tank_rows
+        ]
+
+        tank_abilities = list(name_by_id.keys())
         export_combined_markdown(
             metadata=metadata,
             healer_summary=grouped_summary,
             melee_summary=melee_summary,
             ranged_summary=ranged_summary,
-            tank_summary=[{"name": name, "abilities": [dmg_dict.get(sid, 0) for sid in sorted(all_taken_abilities)]} for name, _, dmg_dict in tank_rows],
+            tank_summary=tank_summary,
             tank_abilities=[spell_map.get(sid, f"(ID {sid})") for sid in sorted(all_taken_abilities)],
             tank_damage_summary=[
             {
                 "class_name": cls,
-                "abilities": [
-                    spell_map.get(canonical_id, f"(ID {canonical_id})")
+                "spells_map": dict(OrderedDict(
+                    ("Cleave" if SpellBreakdown.spell_id_aliases.get(canonical_id, canonical_id) == 15663
+                    else spell_map.get(canonical_id, f"(ID {canonical_id})"),
+                    [
+                        sid for sid in all_abilities_by_class[cls]
+                        if SpellBreakdown.spell_id_aliases.get(sid, sid) == canonical_id
+                    ])
                     for canonical_id in sorted({
-                        SpellBreakdown.spell_id_aliases.get(a, a)
-                        for a in all_abilities_by_class[cls]
+                        SpellBreakdown.spell_id_aliases.get(a, a) for a in all_abilities_by_class[cls]
                     })
-                ],
+                )),
                 "players": [
                     {
                         "name": row["name"],
-                        "casts": [
-                            sum(
-                                row["casts"].get(var_id, 0)
-                                for var_id in all_abilities_by_class[cls]
-                                if SpellBreakdown.spell_id_aliases.get(var_id, var_id) == canonical_id
-                            )
-                            for canonical_id in sorted({
-                                SpellBreakdown.spell_id_aliases.get(a, a)
-                                for a in all_abilities_by_class[cls]
-                            })
-                        ]
+                        "casts": {
+                            spell_id: total for spell_id, total in row["casts"].items()
+                        }
+
                     }
                     for row in class_tables[cls]
                 ]
             }
             for cls in class_tables
         ],
-
             spell_names=all_spell_names_by_class,
             report_title=metadata["title"]
         )

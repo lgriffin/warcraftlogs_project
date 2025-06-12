@@ -367,6 +367,7 @@ class SpellBreakdown:
         id_to_name[15581] = "Sinsiter Strike"
         id_to_name[24300] = "Drain Life"
         id_to_name[16508] = "Intimidating Roar"
+        id_to_name[19716] = "Gehennas' Curse"
 
 
 

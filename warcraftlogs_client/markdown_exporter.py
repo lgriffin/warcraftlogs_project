@@ -1,5 +1,7 @@
 import os
 from jinja2 import Environment, FileSystemLoader
+from collections import defaultdict, OrderedDict
+
 import datetime
 
 def export_combined_markdown(
@@ -103,9 +105,7 @@ def export_combined_markdown(
 
     # Aggregate tank damage summary (merge duplicate spell names)
     for tank_class in tank_damage_summary:
-        abilities = tank_class["abilities"]
-        spell_names = abilities
-
+        spell_names = list(tank_class["spells_map"].keys())
         class_group = {
             "class_name": tank_class["class_name"],
             "spells": spell_names,
@@ -113,15 +113,21 @@ def export_combined_markdown(
         }
 
         for player in tank_class["players"]:
+            aggregated_casts = {}
+            for spell, ids in tank_class["spells_map"].items():
+                aggregated_casts[spell] = sum(
+                    player["casts"].get(int(spell_variant), 0) for spell_variant in ids
+                )
+            print(f"[DEBUG] {player['name']} → {aggregated_casts}")
             class_group["players"].append({
                 "name": player["name"],
                 "damage": "-",
-                "spells_map": {
-                    spell: player["casts"][i] for i, spell in enumerate(spell_names)
-                }
+                "spells_map": aggregated_casts
             })
 
+
         context["tank_damage_summary"].append(class_group)
+
 
 
     rendered = template.render(context)
