@@ -118,7 +118,6 @@ def export_combined_markdown(
                 aggregated_casts[spell] = sum(
                     player["casts"].get(int(spell_variant), 0) for spell_variant in ids
                 )
-            print(f"[DEBUG] {player['name']} → {aggregated_casts}")
             class_group["players"].append({
                 "name": player["name"],
                 "damage": "-",
