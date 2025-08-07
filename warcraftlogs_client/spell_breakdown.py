@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 class SpellBreakdown:
+    # Alias to map multiple versions (typically where diffennt ranks are used), a few ? to figure out
     spell_id_aliases = {
         27801: 27805, 23458: 27805, 27803: 27805,
         19943: 19993, 20930: 25903, 25914: 25903, 10329: 19968,
@@ -13,8 +14,21 @@ class SpellBreakdown:
         19644: 19730, 22591: 19730,
         24333: 24317, 15502: 24317, 11597: 24317,
         19460: 20603,
-        369330: 19717
+        369330: 19717,
+        25778: 10101,  # Knock Away
+        15584: 15579,  # Cleave
+        26046: 25779,  # Mana Burn
+        26049: 25779,  # Mana Burn
+        26139: 26100,  # Ground Rupture
+        26478: 26100,  # Ground Rupture
+        26143: 26044,  # Mind Flay
+        26601: 26052,  # Poison Bolt
+        26554: 11581,  # Thunder Clap
+        350025: 13439, # Frostbolt
+        19134: 5246,   # Intimidating Shout
+        20511: 5246,   # Intimidating Shout
     }
+
     @staticmethod
     def calculate(healing_events):
         spells = defaultdict(int)
@@ -369,6 +383,78 @@ class SpellBreakdown:
         id_to_name[16508] = "Intimidating Roar"
         id_to_name[19716] = "Gehennas' Curse"
 
+        # AQ
+        id_to_name[568] = "Arcane Burst"
+        id_to_name[1906] = "Debilitating Charge"
+        id_to_name[3242] = "Ravage"
+        id_to_name[5246] = "Intimidating Shout"
+        id_to_name[6016] = "Pierce Armor"
+        id_to_name[10101] = "Knock Away"
+        id_to_name[15579] = "Cleave"
+        id_to_name[15584] = "Cleave"
+        id_to_name[18327] = "Silence"
+        id_to_name[19128] = "Knockdown"
+        id_to_name[19134] = "Intimidating Shout"
+        id_to_name[25174] = "Sundering Cleave"
+        id_to_name[25778] = "Knock Away"
+        id_to_name[25779] = "Mana Burn"
+        id_to_name[25812] = "Toxic Volley"
+        id_to_name[25991] = "Poison Bolt Volley"
+        id_to_name[25993] = "Poison Shock"
+        id_to_name[26006] = "Shadow Bolt"
+        id_to_name[26007] = "Uppercut"
+        id_to_name[26025] = "Impale"
+        id_to_name[26027] = "Knockback"
+        id_to_name[26044] = "Mind Flay"
+        id_to_name[26046] = "Mana Burn"
+        id_to_name[26048] = "Mind Blast"
+        id_to_name[26049] = "Mana Burn"
+        id_to_name[26050] = "Acid Spit"
+        id_to_name[26052] = "Poison Bolt"
+        id_to_name[26059] = "Explode"
+        id_to_name[26077] = "Itch"
+        id_to_name[26078] = "Vekniss Catalyst"
+        id_to_name[26079] = "Cause Insanity"
+        id_to_name[26081] = "Stinger Charge"
+        id_to_name[26084] = "Whirlwind"
+        id_to_name[26093] = "Quake"
+        id_to_name[26100] = "Ground Rupture"
+        id_to_name[26102] = "Sand Blast"
+        id_to_name[26103] = "Sweep"
+        id_to_name[26139] = "Ground Rupture"
+        id_to_name[26141] = "Hamstring"
+        id_to_name[26143] = "Mind Flay"
+        id_to_name[26192] = "Arcane Explosion"
+        id_to_name[26194] = "Earth Shock"
+        id_to_name[26211] = "Hamstring"
+        id_to_name[26233] = "Wyvern Sting"
+        id_to_name[26476] = "Digestive Acid"
+        id_to_name[26478] = "Ground Rupture"
+        id_to_name[26554] = "Thunderclap"
+        id_to_name[26555] = "Shadow Storm"
+        id_to_name[26558] = "Meteor"
+        id_to_name[26580] = "Fear"
+        id_to_name[26601] = "Poison Bolt"
+        id_to_name[26607] = "Blizzard"
+        id_to_name[26613] = "Unbalancing Strike"
+        id_to_name[341722] = "Eye Beam"
+        id_to_name[4507] = "Target Dummy"
+        id_to_name[6554] = "Pummel"
+        id_to_name[11581] = "Thunder Clap"
+        id_to_name[13439] = "Frostbolt"
+        id_to_name[20005] = "Chilled"
+        id_to_name[20559] = "Mocking Blow"
+        id_to_name[25286] = "Heroic Strike"
+        id_to_name[25288] = "Revenge"
+        id_to_name[350025] = "Frostbolt"
+        id_to_name[20511] = "Intimidating Shout"
+        id_to_name[2819] = "Deadly Poison II"
+        id_to_name[19229] = "Improved Wing Clip"
+        id_to_name[10187] = "Blizzard"
+        id_to_name[12654] = "Ignite"
+        id_to_name[22959] = "Fire Vulnerability"
+        id_to_name[17546] = "Nature Protection Potion"
+        id_to_name[23455] = "Holy Nova"
 
 
         return id_to_name, id_to_casts, entries
