@@ -4,7 +4,7 @@ from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data
 from .characters import Characters
 from .config import load_config
-from .spell_breakdown import SpellBreakdown
+from .spell_manager import SpellBreakdown
 from .healing import OverallHealing
 from . import dynamic_role_parser
 from .common.data import get_master_data, get_report_metadata

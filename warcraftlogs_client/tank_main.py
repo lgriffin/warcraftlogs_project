@@ -4,7 +4,7 @@ from collections import defaultdict
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
 from .config import load_config
-from .spell_breakdown import SpellBreakdown
+from .spell_manager import SpellBreakdown
 from .common.data import get_master_data, get_report_metadata
 import json
 
@@ -88,6 +88,7 @@ def run_tank_report():
         # Damage Taken Abilities
         damage_taken_counts = defaultdict(int)
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, tank['id'])
+        alias_map = SpellBreakdown.spell_id_aliases
 
         for e in per_tank_events[tank['name']]:
             if e.get("type") == "damage":
@@ -96,7 +97,8 @@ def run_tank_report():
 
         print("💥 Damage Taken Breakdown:")
         for spell_id, count in sorted(damage_taken_counts.items(), key=lambda x: -x[1]):
-            print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} hits")
+            canonical_id = alias_map.get(spell_id, spell_id)
+            print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} hits")
 
         # Abilities Used by Tank
         print("⚔️  Abilities Used:")
@@ -113,7 +115,8 @@ def run_tank_report():
                 used_counts[spell_id] += 1
 
         for spell_id, count in sorted(used_counts.items(), key=lambda x: -x[1]):
-            print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} uses")
+            canonical_id = alias_map.get(spell_id, spell_id)
+            print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} uses")
 
         
     print("============================")

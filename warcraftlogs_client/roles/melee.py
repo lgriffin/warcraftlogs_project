@@ -1,5 +1,5 @@
-from client import get_damage_done_data
-from spell_breakdown import SpellBreakdown
+from ..client import get_damage_done_data
+from ..spell_manager import SpellBreakdown
 from collections import defaultdict
 
 def generate_melee_summary(client, report_id, master_actors):

@@ -1,0 +1,117 @@
+{
+  "_comment": "Spell ID Aliases - Maps variant spell IDs to their canonical ID",
+  "_description": "When multiple spell IDs represent the same ability (different ranks, etc.), map them to a single canonical ID",
+  "_format": "source_id: canonical_id",
+  "_example": "27801: 27805 means spell ID 27801 should be treated as 27805",
+  
+  "holy_nova_variants": {
+    "27801": 27805,
+    "23458": 27805,
+    "27803": 27805
+  },
+  
+  "flash_of_light_variants": {
+    "19943": 19993
+  },
+  
+  "holy_shock_variants": {
+    "20930": 25903,
+    "25914": 25903
+  },
+  
+  "holy_light_variants": {
+    "10329": 19968
+  },
+  
+  "cleave_variants": {
+    "20569": 15663,
+    "15754": 15663,
+    "19983": 15663,
+    "19632": 15663,
+    "20605": 15663,
+    "19642": 15663,
+    "15622": 15663
+  },
+  
+  "fire_nova_variants": {
+    "20602": 23462
+  },
+  
+  "fire_shield_variants": {
+    "19627": 11351
+  },
+  
+  "melee_variants": {
+    "-4": 1,
+    "-32": 1
+  },
+  
+  "shadow_bolt_variants": {
+    "22336": 21077,
+    "24668": 21077,
+    "19728": 21077
+  },
+  
+  "shadow_bolt_volley_variants": {
+    "22665": 20741
+  },
+  
+  "shadow_flame_variants": {
+    "22985": 22979,
+    "22980": 22979
+  },
+  
+  "strike_variants": {
+    "19644": 19730,
+    "22591": 19730
+  },
+  
+  "sunder_armor_variants": {
+    "24333": 24317,
+    "15502": 24317,
+    "11597": 24317
+  },
+  
+  "shadow_shock_variants": {
+    "19460": 20603
+  },
+  
+  "rain_of_fire_variants": {
+    "369330": 19717
+  },
+  
+  "knock_away_variants": {
+    "25778": 10101
+  },
+  
+  "mana_burn_variants": {
+    "26046": 25779,
+    "26049": 25779
+  },
+  
+  "ground_rupture_variants": {
+    "26139": 26100,
+    "26478": 26100
+  },
+  
+  "mind_flay_variants": {
+    "26143": 26044
+  },
+  
+  "poison_bolt_variants": {
+    "26601": 26052
+  },
+  
+  "thunder_clap_variants": {
+    "26554": 11581
+  },
+  
+  "frostbolt_variants": {
+    "350025": 13439
+  },
+  
+  "intimidating_shout_variants": {
+    "19134": 5246,
+    "20511": 5246
+  }
+} 

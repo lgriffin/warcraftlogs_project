@@ -3,7 +3,7 @@ import argparse
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
 from .config import load_config
-from .spell_breakdown import SpellBreakdown
+from .spell_manager import SpellBreakdown
 from . import dynamic_role_parser
 from .common.data import get_master_data, get_report_metadata
 
@@ -70,6 +70,7 @@ def run_melee_report():
             try:
                 events = get_damage_done_data(client, report_id, source_id)
                 spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+                alias_map = SpellBreakdown.spell_id_aliases
 
                 total_damage = 0
                 damage_by_ability = defaultdict(int)
@@ -81,7 +82,8 @@ def run_melee_report():
 
                     amount = e.get("amount", 0)
                     spell_id = e.get("abilityGameID")
-                    ability_name = spell_map.get(spell_id, f"(ID {spell_id})")
+                    canonical_id = alias_map.get(spell_id, spell_id)
+                    ability_name = spell_map.get(canonical_id, f"(ID {spell_id})")
 
                     total_damage += amount
                     damage_by_ability[ability_name] += amount

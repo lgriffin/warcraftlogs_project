@@ -106,25 +106,52 @@ As a note, Classic WoW makes it really difficult to identify roles, so we have t
 
 The attempt here is to look holistically at the overall log and NOT at individual fights, so players that swap spec or role will be very hard to detect. Similarly non standard or meme specs are not fully implemented yet. So Ret Paladin, Shadow Priest, Boomkin etc. will undoubtedly have problems. Horde needs more testing, so anyone spotting something missing from the Horde side just raise an issue or a PR.
 
-Similarly, classic uses a range of spells IDs to map the same thematically named ability. We try and converge on those so all spells, such as Flash Heal, count as one Flash Heal Vs segregation based on rank. Warcraft Logs API misses the Spell Name, so on occasion a Spell ID will display. spell_breakdown.py is a quick and dirty hack to map missing IDs, rather than trying to pull from an authorative DB. As a quick fix,
-if you see a spell ID that is absent you can add it manually
+## 🔮 Spell Management System
+
+Classic WoW uses multiple spell IDs for the same ability (different ranks, etc.). Our new **configurable spell system** automatically handles this without requiring code changes.
+
+### Adding Missing Spells (Non-Developers Welcome!)
+
+**When you see `(ID 12345)` instead of a spell name:**
+
+1. Use the management utility:
 ```bash
-id_to_name[12345] = "Actual Spell Name"
+python manage_spells.py add-name 12345 "Actual Spell Name" warrior_abilities
 ```
 
-If there is a rank that is not captured and you want to merge them follow the same structure as this:
+2. Or edit `spell_data/spell_names.json` directly:
+```json
+"warrior_abilities": {
+  "12345": "Actual Spell Name"
+}
+```
+
+**When you see duplicate spells that should be merged:**
+
+1. Use the management utility:
 ```bash
- # Cleave variants
-            20569: 15663,
-            15754: 15663,
-            19983: 15663,
-            19632: 15663,
-            20605: 15663,
-```   
+python manage_spells.py add-alias 12001,12002,12003 12000 new_spell_variants
+```
 
-Wherein you align on one singular ID (can be any ID) and it maps all uses towards that ID.
+2. Or edit `spell_data/spell_aliases.json` directly:
+```json
+"new_spell_variants": {
+  "12001": 12000,  // All map to canonical ID 12000
+  "12002": 12000,
+  "12003": 12000
+}
+```
 
-Even better if you do this, take the time to issue a PR!
+### Spell Management Commands
+
+```bash
+python manage_spells.py validate           # Check configuration
+python manage_spells.py search "Flash Heal" # Find spells
+python manage_spells.py list-categories    # Show categories
+python manage_spells.py list-groups        # Show alias groups
+```
+
+The system automatically validates your changes and prevents errors like circular aliases. **No programming knowledge required!**
 
 ## 🌐 Unified Analysis
 

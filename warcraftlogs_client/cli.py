@@ -99,7 +99,7 @@ def run_unified_analysis(args) -> int:
         run_unified_report(args)
         return 0
     except Exception as e:
-        print(f"❌ Error running unified analysis: {e}")
+        print(f"Error running unified analysis: {e}")
         return 1
 
 def run_healer_analysis(args) -> int:
@@ -144,6 +144,10 @@ def run_ranged_analysis(args) -> int:
 
 def main() -> int:
     """Main entry point for the CLI."""
+    # Reset spell manager to pick up any configuration changes
+    from .spell_manager import reset_spell_manager
+    reset_spell_manager()
+    
     parser = create_parser()
     args = parser.parse_args()
     
