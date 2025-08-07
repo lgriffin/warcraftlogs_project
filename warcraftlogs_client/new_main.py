@@ -3,73 +3,14 @@ import argparse
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data
 from .characters import Characters
-from .loader import load_config
+from .config import load_config
 from .spell_breakdown import SpellBreakdown
 from .healing import OverallHealing
 from . import dynamic_role_parser
+from .common.data import get_master_data, get_report_metadata
 from jinja2 import Environment, FileSystemLoader
 import os
 import datetime
-
-
-def get_master_data(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: "{report_id}") {{
-          masterData {{
-            actors {{
-              id
-              name
-              type
-              subType
-            }}
-          }}
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-
-    if "data" not in result:
-        print("❌ Error retrieving master data:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-
-    return [
-        actor for actor in result["data"]["reportData"]["report"]["masterData"]["actors"]
-        if actor["type"] == "Player"
-    ]
-
-
-
-def get_report_metadata(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: "{report_id}") {{
-          title
-          owner {{
-            name
-          }}
-          startTime
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-
-    if "data" not in result:
-        print("❌ Error retrieving report metadata:")
-        print(result)
-        raise KeyError("Missing 'data' in response. Check if the report ID is valid or if the token has expired.")
-
-    report = result["data"]["reportData"]["report"]
-    return {
-        "title": report["title"],
-        "owner": report["owner"]["name"],
-        "start": report["startTime"]
-    }
 
 
 def print_report_metadata(metadata, present, all_characters):

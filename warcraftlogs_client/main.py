@@ -5,66 +5,12 @@ from collections import OrderedDict
 
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data, get_damage_done_data
-from .loader import load_config
+from .config import load_config
 from .spell_breakdown import SpellBreakdown
 from .healing import OverallHealing
 from . import dynamic_role_parser
 from .markdown_exporter import export_combined_markdown
-
-def get_master_data(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: \"{report_id}\") {{
-          masterData {{
-            actors {{
-              id
-              name
-              type
-              subType
-            }}
-          }}
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-    if "data" not in result:
-        print("❌ Error retrieving master data:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-    return [a for a in result["data"]["reportData"]["report"]["masterData"]["actors"] if a["type"] == "Player"]
-
-
-def get_report_metadata(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: \"{report_id}\") {{
-          title
-          owner {{ name }}
-          startTime
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-    if "data" not in result:
-        print("❌ Error retrieving report metadata:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-    report = result["data"]["reportData"]["report"]
-    if report is None:
-        print(f"[ERROR] Report ID '{report_id}' not found or is inaccessible.")
-        print("🔍 Please double-check the report ID and try again.")
-        exit(1)
-        
-    return {
-    "title": report["title"],
-    "owner": report["owner"]["name"],
-    "start": report["startTime"],
-    "report_id": report_id
-}
+from .common.data import get_master_data, get_report_metadata
 
 
 def print_inferred_raid_makeup(tanks, healers):

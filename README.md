@@ -56,13 +56,17 @@ Example `config.json`:
 From the command line, navigate to the project folder and run:
 
 ```bash
-python -m warcraftlogs_client.main
+python -m warcraftlogs_client.cli
 ```
 
-You can also export the results as a Markdown file using:
+Or for specific analysis modes:
 
 ```bash
-python -m warcraftlogs_client.main --md
+python -m warcraftlogs_client.cli unified --md    # Complete analysis with markdown
+python -m warcraftlogs_client.cli healer          # Healer-focused analysis
+python -m warcraftlogs_client.cli tank            # Tank mitigation analysis
+python -m warcraftlogs_client.cli melee           # Melee DPS analysis
+python -m warcraftlogs_client.cli ranged          # Ranged DPS analysis
 ```
 
 This will generate a `.md` file inside the `reports/` folder, ready for upload, sharing, or analysis. To open a markdown file install a tool like VSCode and open it in preview, you want to view the pretty formatted version Vs the raw data. Markdown is also incredibly useful to pass to a GPT for analysis, allowing you do raid over raid comparisons. 
@@ -122,18 +126,24 @@ Wherein you align on one singular ID (can be any ID) and it maps all uses toward
 
 Even better if you do this, take the time to issue a PR!
 
-## 🌐 Unified Main
+## 🌐 Unified Analysis
 
-If you want an **all-in-one analysis** across all roles:
+The new unified CLI provides **all-in-one analysis** across all roles:
 
 ```bash
-python -m warcraftlogs_client.main --use-dynamic-roles --md
+python -m warcraftlogs_client.cli unified --md
 ```
 
 This will:
 - Automatically classify players into Healer, Tank, Melee, or Ranged
-- Generate **individual role reports** and a **final unified summary**
+- Generate **individual role reports** and a **final unified summary**  
 - Output everything to a clean Markdown file in the `/reports` folder
+
+For healer-specific analysis with dynamic role detection:
+
+```bash
+python -m warcraftlogs_client.cli healer --use-dynamic-roles --md
+```
 
 ---
 
