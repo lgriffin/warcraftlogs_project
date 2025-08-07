@@ -455,6 +455,24 @@ class SpellBreakdown:
         id_to_name[22959] = "Fire Vulnerability"
         id_to_name[17546] = "Nature Protection Potion"
         id_to_name[23455] = "Holy Nova"
+        id_to_name[25810] = "Mind-numbing Poison"
+        id_to_name[22009] = "Greater Heal"
+        id_to_name[11780] = "Lash of Pain"
+        id_to_name[17669] = "Immolate"
+        id_to_name[17260] = "Bite"
+        id_to_name[23580] = "Bloodfang"
+        id_to_name[8732] = "Thunderclap"
+        id_to_name[10966] = "Uppercut"
+        id_to_name[11427] = "Cleave"
+        id_to_name[11574] = "Rend"
+        id_to_name[15550] = "Trample"
+        id_to_name[26053] = "Noxious Poison"
+        id_to_name[26070] = "Fear"
+        id_to_name[26082] = "Stinger Charge"
+        id_to_name[26134] = "Eye Beam"
+        id_to_name[26557] = "Plague Effect"
+        id_to_name[26686] = "Whirlwind"
+
 
 
         return id_to_name, id_to_casts, entries
