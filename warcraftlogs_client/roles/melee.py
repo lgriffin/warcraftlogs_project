@@ -21,11 +21,10 @@ def generate_melee_summary(client, report_id, master_actors):
 
         try:
             events = get_damage_done_data(client, report_id, source_id)
-            spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+            spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
 
             total_damage = 0
             damage_by_ability = defaultdict(int)
-            casts_by_ability = defaultdict(int)
 
             for e in events:
                 if not isinstance(e, dict):
@@ -39,7 +38,12 @@ def generate_melee_summary(client, report_id, master_actors):
 
                 total_damage += amount
                 damage_by_ability[ability_name] += amount
-                casts_by_ability[ability_name] += 1
+
+            # Use actual cast data instead of counting damage events
+            casts_by_ability = {}
+            for spell_id, cast_count in spell_casts.items():
+                ability_name = spell_map.get(spell_id, f"(ID {spell_id})")
+                casts_by_ability[ability_name] = casts_by_ability.get(ability_name, 0) + cast_count
 
             print(f"{name}'s Damage Summary")
             print(f"Total Damage: {total_damage:,}")
@@ -47,7 +51,7 @@ def generate_melee_summary(client, report_id, master_actors):
             print("-" * 60)
             for ability in sorted(damage_by_ability, key=damage_by_ability.get, reverse=True):
                 dmg = damage_by_ability[ability]
-                casts = casts_by_ability[ability]
+                casts = casts_by_ability.get(ability, 0)
                 print(f"{ability:<30} {dmg:>15,} {casts:>10}")
 
             summary = {

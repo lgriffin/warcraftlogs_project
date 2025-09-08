@@ -255,10 +255,10 @@ def run_unified_report(args):
                 source_id = player["id"]
                 try:
                     events = get_damage_done_data(client, report_id, source_id)
-                    spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+                    spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
 
                     total_damage = 0
-                    casts_by_ability = defaultdict(int)
+                    damage_by_ability = defaultdict(int)
                     for e in events:
                         if e.get("type") == "damage":
                             amount = e.get("amount", 0)
@@ -266,19 +266,29 @@ def run_unified_report(args):
                             canonical_id = alias_map.get(spell_id, spell_id)
                             ability = spell_map.get(canonical_id, f"(ID {spell_id})")
                             total_damage += amount
-                            casts_by_ability[ability] += 1
+                            damage_by_ability[ability] += amount
                             all_spells.add(ability)
 
+                    # Use actual cast data instead of counting damage events
+                    casts_by_ability = {}
+                    for spell_id, cast_count in spell_casts.items():
+                        canonical_id = alias_map.get(spell_id, spell_id)
+                        ability = spell_map.get(canonical_id, f"(ID {spell_id})")
+                        casts_by_ability[ability] = casts_by_ability.get(ability, 0) + cast_count
+
                     print(f"{name:<15} {total_damage:>15,}")
-                    print(f"{'Ability':<30} {'Casts':>10}")
-                    print("-" * 45)
-                    for spell in sorted(casts_by_ability, key=casts_by_ability.get, reverse=True):
-                        print(f"{spell:<30} {casts_by_ability[spell]:>10}")
+                    print(f"{'Ability':<30} {'Damage':>12} {'Casts':>8}")
+                    print("-" * 55)
+                    for ability in sorted(damage_by_ability, key=damage_by_ability.get, reverse=True):
+                        dmg = damage_by_ability[ability]
+                        casts = casts_by_ability.get(ability, 0)
+                        print(f"{ability:<30} {dmg:>12,} {casts:>8}")
                     print()
 
                     summary.append({
                         "name": name,
                         "total": total_damage,
+                        "damage": damage_by_ability,
                         "casts": casts_by_ability
                     })
                 except Exception as e:

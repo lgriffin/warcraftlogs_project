@@ -69,12 +69,11 @@ def run_melee_report():
 
             try:
                 events = get_damage_done_data(client, report_id, source_id)
-                spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+                spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
                 alias_map = SpellBreakdown.spell_id_aliases
 
                 total_damage = 0
                 damage_by_ability = defaultdict(int)
-                casts_by_ability = defaultdict(int)
 
                 for e in events:
                     if not isinstance(e, dict) or e.get("type") != "damage":
@@ -87,23 +86,30 @@ def run_melee_report():
 
                     total_damage += amount
                     damage_by_ability[ability_name] += amount
-                    casts_by_ability[ability_name] += 1
+
+                # Use actual cast data instead of counting damage events
+                casts_by_ability = {}
+                for spell_id, cast_count in spell_casts.items():
+                    canonical_id = alias_map.get(spell_id, spell_id)
+                    ability_name = spell_map.get(canonical_id, f"(ID {spell_id})")
+                    casts_by_ability[ability_name] = casts_by_ability.get(ability_name, 0) + cast_count
 
                 print(f"{name:<15} {total_damage:>15,}")
                 print(f"{'Ability':<30} {'Damage':>12} {'Casts':>8}")
                 print("-" * 55)
                 for ability in sorted(damage_by_ability, key=damage_by_ability.get, reverse=True):
                     dmg = damage_by_ability[ability]
-                    casts = casts_by_ability[ability]
+                    casts = casts_by_ability.get(ability, 0)
                     print(f"{ability:<30} {dmg:>12,} {casts:>8}")
                 print()
 
                 class_summary.append({
                     "name": name,
                     "total": total_damage,
+                    "damage": damage_by_ability,
                     "casts": casts_by_ability
                 })
-                all_abilities.update(casts_by_ability.keys())
+                all_abilities.update(damage_by_ability.keys())
 
             except Exception as e:
                 print(f"Error processing {name}: {e}")
