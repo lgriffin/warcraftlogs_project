@@ -3,66 +3,10 @@ import argparse
 from collections import defaultdict
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
-from .loader import load_config
-from .spell_breakdown import SpellBreakdown
+from .config import load_config
+from .spell_manager import SpellBreakdown
+from .common.data import get_master_data, get_report_metadata
 import json
-
-
-def get_master_data(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: \"{report_id}\") {{
-          masterData {{
-            actors {{
-              id
-              name
-              type
-              subType
-            }}
-          }}
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-    if "data" not in result:
-        print("❌ Error retrieving master data:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-
-    return [
-        actor for actor in result["data"]["reportData"]["report"]["masterData"]["actors"]
-        if actor["type"] == "Player"
-    ]
-
-
-def get_report_metadata(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: \"{report_id}\") {{
-          title
-          owner {{ name }}
-          startTime
-          endTime
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-    if "data" not in result:
-        print("❌ Error retrieving report metadata:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-
-    report = result["data"]["reportData"]["report"]
-    return {
-        "title": report["title"],
-        "owner": report["owner"]["name"],
-        "start": report["startTime"],
-        "end": report["endTime"]
-    }
 
 
 def get_damage_taken_data(client, report_id, source_id):
@@ -144,6 +88,7 @@ def run_tank_report():
         # Damage Taken Abilities
         damage_taken_counts = defaultdict(int)
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, tank['id'])
+        alias_map = SpellBreakdown.spell_id_aliases
 
         for e in per_tank_events[tank['name']]:
             if e.get("type") == "damage":
@@ -152,7 +97,8 @@ def run_tank_report():
 
         print("💥 Damage Taken Breakdown:")
         for spell_id, count in sorted(damage_taken_counts.items(), key=lambda x: -x[1]):
-            print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} hits")
+            canonical_id = alias_map.get(spell_id, spell_id)
+            print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} hits")
 
         # Abilities Used by Tank
         print("⚔️  Abilities Used:")
@@ -169,7 +115,8 @@ def run_tank_report():
                 used_counts[spell_id] += 1
 
         for spell_id, count in sorted(used_counts.items(), key=lambda x: -x[1]):
-            print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} uses")
+            canonical_id = alias_map.get(spell_id, spell_id)
+            print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} uses")
 
         
     print("============================")

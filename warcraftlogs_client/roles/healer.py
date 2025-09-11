@@ -1,5 +1,5 @@
 from client import get_healing_data
-from spell_breakdown import SpellBreakdown
+from ..spell_manager import SpellBreakdown
 from healing import OverallHealing
 from collections import defaultdict
 import dynamic_role_parser

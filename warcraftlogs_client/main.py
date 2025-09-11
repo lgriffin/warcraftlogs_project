@@ -5,80 +5,26 @@ from collections import OrderedDict
 
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data, get_damage_done_data
-from .loader import load_config
-from .spell_breakdown import SpellBreakdown
+from .config import load_config
+from .spell_manager import SpellBreakdown
 from .healing import OverallHealing
 from . import dynamic_role_parser
 from .markdown_exporter import export_combined_markdown
-
-def get_master_data(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: \"{report_id}\") {{
-          masterData {{
-            actors {{
-              id
-              name
-              type
-              subType
-            }}
-          }}
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-    if "data" not in result:
-        print("❌ Error retrieving master data:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-    return [a for a in result["data"]["reportData"]["report"]["masterData"]["actors"] if a["type"] == "Player"]
-
-
-def get_report_metadata(client, report_id):
-    query = f"""
-    {{
-      reportData {{
-        report(code: \"{report_id}\") {{
-          title
-          owner {{ name }}
-          startTime
-        }}
-      }}
-    }}
-    """
-    result = client.run_query(query)
-    if "data" not in result:
-        print("❌ Error retrieving report metadata:")
-        print(result)
-        raise KeyError("Missing 'data' in response.")
-    report = result["data"]["reportData"]["report"]
-    if report is None:
-        print(f"[ERROR] Report ID '{report_id}' not found or is inaccessible.")
-        print("🔍 Please double-check the report ID and try again.")
-        exit(1)
-        
-    return {
-    "title": report["title"],
-    "owner": report["owner"]["name"],
-    "start": report["startTime"],
-    "report_id": report_id
-}
+from .common.data import get_master_data, get_report_metadata
 
 
 def print_inferred_raid_makeup(tanks, healers):
     print("\n===== 🧩 Inferred Raid Makeup =====")
 
     if tanks:
-        print("🛡️  Tanks:")
+        print("Tanks:")
         tanks_by_class = defaultdict(list)
         for tank in tanks:
             tanks_by_class[tank["class"]].append(tank["name"])
         for cls in sorted(tanks_by_class):
             print(f"  {cls}: {', '.join(sorted(tanks_by_class[cls]))}")
     else:
-        print("🛡️  Tanks: None identified")
+        print("Tanks: None identified")
 
     if healers:
         print("✨ Healers:")
@@ -93,13 +39,13 @@ def print_inferred_raid_makeup(tanks, healers):
 
 def print_report_metadata(metadata, present_names):
     print("\n========================")
-    print("📝 Report Metadata")
+    print("Report Metadata")
     print("========================")
-    print(f"📄 Title: {metadata['title']}")
-    print(f"👤 Owner: {metadata['owner']}")
+    print(f"Title: {metadata['title']}")
+    print(f"Owner: {metadata['owner']}")
     dt = datetime.datetime.fromtimestamp(metadata['start'] / 1000)
-    print(f"📆 Date: {dt.strftime('%A, %B %d %Y %H:%M:%S')}")
-    print(f"\n👥 Characters Considered: {', '.join(sorted(present_names))}")
+    print(f"Date: {dt.strftime('%A, %B %d %Y %H:%M:%S')}")
+    print(f"\nCharacters Considered: {', '.join(sorted(present_names))}")
 
 
 def identify_tanks(client, report_id, master_actors, min_taken, min_mitigation):
@@ -183,12 +129,12 @@ def run_unified_report(args):
 
 
     # ========================= TANK REPORT
-    print("\n===== 🛡️ Individual Tank Reports =====")
+    print("\n===== Individual Tank Reports =====")
     for tank in tanks:
         name, tank_id = tank["name"], tank["id"]
         print(f"{name} ({tank['class']})")
-        print(f"✅ Total Taken: {tank['taken']:,}")
-        print(f"🛡️  Total Mitigated: {tank['mitigated']:,} ({tank['percent']}%)")
+        print(f"Total Taken: {tank['taken']:,}")
+        print(f"Total Mitigated: {tank['mitigated']:,} ({tank['percent']}%)")
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, tank_id)
         SpellBreakdown.log_cleave_ids(tank["events"])
 
@@ -202,7 +148,8 @@ def run_unified_report(args):
 
         print("💥 Damage Taken Breakdown:")
         for spell_id, count in sorted(damage_taken_counts.items(), key=lambda x: -x[1]):
-            print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} hits")
+            canonical_id = alias_map.get(spell_id, spell_id)
+            print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} hits")
 
         print("⚔️  Abilities Used:")
         try:
@@ -214,7 +161,8 @@ def run_unified_report(args):
                     canonical_id = alias_map.get(spell_id, spell_id)
                     used_counts[canonical_id] += 1
             for spell_id, count in sorted(used_counts.items(), key=lambda x: -x[1]):
-                print(f"  - {spell_map.get(spell_id, f'(ID {spell_id})')}: {count} uses")
+                canonical_id = alias_map.get(spell_id, spell_id)
+                print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} uses")
         except Exception as e:
             print(f"⚠️ Could not fetch damage done for {name}: {e}")
 
@@ -239,8 +187,9 @@ def run_unified_report(args):
             print("-" * 60)
             per_character_spells = {}
             for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
-                spell_name = str(spell_map.get(spell_id, f"(ID {spell_id})"))
-                casts = spell_casts.get(spell_id, 0)
+                canonical_id = alias_map.get(spell_id, spell_id)
+                spell_name = str(spell_map.get(canonical_id, f"(ID {spell_id})"))
+                casts = spell_casts.get(canonical_id, 0)
                 per_character_spells[spell_name] = per_character_spells.get(spell_name, 0) + casts
                 all_spell_names_by_class[class_type].add(spell_name)
                 print(f"{spell_name:<30} {amount:>15,} {casts:>10}")
@@ -250,7 +199,7 @@ def run_unified_report(args):
 
             fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
             if fear_ward and fear_ward["casts"] > 0:
-                print(f"🛡️  Fear Ward Casts: {fear_ward['casts']}")
+                print(f"Fear Ward Casts: {fear_ward['casts']}")
 
             dispels = SpellBreakdown.calculate_dispels(cast_entries, class_type)
             if any(dispels.values()):
@@ -306,29 +255,40 @@ def run_unified_report(args):
                 source_id = player["id"]
                 try:
                     events = get_damage_done_data(client, report_id, source_id)
-                    spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
+                    spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, source_id)
 
                     total_damage = 0
-                    casts_by_ability = defaultdict(int)
+                    damage_by_ability = defaultdict(int)
                     for e in events:
                         if e.get("type") == "damage":
                             amount = e.get("amount", 0)
                             spell_id = e.get("abilityGameID")
-                            ability = spell_map.get(spell_id, f"(ID {spell_id})")
+                            canonical_id = alias_map.get(spell_id, spell_id)
+                            ability = spell_map.get(canonical_id, f"(ID {spell_id})")
                             total_damage += amount
-                            casts_by_ability[ability] += 1
+                            damage_by_ability[ability] += amount
                             all_spells.add(ability)
 
+                    # Use actual cast data instead of counting damage events
+                    casts_by_ability = {}
+                    for spell_id, cast_count in spell_casts.items():
+                        canonical_id = alias_map.get(spell_id, spell_id)
+                        ability = spell_map.get(canonical_id, f"(ID {spell_id})")
+                        casts_by_ability[ability] = casts_by_ability.get(ability, 0) + cast_count
+
                     print(f"{name:<15} {total_damage:>15,}")
-                    print(f"{'Ability':<30} {'Casts':>10}")
-                    print("-" * 45)
-                    for spell in sorted(casts_by_ability, key=casts_by_ability.get, reverse=True):
-                        print(f"{spell:<30} {casts_by_ability[spell]:>10}")
+                    print(f"{'Ability':<30} {'Damage':>12} {'Casts':>8}")
+                    print("-" * 55)
+                    for ability in sorted(damage_by_ability, key=damage_by_ability.get, reverse=True):
+                        dmg = damage_by_ability[ability]
+                        casts = casts_by_ability.get(ability, 0)
+                        print(f"{ability:<30} {dmg:>12,} {casts:>8}")
                     print()
 
                     summary.append({
                         "name": name,
                         "total": total_damage,
+                        "damage": damage_by_ability,
                         "casts": casts_by_ability
                     })
                 except Exception as e:
@@ -487,7 +447,7 @@ def run_unified_report(args):
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, sample_id)
 
         header = f"{'Character':<15}" + "".join(
-            f"{spell_map.get(ability, f'(ID {ability})')[:14]:>16}"
+            f"{spell_map.get(alias_map.get(ability, ability), f'(ID {ability})')[:14]:>16}"
             for ability in sorted(all_abilities_by_class[class_name])
         )
         for row in class_tables[class_name]:
