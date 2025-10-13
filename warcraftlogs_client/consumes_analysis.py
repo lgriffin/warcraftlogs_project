@@ -41,116 +41,59 @@ class ConsumesAnalyzer:
         print(f"[ANALYZING] Analyzing consumables for raid: {report_id}")
         
         # Get raid metadata
-        print(f"[DEBUG] Fetching raid metadata...")
         metadata = get_report_metadata(client, report_id)
-        print(f"[DEBUG] Got raid metadata: {metadata['title']}")
         self.raid_metadata[report_id] = {
             'title': metadata['title'],
             'date': metadata['start']
         }
         
         # Get all actors in the raid
-        print(f"[DEBUG] Fetching master actor data...")
         master_actors = get_master_data(client, report_id)
-        print(f"[DEBUG] Got {len(master_actors)} actors")
         
         # Identify roles using existing logic
-        print(f"[DEBUG] Identifying player roles...")
         roles = self._identify_roles(client, report_id, master_actors)
-        print(f"[DEBUG] Identified {len(roles['healers'])} healers")
         
         # Store healers for this raid
         self.healers_by_raid[report_id] = set(roles['healers'])
         
         # Fetch boss kill timestamps
-        print(f"[DEBUG] Fetching boss kill data...")
         self._fetch_boss_kills(client, report_id)
-        print(f"[DEBUG] Found {len(self.boss_kills[report_id])} boss kills")
         
-        # Check if lesser protection potions are used in this raid (raid-wide check)
-        print(f"[DEBUG] Checking if lesser protection potions are used...")
-        from .client import get_auras_data_by_ability, get_cast_events_data
-        lesser_potions_used = set()
-        if "lesser_protection_potions" in self.config:
-            for ability_id_str in self.config["lesser_protection_potions"].keys():
-                try:
-                    # Do a quick raid-wide check (no sourceID filter)
-                    ability_id = int(ability_id_str)
-                    check_query = f"""
-                    {{
-                      reportData {{
-                        report(code: "{report_id}") {{
-                          events(startTime: 0, endTime: 999999999, abilityID: {ability_id}, dataType: Buffs, limit: 1) {{
-                            data
-                          }}
-                        }}
-                      }}
-                    }}
-                    """
-                    result = client.run_query(check_query)
-                    if result["data"]["reportData"]["report"]["events"]["data"]:
-                        lesser_potions_used.add(ability_id)
-                        print(f"[DEBUG] Found usage of lesser potion {ability_id}")
-                except Exception:
-                    pass
+        # Analyze consumables for each player using efficient table queries
+        from .client import get_buffs_table, get_cast_events_data
         
-        # Analyze consumables for each player
-        print(f"[DEBUG] Starting player analysis for {len(master_actors)} players...")
-        player_count = 0
         for player in master_actors:
             player_name = player['name']
             player_class = player['subType']
             source_id = player['id']
-            player_count += 1
-            
-            if player_count % 5 == 0:
-                print(f"[DEBUG] Processing player {player_count}/{len(master_actors)}: {player_name}")
             
             # Determine player role
             player_role = self._determine_player_role(player_name, player_class, roles)
             
-            # Get buff data and cast data for this player
+            # Get buff data using efficient table query (ONE API call instead of 5-7!)
             try:
-                # Query each consumable ability individually for accurate data
-                all_events = []
-                # Start with defensive potions (always included)
-                consumable_ids = list(self.config["defensive_potions"].keys())
+                # Get table data for this player - includes ALL buffs
+                table_result = get_buffs_table(client, report_id, source_id)
+                table_data = table_result["data"]["reportData"]["report"]["table"]
                 
-                # Add personal buffs only if healers flag is set
-                if self.include_healers:
-                    consumable_ids.extend(list(self.config["personal_buffs"].keys()))
-                
-                # Add lesser protection potions only if they were used
-                if lesser_potions_used:
-                    for ability_id_str in self.config.get("lesser_protection_potions", {}).keys():
-                        if int(ability_id_str) in lesser_potions_used:
-                            consumable_ids.append(ability_id_str)
-                
-                for ability_id_str in consumable_ids:
-                    ability_id = int(ability_id_str)
-                    try:
-                        # Get buff events for this specific ability
-                        ability_data = get_auras_data_by_ability(client, report_id, source_id, ability_id)
-                        ability_events = ability_data["data"]["reportData"]["report"]["events"]["data"]
-                        all_events.extend(ability_events)
-                    except Exception:
-                        # If individual query fails, skip this ability
-                        pass
+                # Parse the JSON string if needed
+                if isinstance(table_data, str):
+                    table_data = json.loads(table_data)
                 
                 # Also get cast events for personal buffs (mana potions, dark runes) - only if healers flag is set
+                cast_events = []
                 if self.include_healers:
                     try:
                         cast_data = get_cast_events_data(client, report_id, source_id)
                         cast_events = cast_data["data"]["reportData"]["report"]["events"]["data"]
                         # Filter to only personal buff casts
                         personal_buff_ids = [int(id) for id in self.config["personal_buffs"].keys()]
-                        personal_casts = [e for e in cast_events if e.get('abilityGameID') in personal_buff_ids]
-                        all_events.extend(personal_casts)
+                        cast_events = [e for e in cast_events if e.get('abilityGameID') in personal_buff_ids]
                     except Exception:
                         pass
                 
-                # Count consumables
-                self._count_consumables(player_name, player_role, report_id, all_events)
+                # Count consumables from table data
+                self._count_consumables_from_table(player_name, player_role, report_id, table_data, cast_events)
                 
             except Exception as e:
                 print(f"[WARNING] Error analyzing {player_name}: {e}")
@@ -246,6 +189,69 @@ class ConsumesAnalyzer:
                 return role
         return "unknown"
     
+    def _count_consumables_from_table(self, player_name: str, player_role: str, report_id: str, 
+                                       table_data: Dict, cast_events: List[Dict]) -> None:
+        """
+        Count consumable usage from table data (buffBands).
+        This is MUCH more efficient than individual event queries!
+        
+        Table data structure:
+        {
+          "data": {
+            "auras": [
+              {
+                "guid": <ability_id>,
+                "name": "<ability name>",
+                "totalUses": <count>,
+                "bands": [{"startTime": ..., "endTime": ...}, ...]
+              },
+              ...
+            ]
+          }
+        }
+        """
+        # Build lookup for our consumables
+        all_consumables = {}
+        for spell_id, spell_name in self.config["defensive_potions"].items():
+            all_consumables[int(spell_id)] = spell_name
+        for spell_id, spell_name in self.config.get("lesser_protection_potions", {}).items():
+            all_consumables[int(spell_id)] = spell_name
+        
+        # Extract auras from table data
+        auras = table_data.get("data", {}).get("auras", [])
+        
+        # Count protection potions from table data
+        for aura in auras:
+            ability_id = aura.get("guid")
+            if ability_id in all_consumables:
+                potion_name = all_consumables[ability_id]
+                # totalUses is the count of times the buff was applied
+                count = aura.get("totalUses", 0)
+                self.consumes_data[player_name][report_id][potion_name] += count
+                
+                # Store timestamps for spike analysis (use band start times)
+                bands = aura.get("bands", [])
+                for band in bands:
+                    self.timestamp_data[report_id][potion_name].append({
+                        'timestamp': band.get('startTime', 0),
+                        'player': player_name,
+                        'type': 'applybuff'  # Treat as applybuff for spike detection
+                    })
+        
+        # Count personal buffs (mana potions, dark runes) from cast events
+        if cast_events:
+            for event in cast_events:
+                ability_id = event.get('abilityGameID')
+                if ability_id:
+                    for spell_id, spell_name in self.config["personal_buffs"].items():
+                        if int(spell_id) == ability_id and event.get('type') in ['cast', 'begincast']:
+                            self.consumes_data[player_name][report_id][spell_name] += 1
+                            # Store timestamp for spike analysis
+                            self.timestamp_data[report_id][spell_name].append({
+                                'timestamp': event.get('timestamp', 0),
+                                'player': player_name,
+                                'type': event.get('type')
+                            })
     
     def _count_consumables(self, player_name: str, player_role: str, report_id: str, events: List[Dict]) -> None:
         """Count consumable usage for a player."""
@@ -497,10 +503,6 @@ class ConsumesAnalyzer:
             raid_title = self.raid_metadata[report_id]['title']
             print(f"\nRaid: {raid_title} ({report_id})")
             print("-" * 80)
-            
-            # Debug: Show what data we have
-            print(f"[DEBUG] Total players with data: {len(self.consumes_data)}")
-            print(f"[DEBUG] Timestamp data for potions: {list(self.timestamp_data[report_id].keys())}")
             
             # Detect spikes for each potion type
             spikes_found = False
