@@ -10,8 +10,13 @@
     "17546": "Nature Protection",
     "17544": "Frost Protection"
   },
+  "lesser_protection_potions": {
+    "7242": "Lesser Shadow Protection",
+    "7254": "Lesser Nature Protection"
+  },
   "role_restrictions": {
     "personal_buffs": ["healer"],
-    "defensive_potions": ["tank", "healer", "melee", "ranged"]
+    "defensive_potions": ["tank", "healer", "melee", "ranged"],
+    "lesser_protection_potions": ["tank", "healer", "melee", "ranged"]
   }
 }

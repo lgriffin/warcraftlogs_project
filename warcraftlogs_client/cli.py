@@ -106,6 +106,11 @@ Examples:
         type=str,
         help='Export results to CSV file'
     )
+    consumes_parser.add_argument(
+        '--healers',
+        action='store_true',
+        help='Include healer personal buffs report (Major Mana Potion, Dark Rune)'
+    )
     
     return parser
 
@@ -163,7 +168,7 @@ def run_consumes_analysis(args) -> int:
     """Run consumables analysis across multiple raids."""
     try:
         from .consumes_analysis import run_consumes_analysis
-        run_consumes_analysis(args.raid_ids, args.csv)
+        run_consumes_analysis(args.raid_ids, args.csv, include_healers=args.healers)
         return 0
     except Exception as e:
         print(f"[ERROR] Error running consumes analysis: {e}")

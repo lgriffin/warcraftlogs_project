@@ -93,6 +93,24 @@ def get_auras_data_by_ability(client, report_id, source_id, ability_id):
     return client.run_query(query)
 
 
+def get_buffs_table(client, report_id, source_id):
+    """
+    Get aggregated buff data using table query - MUCH more efficient than individual event queries!
+    This uses the 'buffBands' capability which returns buff applications in time bands.
+    Returns all buff data for a player in a single API call.
+    """
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          table(dataType: Buffs, startTime: 0, endTime: 999999999, hostilityType: Friendlies, sourceID: {source_id})
+        }}
+      }}
+    }}
+    """
+    return client.run_query(query)
+
+
 def get_damage_done_data(client, report_id, source_id):
     query = f"""
     {{
