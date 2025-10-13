@@ -1,0 +1,17 @@
+{
+  "personal_buffs": {
+    "17531": "Major Mana Potion",
+    "27869": "Dark Rune"
+  },
+  "defensive_potions": {
+    "17548": "Shadow Protection",
+    "17543": "Fire Protection", 
+    "17549": "Arcane Protection",
+    "17546": "Nature Protection",
+    "17544": "Frost Protection"
+  },
+  "role_restrictions": {
+    "personal_buffs": ["healer"],
+    "defensive_potions": ["tank", "healer", "melee", "ranged"]
+  }
+}

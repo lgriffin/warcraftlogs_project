@@ -29,6 +29,70 @@ def get_cast_data(client, report_id, source_id):
     return client.run_query(query)
 
 
+def get_aura_data(client, report_id, source_id):
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          events(startTime: 0, endTime: 999999999, sourceID: {source_id}, dataType: Buffs, hostilityType: Friendlies) {{
+            data
+          }}
+        }}
+      }}
+    }}
+    """
+    return client.run_query(query)
+
+
+def get_cast_events_data(client, report_id, source_id):
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          events(startTime: 0, endTime: 999999999, sourceID: {source_id}, dataType: Casts, hostilityType: Friendlies, limit: 10000) {{
+            data
+            nextPageTimestamp
+          }}
+        }}
+      }}
+    }}
+    """
+    return client.run_query(query)
+
+
+def get_auras_data(client, report_id, source_id):
+    """Get auras data - this matches the website's 'type=auras' parameter (uses Buffs in GraphQL)"""
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          events(startTime: 0, endTime: 999999999, sourceID: {source_id}, dataType: Buffs, hostilityType: Friendlies, limit: 10000) {{
+            data
+            nextPageTimestamp
+          }}
+        }}
+      }}
+    }}
+    """
+    return client.run_query(query)
+
+
+def get_auras_data_by_ability(client, report_id, source_id, ability_id):
+    """Get auras data for a specific ability - this matches the website's ability filter"""
+    query = f"""
+    {{
+      reportData {{
+        report(code: "{report_id}") {{
+          events(startTime: 0, endTime: 999999999, sourceID: {source_id}, dataType: Buffs, hostilityType: Friendlies, abilityID: {ability_id}) {{
+            data
+          }}
+        }}
+      }}
+    }}
+    """
+    return client.run_query(query)
+
+
 def get_damage_done_data(client, report_id, source_id):
     query = f"""
     {{
