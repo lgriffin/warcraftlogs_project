@@ -90,6 +90,23 @@ Examples:
         description='Analyze ranged damage, rotations, and utility spells'
     )
     
+    # Consumes analysis
+    consumes_parser = subparsers.add_parser(
+        'consumes',
+        help='Consumables analysis across multiple raids',
+        description='Analyze consumable usage patterns across multiple raid reports'
+    )
+    consumes_parser.add_argument(
+        'raid_ids',
+        nargs='+',
+        help='Raid IDs to analyze (space-separated)'
+    )
+    consumes_parser.add_argument(
+        '--csv',
+        type=str,
+        help='Export results to CSV file'
+    )
+    
     return parser
 
 def run_unified_analysis(args) -> int:
@@ -142,6 +159,16 @@ def run_ranged_analysis(args) -> int:
         print(f"❌ Error running ranged analysis: {e}")
         return 1
 
+def run_consumes_analysis(args) -> int:
+    """Run consumables analysis across multiple raids."""
+    try:
+        from .consumes_analysis import run_consumes_analysis
+        run_consumes_analysis(args.raid_ids, args.csv)
+        return 0
+    except Exception as e:
+        print(f"[ERROR] Error running consumes analysis: {e}")
+        return 1
+
 def main() -> int:
     """Main entry point for the CLI."""
     # Reset spell manager to pick up any configuration changes
@@ -167,6 +194,8 @@ def main() -> int:
         return run_melee_analysis(args)
     elif args.command == 'ranged':
         return run_ranged_analysis(args)
+    elif args.command == 'consumes':
+        return run_consumes_analysis(args)
     else:
         parser.print_help()
         return 1

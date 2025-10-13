@@ -67,6 +67,7 @@ python -m warcraftlogs_client.cli healer          # Healer-focused analysis
 python -m warcraftlogs_client.cli tank            # Tank mitigation analysis
 python -m warcraftlogs_client.cli melee           # Melee DPS analysis
 python -m warcraftlogs_client.cli ranged          # Ranged DPS analysis
+python -m warcraftlogs_client.cli consumes raid1 raid2 --csv report.csv  # Consumables analysis
 ```
 
 This will generate a `.md` file inside the `reports/` folder, ready for upload, sharing, or analysis. To open a markdown file install a tool like VSCode and open it in preview, you want to view the pretty formatted version Vs the raw data. Markdown is also incredibly useful to pass to a GPT for analysis, allowing you do raid over raid comparisons. 
@@ -75,7 +76,7 @@ This will generate a `.md` file inside the `reports/` folder, ready for upload, 
 
 ## 🧪 Main Analysis Modes
 
-The project offers **4 role-specific views** to break down raid contributions more clearly and allows you choose which role you care about:
+The project offers **5 analysis modes** to break down raid contributions more clearly and allows you choose which role you care about:
 
 ### 1. 🩺 Healer Main
 - Focuses on **healing spells**, **overhealing**, and **spell usage frequency**
@@ -92,6 +93,17 @@ The project offers **4 role-specific views** to break down raid contributions mo
 ### 4. 🌽 Ranged Main
 - Targets **Mages**, **Warlocks**, and **Hunters**
 - Focuses on **spell casts**, **rotational consistency**, and **utility (e.g., decurse, traps)**
+
+### 5. 🍯 Consumables Analysis
+- Analyzes **consumable usage patterns** across multiple raid reports
+- Tracks **protection potions** (Shadow, Fire, Arcane, Nature, Frost) for all roles
+- Monitors **personal buffs** (Major Mana Potion, Dark Rune) for healers only
+- Shows per-raid usage with accurate counting of:
+  - Buffs applied and removed during combat
+  - Buffs applied out of combat (only remove event visible)
+  - Buffs refreshed while active (drinking another potion)
+- Exports detailed data to CSV for further analysis
+- Uses role identification to filter personal buffs for healers only
 
 
 As a note, Classic WoW makes it really difficult to identify roles, so we have to do an element of guess work to identify tanks or healers. If you look at the config.json you can play around with the numbers to correctly idenfify by role.
@@ -170,6 +182,75 @@ For healer-specific analysis with dynamic role detection:
 
 ```bash
 python -m warcraftlogs_client.cli healer --use-dynamic-roles --md
+```
+
+## 🍯 Consumables Analysis
+
+The consumables analysis feature tracks **consumable usage patterns** across multiple raid reports, helping you understand preparation and resource management.
+
+### Features
+
+- **Per-Raid Analysis**: Shows consumable usage for each raid separately
+- **Role-Based Filtering**: 
+  - Protection potions shown for all roles
+  - Personal buffs (Mana Potion, Dark Rune) shown only for healers
+- **Trends Analysis**: Compares usage patterns between raids
+- **CSV Export**: Detailed data export for further analysis
+
+### Usage
+
+```bash
+# Basic analysis across multiple raids
+python -m warcraftlogs_client.cli consumes raid_id_1 raid_id_2 raid_id_3
+
+# With CSV export
+python -m warcraftlogs_client.cli consumes raid_id_1 raid_id_2 --csv consumes_report.csv
+```
+
+### Configuration
+
+The consumables to track are defined in `consumes_config.json`:
+
+```json
+{
+  "personal_buffs": {
+    "17531": "Major Mana Potion",
+    "27869": "Dark Rune"
+  },
+  "defensive_potions": {
+    "17548": "Shadow Protection",
+    "17543": "Fire Protection", 
+    "17549": "Arcane Protection",
+    "17546": "Nature Protection",
+    "17544": "Frost Protection"
+  }
+}
+```
+
+### Sample Output
+
+```
+PROTECTION POTIONS USED
+--------------------------------------------------
+
+Raid: toads 8/10/25 Naxx week 1 (kbK1yFXBrTc84anf)
+------------------------------------------------------------
+Player                Shadow         Fire       Arcane      Nature       Frost
+-----------------------------------------------------------------------------------------------------
+Player1                     2           0           0           0           6
+Player2                     7           1           1           3           6
+...
+
+TRENDS ANALYSIS - RAID COMPARISON
+------------------------------------------------------------
+
+Protection Potion Usage Trends:
+----------------------------------------
+
+Shadow:
+  Player1         : toads 8/10/25: 2 | toads 9/10/25: 1
+  Player2         : toads 8/10/25: 7 | toads 9/10/25: 3
+...
 ```
 
 ---
