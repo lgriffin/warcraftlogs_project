@@ -1,12 +1,16 @@
 {
     "client_id": "9e7bfab5-7623-4300-8f56-d02c2d555a33",
     "client_secret": "mQ0wVlyF8QDYgqCHVpEgytPZ8icx5rkWggWGFzFL",
-    "report_id": "r7b1d3aFmBTnz6g4",
+    "report_id": "QNmWzDhyFZxKY6t4",
+    "guild_id": 774065,
+    "guild_logo": "logo.png",
+    "character_name": "Hadur",
+    "character_server": "spineshatter",
+    "character_region": "eu",
+    "wcl_api_url": "https://fresh.warcraftlogs.com/api/v2/client",
     "role_thresholds": {
-    "healer_min_healing": 50000,
-    "tank_min_taken": 150000,
-    "tank_min_mitigation": 40
-  }
+        "healer_min_healing": 50000,
+        "tank_min_taken": 150000,
+        "tank_min_mitigation": 40
+    }
 }
-
-  

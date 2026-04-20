@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "warcraftlogs-analyzer"
+version = "2.0.0"
+description = "Analyze Warcraft Logs raid reports with role-based performance tracking"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "requests>=2.31.0",
+    "jinja2>=3.1.2",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6.0"]
+dev = ["pytest>=7.0", "pytest-asyncio", "ruff"]
+
+[project.scripts]
+warcraftlogs = "warcraftlogs_client.cli:main"
+
+[project.gui-scripts]
+warcraftlogs-gui = "warcraftlogs_client.gui.app:run"
+
+[tool.setuptools.packages.find]
+include = ["warcraftlogs_client*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
