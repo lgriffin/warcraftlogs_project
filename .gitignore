@@ -73,3 +73,9 @@ consumes_report*.csv
 
 # Configuration files with sensitive data
 config.json
+
+# Local database
+*.db
+
+# Log files
+hadur_log_*.txt

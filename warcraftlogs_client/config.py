@@ -9,6 +9,7 @@ import json
 import os
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
+from pathlib import Path
 
 @dataclass
 class RoleThresholds:
@@ -23,6 +24,7 @@ class ApiConfig:
     client_id: str
     client_secret: str
     report_id: str
+    guild_id: int = 774065
 
 @dataclass
 class AppConfig:
@@ -34,10 +36,17 @@ class AppConfig:
     cache_enabled: bool = True
     cache_dir: str = ".cache"
     reports_dir: str = "reports"
+    guild_logo: str = "logo.png"
     
     # Character API settings
     default_region: str = "EU"
     default_server: str = "gehennas"
+
+    # Character profile
+    character_name: str = ""
+    character_server: str = ""
+    character_region: str = "eu"
+    wcl_api_url: str = "https://fresh.warcraftlogs.com/api/v2/client"
 
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
@@ -74,21 +83,38 @@ class ConfigManager:
         return self._config
     
     def _parse_config(self, raw_config: Dict[str, Any]) -> AppConfig:
-        """Parse and validate raw configuration data."""
-        # Validate required API settings
-        required_fields = ["client_id", "client_secret", "report_id"]
-        missing_fields = [field for field in required_fields if not raw_config.get(field)]
-        
-        if missing_fields:
+        """Parse and validate raw configuration data.
+
+        Credentials are resolved in order: environment variables > config file.
+        """
+        client_id = os.environ.get("WARCRAFTLOGS_CLIENT_ID") or raw_config.get("client_id")
+        client_secret = os.environ.get("WARCRAFTLOGS_CLIENT_SECRET") or raw_config.get("client_secret")
+        report_id = os.environ.get("WARCRAFTLOGS_REPORT_ID") or raw_config.get("report_id")
+
+        missing = []
+        if not client_id:
+            missing.append("client_id (or WARCRAFTLOGS_CLIENT_ID env var)")
+        if not client_secret:
+            missing.append("client_secret (or WARCRAFTLOGS_CLIENT_SECRET env var)")
+        if not report_id:
+            missing.append("report_id (or WARCRAFTLOGS_REPORT_ID env var)")
+
+        if missing:
             raise ConfigurationError(
-                f"Missing required configuration fields: {', '.join(missing_fields)}"
+                f"Missing required configuration: {', '.join(missing)}"
             )
-        
-        # Create API config
+
+        guild_id = raw_config.get("guild_id", 774065)
+        try:
+            guild_id = int(guild_id)
+        except (TypeError, ValueError):
+            guild_id = 774065
+
         api_config = ApiConfig(
-            client_id=raw_config["client_id"],
-            client_secret=raw_config["client_secret"],
-            report_id=raw_config["report_id"]
+            client_id=client_id,
+            client_secret=client_secret,
+            report_id=report_id,
+            guild_id=guild_id,
         )
         
         # Parse role thresholds with defaults
@@ -106,8 +132,13 @@ class ConfigManager:
             cache_enabled=raw_config.get("cache_enabled", True),
             cache_dir=raw_config.get("cache_dir", ".cache"),
             reports_dir=raw_config.get("reports_dir", "reports"),
+            guild_logo=raw_config.get("guild_logo", "logo.png"),
             default_region=raw_config.get("default_region", "EU"),
-            default_server=raw_config.get("default_server", "gehennas")
+            default_server=raw_config.get("default_server", "gehennas"),
+            character_name=raw_config.get("character_name", ""),
+            character_server=raw_config.get("character_server", ""),
+            character_region=raw_config.get("character_region", "eu"),
+            wcl_api_url=raw_config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"),
         )
         
         return config
@@ -146,16 +177,22 @@ def load_config(config_file: Optional[str] = None) -> Dict[str, Any]:
         "client_id": config.api.client_id,
         "client_secret": config.api.client_secret,
         "report_id": config.api.report_id,
+        "guild_id": config.api.guild_id,
         "role_thresholds": {
             "healer_min_healing": config.role_thresholds.healer_min_healing,
             "tank_min_taken": config.role_thresholds.tank_min_taken,
             "tank_min_mitigation": config.role_thresholds.tank_min_mitigation
         },
+        "guild_logo": config.guild_logo,
         "cache_enabled": config.cache_enabled,
         "cache_dir": config.cache_dir,
         "reports_dir": config.reports_dir,
         "default_region": config.default_region,
-        "default_server": config.default_server
+        "default_server": config.default_server,
+        "character_name": config.character_name,
+        "character_server": config.character_server,
+        "character_region": config.character_region,
+        "wcl_api_url": config.wcl_api_url,
     }
 
 def get_app_config(config_file: Optional[str] = None) -> AppConfig:

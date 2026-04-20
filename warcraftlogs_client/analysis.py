@@ -1,0 +1,488 @@
+"""
+Unified analysis engine.
+
+All analysis logic lives here, returning data model objects.
+No printing — presentation is handled by renderers (console, markdown, GUI).
+"""
+
+import json
+import os
+from collections import defaultdict
+from typing import Optional
+
+from .client import WarcraftLogsClient
+from .models import (
+    ConsumableUsage,
+    DPSPerformance,
+    DispelUsage,
+    HealerPerformance,
+    PlayerIdentity,
+    RaidAnalysis,
+    RaidComposition,
+    RaidMetadata,
+    ResourceUsage,
+    SpellUsage,
+    TankPerformance,
+)
+from .spell_manager import SpellBreakdown, get_spell_manager
+
+
+def analyze_raid(client: WarcraftLogsClient, report_id: str,
+                 healer_threshold: int = 200000,
+                 tank_min_taken: int = 150000,
+                 tank_min_mitigation: int = 40) -> RaidAnalysis:
+    """Run a full raid analysis and return structured results."""
+    metadata = client.get_report_metadata(report_id)
+    master_actors = client.get_master_data(report_id)
+
+    composition = _identify_composition(
+        client, report_id, master_actors,
+        healer_threshold, tank_min_taken, tank_min_mitigation,
+    )
+
+    healers = _analyze_healers(client, report_id, composition.healers)
+    tanks = _analyze_tanks(client, report_id, composition.tanks)
+    melee_dps = _analyze_dps(client, report_id, composition.melee, "melee")
+    ranged_dps = _analyze_dps(client, report_id, composition.ranged, "ranged")
+
+    consumables = _analyze_consumables(client, report_id, composition)
+
+    return RaidAnalysis(
+        metadata=metadata,
+        composition=composition,
+        healers=healers,
+        tanks=tanks,
+        dps=melee_dps + ranged_dps,
+        consumables=consumables,
+    )
+
+
+def _identify_composition(
+    client: WarcraftLogsClient,
+    report_id: str,
+    master_actors: list[dict],
+    healer_threshold: int,
+    tank_min_taken: int,
+    tank_min_mitigation: int,
+) -> RaidComposition:
+    """Dynamically identify roles for all players."""
+    tanks = _identify_tanks(client, report_id, master_actors, tank_min_taken, tank_min_mitigation)
+    tank_names = {t.name for t in tanks}
+
+    healers = _identify_healers(client, report_id, master_actors, healer_threshold)
+    healer_names = {h.name for h in healers}
+
+    excluded = tank_names | healer_names
+    always_ranged = {"Mage", "Warlock", "Hunter"}
+    always_melee = {"Rogue"}
+    # Hybrid classes need damage profile check to determine melee vs ranged
+    hybrid_classes = {"Warrior", "Paladin", "Druid", "Shaman", "Priest"}
+
+    melee = []
+    ranged = []
+    for actor in master_actors:
+        name = actor["name"]
+        if name in excluded:
+            continue
+        cls = actor["subType"]
+        pid = PlayerIdentity(name=name, player_class=cls, source_id=actor["id"], role="")
+        if cls in always_ranged:
+            pid.role = "ranged"
+            ranged.append(pid)
+        elif cls in always_melee:
+            pid.role = "melee"
+            melee.append(pid)
+        elif cls in hybrid_classes:
+            role = _classify_hybrid_role(client, report_id, actor["id"], cls)
+            pid.role = role
+            if role == "ranged":
+                ranged.append(pid)
+            else:
+                melee.append(pid)
+
+    return RaidComposition(tanks=tanks, healers=healers, melee=melee, ranged=ranged)
+
+
+# Auto-attack / melee swing ability IDs in WarcraftLogs
+_MELEE_ABILITY_IDS = {1, -4, -32}
+
+# Spells that are strong indicators of a ranged spec
+_RANGED_SPEC_SPELLS = {
+    # Shadow Priest
+    "Shadow Bolt", "Mind Blast", "Mind Flay", "Shadow Word: Pain", "Vampiric Embrace",
+    "Devouring Plague", "Shadow Word: Death",
+    # Balance Druid
+    "Wrath", "Starfire", "Moonfire", "Insect Swarm", "Hurricane",
+    # Elemental Shaman
+    "Lightning Bolt", "Chain Lightning", "Earth Shock", "Flame Shock", "Frost Shock",
+    # Holy/Disc Priest doing damage (Smite)
+    "Smite", "Holy Fire",
+}
+
+
+def _classify_hybrid_role(
+    client: WarcraftLogsClient,
+    report_id: str,
+    source_id: int,
+    player_class: str,
+) -> str:
+    """Determine whether a hybrid-class DPS player is melee or ranged.
+
+    Examines the player's damage profile: if most damage comes from melee
+    swings and instant strikes, they're melee; if from spells, they're ranged.
+    """
+    try:
+        events = client.get_damage_done_data(report_id, source_id)
+    except Exception:
+        return "melee"
+
+    melee_damage = 0
+    spell_damage = 0
+
+    for e in events:
+        if e.get("type") != "damage":
+            continue
+        amount = e.get("amount", 0)
+        ability_id = e.get("abilityGameID")
+        if ability_id in _MELEE_ABILITY_IDS:
+            melee_damage += amount
+        else:
+            spell_damage += amount
+
+    total = melee_damage + spell_damage
+    if total == 0:
+        return "melee"
+
+    melee_ratio = melee_damage / total
+
+    # If more than 40% of damage is melee swings, classify as melee.
+    # Ranged casters typically have <5% melee damage; Enhancement/Ret/Feral
+    # have 40-70%+ from auto-attacks.
+    if melee_ratio > 0.40:
+        return "melee"
+    return "ranged"
+
+
+def _identify_tanks(
+    client: WarcraftLogsClient,
+    report_id: str,
+    master_actors: list[dict],
+    min_taken: int,
+    min_mitigation: int,
+) -> list[PlayerIdentity]:
+    tanks = []
+    for actor in master_actors:
+        if actor["subType"] not in {"Warrior", "Druid", "Paladin"}:
+            continue
+        try:
+            events = client.get_damage_taken_data(report_id, actor["id"])
+            total_taken = sum(e.get("amount", 0) for e in events if e.get("type") == "damage")
+            total_mitigated = sum(e.get("mitigated", 0) for e in events if e.get("type") == "damage")
+            total_unmitigated = total_taken + total_mitigated
+            if total_unmitigated == 0:
+                continue
+            percent = total_mitigated / total_unmitigated * 100
+            if total_taken > min_taken and percent > min_mitigation:
+                tanks.append(PlayerIdentity(
+                    name=actor["name"], player_class=actor["subType"],
+                    source_id=actor["id"], role="tank",
+                ))
+        except Exception:
+            pass
+    return tanks
+
+
+def _identify_healers(
+    client: WarcraftLogsClient,
+    report_id: str,
+    master_actors: list[dict],
+    threshold: int,
+) -> list[PlayerIdentity]:
+    healing_classes = {"Priest", "Paladin", "Druid", "Shaman"}
+    healers = []
+    for actor in master_actors:
+        if actor["subType"] not in healing_classes:
+            continue
+        try:
+            events = client.get_healing_data(report_id, actor["id"])
+            total = sum(e.get("amount", 0) for e in events if e.get("type") == "heal")
+            if total > threshold:
+                healers.append(PlayerIdentity(
+                    name=actor["name"], player_class=actor["subType"],
+                    source_id=actor["id"], role="healer",
+                ))
+        except Exception:
+            pass
+    return healers
+
+
+def _analyze_healers(
+    client: WarcraftLogsClient,
+    report_id: str,
+    healer_ids: list[PlayerIdentity],
+) -> list[HealerPerformance]:
+    results = []
+    alias_map = get_spell_manager().get_legacy_aliases()
+    spell_mgr = get_spell_manager()
+
+    for player in healer_ids:
+        try:
+            healing_events = client.get_healing_data(report_id, player.source_id)
+
+            total_healing = sum(e.get("amount", 0) for e in healing_events)
+            total_overhealing = sum(e.get("overheal", 0) for e in healing_events)
+
+            spell_map, spell_casts, cast_entries = SpellBreakdown.get_spell_id_to_name_map(
+                client, report_id, player.source_id
+            )
+
+            spell_totals = SpellBreakdown.calculate(healing_events)
+            spells = []
+            for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
+                if amount <= 0:
+                    continue
+                canonical_id = alias_map.get(spell_id, spell_id)
+                name = str(spell_map.get(canonical_id, spell_mgr.get_spell_name(spell_id)))
+                casts = spell_casts.get(canonical_id, 0)
+                spells.append(SpellUsage(spell_id=canonical_id, spell_name=name, casts=casts, total_amount=amount))
+
+            dispel_data = SpellBreakdown.calculate_dispels(cast_entries, player.player_class)
+            dispels = [DispelUsage(spell_name=k, casts=v) for k, v in dispel_data.items() if v > 0]
+
+            resource_data = SpellBreakdown.get_resources_used(cast_entries)
+            resources = [ResourceUsage(name=k, count=v) for k, v in resource_data.items()]
+
+            fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
+            fw_casts = fear_ward["casts"] if fear_ward else 0
+
+            results.append(HealerPerformance(
+                name=player.name, player_class=player.player_class, source_id=player.source_id,
+                total_healing=total_healing, total_overhealing=total_overhealing,
+                spells=spells, dispels=dispels, resources=resources, fear_ward_casts=fw_casts,
+            ))
+        except Exception as e:
+            print(f"Error processing healer {player.name}: {e}")
+
+    return results
+
+
+def _analyze_tanks(
+    client: WarcraftLogsClient,
+    report_id: str,
+    tank_ids: list[PlayerIdentity],
+) -> list[TankPerformance]:
+    results = []
+    alias_map = get_spell_manager().get_legacy_aliases()
+
+    spell_mgr = get_spell_manager()
+
+    for player in tank_ids:
+        try:
+            taken_events = client.get_damage_taken_data(report_id, player.source_id)
+
+            total_taken = sum(e.get("amount", 0) for e in taken_events if e.get("type") == "damage")
+            total_mitigated = sum(e.get("mitigated", 0) for e in taken_events if e.get("type") == "damage")
+
+            spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, player.source_id)
+
+            taken_table = client.get_damage_taken_table(report_id, player.source_id)
+            for entry in taken_table:
+                eid = entry.get("guid")
+                ename = entry.get("name")
+                if eid and ename:
+                    canonical = alias_map.get(eid, eid)
+                    spell_map.setdefault(canonical, ename)
+
+            done_table = client.get_damage_done_table(report_id, player.source_id)
+            for entry in done_table:
+                eid = entry.get("guid")
+                ename = entry.get("name")
+                if eid and ename:
+                    canonical = alias_map.get(eid, eid)
+                    spell_map.setdefault(canonical, ename)
+
+            taken_counts: dict[int, int] = defaultdict(int)
+            for e in taken_events:
+                if e.get("type") == "damage":
+                    sid = e.get("abilityGameID")
+                    taken_counts[alias_map.get(sid, sid)] += 1
+
+            taken_breakdown = [
+                SpellUsage(
+                    spell_id=sid,
+                    spell_name=str(spell_map.get(sid, spell_mgr.get_spell_name(sid))),
+                    casts=count,
+                )
+                for sid, count in sorted(taken_counts.items(), key=lambda x: -x[1])
+            ]
+
+            done_events = client.get_damage_done_data(report_id, player.source_id)
+            done_counts: dict[int, int] = defaultdict(int)
+            for e in done_events:
+                if e.get("type") == "damage":
+                    sid = e.get("abilityGameID")
+                    done_counts[alias_map.get(sid, sid)] += 1
+
+            abilities_used = [
+                SpellUsage(
+                    spell_id=sid,
+                    spell_name=str(spell_map.get(sid, spell_mgr.get_spell_name(sid))),
+                    casts=count,
+                )
+                for sid, count in sorted(done_counts.items(), key=lambda x: -x[1])
+            ]
+
+            results.append(TankPerformance(
+                name=player.name, player_class=player.player_class, source_id=player.source_id,
+                total_damage_taken=total_taken, total_mitigated=total_mitigated,
+                damage_taken_breakdown=taken_breakdown, abilities_used=abilities_used,
+            ))
+        except Exception as e:
+            print(f"Error processing tank {player.name}: {e}")
+
+    return results
+
+
+def _analyze_dps(
+    client: WarcraftLogsClient,
+    report_id: str,
+    player_ids: list[PlayerIdentity],
+    role: str,
+) -> list[DPSPerformance]:
+    results = []
+    alias_map = get_spell_manager().get_legacy_aliases()
+
+    spell_mgr = get_spell_manager()
+
+    for player in player_ids:
+        try:
+            events = client.get_damage_done_data(report_id, player.source_id)
+            spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(
+                client, report_id, player.source_id
+            )
+
+            done_table = client.get_damage_done_table(report_id, player.source_id)
+            for entry in done_table:
+                eid = entry.get("guid")
+                ename = entry.get("name")
+                if eid and ename:
+                    canonical = alias_map.get(eid, eid)
+                    spell_map.setdefault(canonical, ename)
+
+            total_damage = 0
+            damage_by_ability: dict[int, int] = defaultdict(int)
+            for e in events:
+                if e.get("type") == "damage":
+                    amount = e.get("amount", 0)
+                    sid = e.get("abilityGameID")
+                    canonical = alias_map.get(sid, sid)
+                    total_damage += amount
+                    damage_by_ability[canonical] += amount
+
+            casts_by_id: dict[int, int] = defaultdict(int)
+            for sid, count in spell_casts.items():
+                canonical = alias_map.get(sid, sid)
+                casts_by_id[canonical] += count
+
+            abilities = [
+                SpellUsage(
+                    spell_id=sid,
+                    spell_name=str(spell_map.get(sid, spell_mgr.get_spell_name(sid))),
+                    casts=casts_by_id.get(sid, 0),
+                    total_amount=dmg,
+                )
+                for sid, dmg in sorted(damage_by_ability.items(), key=lambda x: -x[1])
+            ]
+
+            results.append(DPSPerformance(
+                name=player.name, player_class=player.player_class,
+                source_id=player.source_id, role=role,
+                total_damage=total_damage, abilities=abilities,
+            ))
+        except Exception as e:
+            print(f"Error processing {role} {player.name}: {e}")
+
+    return results
+
+
+def _load_consumes_config() -> dict:
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "consumes_config.json")
+    if not os.path.exists(config_path):
+        return {"defensive_potions": {}, "lesser_protection_potions": {}, "personal_buffs": {}}
+    with open(config_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+TRACKED_POTIONS = {
+    28508: "Destruction Potion",
+    28499: "Super Mana Potion",
+    28507: "Haste Potion",
+}
+
+
+def _analyze_consumables(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+) -> list[ConsumableUsage]:
+    config = _load_consumes_config()
+
+    all_consumable_ids: dict[int, str] = {}
+    for spell_id, name in config.get("defensive_potions", {}).items():
+        all_consumable_ids[int(spell_id)] = name
+    for spell_id, name in config.get("lesser_protection_potions", {}).items():
+        all_consumable_ids[int(spell_id)] = name
+    for spell_id, name in config.get("personal_buffs", {}).items():
+        all_consumable_ids[int(spell_id)] = name
+
+    metadata = client.get_report_metadata(report_id)
+    raid_start = metadata.start_time or 0
+
+    results: list[ConsumableUsage] = []
+
+    for player in composition.all_players:
+        try:
+            table_data = client.get_buffs_table(report_id, player.source_id)
+            if isinstance(table_data, str):
+                table_data = json.loads(table_data)
+
+            auras = table_data.get("data", {}).get("auras", [])
+            if not auras:
+                auras = table_data.get("auras", [])
+            for aura in auras:
+                ability_id = aura.get("guid")
+                if ability_id in all_consumable_ids:
+                    count = aura.get("totalUses", 0)
+                    if count > 0:
+                        results.append(ConsumableUsage(
+                            player_name=player.name,
+                            player_role=player.role,
+                            report_id=report_id,
+                            consumable_name=all_consumable_ids[ability_id],
+                            count=count,
+                        ))
+        except Exception as e:
+            print(f"Error analyzing buff consumables for {player.name}: {e}")
+
+        try:
+            cast_events = client.get_cast_events_paginated(report_id, player.source_id)
+            potion_data: dict[int, list[int]] = defaultdict(list)
+            for e in cast_events:
+                aid = e.get("abilityGameID")
+                if aid in TRACKED_POTIONS:
+                    ts = e.get("timestamp", 0)
+                    potion_data[aid].append(ts)
+
+            for potion_id, timestamps in potion_data.items():
+                results.append(ConsumableUsage(
+                    player_name=player.name,
+                    player_role=player.role,
+                    report_id=report_id,
+                    consumable_name=TRACKED_POTIONS[potion_id],
+                    count=len(timestamps),
+                    timestamps=sorted(timestamps),
+                ))
+        except Exception as e:
+            print(f"Error analyzing potion casts for {player.name}: {e}")
+
+    return results

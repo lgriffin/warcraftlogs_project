@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(python -c ' *)",
+      "Bash(python -m warcraftlogs_client.cli --help)",
+      "Bash(python -m warcraftlogs_client.cli history --help)",
+      "Bash(python -c \"import PySide6; print\\(PySide6.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -c \"from warcraftlogs_client.analysis import analyze_raid; print\\('OK'\\)\")",
+      "Bash(python *)",
+      "Bash(python.exe *)",
+      "WebSearch",
+      "WebFetch(domain:www.warcraftlogs.com)",
+      "WebFetch(domain:warcraft.wiki.gg)",
+      "WebFetch(domain:classic.warcraftlogs.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:fresh.warcraftlogs.com)",
+      "WebFetch(domain:codepen.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:articles.warcraftlogs.com)",
+      "WebFetch(domain:forums.combatlogforums.com)",
+      "WebFetch(domain:www.wowhead.com)",
+      "WebFetch(domain:tbc-twinhead.twinstar.cz)",
+      "WebFetch(domain:wotlk.evowow.com)",
+      "Bash(where python *)",
+      "Bash(D:/code/warcraftlogs_project/.venv/Scripts/python.exe *)",
+      "Bash(/c/Python314/python.exe -m venv .venv)",
+      "Bash(.venv/Scripts/python.exe -m pip install -r requirements.txt)"
+    ]
+  }
+}

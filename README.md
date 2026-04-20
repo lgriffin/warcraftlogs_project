@@ -1,158 +1,153 @@
-# 📊 Warcraft Logs Casts-Focused Report Tool
+# WCL Analyzer v3.0 — TBC Edition
 
-## 🧠 Project Purpose
+A desktop application for analyzing **Warcraft Logs** reports with a focus on **spell casts, utility usage, and consumable tracking** for The Burning Crusade Classic.
 
-This project analyzes **Warcraft Logs** reports with a focus on **spell casts and utility usage**, rather than just raw healing or damage numbers. Traditional metrics are heavily influenced by gear, but **casts and abilities** offer a clearer view of player behavior, decision-making, and contribution to the raid. By analyzing **what players cast, when, and how often**, this tool provides more **meaningful insights into raid performance**.
+Traditional metrics are heavily influenced by gear, but **casts and abilities** offer a clearer view of player behavior, decision-making, and contribution to the raid.
 
 ---
 
-## 🛠️ Getting Started (No Python Experience Needed)
+## Quick Start (No Programming Experience Needed)
 
-This section will walk you through running the tool from scratch — no prior Python experience required.
+### 1. Install Python
 
-### 1. ✅ Install Python
+- Download Python 3.10+ from [python.org](https://www.python.org/downloads/)
+- During installation, **check "Add Python to PATH"**
 
-- Go to [https://www.python.org/downloads/](https://www.python.org/downloads/)
-- Download Python 3.10 or newer for your operating system.
-- During installation, **check the box that says “Add Python to PATH”**.
-
-### 2. 📂 Clone or Download the Project
-
-You can use Git or just download the ZIP.
+### 2. Download the Project
 
 ```bash
 git clone https://github.com/your-username/warcraftlogs-client.git
 cd warcraftlogs-client
 ```
 
-—or download the ZIP from GitHub and extract it.
+Or download and extract the ZIP from GitHub.
 
-### 3. 📦 Install Required Python Libraries
-
-From a terminal or command prompt:
+### 3. Install Dependencies
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-### 4. 🔐 Set Your Warcraft Logs API Token
+### 4. Launch the App
 
-Make sure you’ve set up a valid `config.json` with your Warcraft Logs API credentials and `report_id`. To obtain API credentials login to the [client management page](https://www.warcraftlogs.com/api/clients/) and create a client
+**Double-click** `WCL Analyzer.bat` — no terminal required.
 
-Example `config.json`:
+Or from a terminal:
 
-```json
-{
-  "client_id": "your_client_id_here",
-  "client_secret": "your_client_secret_here",
-  "report_id": "abcdEFGHijkl1234"
-}
+```bash
+python -m warcraftlogs_client.gui.app
 ```
+
+### 5. Configure API Credentials
+
+1. Go to the [WarcraftLogs API Client Management](https://www.warcraftlogs.com/api/clients/) page and create a client
+2. Open the **Settings** tab in the app
+3. Enter your Client ID and Client Secret
+4. Set your Guild ID
+5. Click **Save Settings**
 
 ---
 
-## 🚀 Running the Report
+## Features
 
-From the command line, navigate to the project folder and run:
+### Desktop GUI
 
-```bash
-python -m warcraftlogs_client.cli
-```
+The full-featured PySide6 desktop app provides:
 
-Or for specific analysis modes:
+- **Analyze Tab** — Enter a report ID or select from your guild's recent reports to run a full raid analysis. Results are broken down by role (Healers, Tanks, Melee DPS, Ranged DPS) with clickable character names for detailed spell/ability breakdowns.
+- **History Tab** — Browse all imported raids and characters. View performance trends over time with charts for healing, damage, mitigation, and consumables. Compare raids side by side.
+- **Character Tab** — Set up your main character to view WarcraftLogs profile data, rankings, and recent reports. Links directly to your WCL profile page.
+- **Settings Tab** — Configure API credentials, role detection thresholds, and manage the local database.
 
-```bash
-python -m warcraftlogs_client.cli unified --md    # Complete analysis with markdown
-python -m warcraftlogs_client.cli healer          # Healer-focused analysis
-python -m warcraftlogs_client.cli tank            # Tank mitigation analysis
-python -m warcraftlogs_client.cli melee           # Melee DPS analysis
-python -m warcraftlogs_client.cli ranged          # Ranged DPS analysis
-python -m warcraftlogs_client.cli consumes raid1 raid2 --csv report.csv  # Consumables analysis
-```
+### Raid Analysis
 
-This will generate a `.md` file inside the `reports/` folder, ready for upload, sharing, or analysis. To open a markdown file install a tool like VSCode and open it in preview, you want to view the pretty formatted version Vs the raw data. Markdown is also incredibly useful to pass to a GPT for analysis, allowing you do raid over raid comparisons. 
+For each raid, the analyzer automatically classifies players into roles and provides:
+
+- **Healers**: Healing output, overhealing %, spell breakdown, dispels, resource usage
+- **Tanks**: Damage taken, mitigation %, damage taken breakdown, abilities used
+- **Melee DPS**: Total damage, ability breakdown with casts and damage per ability
+- **Ranged DPS**: Same as melee, with automatic hybrid class detection (Shadow Priest, Boomkin, Elemental Shaman)
+- **Consumables**: Protection potions, mana potions, and tracked consumable usage across all roles
+
+### Consumable Tracking
+
+Tracks consumable usage per player per raid:
+
+- **Buff-based tracking** via the WCL Buffs table (protection potions, mana potions, dark runes)
+- **Cast-based tracking** for specific potions with timestamps:
+  - Destruction Potion (22839)
+  - Super Mana Potion (22832)
+  - Haste Potion (22838)
+
+Timestamps show when each potion was used during the raid, visible in both the overall raid Consumables tab and individual character detail panels.
+
+Consumables to track via buffs are configured in `consumes_config.json`.
+
+### Local Database
+
+All analyzed raids are saved to a local SQLite database (`warcraftlogs_history.db`), enabling:
+
+- Performance trends over time per character
+- Consumable usage history across raids
+- Quick re-viewing of past raids without re-fetching from the API
+- Guild report list shows which raids are already cached
+
+The database can be cleared from **Settings > Clear Database** (requires typing "I am Toad" to confirm).
+
+### Guild Reports
+
+The Analyze tab automatically fetches your guild's recent reports with:
+
+- Day-of-week filtering (defaults to Wed/Thu/Sun raid days)
+- Saved/cached indicators for previously imported raids
+- Clickable report codes that open the raid on WarcraftLogs
+- Double-click to immediately analyze a report
 
 ---
 
-## 🧪 Main Analysis Modes
+## Role Detection
 
-The project offers **5 analysis modes** to break down raid contributions more clearly and allows you choose which role you care about:
+Classic WoW / TBC does not expose role information directly, so the analyzer uses heuristics:
 
-### 1. 🩺 Healer Main
-- Focuses on **healing spells**, **overhealing**, and **spell usage frequency**
-- Tracks utility spells like **Fear Ward**, **Abolish Disease**, and **Major Mana Potion**
+- **Tanks**: Warriors, Druids, and Paladins with high damage taken AND high mitigation %
+- **Healers**: Priests, Paladins, Druids, and Shamans with healing above a configurable threshold
+- **Hybrid DPS**: Warriors, Paladins, Druids, Shamans, and Priests are classified as melee or ranged based on their damage profile (melee swing % vs spell damage %)
 
-### 2. 🛡️ Tank Main
-- Captures **damage taken**, **mitigation abilities**, and **active defensive usage**
-- Highlights spell casts and cooldown discipline
+Thresholds are configurable in Settings:
 
-### 3. 🔫 Melee Main
-- Analyzes melee **damage abilities**, **cooldowns**, and **weapon-based effects**
-- Casts are used to understand pacing, energy/rage usage, and uptime
-
-### 4. 🌽 Ranged Main
-- Targets **Mages**, **Warlocks**, and **Hunters**
-- Focuses on **spell casts**, **rotational consistency**, and **utility (e.g., decurse, traps)**
-
-### 5. 🍯 Consumables Analysis
-- Analyzes **consumable usage patterns** across multiple raid reports
-- Tracks **protection potions** (Shadow, Fire, Arcane, Nature, Frost) for all roles
-- Monitors **personal buffs** (Major Mana Potion, Dark Rune) for healers only
-- Shows per-raid usage with accurate counting of:
-  - Buffs applied and removed during combat
-  - Buffs applied out of combat (only remove event visible)
-  - Buffs refreshed while active (drinking another potion)
-- Exports detailed data to CSV for further analysis
-- Uses role identification to filter personal buffs for healers only
-
-
-As a note, Classic WoW makes it really difficult to identify roles, so we have to do an element of guess work to identify tanks or healers. If you look at the config.json you can play around with the numbers to correctly idenfify by role.
 ```json
 {
-    "role_thresholds": {
+  "role_thresholds": {
     "healer_min_healing": 50000,
     "tank_min_taken": 150000,
     "tank_min_mitigation": 40
+  }
 }
 ```
 
-The attempt here is to look holistically at the overall log and NOT at individual fights, so players that swap spec or role will be very hard to detect. Similarly non standard or meme specs are not fully implemented yet. So Ret Paladin, Shadow Priest, Boomkin etc. will undoubtedly have problems. Horde needs more testing, so anyone spotting something missing from the Horde side just raise an issue or a PR.
+---
 
-## 🔮 Spell Management System
+## Spell Management
 
-Classic WoW uses multiple spell IDs for the same ability (different ranks, etc.). Our new **configurable spell system** automatically handles this without requiring code changes.
+Classic WoW uses multiple spell IDs for the same ability (different ranks). The spell management system handles this automatically.
 
-### Adding Missing Spells (Non-Developers Welcome!)
+### Adding Missing Spells
 
-**When you see `(ID 12345)` instead of a spell name:**
+If you see `(ID 12345)` instead of a spell name:
 
-1. Use the management utility:
 ```bash
 python manage_spells.py add-name 12345 "Actual Spell Name" warrior_abilities
 ```
 
-2. Or edit `spell_data/spell_names.json` directly:
-```json
-"warrior_abilities": {
-  "12345": "Actual Spell Name"
-}
-```
+Or edit `spell_data/spell_names.json` directly.
 
-**When you see duplicate spells that should be merged:**
+### Merging Duplicate Spells
 
-1. Use the management utility:
 ```bash
 python manage_spells.py add-alias 12001,12002,12003 12000 new_spell_variants
 ```
 
-2. Or edit `spell_data/spell_aliases.json` directly:
-```json
-"new_spell_variants": {
-  "12001": 12000,  // All map to canonical ID 12000
-  "12002": 12000,
-  "12003": 12000
-}
-```
+Or edit `spell_data/spell_aliases.json` directly.
 
 ### Spell Management Commands
 
@@ -163,104 +158,40 @@ python manage_spells.py list-categories    # Show categories
 python manage_spells.py list-groups        # Show alias groups
 ```
 
-The system automatically validates your changes and prevents errors like circular aliases. **No programming knowledge required!**
+---
 
-## 🌐 Unified Analysis
+## CLI Mode
 
-The new unified CLI provides **all-in-one analysis** across all roles:
-
-```bash
-python -m warcraftlogs_client.cli unified --md
-```
-
-This will:
-- Automatically classify players into Healer, Tank, Melee, or Ranged
-- Generate **individual role reports** and a **final unified summary**  
-- Output everything to a clean Markdown file in the `/reports` folder
-
-For healer-specific analysis with dynamic role detection:
+The command-line interface is still available for scripting and automation:
 
 ```bash
-python -m warcraftlogs_client.cli healer --use-dynamic-roles --md
+python -m warcraftlogs_client.cli unified --md    # Full analysis with markdown output
+python -m warcraftlogs_client.cli healer           # Healer-focused analysis
+python -m warcraftlogs_client.cli tank             # Tank mitigation analysis
+python -m warcraftlogs_client.cli melee            # Melee DPS analysis
+python -m warcraftlogs_client.cli ranged           # Ranged DPS analysis
+python -m warcraftlogs_client.cli consumes raid1 raid2 --csv report.csv  # Consumables
 ```
 
-## 🍯 Consumables Analysis
-
-The consumables analysis feature tracks **consumable usage patterns** across multiple raid reports, helping you understand preparation and resource management.
-
-### Features
-
-- **Per-Raid Analysis**: Shows consumable usage for each raid separately
-- **Role-Based Filtering**: 
-  - Protection potions shown for all roles
-  - Personal buffs (Mana Potion, Dark Rune) shown only for healers
-- **Trends Analysis**: Compares usage patterns between raids
-- **CSV Export**: Detailed data export for further analysis
-
-### Usage
-
-```bash
-# Basic analysis across multiple raids
-python -m warcraftlogs_client.cli consumes raid_id_1 raid_id_2 raid_id_3
-
-# With CSV export
-python -m warcraftlogs_client.cli consumes raid_id_1 raid_id_2 --csv consumes_report.csv
-```
-
-### Configuration
-
-The consumables to track are defined in `consumes_config.json`:
-
-```json
-{
-  "personal_buffs": {
-    "17531": "Major Mana Potion",
-    "27869": "Dark Rune"
-  },
-  "defensive_potions": {
-    "17548": "Shadow Protection",
-    "17543": "Fire Protection", 
-    "17549": "Arcane Protection",
-    "17546": "Nature Protection",
-    "17544": "Frost Protection"
-  }
-}
-```
-
-### Sample Output
-
-```
-PROTECTION POTIONS USED
---------------------------------------------------
-
-Raid: toads 8/10/25 Naxx week 1 (kbK1yFXBrTc84anf)
-------------------------------------------------------------
-Player                Shadow         Fire       Arcane      Nature       Frost
------------------------------------------------------------------------------------------------------
-Player1                     2           0           0           0           6
-Player2                     7           1           1           3           6
-...
-
-TRENDS ANALYSIS - RAID COMPARISON
-------------------------------------------------------------
-
-Protection Potion Usage Trends:
-----------------------------------------
-
-Shadow:
-  Player1         : toads 8/10/25: 2 | toads 9/10/25: 1
-  Player2         : toads 8/10/25: 7 | toads 9/10/25: 3
-...
-```
+Markdown reports are saved to the `reports/` directory.
 
 ---
 
-## 📁 Output
+## Config Files
 
-All results are saved in the `reports/` directory, with filenames taken directly from the Logs Report:
+| File | Purpose |
+|------|---------|
+| `config.json` | API credentials, guild ID, role thresholds, character settings |
+| `consumes_config.json` | Buff-based consumable tracking IDs (protection pots, mana pots, etc.) |
+| `spell_data/spell_names.json` | Spell ID to name mappings |
+| `spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 
-```
-healing_report_2025-06-06.md
-```
+---
 
-You can have a logo.png in the same folder as the output to customise for your guild etc.
+## Output
+
+- GUI: Results displayed in interactive tables with charts
+- CLI: Markdown files saved to `reports/` directory
+- Database: SQLite file at `warcraftlogs_history.db`
+
+Place a `logo.png` in the `reports/` folder to customise markdown output with your guild logo.
