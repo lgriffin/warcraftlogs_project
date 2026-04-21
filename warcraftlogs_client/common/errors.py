@@ -195,7 +195,7 @@ def validate_api_response(response: Any, expected_keys: list,
     if missing_keys:
         raise ApiError(
             f"Invalid {context}: Missing required data path",
-            details=f"Missing: {' -> '.join(expected_keys[:len(expected_keys)-len(missing_keys)+1])}"
+            response_data=f"Missing: {' -> '.join(expected_keys[:len(expected_keys)-len(missing_keys)+1])}",
         )
     
     return True

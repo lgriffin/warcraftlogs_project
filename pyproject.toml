@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.6.0"]
-dev = ["pytest>=7.0", "pytest-asyncio", "ruff"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff"]
 
 [project.scripts]
 warcraftlogs = "warcraftlogs_client.cli:main"
