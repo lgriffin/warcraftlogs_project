@@ -238,8 +238,6 @@ class CharacterDetailPanel(QWidget):
         self._populate_section("dispels", rows, ["Spell", "Casts"])
 
         resource_rows = [(r.name, r.count) for r in h.resources if r.count > 0]
-        if h.fear_ward_casts > 0:
-            resource_rows.append(("Fear Ward", h.fear_ward_casts))
 
         self._clear_section("damage_taken")
         self._clear_section("abilities_used")
@@ -292,17 +290,22 @@ class CharacterDetailPanel(QWidget):
                           resource_rows: list[tuple] = None):
         rows = []
         has_ts = False
+        seen_names: set[str] = set()
         if consumables:
             has_ts = any(c.timestamps for c in consumables if c.count > 0)
             if has_ts:
                 rows = [(c.consumable_name, c.count, c.timestamps_formatted) for c in consumables if c.count > 0]
             else:
                 rows = [(c.consumable_name, c.count) for c in consumables if c.count > 0]
+            seen_names = {c.consumable_name for c in consumables if c.count > 0}
         if resource_rows:
-            if has_ts:
-                rows.extend([(name, count, "") for name, count in resource_rows])
-            else:
-                rows.extend(resource_rows)
+            for name, count in resource_rows:
+                if name in seen_names:
+                    continue
+                if has_ts:
+                    rows.append((name, count, ""))
+                else:
+                    rows.append((name, count))
         if rows:
             if has_ts:
                 self._populate_section("consumables", rows, ["Consumable", "Count", "Timestamps"])

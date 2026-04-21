@@ -408,16 +408,9 @@ def _analyze_dps(
 def _load_consumes_config() -> dict:
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "consumes_config.json")
     if not os.path.exists(config_path):
-        return {"defensive_potions": {}, "lesser_protection_potions": {}, "personal_buffs": {}}
+        return {"buff_consumables": {}, "cast_consumables": {}}
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-TRACKED_POTIONS = {
-    28508: "Destruction Potion",
-    28499: "Super Mana Potion",
-    28507: "Haste Potion",
-}
 
 
 def _analyze_consumables(
@@ -427,16 +420,12 @@ def _analyze_consumables(
 ) -> list[ConsumableUsage]:
     config = _load_consumes_config()
 
-    all_consumable_ids: dict[int, str] = {}
-    for spell_id, name in config.get("defensive_potions", {}).items():
-        all_consumable_ids[int(spell_id)] = name
-    for spell_id, name in config.get("lesser_protection_potions", {}).items():
-        all_consumable_ids[int(spell_id)] = name
-    for spell_id, name in config.get("personal_buffs", {}).items():
-        all_consumable_ids[int(spell_id)] = name
-
-    metadata = client.get_report_metadata(report_id)
-    raid_start = metadata.start_time or 0
+    buff_ids: dict[int, str] = {
+        int(sid): name for sid, name in config.get("buff_consumables", {}).items()
+    }
+    cast_ids: dict[int, str] = {
+        int(sid): name for sid, name in config.get("cast_consumables", {}).items()
+    }
 
     results: list[ConsumableUsage] = []
 
@@ -451,38 +440,41 @@ def _analyze_consumables(
                 auras = table_data.get("auras", [])
             for aura in auras:
                 ability_id = aura.get("guid")
-                if ability_id in all_consumable_ids:
+                if ability_id in buff_ids:
                     count = aura.get("totalUses", 0)
                     if count > 0:
+                        bands = aura.get("bands", [])
+                        timestamps = sorted(b.get("startTime", 0) for b in bands)
                         results.append(ConsumableUsage(
                             player_name=player.name,
                             player_role=player.role,
                             report_id=report_id,
-                            consumable_name=all_consumable_ids[ability_id],
+                            consumable_name=buff_ids[ability_id],
                             count=count,
+                            timestamps=timestamps,
                         ))
         except Exception as e:
             print(f"Error analyzing buff consumables for {player.name}: {e}")
 
         try:
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
-            potion_data: dict[int, list[int]] = defaultdict(list)
+            cast_data: dict[int, list[int]] = defaultdict(list)
             for e in cast_events:
                 aid = e.get("abilityGameID")
-                if aid in TRACKED_POTIONS:
+                if aid in cast_ids:
                     ts = e.get("timestamp", 0)
-                    potion_data[aid].append(ts)
+                    cast_data[aid].append(ts)
 
-            for potion_id, timestamps in potion_data.items():
+            for spell_id, timestamps in cast_data.items():
                 results.append(ConsumableUsage(
                     player_name=player.name,
                     player_role=player.role,
                     report_id=report_id,
-                    consumable_name=TRACKED_POTIONS[potion_id],
+                    consumable_name=cast_ids[spell_id],
                     count=len(timestamps),
                     timestamps=sorted(timestamps),
                 ))
         except Exception as e:
-            print(f"Error analyzing potion casts for {player.name}: {e}")
+            print(f"Error analyzing cast consumables for {player.name}: {e}")
 
     return results

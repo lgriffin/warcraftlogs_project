@@ -326,11 +326,10 @@ def run_unified_report(args):
             all_dispels.update(row["dispels"].keys())
 
         dispel_headers = "".join(f"{dispel[:16]:>16}" for dispel in sorted(all_dispels))
-        fear_ward_header = f"{'Fear Ward':>12}" if class_name == "Priest" else ""
         header = (
             f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
             "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-            f"{dispel_headers}{fear_ward_header}{'Restore Mana':>16} {'Dark Rune':>12}"
+            f"{dispel_headers}{'Restore Mana':>16} {'Dark Rune':>12}"
         )
         print(header)
         print("-" * len(header))
@@ -352,14 +351,12 @@ def run_unified_report(args):
                 f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels)
             )
 
-            fear_ward = row.get("fear_ward", "-") if class_name == "Priest" else ""
-            fear_ward_value = f"{fear_ward:>12}" if class_name == "Priest" else ""
-            restore_mana = row["resources"].get("Major Mana Potion", 0)
+            restore_mana = row["resources"].get("Super Mana Potion", 0)
             dark_rune = row["resources"].get("Dark Rune", 0)
 
             print(
                 f"{row['name']:<15} {row['healing']:>12,} {row['overhealing']:>12,}"
-                f"{spell_counts}{dispel_counts}{fear_ward_value}{restore_mana:>16}{dark_rune:>12}"
+                f"{spell_counts}{dispel_counts}{restore_mana:>16}{dark_rune:>12}"
             )
 
 

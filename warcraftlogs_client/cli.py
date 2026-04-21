@@ -276,7 +276,6 @@ def _export_markdown_from_analysis(analysis, config):
             "dispels": dispels_dict,
             "resources": resources_dict,
             "healing_spells": healing_by_name,
-            "fear_ward": h.fear_ward_casts if h.player_class == "Priest" else 0,
         })
 
     melee_summary = defaultdict(list)
