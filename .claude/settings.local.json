@@ -27,7 +27,15 @@
       "Bash(where python *)",
       "Bash(D:/code/warcraftlogs_project/.venv/Scripts/python.exe *)",
       "Bash(/c/Python314/python.exe -m venv .venv)",
-      "Bash(.venv/Scripts/python.exe -m pip install -r requirements.txt)"
+      "Bash(.venv/Scripts/python.exe -m pip install -r requirements.txt)",
+      "Bash(grep -E \"^d|\\\\.md$|\\\\.txt$|\\\\.toml$|\\\\.cfg$|\\\\.ini$\")",
+      "Bash(xargs ls *)",
+      "Bash(grep -E \"\\\\.py$|\\\\.json$|\\\\.md$|\\\\.toml$\")",
+      "Bash(grep -E \"warcraftlogs_client/.*\\\\.py$\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)"
     ]
   }
 }
