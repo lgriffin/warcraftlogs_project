@@ -1,27 +1,28 @@
 {
   "buff_consumables": {
-    "38929": "Fel Mana Potion",
-    "28515": "Ironshield Potion",
-    "42735": "Mad Alchemist's Potion",
     "28508": "Destruction Potion",
     "28507": "Haste Potion",
     "28506": "Heroic Potion",
     "28494": "Insane Strength Potion",
     "28504": "Major Dreamless Sleep Potion",
-    "27498": "Scroll of Agility V",
-    "10309": "Scroll of Agility IV",
-    "27503": "Scroll of Strength V",
-    "10310": "Scroll of Strength IV",
+    "28502": "Ironshield Potion",
+    "28491": "Super Healing Potion",
+    "33077": "Scroll of Agility V",
+    "12174": "Scroll of Agility IV",
+    "33082": "Scroll of Strength V",
+    "8120": "Scroll of Strength IV",
+    "28726": "Nightmare Seed",
+    "38929": "Fel Mana Potion",
+    "42735": "Mad Alchemist's Potion",
+    "35476": "Drums of Battle"
+  },
+  "cast_consumables": {
+    "28499": "Super Mana Potion",
+    "28495": "Super Rejuvenation Potion",
     "25122": "Superior Wizard Oil",
     "25123": "Superior Mana Oil",
     "29453": "Adamantite Sharpening Stone",
     "29452": "Adamantite Weightstone",
-    "28726": "Nightmare Seed"
-  },
-  "cast_consumables": {
-    "28495": "Super Rejuvenation Potion",
-    "28499": "Super Mana Potion",
-    "28491": "Super Healing Potion",
     "28551": "Volatile Healing Potion",
     "28552": "Unstable Mana Potion",
     "32903": "Auchenai Mana Potion",
@@ -33,8 +34,8 @@
     "17528": "Mighty Rage Potion",
     "27869": "Dark Rune",
     "16666": "Demonic Rune",
-    "30542": "Gnomish Flame Turret",
     "30486": "Super Sapper Charge",
+    "30542": "Gnomish Flame Turret",
     "30217": "Adamantite Grenade"
   }
 }
