@@ -146,11 +146,10 @@ def _render_healer_summary_tables(healers: list[HealerPerformance]) -> None:
 
         print(f"\nHealer Summary: {class_name}")
         dispel_hdrs = "".join(f"{d[:16]:>16}" for d in dispel_names)
-        fw_hdr = f"{'Fear Ward':>12}" if class_name == "Priest" else ""
         header = (
             f"{'Character':<15} {'Healing':>12} {'Overheal':>12} "
             + "".join(f"{s[:14]:>16}" for s in spell_names)
-            + dispel_hdrs + fw_hdr
+            + dispel_hdrs
             + f"{'Mana Pot':>12}{'Dark Rune':>12}"
         )
         print(header)
@@ -165,13 +164,12 @@ def _render_healer_summary_tables(healers: list[HealerPerformance]) -> None:
                 f"{spell_lookup[s].casts if s in spell_lookup else 0:>16}" for s in spell_names
             )
             dispel_cols = "".join(f"{dispel_lookup.get(d, 0):>16}" for d in dispel_names)
-            fw_col = f"{h.fear_ward_casts:>12}" if class_name == "Priest" else ""
-            mana = resource_lookup.get("Major Mana Potion", 0)
+            mana = resource_lookup.get("Super Mana Potion", 0)
             rune = resource_lookup.get("Dark Rune", 0)
 
             print(
                 f"{h.name:<15} {h.total_healing:>12,} {h.total_overhealing:>12,}"
-                f"{spell_cols}{dispel_cols}{fw_col}{mana:>12}{rune:>12}"
+                f"{spell_cols}{dispel_cols}{mana:>12}{rune:>12}"
             )
 
 

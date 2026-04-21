@@ -80,17 +80,14 @@ class ConsumesAnalyzer:
                 if isinstance(table_data, str):
                     table_data = json.loads(table_data)
                 
-                # Also get cast events for personal buffs (mana potions, dark runes) - only if healers flag is set
                 cast_events = []
-                if self.include_healers:
-                    try:
-                        cast_data = get_cast_events_data(client, report_id, source_id)
-                        cast_events = cast_data["data"]["reportData"]["report"]["events"]["data"]
-                        # Filter to only personal buff casts
-                        personal_buff_ids = [int(id) for id in self.config["personal_buffs"].keys()]
-                        cast_events = [e for e in cast_events if e.get('abilityGameID') in personal_buff_ids]
-                    except Exception:
-                        pass
+                try:
+                    cast_data = get_cast_events_data(client, report_id, source_id)
+                    cast_events = cast_data["data"]["reportData"]["report"]["events"]["data"]
+                    cast_ids = [int(sid) for sid in self.config.get("cast_consumables", {}).keys()]
+                    cast_events = [e for e in cast_events if e.get('abilityGameID') in cast_ids]
+                except Exception:
+                    pass
                 
                 # Count consumables from table data
                 self._count_consumables_from_table(player_name, player_role, report_id, table_data, cast_events)
@@ -210,11 +207,8 @@ class ConsumesAnalyzer:
           }
         }
         """
-        # Build lookup for our consumables
         all_consumables = {}
-        for spell_id, spell_name in self.config["defensive_potions"].items():
-            all_consumables[int(spell_id)] = spell_name
-        for spell_id, spell_name in self.config.get("lesser_protection_potions", {}).items():
+        for spell_id, spell_name in self.config.get("buff_consumables", {}).items():
             all_consumables[int(spell_id)] = spell_name
         
         # Extract auras from table data
@@ -243,10 +237,9 @@ class ConsumesAnalyzer:
             for event in cast_events:
                 ability_id = event.get('abilityGameID')
                 if ability_id:
-                    for spell_id, spell_name in self.config["personal_buffs"].items():
+                    for spell_id, spell_name in self.config.get("cast_consumables", {}).items():
                         if int(spell_id) == ability_id and event.get('type') in ['cast', 'begincast']:
                             self.consumes_data[player_name][report_id][spell_name] += 1
-                            # Store timestamp for spike analysis
                             self.timestamp_data[report_id][spell_name].append({
                                 'timestamp': event.get('timestamp', 0),
                                 'player': player_name,
@@ -284,21 +277,17 @@ class ConsumesAnalyzer:
                 })
         
         # Second pass: count consumables intelligently
-        # Personal buffs (mana potions, dark runes) - count cast events
-        for spell_id, spell_name in self.config["personal_buffs"].items():
+        for spell_id, spell_name in self.config.get("cast_consumables", {}).items():
             spell_id_int = int(spell_id)
             if spell_id_int in ability_events:
                 cast_count = sum(1 for e in ability_events[spell_id_int] if e['type'] in ["cast", "begincast"])
                 self.consumes_data[player_name][report_id][spell_name] += cast_count
-        
-        # Defensive potions - count only removebuff and refreshbuff events
-        # This matches the Warcraft Logs website behavior most closely
-        for spell_id, spell_name in self.config["defensive_potions"].items():
+
+        for spell_id, spell_name in self.config.get("buff_consumables", {}).items():
             spell_id_int = int(spell_id)
             if spell_id_int in ability_events:
                 ability_event_list = ability_events[spell_id_int]
-                
-                # Track timestamps for spike analysis (use applybuff for when potion was used)
+
                 for event in ability_event_list:
                     if event['type'] in ['applybuff', 'refreshbuff']:
                         self.timestamp_data[report_id][spell_name].append({
@@ -306,36 +295,10 @@ class ConsumesAnalyzer:
                             'player': player_name,
                             'type': event['type']
                         })
-                
-                # Count removebuff events - each removal = 1 potion consumed
-                remove_count = sum(1 for e in ability_event_list if e['type'] == 'removebuff')
-                
-                # Count refreshbuff events - each refresh = 1 new potion used
-                refresh_count = sum(1 for e in ability_event_list if e['type'] == 'refreshbuff')
-                
-                # Total usage = removes + refreshes
-                # This is the most reliable method as it counts actual consumption
-                count = remove_count + refresh_count
-                self.consumes_data[player_name][report_id][spell_name] += count
-        
-        # Lesser protection potions - same logic as defensive potions
-        for spell_id, spell_name in self.config.get("lesser_protection_potions", {}).items():
-            spell_id_int = int(spell_id)
-            if spell_id_int in ability_events:
-                ability_event_list = ability_events[spell_id_int]
-                
-                # Track timestamps for spike analysis
-                for event in ability_event_list:
-                    if event['type'] in ['applybuff', 'refreshbuff']:
-                        self.timestamp_data[report_id][spell_name].append({
-                            'timestamp': event['timestamp'],
-                            'player': player_name,
-                            'type': event['type']
-                        })
-                
+
                 remove_count = sum(1 for e in ability_event_list if e['type'] == 'removebuff')
                 refresh_count = sum(1 for e in ability_event_list if e['type'] == 'refreshbuff')
-                
+
                 count = remove_count + refresh_count
                 self.consumes_data[player_name][report_id][spell_name] += count
     
@@ -344,27 +307,10 @@ class ConsumesAnalyzer:
         print("\n" + "="*80)
         print("CONSUMABLES ANALYSIS REPORT")
         print("="*80)
-        print("\nNOTE: Consumable counts are based on removebuff and refreshbuff events.")
-        print("Some discrepancies may exist compared to the Warcraft Logs website due to:")
-        print("  - Potions applied out of combat (not always logged)")
-        print("  - Buffs that remain active at raid end (no removebuff event)")
-        print("  - Differences in how the website processes event data")
-        print("="*80)
-        
-        # Generate defensive potions report (all roles, per raid)
-        self._print_defensive_potions_report()
-        
-        # Generate lesser protection potions report (all roles, per raid)
-        self._print_lesser_protection_potions_report()
-        
-        # Generate personal buffs report (healers only, per raid) - only if requested
-        if include_healers:
-            self._print_personal_buffs_report()
-        
-        # Generate group-wide buff behavior analysis
+
+        self._print_consumables_report()
         self._print_group_buff_behavior()
-        
-        # Generate CSV if requested
+
         if output_csv:
             self._export_to_csv(output_csv)
     
@@ -380,117 +326,50 @@ class ConsumesAnalyzer:
         
         # Check if they used mana potions (likely healer)
         for report_data in player_data.values():
-            if "Major Mana Potion" in report_data or "Dark Rune" in report_data:
+            if "Super Mana Potion" in report_data or "Dark Rune" in report_data:
                 return "healer"
         
         # Default to unknown if we can't determine
         return "unknown"
     
-    def _print_defensive_potions_report(self) -> None:
-        """Print defensive potions usage report per raid."""
-        print("\nPROTECTION POTIONS USED")
-        print("-" * 50)
-        
-        # Get all defensive potion names and trim "Protection" from the end
-        potion_names = [name.replace(" Protection", "") for name in self.config["defensive_potions"].values()]
-        
-        # Group data by raid
+    def _print_consumables_report(self) -> None:
+        """Print consumable usage per raid, showing only consumables that appeared."""
         for report_id in sorted(self.raid_metadata.keys()):
             raid_title = self.raid_metadata[report_id]['title']
             print(f"\nRaid: {raid_title} ({report_id})")
             print("-" * 60)
-            
-            # Collect defensive potion usage for this raid
-            defensive_data = defaultdict(int)
-            players_in_raid = set()
-            
-            # Initialize all players with 0 for all potion types
+
+            present_consumables: set[str] = set()
+            players_in_raid: set[str] = set()
+            usage_data: dict[tuple[str, str], int] = defaultdict(int)
+
             for player_name, report_data in self.consumes_data.items():
                 if report_id in report_data:
                     players_in_raid.add(player_name)
-                    # Initialize all potion types to 0 for this player
-                    for potion_name in potion_names:
-                        defensive_data[(player_name, potion_name)] = 0
-            
-            # Now populate with actual data
-            for player_name, report_data in self.consumes_data.items():
-                if report_id in report_data:
                     for consumable_name, count in report_data[report_id].items():
-                        if consumable_name in self.config["defensive_potions"].values():
-                            # Trim "Protection" from the name for display
-                            display_name = consumable_name.replace(" Protection", "")
-                            defensive_data[(player_name, display_name)] = count
-            
-            if defensive_data:
-                # Print header
-                header = f"{'Player':<20} " + "".join(f"{potion[:15]:>16}" for potion in potion_names)
-                print(header)
-                print("-" * len(header))
-                
-                # Print data for each player in this raid
-                for player_name in sorted(players_in_raid):
-                    row = f"{player_name:<20}"
-                    for potion in potion_names:
-                        count = defensive_data.get((player_name, potion), 0)
-                        row += f"{count:>16}"
-                    print(row)
-            else:
-                print("No defensive potion usage found in this raid.")
-    
-    def _print_lesser_protection_potions_report(self) -> None:
-        """Print lesser protection potions usage report per raid."""
-        # Check if config has this category
-        if "lesser_protection_potions" not in self.config or not self.config["lesser_protection_potions"]:
-            return
-            
-        print("\nLESSER PROTECTION POTIONS USED")
-        print("-" * 50)
-        
-        # Get all lesser protection potion names and trim "Protection" from the end
-        potion_names = [name.replace(" Protection", "") for name in self.config["lesser_protection_potions"].values()]
-        
-        # Group data by raid
-        for report_id in sorted(self.raid_metadata.keys()):
-            raid_title = self.raid_metadata[report_id]['title']
-            print(f"\nRaid: {raid_title} ({report_id})")
-            print("-" * 60)
-            
-            # Collect lesser protection potion usage for this raid
-            lesser_data = defaultdict(int)
-            players_in_raid = set()
-            
-            # Initialize all players with 0 for all potion types
-            for player_name, report_data in self.consumes_data.items():
-                if report_id in report_data:
-                    players_in_raid.add(player_name)
-                    # Initialize all potion types to 0 for this player
-                    for potion_name in potion_names:
-                        lesser_data[(player_name, potion_name)] = 0
-            
-            # Now populate with actual data
-            for player_name, report_data in self.consumes_data.items():
-                if report_id in report_data:
-                    for consumable_name, count in report_data[report_id].items():
-                        if consumable_name in self.config["lesser_protection_potions"].values():
-                            # Trim "Protection" from the name for display
-                            display_name = consumable_name.replace(" Protection", "")
-                            lesser_data[(player_name, display_name)] = count
-            
-            if lesser_data and any(count > 0 for count in lesser_data.values()):
-                # Print header
-                header = f"{'Player':<20} " + "".join(f"{potion[:20]:>20}" for potion in potion_names)
-                print(header)
-                print("-" * len(header))
-                
-                # Print data for each player in this raid
-                for player_name in sorted(players_in_raid):
-                    row = f"{player_name:<20}"
-                    for potion in potion_names:
-                        count = lesser_data.get((player_name, potion), 0)
-                        row += f"{count:>20}"
-                    print(row)
-            else:
-                print("No lesser protection potion usage found in this raid.")
+                        if count > 0:
+                            present_consumables.add(consumable_name)
+                            usage_data[(player_name, consumable_name)] = count
+
+            if not present_consumables:
+                print("No consumable usage found in this raid.")
+                continue
+
+            col_names = sorted(present_consumables)
+            col_width = 20
+            header = f"{'Player':<20} " + "".join(f"{name[:col_width-2]:>{col_width}}" for name in col_names)
+            print(header)
+            print("-" * len(header))
+
+            for player_name in sorted(players_in_raid):
+                has_any = any(usage_data.get((player_name, c), 0) > 0 for c in col_names)
+                if not has_any:
+                    continue
+                row = f"{player_name:<20}"
+                for c in col_names:
+                    count = usage_data.get((player_name, c), 0)
+                    row += f"{count:>{col_width}}" if count > 0 else f"{'':>{col_width}}"
+                print(row)
     
     def _print_group_buff_behavior(self) -> None:
         """Analyze and print coordinated potion usage patterns."""
@@ -606,49 +485,6 @@ class ConsumesAnalyzer:
                     processed_timestamps.add(ts)
         
         return spikes
-    
-    def _print_personal_buffs_report(self) -> None:
-        """Print personal buffs usage report for healers only, per raid."""
-        print("\nPERSONAL BUFFS USAGE (Healers Only)")
-        print("-" * 50)
-        
-        # Get all personal buff names
-        buff_names = list(self.config["personal_buffs"].values())
-        
-        # Group data by raid
-        for report_id in sorted(self.raid_metadata.keys()):
-            raid_title = self.raid_metadata[report_id]['title']
-            print(f"\nRaid: {raid_title} ({report_id})")
-            print("-" * 60)
-            
-            # Collect personal buff usage for healers in this raid
-            personal_data = defaultdict(int)
-            healers_in_raid = set()
-            
-            for player_name, report_data in self.consumes_data.items():
-                if report_id in report_data:
-                    # Check if this player is a healer by looking at their class and usage patterns
-                    if self._is_healer(player_name, report_id):
-                        healers_in_raid.add(player_name)
-                        for consumable_name, count in report_data[report_id].items():
-                            if consumable_name in self.config["personal_buffs"].values():
-                                personal_data[(player_name, consumable_name)] = count
-            
-            if personal_data:
-                # Print header
-                header = f"{'Healer':<20} " + "".join(f"{buff[:15]:>16}" for buff in buff_names)
-                print(header)
-                print("-" * len(header))
-                
-                # Print data for each healer in this raid
-                for healer in sorted(healers_in_raid):
-                    row = f"{healer:<20}"
-                    for buff in buff_names:
-                        count = personal_data.get((healer, buff), 0)
-                        row += f"{count:>16}"
-                    print(row)
-            else:
-                print("No healer personal buff usage found in this raid.")
     
     def _export_to_csv(self, output_file: str) -> None:
         """Export consumables data to CSV file."""

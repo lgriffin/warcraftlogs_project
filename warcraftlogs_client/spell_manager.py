@@ -241,7 +241,7 @@ class SpellManager:
             Dictionary mapping resource names to usage counts
         """
         resource_ids = {
-            17531: "Major Mana Potion",
+            28499: "Super Mana Potion",
             27869: "Dark Rune"
         }
         

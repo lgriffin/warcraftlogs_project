@@ -94,8 +94,10 @@ class ConsumableUsage:
             return ""
         parts = []
         for ms in self.timestamps:
-            dt = datetime.fromtimestamp(ms / 1000)
-            parts.append(dt.strftime("%H:%M:%S"))
+            total_seconds = ms // 1000
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+            parts.append(f"{minutes:02d}:{seconds:02d}")
         return ", ".join(parts)
 
 
