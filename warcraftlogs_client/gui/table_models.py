@@ -13,7 +13,7 @@ class HealerTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._healers = healers or []
         self._columns = ["Name", "Class", "Healing", "Overhealing", "OH%",
-                         "Dispels", "Fear Ward", "Mana Pot", "Dark Rune"]
+                         "Dispels", "Mana Pot", "Dark Rune"]
 
     def set_data(self, healers: list[HealerPerformance]):
         self.beginResetModel()
@@ -46,9 +46,8 @@ class HealerTableModel(QAbstractTableModel):
             if col == 3: return f"{h.total_overhealing:,}"
             if col == 4: return f"{h.overheal_percent:.1f}%"
             if col == 5: return sum(d.casts for d in h.dispels)
-            if col == 6: return h.fear_ward_casts
-            if col == 7: return resource_lookup.get("Major Mana Potion", 0)
-            if col == 8: return resource_lookup.get("Dark Rune", 0)
+            if col == 6: return resource_lookup.get("Super Mana Potion", 0)
+            if col == 7: return resource_lookup.get("Dark Rune", 0)
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             if col >= 2:

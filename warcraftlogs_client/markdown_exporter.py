@@ -58,8 +58,7 @@ def export_combined_markdown(
                 "overhealing": f"{row['overhealing']:,}",
                 "spells": row["spells"],
                 "dispels": row["dispels"],
-                "fear_ward": row.get("fear_ward", "") if class_type == "Priest" else "",
-                "mana_potions": row.get("mana_potions") or row.get("resources", {}).get("Major Mana Potion", 0),
+                "mana_potions": row.get("mana_potions") or row.get("resources", {}).get("Super Mana Potion", 0),
                 "dark_runes": row.get("dark_runes") or row.get("resources", {}).get("Dark Rune", 0)
             })
 

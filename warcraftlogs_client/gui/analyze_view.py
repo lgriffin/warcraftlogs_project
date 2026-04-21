@@ -516,10 +516,9 @@ class AnalyzeView(QWidget):
         QMessageBox.critical(self, "Analysis Error", f"Failed to analyze raid:\n\n{error_msg}")
 
     def _populate_raid_consumables(self, analysis: RaidAnalysis):
-        self._raid_consumables_raw = analysis.consumables
-        consumes = analysis.consumables
+        self._raid_consumables_raw = [c for c in analysis.consumables if c.count > 0]
 
-        consumable_names = sorted({c.consumable_name for c in consumes})
+        consumable_names = sorted({c.consumable_name for c in self._raid_consumables_raw})
         self._consumes_filter_combo.blockSignals(True)
         self._consumes_filter_combo.clear()
         self._consumes_filter_combo.addItem("All")
@@ -539,26 +538,17 @@ class AnalyzeView(QWidget):
         if selected and selected != "All":
             consumes = [c for c in consumes if c.consumable_name == selected]
 
-        player_map: dict[str, dict] = {}
+        rows = []
         for c in consumes:
-            if c.player_name not in player_map:
-                player_map[c.player_name] = {"Name": c.player_name, "Role": c.player_role}
-            player_map[c.player_name][c.consumable_name] = c.count
-            if c.timestamps:
-                player_map[c.player_name]["Timestamps"] = c.timestamps_formatted
+            rows.append({
+                "Player": c.player_name,
+                "Consumable": c.consumable_name,
+                "Count": c.count,
+                "Timestamps": c.timestamps_formatted,
+            })
 
-        rows = list(player_map.values())
-        rows.sort(key=lambda r: r["Name"])
-
-        if selected and selected != "All":
-            has_ts = any(r.get("Timestamps") for r in rows)
-            cols = ["Name", "Role", selected] + (["Timestamps"] if has_ts else [])
-            rows.sort(key=lambda r: r.get(selected, 0), reverse=True)
-        else:
-            consumable_names = sorted({c.consumable_name for c in consumes})
-            cols = ["Name", "Role"] + consumable_names
-
-        self._consumes_model.set_data(rows, cols)
+        rows.sort(key=lambda r: (r["Player"], r["Consumable"]))
+        self._consumes_model.set_data(rows, ["Player", "Consumable", "Count", "Timestamps"])
 
     def _render_composition(self, analysis: RaidAnalysis):
         comp = analysis.composition
