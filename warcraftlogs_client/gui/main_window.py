@@ -14,6 +14,7 @@ from PySide6.QtGui import QFont, QIcon, QPixmap
 
 from .analyze_view import AnalyzeView
 from .history_view import HistoryView
+from .raid_group_view import RaidGroupView
 from .character_view import CharacterView
 from .settings_view import SettingsView
 
@@ -85,6 +86,7 @@ class MainWindow(QMainWindow):
         nav_items = [
             ("Analyze Raid", "Run analysis on a WarcraftLogs report"),
             ("History", "View historical character performance"),
+            ("Raid Groups", "Manage raid groups and members"),
             ("Character", "View character profile and rankings"),
             ("Settings", "Configure credentials and thresholds"),
         ]
@@ -138,11 +140,13 @@ class MainWindow(QMainWindow):
 
         self.analyze_view = AnalyzeView()
         self.history_view = HistoryView()
+        self.raid_group_view = RaidGroupView()
         self.character_view = CharacterView()
         self.settings_view = SettingsView()
 
         self.stack.addWidget(self.analyze_view)
         self.stack.addWidget(self.history_view)
+        self.stack.addWidget(self.raid_group_view)
         self.stack.addWidget(self.character_view)
         self.stack.addWidget(self.settings_view)
 
@@ -168,6 +172,7 @@ class MainWindow(QMainWindow):
 
         self.analyze_view.status_message.connect(self.status_bar.showMessage)
         self.history_view.status_message.connect(self.status_bar.showMessage)
+        self.raid_group_view.status_message.connect(self.status_bar.showMessage)
         self.character_view.status_message.connect(self.status_bar.showMessage)
         self.character_view.analyze_report.connect(self._analyze_report)
         self.character_view.view_character_history.connect(self._go_to_character)
