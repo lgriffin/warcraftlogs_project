@@ -18,8 +18,11 @@ from PySide6.QtGui import QFont, QColor, QDesktopServices
 from PySide6.QtCore import QUrl
 
 from .styles import COMMON_STYLES, COLORS
+from .charts import SpiderChartWidget, CalendarHeatmapWidget
+from .table_models import HistoryTableModel
 from .worker import CharacterProfileWorker
 from ..models import CharacterProfile, ZoneRankingResult, EncounterRanking
+from ..database import PerformanceDB
 
 
 class _RankingsTableModel(QAbstractTableModel):
@@ -288,6 +291,62 @@ class CharacterView(QWidget):
 
         layout.addWidget(splitter, 1)
 
+        # ── Local Performance section ──
+        self._local_perf_group = QGroupBox("Local Performance (from imported raids)")
+        local_layout = QVBoxLayout(self._local_perf_group)
+
+        # Summary row
+        self._local_summary = QHBoxLayout()
+        self._local_labels = {}
+        for key in ["Raids Tracked", "Consistency", "Consumable Compliance"]:
+            box = QVBoxLayout()
+            title = QLabel(key)
+            title.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            val = QLabel("-")
+            val.setStyleSheet(f"color: {COLORS['text']}; font-size: 16px; font-weight: bold;")
+            val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._local_labels[key] = val
+            box.addWidget(title)
+            box.addWidget(val)
+            self._local_summary.addLayout(box)
+        local_layout.addLayout(self._local_summary)
+
+        # Tabs: Personal Bests | Radar | Calendar
+        from PySide6.QtWidgets import QTabWidget
+        self._local_tabs = QTabWidget()
+
+        # Personal Bests tab
+        self._local_bests_model = HistoryTableModel()
+        bests_table = QTableView()
+        bests_table.setModel(self._local_bests_model)
+        bests_table.setAlternatingRowColors(True)
+        bests_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        bests_table.verticalHeader().setVisible(False)
+        bests_table.horizontalHeader().setStretchLastSection(True)
+        bests_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        bests_table.setStyleSheet(
+            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        self._local_tabs.addTab(bests_table, "Personal Bests")
+
+        # Radar tab
+        self._local_spider_tab = QWidget()
+        self._local_spider_layout = QVBoxLayout(self._local_spider_tab)
+        self._local_spider_layout.setContentsMargins(0, 4, 0, 0)
+        self._local_spider_widget = None
+        self._local_tabs.addTab(self._local_spider_tab, "Radar")
+
+        # Calendar tab
+        self._local_calendar_tab = QWidget()
+        self._local_calendar_layout = QVBoxLayout(self._local_calendar_tab)
+        self._local_calendar_layout.setContentsMargins(0, 4, 0, 0)
+        self._local_calendar_widget = None
+        self._local_tabs.addTab(self._local_calendar_tab, "Calendar")
+
+        local_layout.addWidget(self._local_tabs, 1)
+        layout.addWidget(self._local_perf_group, 1)
+
     def _load_character_config(self):
         if not os.path.exists(CONFIG_PATH):
             return
@@ -398,12 +457,12 @@ class CharacterView(QWidget):
             self._rankings_model.set_data([])
 
         self._reports_list.clear()
+        cached_codes = set()
         try:
-            from ..database import PerformanceDB
-            db = PerformanceDB()
-            cached_codes = db.get_imported_report_codes()
+            with PerformanceDB() as db:
+                cached_codes = db.get_imported_report_codes()
         except Exception:
-            cached_codes = set()
+            pass
 
         for r in profile.recent_reports:
             saved = "[Saved] " if r.code in cached_codes else ""
@@ -414,7 +473,67 @@ class CharacterView(QWidget):
                 item.setForeground(QColor(COLORS['success']))
             self._reports_list.addItem(item)
 
+        self._load_local_performance(profile.name)
         self.status_message.emit(f"Loaded profile for {profile.name}")
+
+    def _load_local_performance(self, name: str):
+        try:
+            with PerformanceDB() as db:
+                history = db.get_character_history(name)
+                consistency = db.get_character_consistency(name)
+                compliance = db.get_character_consumable_compliance(name)
+                bests = db.get_character_personal_bests(name)
+                spider_data = db.get_character_spider_data(name)
+                calendar_data = db.get_character_raid_calendar(name)
+        except Exception:
+            return
+
+        if history and history.total_raids > 0:
+            self._local_labels["Raids Tracked"].setText(str(history.total_raids))
+        else:
+            self._local_labels["Raids Tracked"].setText("-")
+
+        if consistency:
+            scores = []
+            for key in ("healing_consistency", "damage_consistency", "mitigation_consistency"):
+                if key in consistency:
+                    scores.append(consistency[key])
+            if scores:
+                avg = sum(scores) / len(scores)
+                self._local_labels["Consistency"].setText(f"{avg:.1f}%")
+            else:
+                self._local_labels["Consistency"].setText("-")
+        else:
+            self._local_labels["Consistency"].setText("-")
+
+        if compliance and compliance.get("total_raids", 0) > 0:
+            pct = compliance["compliance_pct"]
+            avg = compliance["avg_per_raid"]
+            self._local_labels["Consumable Compliance"].setText(
+                f"{pct:.0f}% ({avg:.1f}/raid)")
+        else:
+            self._local_labels["Consumable Compliance"].setText("-")
+
+        if bests:
+            self._local_bests_model.set_data(bests, ["label", "raid_date", "title", "value"])
+        else:
+            self._local_bests_model.set_data([], [])
+
+        if self._local_spider_widget:
+            self._local_spider_layout.removeWidget(self._local_spider_widget)
+            self._local_spider_widget.deleteLater()
+            self._local_spider_widget = None
+        if spider_data:
+            self._local_spider_widget = SpiderChartWidget(spider_data)
+            self._local_spider_layout.addWidget(self._local_spider_widget)
+
+        if self._local_calendar_widget:
+            self._local_calendar_layout.removeWidget(self._local_calendar_widget)
+            self._local_calendar_widget.deleteLater()
+            self._local_calendar_widget = None
+        if calendar_data:
+            self._local_calendar_widget = CalendarHeatmapWidget(calendar_data)
+            self._local_calendar_layout.addWidget(self._local_calendar_widget)
 
     def _on_profile_error(self, error_msg: str):
         self._refresh_btn.setEnabled(True)
