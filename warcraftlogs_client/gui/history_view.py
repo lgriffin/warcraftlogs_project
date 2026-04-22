@@ -8,10 +8,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QComboBox, QTableView, QHeaderView, QGroupBox,
     QSplitter, QListWidget, QListWidgetItem, QTabWidget,
-    QTextEdit, QMessageBox, QFileDialog,
+    QTextEdit, QMessageBox, QFileDialog, QStyledItemDelegate, QStyle,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex
-from PySide6.QtGui import QFont, QCursor
+from PySide6.QtCore import Qt, Signal, QModelIndex, QRect, QSize
+from PySide6.QtGui import QFont, QCursor, QPainter, QColor, QPen, QBrush
 
 from .detail_panel import CharacterDetailPanel
 
@@ -28,6 +28,68 @@ from .table_models import (
 from ..database import PerformanceDB
 
 
+TAG_COLORS = [
+    "#e94560", "#2ecc71", "#3498db", "#f39c12", "#9b59b6",
+    "#1abc9c", "#e67e22", "#e74c3c", "#00cec9", "#fd79a8",
+]
+
+
+class _TagDelegate(QStyledItemDelegate):
+    """Draws character name + raid group tags as colored pills."""
+
+    def paint(self, painter: QPainter, option, index):
+        self.initStyleOption(option, index)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, QColor(COLORS['bg_dark']))
+        else:
+            painter.fillRect(option.rect, QColor(COLORS['bg_card']))
+
+        tags = index.data(Qt.ItemDataRole.UserRole + 1) or []
+        display = index.data(Qt.ItemDataRole.DisplayRole) or ""
+
+        painter.setPen(QColor(COLORS['text']))
+        painter.setFont(option.font)
+        text_rect = QRect(option.rect)
+        text_rect.setLeft(text_rect.left() + 12)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, display)
+
+        if tags:
+            fm = painter.fontMetrics()
+            text_width = fm.horizontalAdvance(display)
+            x = option.rect.left() + 12 + text_width + 10
+            tag_font = QFont(option.font)
+            tag_font.setPointSize(max(7, option.font.pointSize() - 2))
+            tag_font.setBold(True)
+            painter.setFont(tag_font)
+            tag_fm = painter.fontMetrics()
+
+            for i, tag in enumerate(tags):
+                color = QColor(TAG_COLORS[i % len(TAG_COLORS)])
+                tw = tag_fm.horizontalAdvance(tag) + 12
+                th = tag_fm.height() + 4
+                ty = option.rect.center().y() - th // 2
+
+                pill = QRect(int(x), int(ty), int(tw), int(th))
+                painter.setBrush(QBrush(color))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawRoundedRect(pill, 6, 6)
+
+                painter.setPen(QColor("#fff"))
+                painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, tag)
+
+                x += tw + 4
+
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        base = super().sizeHint(option, index)
+        return QSize(base.width(), max(base.height(), 32))
+
+
 class HistoryView(QWidget):
     status_message = Signal(str)
 
@@ -36,6 +98,7 @@ class HistoryView(QWidget):
         self.setStyleSheet(COMMON_STYLES)
         self._chart_widgets = {}
         self._current_raid_analysis = None
+        self._group_map: dict[str, list[str]] = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -79,7 +142,34 @@ class HistoryView(QWidget):
         search_layout.addWidget(refresh_btn)
         left_layout.addLayout(search_layout)
 
+        group_filter_layout = QHBoxLayout()
+        group_filter_label = QLabel("Group:")
+        group_filter_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        group_filter_layout.addWidget(group_filter_label)
+        self._group_filter_combo = QComboBox()
+        self._group_filter_combo.setMinimumWidth(140)
+        self._group_filter_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {COLORS['bg_input']};
+                color: {COLORS['text']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px; padding: 4px 8px;
+                font-size: 11px;
+            }}
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox QAbstractItemView {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text']};
+                selection-background-color: {COLORS['bg_dark']};
+            }}
+        """)
+        self._group_filter_combo.currentIndexChanged.connect(self._apply_group_filter)
+        group_filter_layout.addWidget(self._group_filter_combo)
+        group_filter_layout.addStretch()
+        left_layout.addLayout(group_filter_layout)
+
         self.char_list = QListWidget()
+        self.char_list.setItemDelegate(_TagDelegate(self.char_list))
         self.char_list.setStyleSheet(f"""
             QListWidget {{
                 background-color: {COLORS['bg_card']};
@@ -109,7 +199,7 @@ class HistoryView(QWidget):
         self.summary_card = QGroupBox("Character Summary")
         summary_layout = QVBoxLayout(self.summary_card)
         self.summary_labels = {}
-        for key in ["Name", "Class", "Raids Tracked", "Active Period",
+        for key in ["Name", "Class", "Raid Groups", "Raids Tracked", "Active Period",
                      "Avg Healing", "Avg Damage", "Avg Mitigation", "Consumables Used"]:
             row = QHBoxLayout()
             label = QLabel(f"{key}:")
@@ -495,22 +585,53 @@ class HistoryView(QWidget):
     def _load_characters(self):
         self.char_list.clear()
         self._all_characters = []
+        self._group_map = {}
         try:
             with PerformanceDB() as db:
                 self._all_characters = db.get_all_characters()
+                groups = db.get_all_raid_groups()
+                for g in groups:
+                    for member in g.members:
+                        self._group_map.setdefault(member, []).append(g.name)
+
+                group_names = [g.name for g in groups]
+
+            self._group_filter_combo.blockSignals(True)
+            current = self._group_filter_combo.currentText()
+            self._group_filter_combo.clear()
+            self._group_filter_combo.addItem("All")
+            for gn in group_names:
+                self._group_filter_combo.addItem(gn)
+            idx = self._group_filter_combo.findText(current)
+            if idx >= 0:
+                self._group_filter_combo.setCurrentIndex(idx)
+            self._group_filter_combo.blockSignals(False)
+
             for ch in self._all_characters:
                 item = QListWidgetItem(f"{ch.name}  ({ch.player_class})")
                 item.setData(Qt.ItemDataRole.UserRole, ch.name)
+                item.setData(Qt.ItemDataRole.UserRole + 1,
+                             self._group_map.get(ch.name, []))
                 self.char_list.addItem(item)
+
+            self._apply_group_filter()
             self.status_message.emit(f"Loaded {len(self._all_characters)} characters")
         except Exception as e:
             self.status_message.emit(f"No history data yet: {e}")
 
-    def _filter_characters(self, text: str):
-        search = text.lower()
+    def _filter_characters(self, text: str = ""):
+        search = (text or self.search_input.text()).lower()
+        group = self._group_filter_combo.currentText()
         for i in range(self.char_list.count()):
             item = self.char_list.item(i)
-            item.setHidden(search not in item.text().lower())
+            name = item.data(Qt.ItemDataRole.UserRole)
+            text_match = search in item.text().lower()
+            group_match = (group == "All" or
+                           group in self._group_map.get(name, []))
+            item.setHidden(not (text_match and group_match))
+
+    def _apply_group_filter(self):
+        self._filter_characters()
 
     def _on_character_selected(self, current: QListWidgetItem, previous):
         if not current:
@@ -529,6 +650,22 @@ class HistoryView(QWidget):
 
                 self.summary_labels["Name"].setText(history.name)
                 self.summary_labels["Class"].setText(history.player_class)
+
+                char_groups = self._group_map.get(name, [])
+                if char_groups:
+                    tag_parts = []
+                    for i, g in enumerate(char_groups):
+                        color = TAG_COLORS[i % len(TAG_COLORS)]
+                        tag_parts.append(
+                            f'<span style="background-color:{color}; color:#fff; '
+                            f'padding:2px 8px; border-radius:4px; font-size:11px; '
+                            f'font-weight:bold;">{g}</span>')
+                    self.summary_labels["Raid Groups"].setText("  ".join(tag_parts))
+                    self.summary_labels["Raid Groups"].setTextFormat(Qt.TextFormat.RichText)
+                else:
+                    self.summary_labels["Raid Groups"].setText("-")
+                    self.summary_labels["Raid Groups"].setTextFormat(Qt.TextFormat.PlainText)
+
                 self.summary_labels["Raids Tracked"].setText(str(history.total_raids))
 
                 if history.first_seen and history.last_seen:

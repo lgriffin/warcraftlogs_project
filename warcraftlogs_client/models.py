@@ -196,6 +196,16 @@ class CharacterHistory:
     total_consumables_used: int = 0
 
 
+@dataclass
+class RaidGroup:
+    """A named group of characters with associated raid days."""
+    id: int = 0
+    name: str = ""
+    raid_days: list[str] = field(default_factory=list)
+    created_at: Optional[datetime] = None
+    members: list[str] = field(default_factory=list)
+
+
 # ── WCL Character Profile models ──
 
 WOW_CLASS_NAMES = {

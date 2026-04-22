@@ -21,13 +21,14 @@ from .models import (
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
+    RaidGroup,
     RaidMetadata,
     ResourceUsage,
     SpellUsage,
     TankPerformance,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -137,6 +138,22 @@ CREATE INDEX IF NOT EXISTS idx_dps_perf_raid ON dps_performance(raid_id);
 CREATE INDEX IF NOT EXISTS idx_consumable_char ON consumable_usage(character_id);
 CREATE INDEX IF NOT EXISTS idx_consumable_raid ON consumable_usage(raid_id);
 CREATE INDEX IF NOT EXISTS idx_raids_date ON raids(raid_date);
+
+CREATE TABLE IF NOT EXISTS raid_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    raid_days TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS raid_group_members (
+    group_id INTEGER NOT NULL REFERENCES raid_groups(id) ON DELETE CASCADE,
+    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    UNIQUE(group_id, character_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rgm_group ON raid_group_members(group_id);
+CREATE INDEX IF NOT EXISTS idx_rgm_char ON raid_group_members(character_id);
 """
 
 
@@ -171,6 +188,25 @@ class PerformanceDB:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(consumable_usage)").fetchall()}
         if "timestamps" not in cols:
             conn.execute("ALTER TABLE consumable_usage ADD COLUMN timestamps TEXT DEFAULT NULL")
+
+        tables = {row[0] for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        if "raid_groups" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS raid_groups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    raid_days TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE TABLE IF NOT EXISTS raid_group_members (
+                    group_id INTEGER NOT NULL REFERENCES raid_groups(id) ON DELETE CASCADE,
+                    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    UNIQUE(group_id, character_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_rgm_group ON raid_group_members(group_id);
+                CREATE INDEX IF NOT EXISTS idx_rgm_char ON raid_group_members(character_id);
+            """)
 
     def close(self) -> None:
         if self._conn:
@@ -598,9 +634,126 @@ class PerformanceDB:
         rows = conn.execute("SELECT report_id FROM raids").fetchall()
         return {r["report_id"] for r in rows}
 
+    # ── Raid Group operations ──
+
+    def create_raid_group(self, name: str, raid_days: list[str] | None = None) -> RaidGroup:
+        conn = self._get_conn()
+        days_json = json.dumps(raid_days or [])
+        conn.execute(
+            "INSERT INTO raid_groups (name, raid_days) VALUES (?, ?)",
+            (name, days_json),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM raid_groups WHERE name = ?", (name,)
+        ).fetchone()
+        return RaidGroup(
+            id=row["id"], name=row["name"],
+            raid_days=json.loads(row["raid_days"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def update_raid_group(self, group_id: int, name: str | None = None,
+                          raid_days: list[str] | None = None) -> None:
+        conn = self._get_conn()
+        if name is not None:
+            conn.execute("UPDATE raid_groups SET name = ? WHERE id = ?", (name, group_id))
+        if raid_days is not None:
+            conn.execute("UPDATE raid_groups SET raid_days = ? WHERE id = ?",
+                         (json.dumps(raid_days), group_id))
+        conn.commit()
+
+    def delete_raid_group(self, group_id: int) -> None:
+        conn = self._get_conn()
+        conn.execute("DELETE FROM raid_group_members WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM raid_groups WHERE id = ?", (group_id,))
+        conn.commit()
+
+    def get_all_raid_groups(self) -> list[RaidGroup]:
+        conn = self._get_conn()
+        rows = conn.execute("SELECT * FROM raid_groups ORDER BY name").fetchall()
+        groups = []
+        for r in rows:
+            members = conn.execute(
+                """SELECT c.name FROM raid_group_members rgm
+                   JOIN characters c ON c.id = rgm.character_id
+                   WHERE rgm.group_id = ?
+                   ORDER BY c.name""",
+                (r["id"],),
+            ).fetchall()
+            groups.append(RaidGroup(
+                id=r["id"], name=r["name"],
+                raid_days=json.loads(r["raid_days"]),
+                created_at=datetime.fromisoformat(r["created_at"]),
+                members=[m["name"] for m in members],
+            ))
+        return groups
+
+    def get_raid_group(self, group_id: int) -> RaidGroup | None:
+        conn = self._get_conn()
+        r = conn.execute("SELECT * FROM raid_groups WHERE id = ?", (group_id,)).fetchone()
+        if not r:
+            return None
+        members = conn.execute(
+            """SELECT c.name FROM raid_group_members rgm
+               JOIN characters c ON c.id = rgm.character_id
+               WHERE rgm.group_id = ?
+               ORDER BY c.name""",
+            (r["id"],),
+        ).fetchall()
+        return RaidGroup(
+            id=r["id"], name=r["name"],
+            raid_days=json.loads(r["raid_days"]),
+            created_at=datetime.fromisoformat(r["created_at"]),
+            members=[m["name"] for m in members],
+        )
+
+    def add_raid_group_member(self, group_id: int, character_name: str) -> bool:
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if not char:
+            return False
+        try:
+            conn.execute(
+                "INSERT INTO raid_group_members (group_id, character_id) VALUES (?, ?)",
+                (group_id, char["id"]),
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def remove_raid_group_member(self, group_id: int, character_name: str) -> None:
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if char:
+            conn.execute(
+                "DELETE FROM raid_group_members WHERE group_id = ? AND character_id = ?",
+                (group_id, char["id"]),
+            )
+            conn.commit()
+
+    def get_groups_for_character(self, character_name: str) -> list[str]:
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT rg.name FROM raid_groups rg
+               JOIN raid_group_members rgm ON rgm.group_id = rg.id
+               JOIN characters c ON c.id = rgm.character_id
+               WHERE c.name = ?
+               ORDER BY rg.name""",
+            (character_name,),
+        ).fetchall()
+        return [r["name"] for r in rows]
+
     def clear_all(self) -> None:
         """Delete all data from the database."""
         conn = self._get_conn()
+        conn.execute("DELETE FROM raid_group_members")
+        conn.execute("DELETE FROM raid_groups")
         conn.execute("DELETE FROM healer_spells")
         conn.execute("DELETE FROM healer_performance")
         conn.execute("DELETE FROM tank_damage_taken")
