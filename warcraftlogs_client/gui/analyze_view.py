@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QComboBox, QTabWidget, QTableView,
     QProgressBar, QHeaderView, QGroupBox, QMessageBox,
-    QSplitter, QTextEdit,
+    QSplitter, QTextEdit, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal, QModelIndex
 from PySide6.QtGui import QFont, QCursor
@@ -57,10 +57,15 @@ class AnalyzeView(QWidget):
         self.save_checkbox.setChecked(True)
         input_layout.addWidget(self.save_checkbox)
 
-        self.analyze_btn = QPushButton("Analyze")
-        self.analyze_btn.setFixedWidth(120)
+        self.analyze_btn = QPushButton("  Analyze  ")
         self.analyze_btn.clicked.connect(self._start_analysis)
         input_layout.addWidget(self.analyze_btn)
+
+        self.export_btn = QPushButton("  Export Markdown  ")
+        self.export_btn.setProperty("secondary", True)
+        self.export_btn.setEnabled(False)
+        self.export_btn.clicked.connect(self._export_markdown)
+        input_layout.addWidget(self.export_btn)
 
         input_layout.addStretch()
         layout.addWidget(input_group)
@@ -106,9 +111,8 @@ class AnalyzeView(QWidget):
         guild_label.setStyleSheet(f"color: {COLORS['text_header']};")
         guild_header_layout.addWidget(guild_label)
 
-        self.refresh_guild_btn = QPushButton("Fetch")
+        self.refresh_guild_btn = QPushButton("  Fetch  ")
         self.refresh_guild_btn.setProperty("secondary", True)
-        self.refresh_guild_btn.setFixedWidth(70)
         self.refresh_guild_btn.clicked.connect(self._fetch_guild_reports)
         guild_header_layout.addWidget(self.refresh_guild_btn)
         guild_layout.addLayout(guild_header_layout)
@@ -482,6 +486,8 @@ class AnalyzeView(QWidget):
         )
         self.raid_info.setVisible(True)
 
+        self.export_btn.setEnabled(True)
+
         self.healer_model.set_data(analysis.healers)
         self.tank_model.set_data(analysis.tanks)
         self.melee_model.set_data([d for d in analysis.dps if d.role == "melee"])
@@ -573,6 +579,30 @@ class AnalyzeView(QWidget):
         lines.append(f"\nTotal: {len(comp.all_players)} players")
 
         self.comp_text.setPlainText("\n".join(lines))
+
+    def _export_markdown(self):
+        if not self._current_analysis:
+            return
+
+        title = self._current_analysis.metadata.title
+        safe_title = "".join(
+            c if c.isalnum() or c in " _-" else "_" for c in title
+        ).strip().replace(" ", "_")
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Markdown Report",
+            f"{safe_title}.md",
+            "Markdown Files (*.md);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            from ..renderers.markdown import export_raid_analysis
+            export_raid_analysis(self._current_analysis, output_path=path)
+            self.status_message.emit(f"Exported to {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export:\n\n{e}")
 
     def showEvent(self, event):
         super().showEvent(event)

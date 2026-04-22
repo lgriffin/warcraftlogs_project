@@ -489,42 +489,103 @@ class ConsumesAnalyzer:
     def _export_to_csv(self, output_file: str) -> None:
         """Export consumables data to CSV file."""
         print(f"\n[EXPORT] Exporting data to CSV: {output_file}")
-        
+
         with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile)
-            
+
             # Write header
             writer.writerow(['Player', 'Raid ID', 'Raid Title', 'Consumable', 'Count'])
-            
+
             # Write data
             for player_name, report_data in self.consumes_data.items():
                 for report_id, consumables in report_data.items():
                     raid_title = self.raid_metadata.get(report_id, {}).get('title', 'Unknown')
                     for consumable_name, count in consumables.items():
                         writer.writerow([player_name, report_id, raid_title, consumable_name, count])
-        
+
         print(f"[SUCCESS] CSV export completed: {output_file}")
 
+    def export_to_markdown(self, output_path: Optional[str] = None) -> str:
+        """Export consumables data to a markdown file. Returns path written."""
+        lines = ["# Consumables Analysis Report", ""]
 
-def run_consumes_analysis(raid_ids: List[str], output_csv: Optional[str] = None, include_healers: bool = False) -> None:
+        for report_id in sorted(self.raid_metadata.keys()):
+            raid_title = self.raid_metadata[report_id]['title']
+            lines.append(f"## {raid_title}")
+            lines.append(f"[View on WarcraftLogs](https://www.warcraftlogs.com/reports/{report_id})")
+            lines.append("")
+
+            present_consumables: set = set()
+            players_in_raid: set = set()
+            usage_data: dict = defaultdict(int)
+
+            for player_name, report_data in self.consumes_data.items():
+                if report_id in report_data:
+                    players_in_raid.add(player_name)
+                    for consumable_name, count in report_data[report_id].items():
+                        if count > 0:
+                            present_consumables.add(consumable_name)
+                            usage_data[(player_name, consumable_name)] = count
+
+            if not present_consumables:
+                lines.append("No consumable usage found in this raid.")
+                lines.append("")
+                continue
+
+            col_names = sorted(present_consumables)
+            headers = ["Player"] + col_names
+            lines.append("| " + " | ".join(headers) + " |")
+            lines.append("| " + " | ".join("---" for _ in headers) + " |")
+
+            for player_name in sorted(players_in_raid):
+                has_any = any(usage_data.get((player_name, c), 0) > 0 for c in col_names)
+                if not has_any:
+                    continue
+                cells = [player_name]
+                for c in col_names:
+                    count = usage_data.get((player_name, c), 0)
+                    cells.append(str(count) if count > 0 else "")
+                lines.append("| " + " | ".join(cells) + " |")
+
+            lines.append("")
+
+        if not output_path:
+            titles = [m['title'] for m in self.raid_metadata.values()]
+            safe_title = "".join(
+                c if c.isalnum() or c in " _-" else "_"
+                for c in (titles[0] if titles else "consumes")
+            ).strip().replace(" ", "_")
+            output_path = os.path.join("reports", f"{safe_title}_consumes.md")
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+        return output_path
+
+
+def run_consumes_analysis(raid_ids: List[str], output_csv: Optional[str] = None,
+                          include_healers: bool = False, markdown_path: Optional[str] = None) -> None:
     """Run consumables analysis for multiple raid IDs."""
     from .auth import TokenManager
     from .config import load_config
-    
-    # Load configuration
+
     config = load_config()
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
     client = WarcraftLogsClient(token_mgr)
-    
-    # Initialize analyzer with healer flag
+
     analyzer = ConsumesAnalyzer(include_healers=include_healers)
-    
-    # Analyze each raid
+
     for raid_id in raid_ids:
         try:
             analyzer.analyze_raid(client, raid_id)
         except Exception as e:
             print(f"[ERROR] Error analyzing raid {raid_id}: {e}")
-    
-    # Generate report
+
     analyzer.generate_report(output_csv, include_healers=include_healers)
+
+    if markdown_path:
+        path = analyzer.export_to_markdown(
+            None if markdown_path == "auto" else markdown_path
+        )
+        print(f"\nMarkdown report exported to: {path}")
