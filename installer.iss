@@ -14,7 +14,6 @@ SetupIconFile=logo.ico
 UninstallDisplayIcon={app}\WarcraftLogsAnalyzer.exe
 PrivilegesRequired=lowest
 WizardStyle=modern
-LicenseFile=LICENSE
 
 [Files]
 Source: "dist\WarcraftLogsAnalyzer\*"; DestDir: "{app}"; Flags: recursesubdirs
