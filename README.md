@@ -6,7 +6,30 @@ Traditional metrics are heavily influenced by gear, but **casts and abilities** 
 
 ---
 
-## Quick Start (No Programming Experience Needed)
+## Windows Installer
+
+A standalone Windows installer is available that bundles everything — no Python installation required.
+
+1. Download `WarcraftLogsAnalyzer-3.0.0-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
+2. Run the installer and follow the prompts
+3. Launch **WarcraftLogs Analyzer** from the Start Menu or desktop shortcut
+
+### Building the Installer
+
+To build the installer from source:
+
+```bash
+pip install pyinstaller
+python -m PyInstaller warcraftlogs_analyzer.spec
+```
+
+The runnable output is in `dist/WarcraftLogsAnalyzer/` — the `build/` directory is only PyInstaller's working area and cannot be run directly.
+
+To create the installer `.exe`, install [Inno Setup](https://jrsoftware.org/isinfo.php) and compile `installer.iss`.
+
+---
+
+## Quick Start (From Source)
 
 ### 1. Install Python
 
