@@ -7,9 +7,11 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
 
 from .main_window import MainWindow
+from .. import paths
 
 
 def run():
+    paths.ensure_first_run_config()
     app = QApplication(sys.argv)
     app.setApplicationName("WarcraftLogs Analyzer")
     app.setApplicationVersion("3.0.0")

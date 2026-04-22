@@ -406,7 +406,8 @@ def _analyze_dps(
 
 
 def _load_consumes_config() -> dict:
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "consumes_config.json")
+    from . import paths
+    config_path = str(paths.get_consumes_config_path())
     if not os.path.exists(config_path):
         return {"buff_consumables": {}, "cast_consumables": {}}
     with open(config_path, "r", encoding="utf-8") as f:

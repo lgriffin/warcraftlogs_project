@@ -91,9 +91,8 @@ def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, 
 
 
 def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_class, output_path="reports/healing_report.md"):
-    # Use absolute path to the template directory
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    template_dir = os.path.join(base_dir, "templates")
+    from . import paths
+    template_dir = str(paths.get_template_dir())
 
     env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)
     template = env.get_template("healing_report.md.j2")

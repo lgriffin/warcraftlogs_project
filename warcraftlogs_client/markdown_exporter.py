@@ -16,15 +16,15 @@ def export_combined_markdown(
     report_title,
     output_path=None
 ):
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    template_dir = os.path.join(base_dir, "templates")
+    from . import paths
+    template_dir = str(paths.get_template_dir())
 
     env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)
     template = env.get_template("healing_report.md.j2")
 
     if not output_path:
         safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in report_title).strip().replace(" ", "_")
-        output_path = os.path.join("reports", f"{safe_title}.md")
+        output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}.md")
 
     context = {
         "report_title": report_title,

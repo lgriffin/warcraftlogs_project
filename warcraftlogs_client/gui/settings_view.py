@@ -18,7 +18,8 @@ from .styles import COMMON_STYLES, COLORS
 class SettingsView(QWidget):
     status_message = Signal(str)
 
-    CONFIG_PATH = "config.json"
+    from .. import paths as _paths
+    CONFIG_PATH = str(_paths.get_config_path())
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -134,7 +135,7 @@ class SettingsView(QWidget):
         db_group = QGroupBox("Local Database")
         db_layout = QVBoxLayout(db_group)
 
-        db_path = os.path.abspath("warcraftlogs_history.db")
+        db_path = str(self._paths.get_db_path())
         exists = os.path.exists(db_path)
         size = ""
         if exists:

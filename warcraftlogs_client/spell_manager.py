@@ -23,8 +23,9 @@ class SpellManager:
     - Backward compatibility with existing code
     """
     
-    def __init__(self, spell_data_dir: str = "spell_data"):
-        self.spell_data_dir = spell_data_dir
+    def __init__(self, spell_data_dir: str | None = None):
+        from . import paths
+        self.spell_data_dir = spell_data_dir or str(paths.get_spell_data_dir())
         self._aliases: Optional[Dict[int, int]] = None
         self._names: Optional[Dict[int, str]] = None
         self._reverse_aliases: Optional[Dict[int, Set[int]]] = None

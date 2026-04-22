@@ -40,7 +40,8 @@ def export_raid_analysis(analysis: RaidAnalysis, output_path: str | None = None)
             c if c.isalnum() or c in " _-" else "_"
             for c in analysis.metadata.title
         ).strip().replace(" ", "_")
-        output_path = os.path.join("reports", f"{safe_title}.md")
+        from .. import paths
+        output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}.md")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:

@@ -54,10 +54,9 @@ from .common.errors import ConfigurationError
 class ConfigManager:
     """Manages application configuration loading and validation."""
     
-    DEFAULT_CONFIG_FILE = "config.json"
-    
     def __init__(self, config_file: Optional[str] = None):
-        self.config_file = config_file or self.DEFAULT_CONFIG_FILE
+        from . import paths
+        self.config_file = config_file or str(paths.get_config_path())
         self._config: Optional[AppConfig] = None
     
     def load(self) -> AppConfig:
