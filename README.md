@@ -14,6 +14,16 @@ A standalone Windows installer is available that bundles everything — no Pytho
 2. Run the installer and follow the prompts
 3. Launch **WarcraftLogs Analyzer** from the Start Menu or desktop shortcut
 
+On first launch the app copies a default config and creates a local SQLite database. All user data is stored separately from the application:
+
+| Data | Location |
+|------|----------|
+| Config | `%APPDATA%\WarcraftLogsAnalyzer\config.json` |
+| Database | `%APPDATA%\WarcraftLogsAnalyzer\warcraftlogs_history.db` |
+| Cache | `%LOCALAPPDATA%\WarcraftLogsAnalyzer\cache\` |
+
+Uninstalling the app does not remove user data — delete the folders above manually if needed.
+
 ### Building the Installer
 
 To build the installer from source:
