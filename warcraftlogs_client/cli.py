@@ -72,6 +72,7 @@ Examples:
     consumes_parser = subparsers.add_parser('consumes', help='Consumables analysis across raids')
     consumes_parser.add_argument('raid_ids', nargs='+', help='Raid IDs to analyze')
     consumes_parser.add_argument('--csv', type=str, help='Export results to CSV file')
+    consumes_parser.add_argument('--md', type=str, nargs='?', const='auto', help='Export results as Markdown report (optional path)')
     consumes_parser.add_argument('--healers', action='store_true', help='Include healer personal buffs')
     consumes_parser.add_argument('--save', action='store_true', help='Save results to local database')
 
@@ -112,8 +113,9 @@ def run_unified_analysis(args) -> int:
     render_raid_analysis(analysis)
 
     if hasattr(args, 'md') and args.md:
-        from .markdown_exporter import export_combined_markdown
-        _export_markdown_from_analysis(analysis, config)
+        from .renderers.markdown import export_raid_analysis
+        path = export_raid_analysis(analysis)
+        print(f"\nMarkdown report exported to: {path}")
 
     if hasattr(args, 'save') and args.save:
         from .database import PerformanceDB
@@ -167,7 +169,8 @@ def run_ranged_analysis(args) -> int:
 def run_consumes_analysis(args) -> int:
     try:
         from .consumes_analysis import run_consumes_analysis as _run
-        _run(args.raid_ids, args.csv, include_healers=args.healers)
+        md_path = getattr(args, 'md', None)
+        _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path)
         return 0
     except Exception as e:
         print(f"Error running consumes analysis: {e}")
@@ -252,84 +255,6 @@ def run_history_query(args) -> int:
                           f"{row['role']:<8} {row['total_damage']:>12,}")
 
     return 0
-
-
-def _export_markdown_from_analysis(analysis, config):
-    """Bridge between new analysis model and existing markdown exporter."""
-    from collections import defaultdict, OrderedDict
-
-    grouped_summary = {"Priest": [], "Paladin": [], "Druid": [], "Shaman": []}
-    all_spell_names_by_class = {"Priest": set(), "Paladin": set(), "Druid": set(), "Shaman": set()}
-
-    for h in analysis.healers:
-        per_character_spells = {s.spell_name: s.casts for s in h.spells}
-        healing_by_name = {s.spell_name: s.total_amount for s in h.spells}
-        dispels_dict = {d.spell_name: d.casts for d in h.dispels}
-        resources_dict = {r.name: r.count for r in h.resources}
-        all_spell_names_by_class[h.player_class].update(per_character_spells.keys())
-
-        grouped_summary[h.player_class].append({
-            "name": h.name,
-            "healing": h.total_healing,
-            "overhealing": h.total_overhealing,
-            "spells": per_character_spells,
-            "dispels": dispels_dict,
-            "resources": resources_dict,
-            "healing_spells": healing_by_name,
-        })
-
-    melee_summary = defaultdict(list)
-    ranged_summary = defaultdict(list)
-    all_melee_spells = defaultdict(set)
-    all_ranged_spells = defaultdict(set)
-
-    for d in analysis.dps:
-        casts = {a.spell_name: a.casts for a in d.abilities}
-        damage = {a.spell_name: a.total_amount for a in d.abilities}
-        entry = {"name": d.name, "total": d.total_damage, "damage": damage, "casts": casts}
-        if d.role == "melee":
-            melee_summary[d.player_class].append(entry)
-            all_melee_spells[d.player_class].update(casts.keys())
-        else:
-            ranged_summary[d.player_class].append(entry)
-            all_ranged_spells[d.player_class].update(casts.keys())
-
-    for cls in all_melee_spells:
-        all_spell_names_by_class[cls] = sorted(all_melee_spells[cls])
-    for cls in all_ranged_spells:
-        all_spell_names_by_class[cls] = sorted(all_ranged_spells[cls])
-
-    tank_summary = []
-    all_taken_abilities = set()
-    for t in analysis.tanks:
-        for s in t.damage_taken_breakdown:
-            all_taken_abilities.add(s.spell_name)
-
-    taken_names = sorted(all_taken_abilities)
-    for t in analysis.tanks:
-        lookup = {s.spell_name: s.casts for s in t.damage_taken_breakdown}
-        tank_summary.append({
-            "name": t.name,
-            "abilities": [lookup.get(n, 0) for n in taken_names],
-        })
-
-    from .markdown_exporter import export_combined_markdown
-    export_combined_markdown(
-        metadata={
-            "title": analysis.metadata.title,
-            "owner": analysis.metadata.owner,
-            "start": analysis.metadata.start_time,
-            "report_id": analysis.metadata.report_id,
-        },
-        healer_summary=grouped_summary,
-        melee_summary=dict(melee_summary),
-        ranged_summary=dict(ranged_summary),
-        tank_summary=tank_summary,
-        tank_abilities=taken_names,
-        tank_damage_summary=[],
-        spell_names=all_spell_names_by_class,
-        report_title=analysis.metadata.title,
-    )
 
 
 def main() -> int:

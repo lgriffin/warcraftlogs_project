@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QComboBox, QTableView, QHeaderView, QGroupBox,
     QSplitter, QListWidget, QListWidgetItem, QTabWidget,
-    QTextEdit, QMessageBox,
+    QTextEdit, QMessageBox, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal, QModelIndex
 from PySide6.QtGui import QFont, QCursor
@@ -73,9 +73,8 @@ class HistoryView(QWidget):
         self.search_input.textChanged.connect(self._filter_characters)
         search_layout.addWidget(self.search_input)
 
-        refresh_btn = QPushButton("Refresh")
+        refresh_btn = QPushButton("  Refresh  ")
         refresh_btn.setProperty("secondary", True)
-        refresh_btn.setFixedWidth(80)
         refresh_btn.clicked.connect(self._load_characters)
         search_layout.addWidget(refresh_btn)
         left_layout.addLayout(search_layout)
@@ -260,9 +259,8 @@ class HistoryView(QWidget):
         self.raid_search_input.textChanged.connect(self._filter_raids)
         search_layout.addWidget(self.raid_search_input)
 
-        raid_refresh_btn = QPushButton("Refresh")
+        raid_refresh_btn = QPushButton("  Refresh  ")
         raid_refresh_btn.setProperty("secondary", True)
-        raid_refresh_btn.setFixedWidth(80)
         raid_refresh_btn.clicked.connect(self._load_raids)
         search_layout.addWidget(raid_refresh_btn)
         left_layout.addLayout(search_layout)
@@ -340,6 +338,7 @@ class HistoryView(QWidget):
         results_layout = QVBoxLayout(results_widget)
         results_layout.setContentsMargins(8, 0, 0, 0)
 
+        raid_info_row = QHBoxLayout()
         self.raid_info_label = QLabel("")
         self.raid_info_label.setStyleSheet(f"""
             QLabel {{
@@ -351,7 +350,15 @@ class HistoryView(QWidget):
             }}
         """)
         self.raid_info_label.setVisible(False)
-        results_layout.addWidget(self.raid_info_label)
+        raid_info_row.addWidget(self.raid_info_label, 1)
+
+        self.raid_export_btn = QPushButton("  Export Markdown  ")
+        self.raid_export_btn.setProperty("secondary", True)
+        self.raid_export_btn.setVisible(False)
+        self.raid_export_btn.clicked.connect(self._export_raid_markdown)
+        raid_info_row.addWidget(self.raid_export_btn)
+
+        results_layout.addLayout(raid_info_row)
 
         self.raid_detail_tabs = QTabWidget()
 
@@ -744,6 +751,7 @@ class HistoryView(QWidget):
                 f"{len(comp.melee)}M / {len(comp.ranged)}R"
             )
             self.raid_info_label.setVisible(True)
+            self.raid_export_btn.setVisible(True)
 
             self.raid_healer_model.set_data(analysis.healers)
             self.raid_tank_model.set_data(analysis.tanks)
@@ -880,6 +888,30 @@ class HistoryView(QWidget):
             self.raid_info_label.setVisible(False)
         except Exception as e:
             QMessageBox.critical(self, "Delete Error", f"Failed to delete raid:\n{e}")
+
+    def _export_raid_markdown(self):
+        if not self._current_raid_analysis:
+            return
+
+        title = self._current_raid_analysis.metadata.title
+        safe_title = "".join(
+            c if c.isalnum() or c in " _-" else "_" for c in title
+        ).strip().replace(" ", "_")
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Markdown Report",
+            f"{safe_title}.md",
+            "Markdown Files (*.md);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            from ..renderers.markdown import export_raid_analysis
+            export_raid_analysis(self._current_raid_analysis, output_path=path)
+            self.status_message.emit(f"Exported to {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export:\n\n{e}")
 
     def _render_raid_composition(self, analysis):
         comp = analysis.composition
