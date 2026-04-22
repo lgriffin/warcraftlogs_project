@@ -156,7 +156,8 @@ def _percent_color(pct: float):
     return QColor("#9d9d9d")
 
 
-CONFIG_PATH = "config.json"
+from .. import paths as _paths
+CONFIG_PATH = str(_paths.get_config_path())
 
 
 class CharacterView(QWidget):

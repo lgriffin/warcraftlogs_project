@@ -160,10 +160,9 @@ CREATE INDEX IF NOT EXISTS idx_rgm_char ON raid_group_members(character_id);
 class PerformanceDB:
     """SQLite database for storing and querying historical character performance."""
 
-    DEFAULT_PATH = "warcraftlogs_history.db"
-
     def __init__(self, db_path: Optional[str] = None):
-        self.db_path = db_path or self.DEFAULT_PATH
+        from . import paths
+        self.db_path = db_path or str(paths.get_db_path())
         self._conn: Optional[sqlite3.Connection] = None
 
     def _get_conn(self) -> sqlite3.Connection:

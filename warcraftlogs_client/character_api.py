@@ -3,8 +3,9 @@ import json
 import time
 from typing import List
 from .client import run_graphql_query
+from . import paths
 
-CACHE_FILE = ".cache/character_specs.json"
+CACHE_FILE = str(paths.get_cache_dir() / "character_specs.json")
 
 QUERY_TEMPLATE = """
 query {{
@@ -18,7 +19,7 @@ query {{
 """
 
 def enrich_actors_with_specs(actors: List[dict]) -> List[dict]:
-    os.makedirs(".cache", exist_ok=True)
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     cache = {}
 
     if os.path.exists(CACHE_FILE):

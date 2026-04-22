@@ -1,8 +1,9 @@
 import os
 import json
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
+from . import paths
+
+CACHE_DIR = str(paths.get_cache_dir())
 
 def _safe_filename(report_id):
     return report_id.replace("/", "_")

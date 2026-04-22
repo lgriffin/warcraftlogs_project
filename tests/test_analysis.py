@@ -132,8 +132,8 @@ class TestIdentifyComposition:
 class TestLoadConsumesConfig:
     def test_missing_file_returns_defaults(self, monkeypatch, tmp_path):
         monkeypatch.setattr(
-            "warcraftlogs_client.analysis.os.path.dirname",
-            lambda _: str(tmp_path),
+            "warcraftlogs_client.paths.get_consumes_config_path",
+            lambda: tmp_path / "nonexistent_consumes_config.json",
         )
         result = _load_consumes_config()
         assert result == {"buff_consumables": {}, "cast_consumables": {}}

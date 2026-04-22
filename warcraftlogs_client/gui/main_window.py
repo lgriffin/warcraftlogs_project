@@ -179,15 +179,8 @@ class MainWindow(QMainWindow):
         self.analyze_view.navigate_to_character.connect(self._go_to_character)
 
     def _load_guild_logo(self):
-        try:
-            from ..config import load_config
-            config = load_config()
-            logo_path = config.get("guild_logo", "logo.png")
-        except Exception:
-            logo_path = "logo.png"
-
-        if not os.path.isabs(logo_path):
-            logo_path = os.path.abspath(logo_path)
+        from .. import paths
+        logo_path = str(paths.get_logo_path())
 
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)

@@ -18,9 +18,10 @@ from . import dynamic_role_parser
 class ConsumesAnalyzer:
     """Analyzes consumable usage across multiple raid reports."""
     
-    def __init__(self, config_path: str = "consumes_config.json", include_healers: bool = False):
+    def __init__(self, config_path: str | None = None, include_healers: bool = False):
         """Initialize the analyzer with consumable configuration."""
-        self.config = self._load_config(config_path)
+        from . import paths
+        self.config = self._load_config(config_path or str(paths.get_consumes_config_path()))
         self.consumes_data = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         self.raid_metadata = {}
         self.healers_by_raid = defaultdict(set)  # Store healers per raid
@@ -555,7 +556,8 @@ class ConsumesAnalyzer:
                 c if c.isalnum() or c in " _-" else "_"
                 for c in (titles[0] if titles else "consumes")
             ).strip().replace(" ", "_")
-            output_path = os.path.join("reports", f"{safe_title}_consumes.md")
+            from . import paths
+            output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}_consumes.md")
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
