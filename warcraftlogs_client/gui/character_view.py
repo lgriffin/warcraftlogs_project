@@ -1,25 +1,87 @@
 """
 Character Profile view — configure your main character, view WCL rankings,
-recent reports, and stats.
+recent reports, and performance trends from parsed raid history.
 """
 
 import json
 import os
-import webbrowser
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableView, QHeaderView, QGroupBox, QProgressBar,
-    QSplitter, QListWidget, QListWidgetItem, QLineEdit,
-    QFormLayout, QMessageBox, QScrollArea,
+    QListWidget, QListWidgetItem, QLineEdit,
+    QFormLayout, QMessageBox, QScrollArea, QTabWidget, QComboBox,
 )
 from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QFont, QColor, QDesktopServices
-from PySide6.QtCore import QUrl
+from PySide6.QtGui import QFont, QColor
 
 from .styles import COMMON_STYLES, COLORS
 from .worker import CharacterProfileWorker
+from .table_models import HistoryTableModel
+from .charts import (
+    build_healer_chart, build_healer_overheal_chart,
+    build_tank_chart, build_tank_mitigation_chart,
+    build_dps_chart, build_spell_trend_chart,
+    build_consumable_trend_chart,
+)
 from ..models import CharacterProfile, ZoneRankingResult, EncounterRanking
+
+
+class _CollapsibleSection(QWidget):
+    """A header bar that toggles visibility of its content widget."""
+
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._toggle_btn = QPushButton(f"  {title}")
+        self._toggle_btn.setCheckable(True)
+        self._toggle_btn.setChecked(True)
+        self._toggle_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text_header']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-size: 13px;
+                font-weight: bold;
+                text-align: left;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['border']};
+            }}
+        """)
+        self._toggle_btn.clicked.connect(self._on_toggle)
+        layout.addWidget(self._toggle_btn)
+
+        self._content = QWidget()
+        content_layout = QVBoxLayout(self._content)
+        content_layout.setContentsMargins(0, 8, 0, 0)
+        content_layout.setSpacing(8)
+        layout.addWidget(self._content)
+
+        self._title = title
+        self._update_arrow()
+
+    def content_layout(self) -> QVBoxLayout:
+        return self._content.layout()
+
+    def set_collapsed(self, collapsed: bool):
+        self._toggle_btn.setChecked(not collapsed)
+        self._content.setVisible(not collapsed)
+        self._update_arrow()
+
+    def _on_toggle(self):
+        visible = self._toggle_btn.isChecked()
+        self._content.setVisible(visible)
+        self._update_arrow()
+
+    def _update_arrow(self):
+        arrow = "v" if self._toggle_btn.isChecked() else ">"
+        self._toggle_btn.setText(f"  {arrow}  {self._title}")
 
 
 class _RankingsTableModel(QAbstractTableModel):
@@ -104,6 +166,13 @@ class CharacterView(QWidget):
         self.setStyleSheet(COMMON_STYLES)
         self._worker = None
         self._profile = None
+        self._chart_widgets = {}
+        self._cached_healer_trend = []
+        self._cached_healer_spell_trend = []
+        self._cached_tank_trend = []
+        self._cached_dps_trend = []
+        self._cached_dps_ability_trend = []
+        self._cached_consumable_trend = []
         self._build_ui()
         self._load_character_config()
 
@@ -124,16 +193,17 @@ class CharacterView(QWidget):
         scroll.setWidget(container)
         layout = QVBoxLayout(container)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
         header = QLabel("Character Profile")
         header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         header.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(header)
 
-        # ── Character config ──
-        config_group = QGroupBox("Character Settings")
-        config_layout = QFormLayout(config_group)
+        # ── Character Settings (collapsible) ──
+        self._config_section = _CollapsibleSection("Character Settings")
+        config_inner = QWidget()
+        config_layout = QFormLayout(config_inner)
         config_layout.setSpacing(10)
 
         self._char_name_input = QLineEdit()
@@ -171,7 +241,8 @@ class CharacterView(QWidget):
         btn_row.addStretch()
         config_layout.addRow(btn_row)
 
-        layout.addWidget(config_group)
+        self._config_section.content_layout().addWidget(config_inner)
+        layout.addWidget(self._config_section)
 
         # ── WCL profile link ──
         self._wcl_link = QLabel("")
@@ -196,45 +267,60 @@ class CharacterView(QWidget):
         self._no_config_label.setVisible(False)
         layout.addWidget(self._no_config_label)
 
-        # ── Main content ──
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        # Left: summary + rankings
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 8, 0)
-
-        # Summary card
+        # ── Summary card (always visible, compact) ──
         self._summary_group = QGroupBox("Summary")
-        summary_layout = QVBoxLayout(self._summary_group)
+        summary_layout = QHBoxLayout(self._summary_group)
+        summary_layout.setSpacing(24)
+
         self._summary_labels = {}
         for key in ["Name", "Class", "Level", "Faction", "Guild",
                      "Best Avg", "Median Avg", "All Stars"]:
-            row = QHBoxLayout()
-            label = QLabel(f"{key}:")
-            label.setFixedWidth(100)
-            label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            col_widget = QWidget()
+            col_layout = QVBoxLayout(col_widget)
+            col_layout.setContentsMargins(0, 0, 0, 0)
+            col_layout.setSpacing(2)
+            label = QLabel(key)
+            label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             value = QLabel("-")
             value.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px; font-weight: bold;")
+            value.setAlignment(Qt.AlignmentFlag.AlignCenter)
             value.setWordWrap(True)
             self._summary_labels[key] = value
-            row.addWidget(label)
-            row.addWidget(value)
-            row.addStretch()
-            summary_layout.addLayout(row)
+            col_layout.addWidget(label)
+            col_layout.addWidget(value)
+            summary_layout.addWidget(col_widget)
 
-        history_btn = QPushButton("View History")
-        history_btn.setFixedWidth(120)
-        history_btn.clicked.connect(self._on_view_history)
-        summary_layout.addWidget(history_btn)
+        layout.addWidget(self._summary_group)
 
-        left_layout.addWidget(self._summary_group)
+        # ── Local DB stats row (raids tracked, avg stats) ──
+        self._db_stats_group = QGroupBox("Raid History Stats")
+        db_stats_layout = QHBoxLayout(self._db_stats_group)
+        db_stats_layout.setSpacing(24)
 
-        # Rankings table
-        rankings_label = QLabel("Encounter Rankings")
-        rankings_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        rankings_label.setStyleSheet(f"color: {COLORS['text_header']};")
-        left_layout.addWidget(rankings_label)
+        self._db_stats_labels = {}
+        for key in ["Raids Tracked", "Active Period", "Avg Healing",
+                     "Avg Damage", "Avg Mitigation", "Consumables Used"]:
+            col_widget = QWidget()
+            col_layout = QVBoxLayout(col_widget)
+            col_layout.setContentsMargins(0, 0, 0, 0)
+            col_layout.setSpacing(2)
+            label = QLabel(key)
+            label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            value = QLabel("-")
+            value.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px; font-weight: bold;")
+            value.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            value.setWordWrap(True)
+            self._db_stats_labels[key] = value
+            col_layout.addWidget(label)
+            col_layout.addWidget(value)
+            db_stats_layout.addWidget(col_widget)
+
+        layout.addWidget(self._db_stats_group)
+
+        # ── Encounter Rankings (collapsible) ──
+        self._rankings_section = _CollapsibleSection("Encounter Rankings")
 
         self._rankings_model = _RankingsTableModel()
         self._rankings_table = QTableView()
@@ -248,21 +334,16 @@ class CharacterView(QWidget):
             QHeaderView.ResizeMode.ResizeToContents)
         self._rankings_table.setStyleSheet(
             f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
-        left_layout.addWidget(self._rankings_table, 1)
+        self._rankings_table.setMaximumHeight(250)
 
-        splitter.addWidget(left)
+        self._rankings_section.content_layout().addWidget(self._rankings_table)
+        layout.addWidget(self._rankings_section)
 
-        # Right: recent reports
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(8, 0, 0, 0)
-
-        reports_label = QLabel("Recent Reports")
-        reports_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        reports_label.setStyleSheet(f"color: {COLORS['text_header']};")
-        right_layout.addWidget(reports_label)
+        # ── Recent Reports (collapsible) ──
+        self._reports_section = _CollapsibleSection("Recent Reports")
 
         self._reports_list = QListWidget()
+        self._reports_list.setMaximumHeight(200)
         self._reports_list.setStyleSheet(f"""
             QListWidget {{
                 background-color: {COLORS['bg_card']};
@@ -272,7 +353,7 @@ class CharacterView(QWidget):
                 font-size: 13px;
             }}
             QListWidget::item {{
-                padding: 8px 12px;
+                padding: 6px 12px;
                 border-bottom: 1px solid {COLORS['border']};
             }}
             QListWidget::item:selected {{
@@ -281,12 +362,137 @@ class CharacterView(QWidget):
             }}
         """)
         self._reports_list.doubleClicked.connect(self._on_report_double_clicked)
-        right_layout.addWidget(self._reports_list, 1)
 
-        splitter.addWidget(right)
-        splitter.setSizes([600, 400])
+        self._reports_section.content_layout().addWidget(self._reports_list)
+        self._reports_section.set_collapsed(True)
+        layout.addWidget(self._reports_section)
 
-        layout.addWidget(splitter, 1)
+        # ── Performance Trends (main content) ──
+        trends_label = QLabel("Performance Trends")
+        trends_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        trends_label.setStyleSheet(f"color: {COLORS['text_header']}; margin-top: 8px;")
+        layout.addWidget(trends_label)
+
+        self._no_trends_label = QLabel(
+            "No raid history data yet. Analyze raids from the Analyze tab to build trend data."
+        )
+        self._no_trends_label.setWordWrap(True)
+        self._no_trends_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._no_trends_label.setStyleSheet(
+            f"color: {COLORS['text_dim']}; font-size: 13px; padding: 20px;")
+        self._no_trends_label.setVisible(False)
+        layout.addWidget(self._no_trends_label)
+
+        combo_style = f"""
+            QComboBox {{
+                background-color: {COLORS['bg_input']};
+                color: {COLORS['text']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+                min-width: 160px;
+            }}
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox QAbstractItemView {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text']};
+                selection-background-color: {COLORS['bg_dark']};
+            }}
+        """
+
+        self._trend_tabs = QTabWidget()
+
+        # Healing tab
+        healer_tab = QWidget()
+        healer_layout = QVBoxLayout(healer_tab)
+        healer_layout.setContentsMargins(0, 4, 0, 0)
+        healer_bar = QHBoxLayout()
+        healer_bar.addWidget(QLabel("Chart:"))
+        self._healer_chart_combo = QComboBox()
+        self._healer_chart_combo.addItems([
+            "Healing & Overhealing", "Overheal %",
+            "Spell Healing", "Spell Casts",
+        ])
+        self._healer_chart_combo.setStyleSheet(combo_style)
+        self._healer_chart_combo.currentIndexChanged.connect(self._rebuild_healer_chart)
+        healer_bar.addWidget(self._healer_chart_combo)
+        healer_bar.addStretch()
+        healer_layout.addLayout(healer_bar)
+        self._healer_chart_container = QVBoxLayout()
+        healer_layout.addLayout(self._healer_chart_container)
+        self._healer_trend_model = HistoryTableModel()
+        healer_layout.addWidget(self._make_trend_table(self._healer_trend_model), 1)
+        self._trend_tabs.addTab(healer_tab, "Healing")
+
+        # Tank tab
+        tank_tab = QWidget()
+        tank_layout = QVBoxLayout(tank_tab)
+        tank_layout.setContentsMargins(0, 4, 0, 0)
+        tank_bar = QHBoxLayout()
+        tank_bar.addWidget(QLabel("Chart:"))
+        self._tank_chart_combo = QComboBox()
+        self._tank_chart_combo.addItems(["Damage & Mitigation", "Mitigation %"])
+        self._tank_chart_combo.setStyleSheet(combo_style)
+        self._tank_chart_combo.currentIndexChanged.connect(self._rebuild_tank_chart)
+        tank_bar.addWidget(self._tank_chart_combo)
+        tank_bar.addStretch()
+        tank_layout.addLayout(tank_bar)
+        self._tank_chart_container = QVBoxLayout()
+        tank_layout.addLayout(self._tank_chart_container)
+        self._tank_trend_model = HistoryTableModel()
+        tank_layout.addWidget(self._make_trend_table(self._tank_trend_model), 1)
+        self._trend_tabs.addTab(tank_tab, "Tank")
+
+        # DPS tab
+        dps_tab = QWidget()
+        dps_layout = QVBoxLayout(dps_tab)
+        dps_layout.setContentsMargins(0, 4, 0, 0)
+        dps_bar = QHBoxLayout()
+        dps_bar.addWidget(QLabel("Chart:"))
+        self._dps_chart_combo = QComboBox()
+        self._dps_chart_combo.addItems(["Total Damage", "Ability Damage", "Ability Casts"])
+        self._dps_chart_combo.setStyleSheet(combo_style)
+        self._dps_chart_combo.currentIndexChanged.connect(self._rebuild_dps_chart)
+        dps_bar.addWidget(self._dps_chart_combo)
+        dps_bar.addStretch()
+        dps_layout.addLayout(dps_bar)
+        self._dps_chart_container = QVBoxLayout()
+        dps_layout.addLayout(self._dps_chart_container)
+        self._dps_trend_model = HistoryTableModel()
+        dps_layout.addWidget(self._make_trend_table(self._dps_trend_model), 1)
+        self._trend_tabs.addTab(dps_tab, "DPS")
+
+        # Consumables tab
+        consumes_tab = QWidget()
+        consumes_layout = QVBoxLayout(consumes_tab)
+        consumes_layout.setContentsMargins(0, 4, 0, 0)
+        self._consumes_chart_container = QVBoxLayout()
+        consumes_layout.addLayout(self._consumes_chart_container)
+        consumes_table_label = QLabel("Last 5 Raids")
+        consumes_table_label.setStyleSheet(
+            f"color: {COLORS['text_dim']}; font-size: 11px; margin-top: 4px;")
+        consumes_layout.addWidget(consumes_table_label)
+        self._consumes_trend_model = HistoryTableModel()
+        consumes_layout.addWidget(self._make_trend_table(self._consumes_trend_model), 1)
+        self._trend_tabs.addTab(consumes_tab, "Consumables")
+
+        self._trend_tabs.setMinimumHeight(420)
+        layout.addWidget(self._trend_tabs)
+
+    def _make_trend_table(self, model) -> QTableView:
+        table = QTableView()
+        table.setModel(model)
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.setStyleSheet(
+            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        return table
+
+    # ── Config persistence ──
 
     def _load_character_config(self):
         if not os.path.exists(CONFIG_PATH):
@@ -299,6 +505,8 @@ class CharacterView(QWidget):
             self._char_region_input.setText(config.get("character_region", "eu"))
             self._wcl_api_url_input.setText(
                 config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"))
+            if config.get("character_name") and config.get("character_server"):
+                self._config_section.set_collapsed(True)
         except Exception:
             pass
 
@@ -328,7 +536,10 @@ class CharacterView(QWidget):
 
     def _save_and_refresh(self):
         self._save_character_config()
+        self._config_section.set_collapsed(True)
         self._fetch_profile()
+
+    # ── WCL profile fetch ──
 
     def _update_wcl_link(self, name: str, server: str, region: str):
         api_url = self._wcl_api_url_input.text().strip()
@@ -387,7 +598,7 @@ class CharacterView(QWidget):
                 star = zr.all_stars[0]
                 self._summary_labels["All Stars"].setText(
                     f"{star.points:.0f}/{star.possible_points:.0f} pts  "
-                    f"(#{star.rank:,} of {star.total:,} — {star.rank_percent:.1f}%)"
+                    f"(#{star.rank:,} of {star.total:,})"
                 )
 
             self._rankings_model.set_data(zr.encounter_rankings)
@@ -414,12 +625,200 @@ class CharacterView(QWidget):
                 item.setForeground(QColor(COLORS['success']))
             self._reports_list.addItem(item)
 
+        self._load_trends(profile.name)
         self.status_message.emit(f"Loaded profile for {profile.name}")
 
     def _on_profile_error(self, error_msg: str):
         self._refresh_btn.setEnabled(True)
         self._progress.setVisible(False)
         self.status_message.emit(f"Failed to load profile: {error_msg}")
+        char_name = self._char_name_input.text().strip()
+        if char_name:
+            self._load_trends(char_name)
+
+    # ── Performance trends from local DB ──
+
+    def _load_trends(self, character_name: str):
+        try:
+            from ..database import PerformanceDB
+            with PerformanceDB() as db:
+                history = db.get_character_history(character_name)
+                if not history or history.total_raids == 0:
+                    self._no_trends_label.setVisible(True)
+                    self._trend_tabs.setVisible(False)
+                    self._db_stats_group.setVisible(False)
+                    return
+
+                self._no_trends_label.setVisible(False)
+                self._trend_tabs.setVisible(True)
+                self._db_stats_group.setVisible(True)
+
+                self._db_stats_labels["Raids Tracked"].setText(str(history.total_raids))
+                if history.first_seen and history.last_seen:
+                    period = (f"{history.first_seen.strftime('%Y-%m-%d')} to "
+                              f"{history.last_seen.strftime('%Y-%m-%d')}")
+                    self._db_stats_labels["Active Period"].setText(period)
+                else:
+                    self._db_stats_labels["Active Period"].setText("-")
+                self._db_stats_labels["Avg Healing"].setText(
+                    f"{history.avg_healing:,.0f}" if history.avg_healing else "-")
+                self._db_stats_labels["Avg Damage"].setText(
+                    f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
+                self._db_stats_labels["Avg Mitigation"].setText(
+                    f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-")
+                self._db_stats_labels["Consumables Used"].setText(
+                    str(history.total_consumables_used))
+
+                self._cached_healer_trend = db.get_healer_trend(character_name)
+                self._cached_healer_spell_trend = (
+                    db.get_healer_spell_trend(character_name) if self._cached_healer_trend else [])
+                self._cached_tank_trend = db.get_tank_trend(character_name)
+                self._cached_dps_trend = db.get_dps_trend(character_name)
+                self._cached_dps_ability_trend = (
+                    db.get_dps_ability_trend(character_name) if self._cached_dps_trend else [])
+                self._cached_consumable_trend = db.get_consumable_trend(character_name)
+
+                # Healing
+                if self._cached_healer_trend:
+                    self._healer_trend_model.set_data(
+                        self._cached_healer_trend,
+                        ["raid_date", "title", "total_healing", "total_overhealing", "overheal_percent"])
+                else:
+                    self._healer_trend_model.set_data([], [])
+                self._rebuild_healer_chart()
+
+                # Tank
+                if self._cached_tank_trend:
+                    self._tank_trend_model.set_data(
+                        self._cached_tank_trend,
+                        ["raid_date", "title", "total_damage_taken", "total_mitigated", "mitigation_percent"])
+                else:
+                    self._tank_trend_model.set_data([], [])
+                self._rebuild_tank_chart()
+
+                # DPS
+                if self._cached_dps_trend:
+                    self._dps_trend_model.set_data(
+                        self._cached_dps_trend,
+                        ["raid_date", "title", "role", "total_damage"])
+                else:
+                    self._dps_trend_model.set_data([], [])
+                self._rebuild_dps_chart()
+
+                # Consumables
+                consumes_summary = db.get_consumable_summary(character_name, limit=5)
+                if consumes_summary:
+                    all_consumable_names = set()
+                    for row in consumes_summary:
+                        for k in row:
+                            if k not in ("raid_date", "title", "report_id"):
+                                all_consumable_names.add(k)
+                    cols = ["raid_date", "title"] + sorted(all_consumable_names)
+                    self._consumes_trend_model.set_data(consumes_summary, cols)
+                else:
+                    self._consumes_trend_model.set_data([], [])
+                self._rebuild_consumable_chart()
+
+                # Auto-select the tab with data
+                if self._cached_healer_trend:
+                    self._trend_tabs.setCurrentIndex(0)
+                elif self._cached_tank_trend:
+                    self._trend_tabs.setCurrentIndex(1)
+                elif self._cached_dps_trend:
+                    self._trend_tabs.setCurrentIndex(2)
+                elif self._cached_consumable_trend:
+                    self._trend_tabs.setCurrentIndex(3)
+
+        except Exception as e:
+            self._no_trends_label.setText(
+                f"Could not load trend data: {e}")
+            self._no_trends_label.setVisible(True)
+            self._trend_tabs.setVisible(False)
+            self._db_stats_group.setVisible(False)
+
+    # ── Chart rebuild handlers ──
+
+    def _clear_chart(self, container_layout: QVBoxLayout, key: str):
+        old = self._chart_widgets.get(key)
+        if old:
+            container_layout.removeWidget(old)
+            old.deleteLater()
+            self._chart_widgets.pop(key, None)
+
+    def _set_chart(self, container_layout: QVBoxLayout, key: str, chart_view):
+        self._clear_chart(container_layout, key)
+        self._chart_widgets[key] = chart_view
+        container_layout.insertWidget(0, chart_view)
+
+    def _rebuild_healer_chart(self):
+        choice = self._healer_chart_combo.currentIndex()
+        trend = self._cached_healer_trend
+        spell_trend = self._cached_healer_spell_trend
+
+        if not trend:
+            self._clear_chart(self._healer_chart_container, "healer")
+            return
+
+        if choice == 0:
+            view = build_healer_chart(trend)
+        elif choice == 1:
+            view = build_healer_overheal_chart(trend)
+        elif choice == 2:
+            view = build_spell_trend_chart(
+                spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
+        elif choice == 3:
+            view = build_spell_trend_chart(
+                spell_trend, "casts", "Spell Casts Over Time", "Casts")
+        else:
+            return
+        self._set_chart(self._healer_chart_container, "healer", view)
+
+    def _rebuild_tank_chart(self):
+        choice = self._tank_chart_combo.currentIndex()
+        trend = self._cached_tank_trend
+
+        if not trend:
+            self._clear_chart(self._tank_chart_container, "tank")
+            return
+
+        if choice == 0:
+            view = build_tank_chart(trend)
+        elif choice == 1:
+            view = build_tank_mitigation_chart(trend)
+        else:
+            return
+        self._set_chart(self._tank_chart_container, "tank", view)
+
+    def _rebuild_dps_chart(self):
+        choice = self._dps_chart_combo.currentIndex()
+        trend = self._cached_dps_trend
+        ability_trend = self._cached_dps_ability_trend
+
+        if not trend:
+            self._clear_chart(self._dps_chart_container, "dps")
+            return
+
+        if choice == 0:
+            view = build_dps_chart(trend)
+        elif choice == 1:
+            view = build_spell_trend_chart(
+                ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
+        elif choice == 2:
+            view = build_spell_trend_chart(
+                ability_trend, "casts", "Ability Casts Over Time", "Casts")
+        else:
+            return
+        self._set_chart(self._dps_chart_container, "dps", view)
+
+    def _rebuild_consumable_chart(self):
+        trend = self._cached_consumable_trend
+        if not trend:
+            self._clear_chart(self._consumes_chart_container, "consumes")
+            return
+        view = build_consumable_trend_chart(trend)
+        self._set_chart(self._consumes_chart_container, "consumes", view)
+
+    # ── Event handlers ──
 
     def _on_view_history(self):
         name = self._char_name_input.text().strip()
@@ -440,5 +839,7 @@ class CharacterView(QWidget):
             server = self._char_server_input.text().strip()
             if char_name and server:
                 self._fetch_profile()
+            elif char_name:
+                self._load_trends(char_name)
             else:
                 self._no_config_label.setVisible(True)
