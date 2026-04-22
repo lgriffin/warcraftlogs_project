@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_data_files
 pyside6_datas = collect_data_files("PySide6")
 
 a = Analysis(
-    ["warcraftlogs_client/gui/app.py"],
+    ["launcher.py"],
     pathex=[],
     binaries=[],
     datas=[
