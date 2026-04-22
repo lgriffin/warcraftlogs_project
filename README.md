@@ -55,7 +55,8 @@ python -m warcraftlogs_client.gui.app
 The full-featured PySide6 desktop app provides:
 
 - **Analyze Tab** — Enter a report ID or select from your guild's recent reports to run a full raid analysis. Results are broken down by role (Healers, Tanks, Melee DPS, Ranged DPS) with clickable character names for detailed spell/ability breakdowns.
-- **History Tab** — Browse all imported raids and characters. View performance trends over time with charts for healing, damage, mitigation, and consumables. Compare raids side by side.
+- **History Tab** — Browse all imported raids and characters. View performance trends over time with charts for healing, damage, mitigation, and consumables. Character insights include consistency scores, personal bests, radar charts, and calendar heatmaps.
+- **Raid Groups Tab** — Create and manage raid groups, assign characters, set raid days, and view group dashboards with aggregated performance, attendance, and role coverage.
 - **Character Tab** — Set up your main character to view WarcraftLogs profile data, rankings, and recent reports. Links directly to your WCL profile page.
 - **Settings Tab** — Configure API credentials, role detection thresholds, and manage the local database.
 
@@ -82,6 +83,42 @@ Tracks consumable usage per player per raid:
 Timestamps show when each potion was used during the raid, visible in both the overall raid Consumables tab and individual character detail panels.
 
 Consumables to track via buffs are configured in `consumes_config.json`.
+
+### Raid Groups
+
+Create named groups of characters to track your raid roster over time:
+
+- **Group Management** — Create, rename, and delete raid groups. Add/remove characters detected from imported reports.
+- **Raid Days** — Select which days your group raids (Mon-Sun). The view automatically shows matching raids from your history.
+- **Group Dashboard** — Aggregated performance chart, attendance tracker, and role coverage matrix for group members.
+- **History Integration** — Characters show colored group tag pills in the History tab. Filter the character list by raid group.
+
+### Character Insights
+
+The History tab includes advanced analytics per character:
+
+- **Consistency Score** — How stable performance is across raids (lower variance = higher score)
+- **Consumable Compliance** — Percentage of raids where consumables were used, with average per raid
+- **Personal Bests** — Best and worst performances for healing, damage, and mitigation with raid context
+
+### Radar Chart
+
+The Radar (spider) chart shows a character's relative standing across six dimensions, each scored 0-100:
+
+| Axis | How it's calculated |
+|------|-------------------|
+| **Healing** | Percentile rank of average healing output vs. all tracked characters |
+| **Damage** | Percentile rank of average damage output vs. all tracked characters |
+| **Mitigation** | Percentile rank of average mitigation % vs. all tracked tanks |
+| **Activity** | Percentile rank of total raids attended vs. all tracked characters |
+| **Consumables** | Percentile rank of total consumables used vs. all tracked characters |
+| **Consistency** | Average consistency score across roles (100 = identical every raid, lower = more variance between raids) |
+
+Hover over any axis label on the chart for a tooltip explanation.
+
+### Calendar Heatmap
+
+A GitHub-style activity heatmap showing raid participation over the last 6 months, colored by performance intensity.
 
 ### Local Database
 

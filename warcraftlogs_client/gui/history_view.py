@@ -21,6 +21,7 @@ from .charts import (
     build_tank_chart, build_tank_mitigation_chart,
     build_dps_chart, build_spell_trend_chart,
     build_consumable_trend_chart,
+    SpiderChartWidget, CalendarHeatmapWidget,
 )
 from .table_models import (
     HistoryTableModel, HealerTableModel, TankTableModel, DPSTableModel,
@@ -200,7 +201,8 @@ class HistoryView(QWidget):
         summary_layout = QVBoxLayout(self.summary_card)
         self.summary_labels = {}
         for key in ["Name", "Class", "Raid Groups", "Raids Tracked", "Active Period",
-                     "Avg Healing", "Avg Damage", "Avg Mitigation", "Consumables Used"]:
+                     "Avg Healing", "Avg Damage", "Avg Mitigation", "Consumables Used",
+                     "Consistency", "Consumable Compliance"]:
             row = QHBoxLayout()
             label = QLabel(f"{key}:")
             label.setFixedWidth(130)
@@ -312,6 +314,29 @@ class HistoryView(QWidget):
         self.consumes_trend_model = HistoryTableModel()
         consumes_tab_layout.addWidget(self._make_history_table(self.consumes_trend_model), 1)
         self.char_trend_tabs.addTab(self._consumes_tab, "Consumables")
+
+        # Personal Bests/Worsts tab
+        self._bests_tab = QWidget()
+        bests_tab_layout = QVBoxLayout(self._bests_tab)
+        bests_tab_layout.setContentsMargins(0, 4, 0, 0)
+        self._bests_model = HistoryTableModel()
+        bests_table = self._make_history_table(self._bests_model)
+        bests_tab_layout.addWidget(bests_table, 1)
+        self.char_trend_tabs.addTab(self._bests_tab, "Personal Bests")
+
+        # Spider Chart tab
+        self._spider_tab = QWidget()
+        self._spider_tab_layout = QVBoxLayout(self._spider_tab)
+        self._spider_tab_layout.setContentsMargins(0, 4, 0, 0)
+        self._spider_widget = None
+        self.char_trend_tabs.addTab(self._spider_tab, "Radar")
+
+        # Calendar Heatmap tab
+        self._calendar_tab = QWidget()
+        self._calendar_tab_layout = QVBoxLayout(self._calendar_tab)
+        self._calendar_tab_layout.setContentsMargins(0, 4, 0, 0)
+        self._calendar_widget = None
+        self.char_trend_tabs.addTab(self._calendar_tab, "Calendar")
 
         # Cache for trend data used by chart rebuilds
         self._cached_healer_trend = []
@@ -736,6 +761,59 @@ class HistoryView(QWidget):
                 else:
                     self.consumes_trend_model.set_data([], [])
                 self._rebuild_consumable_chart()
+
+                # Consistency score
+                consistency = db.get_character_consistency(name)
+                if consistency:
+                    scores = []
+                    for key in ("healing_consistency", "damage_consistency", "mitigation_consistency"):
+                        if key in consistency:
+                            scores.append(consistency[key])
+                    if scores:
+                        avg = sum(scores) / len(scores)
+                        self.summary_labels["Consistency"].setText(f"{avg:.1f}%")
+                    else:
+                        self.summary_labels["Consistency"].setText("-")
+                else:
+                    self.summary_labels["Consistency"].setText("-")
+
+                # Consumable compliance
+                compliance = db.get_character_consumable_compliance(name)
+                if compliance and compliance.get("total_raids", 0) > 0:
+                    pct = compliance["compliance_pct"]
+                    avg = compliance["avg_per_raid"]
+                    self.summary_labels["Consumable Compliance"].setText(
+                        f"{pct:.0f}% ({avg:.1f}/raid)"
+                    )
+                else:
+                    self.summary_labels["Consumable Compliance"].setText("-")
+
+                # Personal Bests
+                bests = db.get_character_personal_bests(name)
+                if bests:
+                    self._bests_model.set_data(bests, ["label", "raid_date", "title", "value"])
+                else:
+                    self._bests_model.set_data([], [])
+
+                # Spider / Radar chart
+                spider_data = db.get_character_spider_data(name)
+                if self._spider_widget:
+                    self._spider_tab_layout.removeWidget(self._spider_widget)
+                    self._spider_widget.deleteLater()
+                    self._spider_widget = None
+                if spider_data:
+                    self._spider_widget = SpiderChartWidget(spider_data)
+                    self._spider_tab_layout.addWidget(self._spider_widget)
+
+                # Calendar heatmap
+                calendar_data = db.get_character_raid_calendar(name)
+                if self._calendar_widget:
+                    self._calendar_tab_layout.removeWidget(self._calendar_widget)
+                    self._calendar_widget.deleteLater()
+                    self._calendar_widget = None
+                if calendar_data:
+                    self._calendar_widget = CalendarHeatmapWidget(calendar_data)
+                    self._calendar_tab_layout.addWidget(self._calendar_widget)
 
                 # Auto-select best tab
                 if self._cached_healer_trend:
