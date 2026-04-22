@@ -293,6 +293,7 @@ class RaidGroupView(QWidget):
         attend_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         attend_table.setStyleSheet(
             f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        attend_table.setMinimumHeight(180)
         attend_layout.addWidget(attend_table, 1)
         dash_tables.addWidget(attend_panel)
 
@@ -314,6 +315,7 @@ class RaidGroupView(QWidget):
         role_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         role_table.setStyleSheet(
             f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        role_table.setMinimumHeight(180)
         role_layout.addWidget(role_table, 1)
         dash_tables.addWidget(role_panel)
 
