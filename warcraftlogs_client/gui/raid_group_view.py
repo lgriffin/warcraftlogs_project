@@ -7,7 +7,7 @@ import json
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QListWidget, QListWidgetItem, QSplitter,
+    QLineEdit, QListWidget, QListWidgetItem, QSplitter, QScrollArea,
     QCheckBox, QGroupBox, QMessageBox, QTableView, QHeaderView,
     QInputDialog,
 )
@@ -16,6 +16,7 @@ from PySide6.QtGui import QFont
 
 from .styles import COMMON_STYLES, COLORS
 from .table_models import HistoryTableModel
+from .charts import build_group_performance_chart
 from ..database import PerformanceDB
 
 
@@ -30,12 +31,20 @@ class RaidGroupView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(COMMON_STYLES)
         self._current_group_id = None
         self._all_character_names = []
         self._build_ui()
 
     def _build_ui(self):
+        self.setStyleSheet(COMMON_STYLES + f"""
+            RaidGroupView, RaidGroupView QWidget {{
+                background-color: {COLORS['bg_dark']};
+            }}
+            RaidGroupView QGroupBox {{
+                background-color: {COLORS['bg_card']};
+            }}
+        """)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
@@ -96,6 +105,7 @@ class RaidGroupView(QWidget):
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(8, 0, 0, 0)
+        right_layout.setSpacing(0)
 
         self._no_selection_label = QLabel("Select or create a raid group to get started.")
         self._no_selection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -103,12 +113,12 @@ class RaidGroupView(QWidget):
             f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
         right_layout.addWidget(self._no_selection_label)
 
-        self._detail_widget = QWidget()
-        detail_layout = QVBoxLayout(self._detail_widget)
-        detail_layout.setContentsMargins(0, 0, 0, 0)
-        detail_layout.setSpacing(12)
+        # ── Fixed header: name + raid days (always visible) ──
+        self._header_widget = QWidget()
+        header_layout = QVBoxLayout(self._header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 8)
+        header_layout.setSpacing(8)
 
-        # Group name header
         name_row = QHBoxLayout()
         self._group_name_label = QLabel("")
         self._group_name_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
@@ -121,22 +131,43 @@ class RaidGroupView(QWidget):
         rename_btn.clicked.connect(self._rename_group)
         name_row.addWidget(rename_btn)
         name_row.addStretch()
-        detail_layout.addLayout(name_row)
+        header_layout.addLayout(name_row)
 
-        # Raid days
-        days_group = QGroupBox("Raid Days")
-        days_layout = QHBoxLayout(days_group)
-        days_layout.setSpacing(12)
+        days_row = QHBoxLayout()
+        days_row.setSpacing(16)
+        days_label = QLabel("Raid Days:")
+        days_label.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px; font-weight: bold;")
+        days_row.addWidget(days_label)
 
         self._day_checkboxes = {}
         for day in DAYS_OF_WEEK:
             cb = QCheckBox(DAY_ABBREV[day])
-            cb.setStyleSheet("font-size: 12px;")
+            cb.setStyleSheet(f"""
+                QCheckBox {{
+                    font-size: 13px; color: {COLORS['text']}; spacing: 6px;
+                }}
+                QCheckBox::indicator {{ width: 18px; height: 18px; }}
+            """)
             cb.toggled.connect(self._on_raid_days_changed)
             self._day_checkboxes[day] = cb
-            days_layout.addWidget(cb)
-        days_layout.addStretch()
-        detail_layout.addWidget(days_group)
+            days_row.addWidget(cb)
+        days_row.addStretch()
+        header_layout.addLayout(days_row)
+
+        self._header_widget.setVisible(False)
+        right_layout.addWidget(self._header_widget)
+
+        # ── Scrollable content below header ──
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}
+        """)
+
+        self._detail_widget = QWidget()
+        detail_layout = QVBoxLayout(self._detail_widget)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        detail_layout.setSpacing(12)
 
         # Members section
         members_group = QGroupBox("Members")
@@ -165,6 +196,7 @@ class RaidGroupView(QWidget):
         avail_layout.addWidget(avail_label)
         self._available_list = QListWidget()
         self._available_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self._available_list.setMinimumHeight(150)
         self._available_list.setStyleSheet(f"""
             QListWidget {{
                 background-color: {COLORS['bg_card']};
@@ -190,6 +222,7 @@ class RaidGroupView(QWidget):
         current_layout.addWidget(current_label)
         self._members_list = QListWidget()
         self._members_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self._members_list.setMinimumHeight(150)
         self._members_list.setStyleSheet(self._available_list.styleSheet())
         current_layout.addWidget(self._members_list)
 
@@ -225,12 +258,71 @@ class RaidGroupView(QWidget):
         raids_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         raids_table.setStyleSheet(
             f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
-        raids_table.setMaximumHeight(220)
+        raids_table.setMinimumHeight(160)
+        raids_table.setMaximumHeight(280)
         raids_layout.addWidget(raids_table)
         detail_layout.addWidget(raids_group)
 
+        # ── Dashboard section ──
+        dashboard_label = QLabel("Group Dashboard")
+        dashboard_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        dashboard_label.setStyleSheet(f"color: {COLORS['text_header']}; margin-top: 8px;")
+        detail_layout.addWidget(dashboard_label)
+
+        self._perf_chart_container = QVBoxLayout()
+        detail_layout.addLayout(self._perf_chart_container)
+        self._perf_chart_widget = None
+
+        dash_tables = QSplitter(Qt.Orientation.Horizontal)
+
+        # Attendance table
+        attend_panel = QWidget()
+        attend_layout = QVBoxLayout(attend_panel)
+        attend_layout.setContentsMargins(0, 0, 4, 0)
+        attend_title = QLabel("Attendance")
+        attend_title.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-weight: bold;")
+        attend_layout.addWidget(attend_title)
+        self._attendance_model = HistoryTableModel()
+        attend_table = QTableView()
+        attend_table.setModel(self._attendance_model)
+        attend_table.setAlternatingRowColors(True)
+        attend_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        attend_table.setSortingEnabled(True)
+        attend_table.verticalHeader().setVisible(False)
+        attend_table.horizontalHeader().setStretchLastSection(True)
+        attend_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        attend_table.setStyleSheet(
+            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        attend_layout.addWidget(attend_table, 1)
+        dash_tables.addWidget(attend_panel)
+
+        # Role Coverage table
+        role_panel = QWidget()
+        role_layout = QVBoxLayout(role_panel)
+        role_layout.setContentsMargins(4, 0, 0, 0)
+        role_title = QLabel("Role Coverage")
+        role_title.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-weight: bold;")
+        role_layout.addWidget(role_title)
+        self._role_model = HistoryTableModel()
+        role_table = QTableView()
+        role_table.setModel(self._role_model)
+        role_table.setAlternatingRowColors(True)
+        role_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        role_table.setSortingEnabled(True)
+        role_table.verticalHeader().setVisible(False)
+        role_table.horizontalHeader().setStretchLastSection(True)
+        role_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        role_table.setStyleSheet(
+            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        role_layout.addWidget(role_table, 1)
+        dash_tables.addWidget(role_panel)
+
+        dash_tables.setSizes([400, 400])
+        detail_layout.addWidget(dash_tables, 1)
+
         self._detail_widget.setVisible(False)
-        right_layout.addWidget(self._detail_widget, 1)
+        scroll.setWidget(self._detail_widget)
+        right_layout.addWidget(scroll, 1)
 
         splitter.addWidget(right_panel)
         splitter.setSizes([260, 740])
@@ -294,6 +386,7 @@ class RaidGroupView(QWidget):
             with PerformanceDB() as db:
                 db.delete_raid_group(group_id)
             self._current_group_id = None
+            self._header_widget.setVisible(False)
             self._detail_widget.setVisible(False)
             self._no_selection_label.setVisible(True)
             self._load_groups()
@@ -342,6 +435,7 @@ class RaidGroupView(QWidget):
 
             self._current_group_id = group_id
             self._no_selection_label.setVisible(False)
+            self._header_widget.setVisible(True)
             self._detail_widget.setVisible(True)
 
             self._group_name_label.setText(group.name)
@@ -357,6 +451,7 @@ class RaidGroupView(QWidget):
 
             self._refresh_available_list(group.members)
             self._load_matching_raids(group.raid_days)
+            self._load_dashboard(group_id)
         except Exception as e:
             self.status_message.emit(f"Error loading group: {e}")
 
@@ -419,6 +514,41 @@ class RaidGroupView(QWidget):
                 self._group_list.setCurrentItem(item)
                 self._group_list.blockSignals(False)
                 break
+
+    # ── Dashboard ──
+
+    def _load_dashboard(self, group_id: int):
+        try:
+            with PerformanceDB() as db:
+                perf_trend = db.get_group_performance_trend(group_id)
+                attendance = db.get_group_attendance(group_id)
+                role_coverage = db.get_group_role_coverage(group_id)
+
+            if self._perf_chart_widget:
+                self._perf_chart_container.removeWidget(self._perf_chart_widget)
+                self._perf_chart_widget.deleteLater()
+                self._perf_chart_widget = None
+
+            if perf_trend:
+                self._perf_chart_widget = build_group_performance_chart(perf_trend)
+                self._perf_chart_container.addWidget(self._perf_chart_widget)
+
+            if attendance:
+                self._attendance_model.set_data(
+                    attendance,
+                    ["name", "player_class", "attended", "total_raids", "attendance_pct"])
+            else:
+                self._attendance_model.set_data([], [])
+
+            if role_coverage:
+                self._role_model.set_data(
+                    role_coverage,
+                    ["name", "player_class", "healer", "tank", "dps"])
+            else:
+                self._role_model.set_data([], [])
+
+        except Exception as e:
+            self.status_message.emit(f"Error loading dashboard: {e}")
 
     # ── Raid days ──
 

@@ -749,6 +749,298 @@ class PerformanceDB:
         ).fetchall()
         return [r["name"] for r in rows]
 
+    # ── Analytics queries ──
+
+    def get_group_performance_trend(self, group_id: int) -> list[dict]:
+        """Aggregate performance for all group members per raid, ordered by date."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT r.raid_date, r.title, r.report_id,
+                      AVG(hp.total_healing) as avg_healing,
+                      AVG(dp.total_damage) as avg_damage,
+                      AVG(tp.mitigation_percent) as avg_mitigation,
+                      COUNT(DISTINCT c.id) as members_present
+               FROM raids r
+               JOIN raid_group_members rgm ON rgm.group_id = ?
+               JOIN characters c ON c.id = rgm.character_id
+               LEFT JOIN healer_performance hp ON hp.character_id = c.id AND hp.raid_id = r.id
+               LEFT JOIN dps_performance dp ON dp.character_id = c.id AND dp.raid_id = r.id
+               LEFT JOIN tank_performance tp ON tp.character_id = c.id AND tp.raid_id = r.id
+               WHERE hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL
+               GROUP BY r.id
+               ORDER BY r.raid_date ASC""",
+            (group_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_group_attendance(self, group_id: int) -> list[dict]:
+        """Attendance for each group member: raids attended, total raids, %."""
+        conn = self._get_conn()
+        members = conn.execute(
+            """SELECT c.id, c.name, c.player_class
+               FROM raid_group_members rgm
+               JOIN characters c ON c.id = rgm.character_id
+               WHERE rgm.group_id = ?
+               ORDER BY c.name""",
+            (group_id,),
+        ).fetchall()
+
+        group_raid_ids = conn.execute(
+            """SELECT DISTINCT r.id FROM raids r
+               JOIN raid_group_members rgm ON rgm.group_id = ?
+               JOIN characters c ON c.id = rgm.character_id
+               LEFT JOIN healer_performance hp ON hp.character_id = c.id AND hp.raid_id = r.id
+               LEFT JOIN dps_performance dp ON dp.character_id = c.id AND dp.raid_id = r.id
+               LEFT JOIN tank_performance tp ON tp.character_id = c.id AND tp.raid_id = r.id
+               WHERE hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL""",
+            (group_id,),
+        ).fetchall()
+        total_raids = len(group_raid_ids)
+        raid_id_set = {r["id"] for r in group_raid_ids}
+
+        results = []
+        for m in members:
+            attended_rows = conn.execute(
+                """SELECT DISTINCT raid_id FROM (
+                    SELECT raid_id FROM healer_performance WHERE character_id = ?
+                    UNION SELECT raid_id FROM tank_performance WHERE character_id = ?
+                    UNION SELECT raid_id FROM dps_performance WHERE character_id = ?
+                )""",
+                (m["id"], m["id"], m["id"]),
+            ).fetchall()
+            attended = sum(1 for r in attended_rows if r["raid_id"] in raid_id_set)
+            pct = round(attended / total_raids * 100, 1) if total_raids > 0 else 0.0
+            results.append({
+                "name": m["name"], "player_class": m["player_class"],
+                "attended": attended, "total_raids": total_raids,
+                "attendance_pct": pct,
+            })
+        return results
+
+    def get_group_role_coverage(self, group_id: int) -> list[dict]:
+        """For each group member, count raids in each role."""
+        conn = self._get_conn()
+        members = conn.execute(
+            """SELECT c.id, c.name, c.player_class
+               FROM raid_group_members rgm
+               JOIN characters c ON c.id = rgm.character_id
+               WHERE rgm.group_id = ?
+               ORDER BY c.name""",
+            (group_id,),
+        ).fetchall()
+
+        results = []
+        for m in members:
+            healer_count = conn.execute(
+                "SELECT COUNT(*) as cnt FROM healer_performance WHERE character_id = ?",
+                (m["id"],)).fetchone()["cnt"]
+            tank_count = conn.execute(
+                "SELECT COUNT(*) as cnt FROM tank_performance WHERE character_id = ?",
+                (m["id"],)).fetchone()["cnt"]
+            dps_count = conn.execute(
+                "SELECT COUNT(*) as cnt FROM dps_performance WHERE character_id = ?",
+                (m["id"],)).fetchone()["cnt"]
+            results.append({
+                "name": m["name"], "player_class": m["player_class"],
+                "healer": healer_count, "tank": tank_count, "dps": dps_count,
+            })
+        return results
+
+    def get_character_consistency(self, character_name: str) -> dict:
+        """Compute consistency scores (std dev) for a character's performance."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if not char:
+            return {}
+        cid = char["id"]
+
+        result = {"name": character_name}
+
+        healing_rows = conn.execute(
+            "SELECT total_healing FROM healer_performance WHERE character_id = ?", (cid,)
+        ).fetchall()
+        if len(healing_rows) >= 2:
+            vals = [r["total_healing"] for r in healing_rows]
+            mean = sum(vals) / len(vals)
+            variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+            std = variance ** 0.5
+            result["healing_mean"] = round(mean)
+            result["healing_std"] = round(std)
+            result["healing_consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
+
+        damage_rows = conn.execute(
+            "SELECT total_damage FROM dps_performance WHERE character_id = ?", (cid,)
+        ).fetchall()
+        if len(damage_rows) >= 2:
+            vals = [r["total_damage"] for r in damage_rows]
+            mean = sum(vals) / len(vals)
+            variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+            std = variance ** 0.5
+            result["damage_mean"] = round(mean)
+            result["damage_std"] = round(std)
+            result["damage_consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
+
+        tank_rows = conn.execute(
+            "SELECT mitigation_percent FROM tank_performance WHERE character_id = ?", (cid,)
+        ).fetchall()
+        if len(tank_rows) >= 2:
+            vals = [r["mitigation_percent"] for r in tank_rows]
+            mean = sum(vals) / len(vals)
+            variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+            std = variance ** 0.5
+            result["mitigation_mean"] = round(mean, 1)
+            result["mitigation_std"] = round(std, 1)
+            result["mitigation_consistency"] = round(100 - (std / max(mean, 0.01) * 100), 1)
+
+        return result
+
+    def get_character_personal_bests(self, character_name: str) -> list[dict]:
+        """Get top and bottom performance raids for a character."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if not char:
+            return []
+        cid = char["id"]
+        results = []
+
+        for label, table, metric, order in [
+            ("Best Healing", "healer_performance", "total_healing", "DESC"),
+            ("Worst Healing", "healer_performance", "total_healing", "ASC"),
+            ("Best DPS", "dps_performance", "total_damage", "DESC"),
+            ("Worst DPS", "dps_performance", "total_damage", "ASC"),
+            ("Best Mitigation", "tank_performance", "mitigation_percent", "DESC"),
+            ("Worst Mitigation", "tank_performance", "mitigation_percent", "ASC"),
+        ]:
+            row = conn.execute(
+                f"""SELECT r.raid_date, r.title, r.report_id, p.{metric} as value
+                    FROM {table} p
+                    JOIN raids r ON r.id = p.raid_id
+                    WHERE p.character_id = ?
+                    ORDER BY p.{metric} {order}
+                    LIMIT 1""",
+                (cid,),
+            ).fetchone()
+            if row:
+                results.append({
+                    "label": label, "raid_date": row["raid_date"],
+                    "title": row["title"], "report_id": row["report_id"],
+                    "value": row["value"],
+                })
+        return results
+
+    def get_character_consumable_compliance(self, character_name: str) -> dict:
+        """Consumable usage rate: % of raids where character used any consumables."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if not char:
+            return {}
+        cid = char["id"]
+
+        total_raids = conn.execute(
+            """SELECT COUNT(DISTINCT raid_id) as cnt FROM (
+                SELECT raid_id FROM healer_performance WHERE character_id = ?
+                UNION SELECT raid_id FROM tank_performance WHERE character_id = ?
+                UNION SELECT raid_id FROM dps_performance WHERE character_id = ?
+            )""", (cid, cid, cid),
+        ).fetchone()["cnt"]
+
+        raids_with_consumes = conn.execute(
+            "SELECT COUNT(DISTINCT raid_id) as cnt FROM consumable_usage WHERE character_id = ?",
+            (cid,),
+        ).fetchone()["cnt"]
+
+        avg_per_raid = conn.execute(
+            """SELECT AVG(total) as avg FROM (
+                SELECT SUM(count) as total FROM consumable_usage
+                WHERE character_id = ? GROUP BY raid_id
+            )""", (cid,),
+        ).fetchone()["avg"]
+
+        return {
+            "total_raids": total_raids,
+            "raids_with_consumes": raids_with_consumes,
+            "compliance_pct": round(raids_with_consumes / total_raids * 100, 1) if total_raids > 0 else 0,
+            "avg_per_raid": round(avg_per_raid, 1) if avg_per_raid else 0,
+        }
+
+    def get_character_spider_data(self, character_name: str) -> dict:
+        """Normalized 0-100 scores across multiple dimensions for radar chart."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if not char:
+            return {}
+        cid = char["id"]
+
+        history = self.get_character_history(character_name)
+        if not history or history.total_raids == 0:
+            return {}
+
+        all_chars = self.get_all_characters()
+        if not all_chars:
+            return {}
+
+        def percentile(value, all_values):
+            if not all_values or value is None:
+                return 0
+            sorted_vals = sorted(v for v in all_values if v is not None)
+            if not sorted_vals:
+                return 0
+            pos = sum(1 for v in sorted_vals if v <= value)
+            return round(pos / len(sorted_vals) * 100)
+
+        all_healing = [c.avg_healing for c in all_chars if c.avg_healing]
+        all_damage = [c.avg_damage for c in all_chars if c.avg_damage]
+        all_mitigation = [c.avg_mitigation_percent for c in all_chars if c.avg_mitigation_percent]
+        all_raids = [c.total_raids for c in all_chars]
+        all_consumes = [c.total_consumables_used for c in all_chars]
+
+        consistency = self.get_character_consistency(character_name)
+        con_scores = []
+        for key in ["healing_consistency", "damage_consistency", "mitigation_consistency"]:
+            if key in consistency:
+                con_scores.append(consistency[key])
+        avg_consistency = sum(con_scores) / len(con_scores) if con_scores else 50
+
+        return {
+            "healing": percentile(history.avg_healing, all_healing),
+            "damage": percentile(history.avg_damage, all_damage),
+            "mitigation": percentile(history.avg_mitigation_percent, all_mitigation),
+            "activity": percentile(history.total_raids, all_raids),
+            "consumables": percentile(history.total_consumables_used, all_consumes),
+            "consistency": min(100, max(0, round(avg_consistency))),
+        }
+
+    def get_character_raid_calendar(self, character_name: str) -> list[dict]:
+        """Get raid dates and a performance score for calendar heatmap."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ?", (character_name,)
+        ).fetchone()
+        if not char:
+            return []
+        cid = char["id"]
+
+        rows = conn.execute(
+            """SELECT r.raid_date, r.title, r.report_id,
+                      hp.total_healing, dp.total_damage, tp.mitigation_percent
+               FROM raids r
+               LEFT JOIN healer_performance hp ON hp.character_id = ? AND hp.raid_id = r.id
+               LEFT JOIN dps_performance dp ON dp.character_id = ? AND dp.raid_id = r.id
+               LEFT JOIN tank_performance tp ON tp.character_id = ? AND tp.raid_id = r.id
+               WHERE hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL
+               ORDER BY r.raid_date ASC""",
+            (cid, cid, cid),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def clear_all(self) -> None:
         """Delete all data from the database."""
         conn = self._get_conn()
