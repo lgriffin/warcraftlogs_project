@@ -5,6 +5,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from warcraftlogs_client.analysis import (
     _classify_hybrid_role,
@@ -38,7 +39,7 @@ class TestClassifyHybridRole:
         assert _classify_hybrid_role(mock_client, "r1", 1, "Paladin") == "melee"
 
     def test_api_error_defaults_melee(self, mock_client):
-        mock_client.get_damage_done_data.side_effect = RuntimeError("API error")
+        mock_client.get_damage_done_data.side_effect = requests.RequestException("API error")
         assert _classify_hybrid_role(mock_client, "r1", 1, "Shaman") == "melee"
 
     def test_boundary_40_percent(self, mock_client):

@@ -2,6 +2,8 @@
 Analyze view — browse guild reports, run raid analysis, and display results.
 """
 
+import json
+import sqlite3
 from datetime import datetime
 
 from PySide6.QtWidgets import (
@@ -336,7 +338,7 @@ class AnalyzeView(QWidget):
             from ..config import load_config
             config = load_config()
             self.report_id_input.setText(config.get("report_id", ""))
-        except Exception:
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
             pass
 
     # ── Guild reports ──
@@ -346,7 +348,7 @@ class AnalyzeView(QWidget):
             from ..config import load_config
             config = load_config()
             guild_id = config.get("guild_id", 774065)
-        except Exception:
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
             guild_id = 774065
 
         self.refresh_guild_btn.setEnabled(False)
@@ -374,7 +376,7 @@ class AnalyzeView(QWidget):
             from ..database import PerformanceDB
             db = PerformanceDB()
             self._cached_codes = db.get_imported_report_codes()
-        except Exception:
+        except (sqlite3.Error, OSError):
             self._cached_codes = set()
 
     def _apply_day_filter(self):
@@ -425,7 +427,7 @@ class AnalyzeView(QWidget):
                 try:
                     from ..config import load_config
                     api_url = load_config().get("wcl_api_url", "")
-                except Exception:
+                except (FileNotFoundError, json.JSONDecodeError, KeyError):
                     api_url = ""
                 base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
                 webbrowser.open(f"{base}/reports/{code}")
@@ -504,7 +506,7 @@ class AnalyzeView(QWidget):
                 self.status_message.emit(f"Analysis complete. Saved to database.")
                 self._refresh_cached_codes()
                 self._apply_day_filter()
-            except Exception as e:
+            except (sqlite3.Error, OSError) as e:
                 self.status_message.emit(f"Analysis complete. DB save failed: {e}")
         else:
             self.status_message.emit("Analysis complete.")

@@ -1,6 +1,5 @@
 import os
 import json
-import time
 from typing import List
 from .client import run_graphql_query
 from . import paths
@@ -65,7 +64,6 @@ def enrich_actors_with_specs(actors: List[dict]) -> List[dict]:
             print(f"[ERROR] Failed to fetch {name}: {e}")
 
         updated.append(actor)
-        time.sleep(0.5)  # Be nice to the API
 
     if cache_updated:
         with open(CACHE_FILE, "w") as f:

@@ -5,6 +5,7 @@ recent reports, and performance trends from parsed raid history.
 
 import json
 import os
+import sqlite3
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -567,7 +568,7 @@ class CharacterView(QWidget):
                 config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"))
             if config.get("character_name") and config.get("character_server"):
                 self._config_section.set_collapsed(True)
-        except Exception:
+        except (json.JSONDecodeError, KeyError, OSError):
             pass
 
     def _save_character_config(self):
@@ -576,7 +577,7 @@ class CharacterView(QWidget):
             try:
                 with open(CONFIG_PATH, "r") as f:
                     config = json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 pass
 
         config["character_name"] = self._char_name_input.text().strip()
@@ -673,7 +674,7 @@ class CharacterView(QWidget):
         try:
             with PerformanceDB() as db:
                 cached_codes = db.get_imported_report_codes()
-        except Exception:
+        except (sqlite3.Error, OSError):
             pass
 
         for r in profile.recent_reports:
@@ -698,7 +699,7 @@ class CharacterView(QWidget):
                 bests = db.get_character_personal_bests(name)
                 spider_data = db.get_character_spider_data(name)
                 calendar_data = db.get_character_raid_calendar(name)
-        except Exception:
+        except (sqlite3.Error, OSError):
             return
 
         if history and history.total_raids > 0:
@@ -849,7 +850,7 @@ class CharacterView(QWidget):
                 elif self._cached_consumable_trend:
                     self._trend_tabs.setCurrentIndex(3)
 
-        except Exception as e:
+        except (sqlite3.Error, OSError, KeyError) as e:
             self._no_trends_label.setText(
                 f"Could not load trend data: {e}")
             self._no_trends_label.setVisible(True)

@@ -10,6 +10,9 @@ import csv
 import os
 from collections import defaultdict
 from typing import Dict, List, Set, Tuple, Optional
+
+import requests
+
 from .client import WarcraftLogsClient, get_cast_data
 from .common.data import get_master_data, get_report_metadata
 from . import dynamic_role_parser
@@ -87,13 +90,13 @@ class ConsumesAnalyzer:
                     cast_events = cast_data["data"]["reportData"]["report"]["events"]["data"]
                     cast_ids = [int(sid) for sid in self.config.get("cast_consumables", {}).keys()]
                     cast_events = [e for e in cast_events if e.get('abilityGameID') in cast_ids]
-                except Exception:
+                except (requests.RequestException, KeyError, TypeError, ValueError):
                     pass
                 
                 # Count consumables from table data
                 self._count_consumables_from_table(player_name, player_role, report_id, table_data, cast_events)
                 
-            except Exception as e:
+            except (requests.RequestException, KeyError, TypeError, ValueError) as e:
                 print(f"[WARNING] Error analyzing {player_name}: {e}")
     
     def _fetch_boss_kills(self, client: WarcraftLogsClient, report_id: str) -> None:
@@ -131,7 +134,7 @@ class ConsumesAnalyzer:
             # Sort by timestamp
             self.boss_kills[report_id].sort(key=lambda x: x['timestamp'])
             
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError) as e:
             print(f"[WARNING] Could not fetch boss kills: {e}")
             self.boss_kills[report_id] = []
     
@@ -160,7 +163,7 @@ class ConsumesAnalyzer:
                     events = healing_data["data"]["reportData"]["report"]["events"]["data"]
                     total = sum(e.get("amount", 0) for e in events if e.get("type") == "heal")
                     healing_totals[actor["name"]] = total
-                except Exception:
+                except (requests.RequestException, KeyError, TypeError):
                     healing_totals[actor["name"]] = 0
         
         healers = dynamic_role_parser.identify_healers(master_actors, healing_totals, threshold=50000)
@@ -581,7 +584,7 @@ def run_consumes_analysis(raid_ids: List[str], output_csv: Optional[str] = None,
     for raid_id in raid_ids:
         try:
             analyzer.analyze_raid(client, raid_id)
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"[ERROR] Error analyzing raid {raid_id}: {e}")
 
     analyzer.generate_report(output_csv, include_healers=include_healers)
