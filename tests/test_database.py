@@ -211,6 +211,154 @@ class TestImportConsumables:
         assert history.total_consumables_used == 2
 
 
+class TestCaseInsensitiveNameMatching:
+    """Character name lookups must be case-insensitive.
+
+    The WCL API may return "Hadur" while the locally imported raid data
+    stores the name as "hadur" or "HADUR".  All query methods should
+    find the character regardless of casing.
+    """
+
+    def test_get_character_history_case_insensitive(self, db, sample_raid_analysis):
+        """Querying with different casing should still find the character."""
+        db.import_raid(sample_raid_analysis)
+        # Data was imported with name "HolyPriest"
+        for variant in ("holypriest", "HOLYPRIEST", "holyPRIEST", "HolyPriest"):
+            history = db.get_character_history(variant)
+            assert history is not None, f"Failed to find character with name '{variant}'"
+            assert history.total_raids == 1
+
+    def test_healer_trend_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        trend = db.get_healer_trend("holypriest")
+        assert len(trend) == 1
+        assert trend[0]["total_healing"] == 500_000
+
+    def test_tank_trend_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        trend = db.get_tank_trend("TANKWARRIOR")
+        assert len(trend) == 1
+        assert trend[0]["total_damage_taken"] == 800_000
+
+    def test_dps_trend_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        trend = db.get_dps_trend("stabbyrogue")
+        assert len(trend) == 1
+        assert trend[0]["total_damage"] == 400_000
+
+    def test_consumable_trend_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        trend = db.get_consumable_trend("HOLYPRIEST")
+        assert len(trend) >= 1
+
+    def test_consumable_summary_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        summary = db.get_consumable_summary("holypriest")
+        assert len(summary) >= 1
+
+    def test_character_consistency_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        result = db.get_character_consistency("holypriest")
+        assert result != {}
+        assert result["name"] == "holypriest"
+
+    def test_character_personal_bests_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        bests = db.get_character_personal_bests("HOLYPRIEST")
+        assert len(bests) > 0
+
+    def test_character_consumable_compliance_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        compliance = db.get_character_consumable_compliance("holypriest")
+        assert compliance != {}
+        assert compliance["total_raids"] > 0
+
+    def test_character_spider_data_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        spider = db.get_character_spider_data("holypriest")
+        assert spider != {}
+
+    def test_character_raid_calendar_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        calendar = db.get_character_raid_calendar("holypriest")
+        assert len(calendar) >= 1
+
+    def test_healer_spell_trend_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        trend = db.get_healer_spell_trend("holypriest")
+        assert len(trend) >= 1
+
+    def test_dps_ability_trend_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        trend = db.get_dps_ability_trend("stabbyrogue")
+        assert len(trend) >= 1
+
+    def test_compare_characters_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        result = db.compare_characters(["holypriest"], "healer")
+        assert len(result) == 1
+
+    def test_upsert_character_case_insensitive_dedup(self, db, sample_raid_analysis):
+        """Importing with different casing should NOT create a duplicate character."""
+        db.import_raid(sample_raid_analysis)
+        # Import again with a modified analysis that has different casing
+        modified = RaidAnalysis(
+            metadata=RaidMetadata(
+                report_id="def456",
+                title="Second Raid",
+                owner="TestGuild",
+                start_time=1_700_010_000_000,
+                end_time=1_700_013_600_000,
+            ),
+            composition=RaidComposition(
+                tanks=[], healers=[
+                    PlayerIdentity(name="HOLYPRIEST", player_class="Priest",
+                                   source_id=1, role="healer"),
+                ], melee=[], ranged=[],
+            ),
+            healers=[
+                HealerPerformance(
+                    name="HOLYPRIEST", player_class="Priest", source_id=1,
+                    total_healing=600_000, total_overhealing=120_000,
+                    spells=[], fear_ward_casts=0,
+                ),
+            ],
+            tanks=[],
+            dps=[],
+            consumables=[],
+        )
+        db.import_raid(modified)
+
+        # Should only have one character entry, not two
+        conn = db._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM characters WHERE name = ? COLLATE NOCASE",
+            ("HolyPriest",),
+        ).fetchall()
+        assert len(rows) == 1
+
+        # Both raids should be associated with that one character
+        history = db.get_character_history("holypriest")
+        assert history is not None
+        assert history.total_raids == 2
+
+    def test_add_raid_group_member_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        group = db.create_raid_group("TestGroup")
+        result = db.add_raid_group_member(group.id, "holypriest")
+        assert result is True
+        groups = db.get_groups_for_character("HOLYPRIEST")
+        assert "TestGroup" in groups
+
+    def test_remove_raid_group_member_case_insensitive(self, db, sample_raid_analysis):
+        db.import_raid(sample_raid_analysis)
+        group = db.create_raid_group("TestGroup")
+        db.add_raid_group_member(group.id, "HolyPriest")
+        db.remove_raid_group_member(group.id, "HOLYPRIEST")
+        groups = db.get_groups_for_character("HolyPriest")
+        assert "TestGroup" not in groups
+
+
 class TestContextManager:
     def test_context_manager_protocol(self, tmp_path):
         db_path = str(tmp_path / "ctx.db")

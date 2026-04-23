@@ -485,25 +485,10 @@ class CharacterView(QWidget):
         self._trend_tabs.setMinimumHeight(420)
         layout.addWidget(self._trend_tabs)
 
-    def _make_trend_table(self, model) -> QTableView:
-        table = QTableView()
-        table.setModel(model)
-        table.setAlternatingRowColors(True)
-        table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setStretchLastSection(True)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
-        return table
-
-    # ── Config persistence ──
-
         # ── Local Performance section ──
         self._local_perf_group = QGroupBox("Local Performance (from imported raids)")
         local_layout = QVBoxLayout(self._local_perf_group)
 
-        # Summary row
         self._local_summary = QHBoxLayout()
         self._local_labels = {}
         for key in ["Raids Tracked", "Consistency", "Consumable Compliance"]:
@@ -520,11 +505,8 @@ class CharacterView(QWidget):
             self._local_summary.addLayout(box)
         local_layout.addLayout(self._local_summary)
 
-        # Tabs: Personal Bests | Radar | Calendar
-        from PySide6.QtWidgets import QTabWidget
         self._local_tabs = QTabWidget()
 
-        # Personal Bests tab
         self._local_bests_model = HistoryTableModel()
         bests_table = QTableView()
         bests_table.setModel(self._local_bests_model)
@@ -538,14 +520,12 @@ class CharacterView(QWidget):
             f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         self._local_tabs.addTab(bests_table, "Personal Bests")
 
-        # Radar tab
         self._local_spider_tab = QWidget()
         self._local_spider_layout = QVBoxLayout(self._local_spider_tab)
         self._local_spider_layout.setContentsMargins(0, 4, 0, 0)
         self._local_spider_widget = None
         self._local_tabs.addTab(self._local_spider_tab, "Radar")
 
-        # Calendar tab
         self._local_calendar_tab = QWidget()
         self._local_calendar_layout = QVBoxLayout(self._local_calendar_tab)
         self._local_calendar_layout.setContentsMargins(0, 4, 0, 0)
@@ -554,6 +534,20 @@ class CharacterView(QWidget):
 
         local_layout.addWidget(self._local_tabs, 1)
         layout.addWidget(self._local_perf_group, 1)
+
+    def _make_trend_table(self, model) -> QTableView:
+        table = QTableView()
+        table.setModel(model)
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.setStyleSheet(
+            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        return table
+
+    # ── Config persistence ──
 
     def _load_character_config(self):
         if not os.path.exists(CONFIG_PATH):

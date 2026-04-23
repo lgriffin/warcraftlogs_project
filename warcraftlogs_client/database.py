@@ -230,15 +230,28 @@ class PerformanceDB:
 
     def _upsert_character(self, name: str, player_class: str, raid_date: str) -> int:
         conn = self._get_conn()
+        # Check for existing character with case-insensitive match
+        existing = conn.execute(
+            "SELECT id, name FROM characters WHERE name = ? COLLATE NOCASE",
+            (name,),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """UPDATE characters SET
+                       player_class = ?,
+                       last_seen = MAX(last_seen, ?)
+                   WHERE id = ?""",
+                (player_class, raid_date, existing["id"]),
+            )
+            return existing["id"]
         conn.execute(
             """INSERT INTO characters (name, player_class, first_seen, last_seen)
-               VALUES (?, ?, ?, ?)
-               ON CONFLICT(name) DO UPDATE SET
-                   player_class = excluded.player_class,
-                   last_seen = MAX(last_seen, excluded.last_seen)""",
+               VALUES (?, ?, ?, ?)""",
             (name, player_class, raid_date, raid_date),
         )
-        cursor = conn.execute("SELECT id FROM characters WHERE name = ?", (name,))
+        cursor = conn.execute(
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE", (name,)
+        )
         return cursor.fetchone()["id"]
 
     def _upsert_raid(self, metadata: RaidMetadata) -> int:
@@ -397,7 +410,8 @@ class PerformanceDB:
         """Get historical performance summary for a character."""
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT * FROM characters WHERE name = ?", (character_name,)
+            "SELECT * FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return None
@@ -466,7 +480,7 @@ class PerformanceDB:
                FROM healer_performance hp
                JOIN characters c ON c.id = hp.character_id
                JOIN raids r ON r.id = hp.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -482,7 +496,7 @@ class PerformanceDB:
                FROM tank_performance tp
                JOIN characters c ON c.id = tp.character_id
                JOIN raids r ON r.id = tp.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -498,7 +512,7 @@ class PerformanceDB:
                FROM dps_performance dp
                JOIN characters c ON c.id = dp.character_id
                JOIN raids r ON r.id = dp.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -514,7 +528,7 @@ class PerformanceDB:
                JOIN healer_performance hp ON hp.id = hs.healer_performance_id
                JOIN characters c ON c.id = hp.character_id
                JOIN raids r ON r.id = hp.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit * 20),
@@ -530,7 +544,7 @@ class PerformanceDB:
                JOIN dps_performance dp ON dp.id = da.dps_performance_id
                JOIN characters c ON c.id = dp.character_id
                JOIN raids r ON r.id = dp.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit * 20),
@@ -546,7 +560,7 @@ class PerformanceDB:
                FROM consumable_usage cu
                JOIN characters c ON c.id = cu.character_id
                JOIN raids r ON r.id = cu.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit * 10),
@@ -561,7 +575,7 @@ class PerformanceDB:
                FROM consumable_usage cu
                JOIN characters c ON c.id = cu.character_id
                JOIN raids r ON r.id = cu.raid_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -574,7 +588,7 @@ class PerformanceDB:
                 """SELECT cu.consumable_name, cu.count, cu.timestamps
                    FROM consumable_usage cu
                    JOIN characters c ON c.id = cu.character_id
-                   WHERE c.name = ? AND cu.raid_id = ?""",
+                   WHERE c.name = ? COLLATE NOCASE AND cu.raid_id = ?""",
                 (character_name, raid["raid_id"]),
             ).fetchall()
             for item in items:
@@ -716,7 +730,8 @@ class PerformanceDB:
     def add_raid_group_member(self, group_id: int, character_name: str) -> bool:
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return False
@@ -733,7 +748,8 @@ class PerformanceDB:
     def remove_raid_group_member(self, group_id: int, character_name: str) -> None:
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if char:
             conn.execute(
@@ -748,7 +764,7 @@ class PerformanceDB:
             """SELECT rg.name FROM raid_groups rg
                JOIN raid_group_members rgm ON rgm.group_id = rg.id
                JOIN characters c ON c.id = rgm.character_id
-               WHERE c.name = ?
+               WHERE c.name = ? COLLATE NOCASE
                ORDER BY rg.name""",
             (character_name,),
         ).fetchall()
@@ -855,7 +871,8 @@ class PerformanceDB:
         """Compute consistency scores (std dev) for a character's performance."""
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return {}
@@ -905,7 +922,8 @@ class PerformanceDB:
         """Get top and bottom performance raids for a character."""
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return []
@@ -941,7 +959,8 @@ class PerformanceDB:
         """Consumable usage rate: % of raids where character used any consumables."""
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return {}
@@ -978,7 +997,8 @@ class PerformanceDB:
         """Normalized 0-100 scores across multiple dimensions for radar chart."""
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return {}
@@ -1027,7 +1047,8 @@ class PerformanceDB:
         """Get raid dates and a performance score for calendar heatmap."""
         conn = self._get_conn()
         char = conn.execute(
-            "SELECT id FROM characters WHERE name = ?", (character_name,)
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
         ).fetchone()
         if not char:
             return []
@@ -1232,7 +1253,7 @@ class PerformanceDB:
                               AVG(hp.total_dispels) as avg_dispels
                        FROM healer_performance hp
                        JOIN characters c ON c.id = hp.character_id
-                       WHERE c.name = ?
+                       WHERE c.name = ? COLLATE NOCASE
                        GROUP BY c.id""",
                     (name,),
                 ).fetchone()
@@ -1244,7 +1265,7 @@ class PerformanceDB:
                               AVG(tp.mitigation_percent) as avg_mitigation
                        FROM tank_performance tp
                        JOIN characters c ON c.id = tp.character_id
-                       WHERE c.name = ?
+                       WHERE c.name = ? COLLATE NOCASE
                        GROUP BY c.id""",
                     (name,),
                 ).fetchone()
@@ -1255,7 +1276,7 @@ class PerformanceDB:
                               AVG(dp.total_damage) as avg_damage
                        FROM dps_performance dp
                        JOIN characters c ON c.id = dp.character_id
-                       WHERE c.name = ? AND dp.role = ?
+                       WHERE c.name = ? COLLATE NOCASE AND dp.role = ?
                        GROUP BY c.id""",
                     (name, role),
                 ).fetchone()
