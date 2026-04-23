@@ -1,39 +1,45 @@
 import os
 import json
+from typing import Any, Optional
 
 from . import paths
 
 CACHE_DIR = str(paths.get_cache_dir())
 
-def _safe_filename(report_id):
+
+def _safe_filename(report_id: str) -> str:
     return report_id.replace("/", "_")
 
-def _cache_file(report_id):
+
+def _cache_file(report_id: str) -> str:
     return os.path.join(CACHE_DIR, f"{_safe_filename(report_id)}.json")
 
-def load_cached_data(report_id):
+
+def load_cached_data(report_id: str) -> Optional[dict]:
     path = _cache_file(report_id)
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            print(f"⚠️ Cache file is corrupted: {path}")
+            print(f"Cache file is corrupted: {path}")
     return None
 
-def save_cache(report_id, data):
+
+def save_cache(report_id: str, data: dict) -> None:
     path = _cache_file(report_id)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-        print(f"💾 Saved cache for report {report_id}")
-    except Exception as e:
-        print(f"❌ Failed to save cache: {e}")
+    except OSError as e:
+        print(f"Failed to save cache: {e}")
 
-def get_cached_actor_data(cache, actor_name, data_type):
+
+def get_cached_actor_data(cache: dict, actor_name: str, data_type: str) -> Optional[Any]:
     return cache.get(data_type, {}).get(actor_name)
 
-def set_cached_actor_data(cache, actor_name, data_type, new_data):
+
+def set_cached_actor_data(cache: dict, actor_name: str, data_type: str, new_data: Any) -> None:
     if data_type not in cache:
         cache[data_type] = {}
     cache[data_type][actor_name] = new_data

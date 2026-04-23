@@ -25,6 +25,7 @@ class TestRunQuery:
     def test_bearer_token_header(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         client.run_query("{ test }")
@@ -35,6 +36,7 @@ class TestRunQuery:
     def test_json_body(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         client.run_query("{ myQuery }")
@@ -50,6 +52,7 @@ class TestGetReportMetadata:
                 "title": "Kara", "owner": {"name": "Guild"},
                 "startTime": 1700000000000, "endTime": 1700003600000,
             }}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         meta = client.get_report_metadata("abc")
@@ -62,6 +65,7 @@ class TestGetReportMetadata:
     def test_not_found_raises(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {"reportData": {"report": None}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         with pytest.raises(ValueError, match="not found"):
@@ -77,6 +81,7 @@ class TestGetMasterData:
                 {"id": 2, "name": "Boss1", "type": "NPC", "subType": "Boss"},
                 {"id": 3, "name": "Player2", "type": "Player", "subType": "Warrior"},
             ]}}}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         result = client.get_master_data("r1")
@@ -91,6 +96,7 @@ class TestGetCastTable:
             json=lambda: {"data": {"reportData": {"report": {"table": {
                 "data": {"entries": [{"guid": 1, "name": "Melee"}]}
             }}}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         result = client.get_cast_table("r1", 1)
@@ -103,6 +109,7 @@ class TestGetCastTable:
             json=lambda: {"data": {"reportData": {"report": {"table": {
                 "entries": [{"guid": 2, "name": "Strike"}]
             }}}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         result = client.get_cast_table("r1", 1)
@@ -112,6 +119,7 @@ class TestGetCastTable:
     def test_empty_response(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {"reportData": {"report": {"table": ""}}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         result = client.get_cast_table("r1", 1)
@@ -126,6 +134,7 @@ class TestGetCastEventsPaginated:
                 "data": [{"type": "cast", "abilityGameID": 1}],
                 "nextPageTimestamp": None,
             }}}}},
+            status_code=200,
             raise_for_status=lambda: None,
         )
         result = client.get_cast_events_paginated("r1", 1)
@@ -139,7 +148,7 @@ class TestGetCastEventsPaginated:
         page2 = {"data": {"reportData": {"report": {"events": {
             "data": [{"id": 2}], "nextPageTimestamp": None,
         }}}}}
-        mock_post.return_value = MagicMock(raise_for_status=lambda: None)
+        mock_post.return_value = MagicMock(status_code=200, raise_for_status=lambda: None)
         mock_post.return_value.json = MagicMock(side_effect=[page1, page2])
         result = client.get_cast_events_paginated("r1", 1)
         assert len(result) == 2

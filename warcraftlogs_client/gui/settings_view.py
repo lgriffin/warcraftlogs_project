@@ -228,7 +228,7 @@ class SettingsView(QWidget):
             try:
                 with open(self.CONFIG_PATH, "r") as f:
                     config = json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 pass
 
         client_id = self.client_id_input.text().strip()

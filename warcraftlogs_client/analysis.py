@@ -10,6 +10,8 @@ import os
 from collections import defaultdict
 from typing import Optional
 
+import requests
+
 from .client import WarcraftLogsClient
 from .models import (
     ConsumableUsage,
@@ -133,7 +135,7 @@ def _classify_hybrid_role(
     """
     try:
         events = client.get_damage_done_data(report_id, source_id)
-    except Exception:
+    except (requests.RequestException, KeyError):
         return "melee"
 
     melee_damage = 0
@@ -187,7 +189,7 @@ def _identify_tanks(
                     name=actor["name"], player_class=actor["subType"],
                     source_id=actor["id"], role="tank",
                 ))
-        except Exception:
+        except (requests.RequestException, KeyError, TypeError):
             pass
     return tanks
 
@@ -211,7 +213,7 @@ def _identify_healers(
                     name=actor["name"], player_class=actor["subType"],
                     source_id=actor["id"], role="healer",
                 ))
-        except Exception:
+        except (requests.RequestException, KeyError, TypeError):
             pass
     return healers
 
@@ -260,7 +262,7 @@ def _analyze_healers(
                 total_healing=total_healing, total_overhealing=total_overhealing,
                 spells=spells, dispels=dispels, resources=resources, fear_ward_casts=fw_casts,
             ))
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error processing healer {player.name}: {e}")
 
     return results
@@ -337,7 +339,7 @@ def _analyze_tanks(
                 total_damage_taken=total_taken, total_mitigated=total_mitigated,
                 damage_taken_breakdown=taken_breakdown, abilities_used=abilities_used,
             ))
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error processing tank {player.name}: {e}")
 
     return results
@@ -399,7 +401,7 @@ def _analyze_dps(
                 source_id=player.source_id, role=role,
                 total_damage=total_damage, abilities=abilities,
             ))
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error processing {role} {player.name}: {e}")
 
     return results
@@ -454,7 +456,7 @@ def _analyze_consumables(
                             count=count,
                             timestamps=timestamps,
                         ))
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error analyzing buff consumables for {player.name}: {e}")
 
         try:
@@ -475,7 +477,7 @@ def _analyze_consumables(
                     count=len(timestamps),
                     timestamps=sorted(timestamps),
                 ))
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error analyzing cast consumables for {player.name}: {e}")
 
     return results

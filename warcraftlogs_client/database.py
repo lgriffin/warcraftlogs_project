@@ -139,6 +139,11 @@ CREATE INDEX IF NOT EXISTS idx_consumable_char ON consumable_usage(character_id)
 CREATE INDEX IF NOT EXISTS idx_consumable_raid ON consumable_usage(raid_id);
 CREATE INDEX IF NOT EXISTS idx_raids_date ON raids(raid_date);
 
+CREATE INDEX IF NOT EXISTS idx_healer_spells_perf ON healer_spells(healer_performance_id);
+CREATE INDEX IF NOT EXISTS idx_tank_dt_perf ON tank_damage_taken(tank_performance_id);
+CREATE INDEX IF NOT EXISTS idx_tank_ab_perf ON tank_abilities(tank_performance_id);
+CREATE INDEX IF NOT EXISTS idx_dps_ab_perf ON dps_abilities(dps_performance_id);
+
 CREATE TABLE IF NOT EXISTS raid_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -171,6 +176,7 @@ class PerformanceDB:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
+            self._conn.execute("PRAGMA busy_timeout=5000")
         return self._conn
 
     def initialize(self) -> None:

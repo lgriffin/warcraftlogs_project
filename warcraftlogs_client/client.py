@@ -5,6 +5,8 @@ All API interactions go through WarcraftLogsClient. Methods return
 extracted data (not raw JSON wrappers), with consistent signatures.
 """
 
+import time
+
 import requests
 from typing import Optional
 
@@ -16,14 +18,36 @@ from .models import (
 
 class WarcraftLogsClient:
     API_URL = "https://www.warcraftlogs.com/api/v2/client"
+    MIN_REQUEST_INTERVAL = 0.25
+    MAX_RETRIES = 3
 
     def __init__(self, token_manager):
         self.token_manager = token_manager
+        self._last_request_time = 0.0
+
+    def _throttle(self) -> None:
+        elapsed = time.monotonic() - self._last_request_time
+        if elapsed < self.MIN_REQUEST_INTERVAL:
+            time.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
 
     def run_query(self, query: str) -> dict:
         token = self.token_manager.get_token()
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.post(self.API_URL, headers=headers, json={"query": query})
+
+        for attempt in range(self.MAX_RETRIES):
+            self._throttle()
+            self._last_request_time = time.monotonic()
+
+            response = requests.post(self.API_URL, headers=headers, json={"query": query})
+
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < self.MAX_RETRIES - 1:
+                    backoff = 2 ** attempt
+                    time.sleep(backoff)
+                    continue
+            response.raise_for_status()
+            return response.json()
+
         response.raise_for_status()
         return response.json()
 
