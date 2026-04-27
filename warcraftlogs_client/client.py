@@ -10,6 +10,7 @@ import time
 import requests
 from typing import Optional
 
+from .cache import get_cached_response, save_response_cache
 from .models import (
     RaidMetadata, CharacterProfile, ZoneRankingResult,
     EncounterRanking, AllStarRanking, CharacterReportEntry,
@@ -21,16 +22,23 @@ class WarcraftLogsClient:
     MIN_REQUEST_INTERVAL = 0.25
     MAX_RETRIES = 3
 
-    def __init__(self, token_manager):
+    def __init__(self, token_manager, cache_enabled: bool = True):
         self.token_manager = token_manager
         self._last_request_time = 0.0
+        self.cache_enabled = cache_enabled
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_time
         if elapsed < self.MIN_REQUEST_INTERVAL:
             time.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
 
-    def run_query(self, query: str) -> dict:
+    def run_query(self, query: str, use_cache: bool = True) -> dict:
+        use_cache = use_cache and self.cache_enabled
+        if use_cache:
+            cached = get_cached_response(query)
+            if cached is not None:
+                return cached
+
         token = self.token_manager.get_token()
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -46,10 +54,16 @@ class WarcraftLogsClient:
                     time.sleep(backoff)
                     continue
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            if use_cache:
+                save_response_cache(query, result)
+            return result
 
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        if use_cache:
+            save_response_cache(query, result)
+        return result
 
     # ── Report-level queries ──
 
@@ -96,7 +110,7 @@ class WarcraftLogsClient:
           }}
         }}
         """
-        result = self.run_query(query)
+        result = self.run_query(query, use_cache=False)
         reports = result["data"]["reportData"]["reports"]["data"]
         return [
             {
@@ -432,7 +446,7 @@ class WarcraftLogsClient:
               }}
             }}
             """
-            result = self.run_query(query)
+            result = self.run_query(query, use_cache=False)
             char = result["data"]["characterData"]["character"]
             if not char:
                 raise ValueError(f"Character '{name}' not found on {server_slug}-{server_region}")
@@ -490,7 +504,7 @@ class WarcraftLogsClient:
               }}
             }}
             """
-            result = self.run_query(query)
+            result = self.run_query(query, use_cache=False)
             char = result["data"]["characterData"]["character"]
             if not char:
                 return None

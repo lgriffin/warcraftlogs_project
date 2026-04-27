@@ -586,7 +586,7 @@ class CharacterView(QWidget):
             with open(CONFIG_PATH, "w") as f:
                 json.dump(config, f, indent=4)
             self.status_message.emit("Character settings saved")
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             QMessageBox.critical(self, "Save Error", f"Could not save config:\n{e}")
 
     def _save_and_refresh(self):

@@ -4,10 +4,13 @@ Background worker thread for API calls.
 Keeps the UI responsive while fetching data from WarcraftLogs.
 """
 
+import requests
+
 from PySide6.QtCore import QThread, Signal
 
 from ..auth import TokenManager
 from ..client import WarcraftLogsClient
+from ..common.errors import WarcraftLogsError
 from ..config import load_config
 from ..analysis import analyze_raid
 from ..models import RaidAnalysis, CharacterProfile
@@ -45,7 +48,7 @@ class AnalysisWorker(QThread):
             self.progress.emit("Analysis complete!")
             self.finished.emit(result)
 
-        except Exception as e:
+        except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
 
 
@@ -66,7 +69,7 @@ class GuildReportsWorker(QThread):
             client = WarcraftLogsClient(token_mgr)
             reports = client.get_guild_reports(self.guild_id)
             self.finished.emit(reports)
-        except Exception as e:
+        except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
 
 
@@ -94,5 +97,5 @@ class CharacterProfileWorker(QThread):
                 api_url=self.api_url,
             )
             self.finished.emit(profile)
-        except Exception as e:
+        except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))

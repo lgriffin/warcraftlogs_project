@@ -1,7 +1,10 @@
+from collections import defaultdict
+
+import requests
+
 from client import get_healing_data
 from ..spell_manager import SpellBreakdown
 from healing import OverallHealing
-from collections import defaultdict
 import dynamic_role_parser
 
 def generate_healer_summary(client, report_id, master_actors):
@@ -78,7 +81,7 @@ def generate_healer_summary(client, report_id, master_actors):
 
             grouped_summary[char_class].append(summary)
 
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"❌ Error processing {name}: {e}")
 
     # 🧠 Identify actual healers based on healing output

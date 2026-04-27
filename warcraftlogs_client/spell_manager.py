@@ -371,7 +371,7 @@ class SpellManager:
             
             return True
             
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, KeyError, ValueError, TypeError) as e:
             print(f"❌ Configuration validation failed: {e}")
             return False
 

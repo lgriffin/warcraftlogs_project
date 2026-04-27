@@ -17,7 +17,7 @@ from warcraftlogs_client.models import RaidMetadata
 def client():
     tm = MagicMock()
     tm.get_token.return_value = "test_token"
-    return WarcraftLogsClient(tm)
+    return WarcraftLogsClient(tm, cache_enabled=False)
 
 
 class TestRunQuery:

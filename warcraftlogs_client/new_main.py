@@ -1,5 +1,10 @@
-import datetime
 import argparse
+import datetime
+import os
+
+import requests
+from jinja2 import Environment, FileSystemLoader
+
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data
 from .characters import Characters
@@ -8,9 +13,6 @@ from .spell_manager import SpellBreakdown
 from .healing import OverallHealing
 from . import dynamic_role_parser
 from .common.data import get_master_data, get_report_metadata
-from jinja2 import Environment, FileSystemLoader
-import os
-import datetime
 
 
 def print_report_metadata(metadata, present, all_characters):
@@ -283,7 +285,7 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
 
             grouped_summary[char_class].append(character_summary)
 
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"❌ Error processing {name}: {e}")
 
     if use_dynamic_roles:
