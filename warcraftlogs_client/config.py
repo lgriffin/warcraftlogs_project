@@ -37,7 +37,9 @@ class AppConfig:
     cache_dir: str = ".cache"
     reports_dir: str = "reports"
     guild_logo: str = "logo.png"
-    
+    guild_name: str = ""
+    guild_server: str = ""
+
     # Character API settings
     default_region: str = "EU"
     default_server: str = "gehennas"
@@ -132,6 +134,8 @@ class ConfigManager:
             cache_dir=raw_config.get("cache_dir", ".cache"),
             reports_dir=raw_config.get("reports_dir", "reports"),
             guild_logo=raw_config.get("guild_logo", "logo.png"),
+            guild_name=raw_config.get("guild_name", ""),
+            guild_server=raw_config.get("guild_server", ""),
             default_region=raw_config.get("default_region", "EU"),
             default_server=raw_config.get("default_server", "gehennas"),
             character_name=raw_config.get("character_name", ""),
@@ -183,6 +187,8 @@ def load_config(config_file: Optional[str] = None) -> Dict[str, Any]:
             "tank_min_mitigation": config.role_thresholds.tank_min_mitigation
         },
         "guild_logo": config.guild_logo,
+        "guild_name": config.guild_name,
+        "guild_server": config.guild_server,
         "cache_enabled": config.cache_enabled,
         "cache_dir": config.cache_dir,
         "reports_dir": config.reports_dir,
