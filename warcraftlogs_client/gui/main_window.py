@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.nav_list)
         sidebar_layout.addStretch()
 
-        version_label = QLabel("v3.2.0")
+        version_label = QLabel("v3.2.1")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("color: #555; padding: 10px; font-size: 11px;")
         sidebar_layout.addWidget(version_label)
