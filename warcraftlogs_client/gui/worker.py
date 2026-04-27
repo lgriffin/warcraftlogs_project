@@ -52,6 +52,27 @@ class AnalysisWorker(QThread):
             self.error.emit(str(e))
 
 
+class GuildInfoWorker(QThread):
+    """Fetches guild name and server in a background thread."""
+
+    finished = Signal(dict)
+    error = Signal(str)
+
+    def __init__(self, guild_id: int, parent=None):
+        super().__init__(parent)
+        self.guild_id = guild_id
+
+    def run(self):
+        try:
+            config = load_config()
+            token_mgr = TokenManager(config["client_id"], config["client_secret"])
+            client = WarcraftLogsClient(token_mgr)
+            info = client.get_guild_info(self.guild_id)
+            self.finished.emit(info)
+        except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
+            self.error.emit(str(e))
+
+
 class GuildReportsWorker(QThread):
     """Fetches guild report list in a background thread."""
 
