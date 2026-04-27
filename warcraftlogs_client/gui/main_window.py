@@ -116,18 +116,11 @@ class MainWindow(QMainWindow):
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(16, 8, 16, 8)
 
-        top_bar_layout.addStretch()
-
         self._guild_name_label = QLabel()
-        self._guild_name_label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        self._guild_name_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self._guild_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._guild_name_label.setStyleSheet("color: #e94560; background: transparent;")
-        top_bar_layout.addWidget(self._guild_name_label)
-
-        self._guild_server_label = QLabel()
-        self._guild_server_label.setStyleSheet("color: #8899aa; font-size: 11px; background: transparent; margin-left: 6px;")
-        top_bar_layout.addWidget(self._guild_server_label)
-
-        top_bar_layout.addSpacing(10)
+        top_bar_layout.addWidget(self._guild_name_label, 1)
 
         self.guild_logo_label = QLabel()
         self.guild_logo_label.setFixedSize(44, 44)
@@ -135,8 +128,6 @@ class MainWindow(QMainWindow):
         self.guild_logo_label.setStyleSheet("background: transparent;")
         self._load_guild_logo()
         top_bar_layout.addWidget(self.guild_logo_label)
-
-        self._load_guild_info()
 
         content_layout.addWidget(top_bar)
 
@@ -187,6 +178,8 @@ class MainWindow(QMainWindow):
         self.character_view.analyze_report.connect(self._analyze_report)
         self.character_view.view_character_history.connect(self._drill_into_character_history)
         self.settings_view.status_message.connect(self._on_settings_saved)
+
+        self._load_guild_info()
 
     def _on_nav_changed(self, index: int):
         self.stack.show_base_page(index)
@@ -247,10 +240,24 @@ class MainWindow(QMainWindow):
         try:
             from ..config import load_config
             config = load_config()
-            name = config.get("guild_name", "")
-            server = config.get("guild_server", "")
+            guild_id = config.get("guild_id", 0)
+            client_id = config.get("client_id", "")
+            if not guild_id or not client_id:
+                return
         except Exception:
-            name, server = "", ""
+            return
 
-        self._guild_name_label.setText(name)
-        self._guild_server_label.setText(f"— {server}" if server else "")
+        from .worker import GuildInfoWorker
+        self._guild_info_worker = GuildInfoWorker(guild_id)
+        self._guild_info_worker.finished.connect(self._on_guild_info_loaded)
+        self._guild_info_worker.start()
+
+    def _on_guild_info_loaded(self, info: dict):
+        name = info.get("name", "")
+        server = info.get("server", "")
+        if name and server:
+            self._guild_name_label.setText(f"<{name}>  {server}")
+        elif name:
+            self._guild_name_label.setText(f"<{name}>")
+        else:
+            self._guild_name_label.setText("")

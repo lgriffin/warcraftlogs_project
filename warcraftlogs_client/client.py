@@ -92,6 +92,33 @@ class WarcraftLogsClient:
             end_time=report.get("endTime"),
         )
 
+    def get_guild_info(self, guild_id: int) -> dict:
+        """Fetch guild name and server by guild ID."""
+        query = f"""
+        {{
+          guildData {{
+            guild(id: {guild_id}) {{
+              name
+              server {{
+                name
+                region {{
+                  name
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        guild = result["data"]["guildData"]["guild"]
+        if not guild:
+            return {"name": "", "server": ""}
+        server = guild.get("server") or {}
+        return {
+            "name": guild.get("name", ""),
+            "server": server.get("name", ""),
+        }
+
     def get_guild_reports(self, guild_id: int, limit: int = 50) -> list[dict]:
         """Fetch recent reports for a guild by guild ID."""
         query = f"""
