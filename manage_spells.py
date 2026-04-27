@@ -23,7 +23,7 @@ def load_json_file(filepath: str) -> Optional[Dict[str, Any]]:
     except json.JSONDecodeError as e:
         print(f"❌ JSON syntax error in {filepath}: {e}")
         return None
-    except Exception as e:
+    except OSError as e:
         print(f"❌ Error reading {filepath}: {e}")
         return None
 
@@ -33,7 +33,7 @@ def save_json_file(filepath: str, data: Dict[str, Any]) -> bool:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
-    except Exception as e:
+    except OSError as e:
         print(f"❌ Error saving {filepath}: {e}")
         return False
 

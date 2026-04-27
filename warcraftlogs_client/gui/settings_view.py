@@ -4,6 +4,7 @@ Settings view — configure credentials, thresholds, and database.
 
 import json
 import os
+import sqlite3
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -217,7 +218,7 @@ class SettingsView(QWidget):
             self.tank_min_taken.setValue(thresholds.get("tank_min_taken", 150000))
             self.tank_min_mitigation.setValue(thresholds.get("tank_min_mitigation", 40))
 
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, KeyError, ValueError) as e:
             QMessageBox.warning(self, "Config Error", f"Could not load config.json:\n{e}")
 
     def _save_config(self):
@@ -261,7 +262,7 @@ class SettingsView(QWidget):
 
             QMessageBox.information(self, "Saved", "Settings saved successfully.")
             self.status_message.emit("Settings saved")
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             QMessageBox.critical(self, "Save Error", f"Could not save config.json:\n{e}")
 
     def _clear_database(self):
@@ -295,5 +296,5 @@ class SettingsView(QWidget):
                 db.clear_all()
             QMessageBox.information(self, "Cleared", "Database has been cleared.")
             self.status_message.emit("Database cleared")
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             QMessageBox.critical(self, "Error", f"Failed to clear database:\n{e}")

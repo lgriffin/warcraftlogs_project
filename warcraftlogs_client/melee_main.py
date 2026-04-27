@@ -1,14 +1,16 @@
-import datetime
 import argparse
+import datetime
+import json
+from collections import defaultdict
+
+import requests
+
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
 from .config import load_config
 from .spell_manager import SpellBreakdown
 from . import dynamic_role_parser
 from .common.data import get_master_data, get_report_metadata
-
-from collections import defaultdict
-import json
 
 def print_report_metadata(metadata, present_names):
     print("\n========================")
@@ -111,7 +113,7 @@ def run_melee_report():
                 })
                 all_abilities.update(damage_by_ability.keys())
 
-            except Exception as e:
+            except (requests.RequestException, KeyError, TypeError, ValueError) as e:
                 print(f"Error processing {name}: {e}")
 
         print_class_summary_table(melee_class, class_summary, sorted(all_abilities))

@@ -1,6 +1,9 @@
+from collections import defaultdict
+
+import requests
+
 from ..client import get_damage_done_data
 from ..spell_manager import SpellBreakdown
-from collections import defaultdict
 
 def generate_melee_summary(client, report_id, master_actors):
     print("============================")
@@ -68,7 +71,7 @@ def generate_melee_summary(client, report_id, master_actors):
             grouped_summary[char_class].append(summary)
             all_spell_names[char_class].update(damage_by_ability.keys())
 
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error processing {name}: {e}")
 
     return grouped_summary, all_spell_names

@@ -3,6 +3,8 @@ import datetime
 from collections import defaultdict
 from collections import OrderedDict
 
+import requests
+
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_healing_data, get_damage_done_data
 from .config import load_config
@@ -84,7 +86,7 @@ def identify_tanks(client, report_id, master_actors, min_taken, min_mitigation):
                     "taken": total_taken,
                     "percent": round(percent, 2),
                 })
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ Error identifying tank {actor['name']}: {e}")
     return tank_candidates
 
@@ -116,7 +118,7 @@ def run_unified_report(args):
             events = healing_data["data"]["reportData"]["report"]["events"]["data"]
             total = sum(e.get("amount", 0) for e in events if e.get("type") == "heal")
             healing_totals[actor["name"]] = total
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ Skipping {actor['name']} for healer check: {e}")
 
     healers = dynamic_role_parser.identify_healers(master_actors, healing_totals, threshold=healer_threshold)
@@ -163,7 +165,7 @@ def run_unified_report(args):
             for spell_id, count in sorted(used_counts.items(), key=lambda x: -x[1]):
                 canonical_id = alias_map.get(spell_id, spell_id)
                 print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} uses")
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ Could not fetch damage done for {name}: {e}")
 
     # ========================= HEALER REPORT
@@ -225,7 +227,7 @@ def run_unified_report(args):
                 },
                 "fear_ward": fear_ward["casts"] if class_type == "Priest" and fear_ward else 0,
             })
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"❌ Error processing {name}: {e}")
 
     # ========================= MELEE & RANGED REPORT
@@ -291,7 +293,7 @@ def run_unified_report(args):
                         "damage": damage_by_ability,
                         "casts": casts_by_ability
                     })
-                except Exception as e:
+                except (requests.RequestException, KeyError, TypeError, ValueError) as e:
                     print(f"❌ Error processing {name}: {e}")
 
             summary_store[class_name] = summary
@@ -435,7 +437,7 @@ def run_unified_report(args):
                 "casts": ability_counts
             })
             all_abilities_by_class[class_name].update(ability_counts.keys())
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ Could not fetch abilities for {name}: {e}")
 
     for class_name in class_tables:

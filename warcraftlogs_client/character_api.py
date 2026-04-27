@@ -1,7 +1,10 @@
 import os
 import json
-from typing import List
-from .client import run_graphql_query
+from typing import List, Optional
+
+import requests
+
+from .client import WarcraftLogsClient
 from . import paths
 
 CACHE_FILE = str(paths.get_cache_dir() / "character_specs.json")
@@ -17,7 +20,13 @@ query {{
 }}
 """
 
-def enrich_actors_with_specs(actors: List[dict]) -> List[dict]:
+
+def enrich_actors_with_specs(
+    actors: List[dict],
+    client: Optional[WarcraftLogsClient] = None,
+    region: str = "EU",
+    server: str = "gehennas",
+) -> List[dict]:
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     cache = {}
 
@@ -40,15 +49,14 @@ def enrich_actors_with_specs(actors: List[dict]) -> List[dict]:
             updated.append(actor)
             continue
 
-        # Try to fetch from API
-        # TODO: infer region/server dynamically or default from config
-        region = "EU"
-        server = "gehennas"
+        if client is None:
+            updated.append(actor)
+            continue
 
         query = QUERY_TEMPLATE.format(name=name, server=server, region=region)
 
         try:
-            result = run_graphql_query(query)
+            result = client.run_query(query, use_cache=False)
             character = result["data"]["characterData"]["character"]
             if character:
                 spec_id = character.get("specID")
@@ -60,7 +68,7 @@ def enrich_actors_with_specs(actors: List[dict]) -> List[dict]:
                 print(f"[FETCHED] {name}: specID={spec_id}, classID={class_id}")
             else:
                 print(f"[MISSING] No character data for {name}")
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError) as e:
             print(f"[ERROR] Failed to fetch {name}: {e}")
 
         updated.append(actor)

@@ -603,7 +603,7 @@ class AnalyzeView(QWidget):
             from ..renderers.markdown import export_raid_analysis
             export_raid_analysis(self._current_analysis, output_path=path)
             self.status_message.emit(f"Exported to {path}")
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export:\n\n{e}")
 
     def showEvent(self, event):

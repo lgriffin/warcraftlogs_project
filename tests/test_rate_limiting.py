@@ -13,7 +13,7 @@ from warcraftlogs_client.client import WarcraftLogsClient
 def client():
     tm = MagicMock()
     tm.get_token.return_value = "test_token"
-    c = WarcraftLogsClient(tm)
+    c = WarcraftLogsClient(tm, cache_enabled=False)
     c.MIN_REQUEST_INTERVAL = 0.01
     return c
 

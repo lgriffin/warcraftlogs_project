@@ -2,6 +2,7 @@
 History view — browse historical character performance and past raid analyses.
 """
 
+import sqlite3
 from datetime import datetime
 
 from PySide6.QtWidgets import (
@@ -641,7 +642,7 @@ class HistoryView(QWidget):
 
             self._apply_group_filter()
             self.status_message.emit(f"Loaded {len(self._all_characters)} characters")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             self.status_message.emit(f"No history data yet: {e}")
 
     def _filter_characters(self, text: str = ""):
@@ -824,7 +825,7 @@ class HistoryView(QWidget):
                     self.char_trend_tabs.setCurrentIndex(2)
 
                 self.status_message.emit(f"Showing history for {name}")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             self.status_message.emit(f"Error loading history: {e}")
 
     # ── Chart rebuild handlers ──
@@ -906,7 +907,7 @@ class HistoryView(QWidget):
                 self._all_raids_raw = db.get_raid_list()
             self._apply_raid_day_filter()
             self.status_message.emit(f"Loaded {len(self._all_raids_raw)} raids")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             self.status_message.emit(f"No raid data yet: {e}")
 
     def _apply_raid_day_filter(self):
@@ -982,7 +983,7 @@ class HistoryView(QWidget):
                 self.raid_detail_tabs.setCurrentIndex(1)
 
             self.status_message.emit(f"Showing raid: {m.title}")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             self.status_message.emit(f"Error loading raid: {e}")
 
     def _on_raid_character_clicked(self, name: str):
@@ -1101,7 +1102,7 @@ class HistoryView(QWidget):
             self.status_message.emit(f"Deleted raid: {title}")
             self._load_raids()
             self.raid_info_label.setVisible(False)
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             QMessageBox.critical(self, "Delete Error", f"Failed to delete raid:\n{e}")
 
     def _export_raid_markdown(self):
@@ -1125,7 +1126,7 @@ class HistoryView(QWidget):
             from ..renderers.markdown import export_raid_analysis
             export_raid_analysis(self._current_raid_analysis, output_path=path)
             self.status_message.emit(f"Exported to {path}")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export:\n\n{e}")
 
     def _render_raid_composition(self, analysis):

@@ -15,6 +15,10 @@ This module provides a single entry point for all analysis modes:
 import argparse
 import sys
 
+import requests
+
+from .common.errors import WarcraftLogsError
+
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -131,7 +135,7 @@ def run_healer_analysis(args) -> int:
         from .new_main import run_full_report
         run_full_report(markdown=args.md, use_dynamic_roles=args.use_dynamic_roles)
         return 0
-    except Exception as e:
+    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running healer analysis: {e}")
         return 1
 
@@ -141,7 +145,7 @@ def run_tank_analysis(args) -> int:
         from .tank_main import run_tank_report
         run_tank_report()
         return 0
-    except Exception as e:
+    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running tank analysis: {e}")
         return 1
 
@@ -151,7 +155,7 @@ def run_melee_analysis(args) -> int:
         from .melee_main import run_melee_report
         run_melee_report()
         return 0
-    except Exception as e:
+    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running melee analysis: {e}")
         return 1
 
@@ -161,7 +165,7 @@ def run_ranged_analysis(args) -> int:
         from .ranged_main import run_ranged_report
         run_ranged_report()
         return 0
-    except Exception as e:
+    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running ranged analysis: {e}")
         return 1
 
@@ -172,7 +176,7 @@ def run_consumes_analysis(args) -> int:
         md_path = getattr(args, 'md', None)
         _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path)
         return 0
-    except Exception as e:
+    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running consumes analysis: {e}")
         return 1
 
@@ -281,7 +285,7 @@ def main() -> int:
     if handler:
         try:
             return handler(args)
-        except Exception as e:
+        except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             print(f"Error: {e}")
             return 1
 

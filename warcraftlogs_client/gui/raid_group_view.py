@@ -4,6 +4,7 @@ and view raids matching the group's scheduled days.
 """
 
 import json
+import sqlite3
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -348,7 +349,7 @@ class RaidGroupView(QWidget):
                 item = QListWidgetItem(label)
                 item.setData(Qt.ItemDataRole.UserRole, g.id)
                 self._group_list.addItem(item)
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             self.status_message.emit(f"Error loading groups: {e}")
 
     def _create_group(self):
@@ -366,7 +367,7 @@ class RaidGroupView(QWidget):
                     self._group_list.setCurrentItem(item)
                     break
             self.status_message.emit(f"Created raid group: {name.strip()}")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             QMessageBox.warning(self, "Error", f"Could not create group:\n{e}")
 
     def _delete_group(self):
@@ -393,7 +394,7 @@ class RaidGroupView(QWidget):
             self._no_selection_label.setVisible(True)
             self._load_groups()
             self.status_message.emit(f"Deleted raid group: {name}")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             QMessageBox.critical(self, "Error", f"Failed to delete group:\n{e}")
 
     def _rename_group(self):
@@ -415,7 +416,7 @@ class RaidGroupView(QWidget):
                     self._group_list.setCurrentItem(item)
                     break
             self.status_message.emit(f"Renamed group to: {name.strip()}")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             QMessageBox.warning(self, "Error", f"Could not rename:\n{e}")
 
     # ── Group selection ──
@@ -454,7 +455,7 @@ class RaidGroupView(QWidget):
             self._refresh_available_list(group.members)
             self._load_matching_raids(group.raid_days)
             self._load_dashboard(group_id)
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             self.status_message.emit(f"Error loading group: {e}")
 
     def _refresh_available_list(self, current_members: list[str]):
@@ -488,7 +489,7 @@ class RaidGroupView(QWidget):
             self._show_group(self._current_group_id)
             self._refresh_group_list_label()
             self.status_message.emit(f"Added {len(selected)} member(s)")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             QMessageBox.warning(self, "Error", f"Could not add member:\n{e}")
 
     def _remove_member(self):
@@ -504,7 +505,7 @@ class RaidGroupView(QWidget):
             self._show_group(self._current_group_id)
             self._refresh_group_list_label()
             self.status_message.emit(f"Removed {len(selected)} member(s)")
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             QMessageBox.warning(self, "Error", f"Could not remove member:\n{e}")
 
     def _refresh_group_list_label(self):
@@ -549,7 +550,7 @@ class RaidGroupView(QWidget):
             else:
                 self._role_model.set_data([], [])
 
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             self.status_message.emit(f"Error loading dashboard: {e}")
 
     # ── Raid days ──
@@ -563,7 +564,7 @@ class RaidGroupView(QWidget):
                 db.update_raid_group(self._current_group_id, raid_days=days)
             self._load_matching_raids(days)
             self._refresh_group_list_label()
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             self.status_message.emit(f"Error saving raid days: {e}")
 
     def _load_matching_raids(self, raid_days: list[str]):
@@ -592,7 +593,7 @@ class RaidGroupView(QWidget):
 
             cols = ["date", "day", "title", "report_id"]
             self._matching_raids_model.set_data(matching, cols)
-        except Exception as e:
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
             self.status_message.emit(f"Error loading matching raids: {e}")
 
     # ── Lifecycle ──

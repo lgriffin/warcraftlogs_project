@@ -1,12 +1,15 @@
 import datetime
 import argparse
+import json
 from collections import defaultdict
+
+import requests
+
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
 from .config import load_config
 from .spell_manager import SpellBreakdown
 from .common.data import get_master_data, get_report_metadata
-import json
 
 
 def get_damage_taken_data(client, report_id, source_id):
@@ -72,7 +75,7 @@ def run_tank_report():
                 })
                 per_tank_events[name] = events
 
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"❌ Error evaluating {name}: {e}")
 
     
@@ -104,7 +107,7 @@ def run_tank_report():
         print("⚔️  Abilities Used:")
         try:
             damage_done_events = get_damage_done_data(client, report_id, tank['id'])
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"  ⚠️ Error fetching damage done for {tank['name']}: {e}")
             damage_done_events = []
 
@@ -187,7 +190,7 @@ def run_tank_report():
                 "casts": ability_counts
             })
             all_abilities_by_class[class_name].update(ability_counts.keys())
-        except Exception as e:
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ Could not fetch abilities for {name}: {e}")
 
     for class_name in class_tables:
