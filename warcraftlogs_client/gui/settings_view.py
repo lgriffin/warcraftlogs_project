@@ -76,6 +76,14 @@ class SettingsView(QWidget):
         self.guild_id_input.setPlaceholderText("e.g. 774065")
         creds_layout.addRow("Guild ID:", self.guild_id_input)
 
+        self.guild_name_input = QLineEdit()
+        self.guild_name_input.setPlaceholderText("e.g. Amicable")
+        creds_layout.addRow("Guild Name:", self.guild_name_input)
+
+        self.guild_server_input = QLineEdit()
+        self.guild_server_input.setPlaceholderText("e.g. Gehennas")
+        creds_layout.addRow("Guild Server:", self.guild_server_input)
+
         # Show/hide secret toggle
         self.show_secret_btn = QPushButton("Show")
         self.show_secret_btn.setFixedWidth(80)
@@ -212,6 +220,8 @@ class SettingsView(QWidget):
             self.client_secret_input.setText(config.get("client_secret", ""))
             self.report_id_input.setText(config.get("report_id", ""))
             self.guild_id_input.setText(str(config.get("guild_id", 774065)))
+            self.guild_name_input.setText(config.get("guild_name", ""))
+            self.guild_server_input.setText(config.get("guild_server", ""))
 
             thresholds = config.get("role_thresholds", {})
             self.healer_threshold.setValue(thresholds.get("healer_min_healing", 50000))
@@ -247,6 +257,8 @@ class SettingsView(QWidget):
             config["guild_id"] = int(self.guild_id_input.text().strip())
         except ValueError:
             config["guild_id"] = 0
+        config["guild_name"] = self.guild_name_input.text().strip()
+        config["guild_server"] = self.guild_server_input.text().strip()
         config["role_thresholds"] = {
             "healer_min_healing": self.healer_threshold.value(),
             "tank_min_taken": self.tank_min_taken.value(),

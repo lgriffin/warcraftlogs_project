@@ -621,3 +621,51 @@ def build_group_performance_chart(trend_data: list[dict]) -> QChartView:
         _add_series(chart, members_pts, "Members Present", 3, x_axis, y2)
 
     return make_chart_view(chart)
+
+
+def build_class_comparison_chart(trend_data: list[dict], metric_key: str) -> QChartView:
+    """Multi-series line chart with one line per player for class comparison."""
+    title_map = {
+        "healing": "Healing Comparison",
+        "damage": "Damage Comparison",
+        "mitigation": "Mitigation % Comparison",
+    }
+    chart = _make_chart(title_map.get(metric_key, "Class Comparison"))
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    x_axis.setTitleText("Raid Date")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_label = {
+        "healing": "Total Healing",
+        "damage": "Total Damage",
+        "mitigation": "Mitigation %",
+    }
+    y_axis = QValueAxis()
+    y_axis.setTitleText(y_label.get(metric_key, "Value"))
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    by_player: dict[str, list[tuple[datetime, float]]] = {}
+    for row in trend_data:
+        if row.get("metric_key") != metric_key:
+            continue
+        name = row["name"]
+        date_str = row.get("raid_date", "")
+        val = row.get("metric_value", 0) or 0
+        try:
+            dt = datetime.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            continue
+        by_player.setdefault(name, []).append((dt, float(val)))
+
+    all_pts = []
+    for i, (name, pts) in enumerate(sorted(by_player.items())):
+        pts.sort(key=lambda p: p[0])
+        all_pts.extend(pts)
+        _add_series(chart, pts, name, i, x_axis, y_axis)
+
+    _fit_axes(x_axis, y_axis, all_pts)
+    return make_chart_view(chart)

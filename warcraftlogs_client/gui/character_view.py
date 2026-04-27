@@ -172,6 +172,12 @@ class CharacterView(QWidget):
         self._worker = None
         self._profile = None
         self._chart_widgets = {}
+        self._all_healer_trend = []
+        self._all_healer_spell_trend = []
+        self._all_tank_trend = []
+        self._all_dps_trend = []
+        self._all_dps_ability_trend = []
+        self._all_consumable_trend = []
         self._cached_healer_trend = []
         self._cached_healer_spell_trend = []
         self._cached_tank_trend = []
@@ -405,6 +411,18 @@ class CharacterView(QWidget):
                 selection-background-color: {COLORS['bg_dark']};
             }}
         """
+
+        raid_size_row = QHBoxLayout()
+        raid_size_label = QLabel("Raid Size:")
+        raid_size_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        raid_size_row.addWidget(raid_size_label)
+        self._raid_size_combo = QComboBox()
+        self._raid_size_combo.addItems(["All Raids", "10-man", "25-man"])
+        self._raid_size_combo.setStyleSheet(combo_style)
+        self._raid_size_combo.currentIndexChanged.connect(self._on_raid_size_changed)
+        raid_size_row.addWidget(self._raid_size_combo)
+        raid_size_row.addStretch()
+        layout.addLayout(raid_size_row)
 
         self._trend_tabs = QTabWidget()
 
@@ -784,43 +802,15 @@ class CharacterView(QWidget):
                 self._db_stats_labels["Consumables Used"].setText(
                     str(history.total_consumables_used))
 
-                self._cached_healer_trend = db.get_healer_trend(character_name)
-                self._cached_healer_spell_trend = (
-                    db.get_healer_spell_trend(character_name) if self._cached_healer_trend else [])
-                self._cached_tank_trend = db.get_tank_trend(character_name)
-                self._cached_dps_trend = db.get_dps_trend(character_name)
-                self._cached_dps_ability_trend = (
-                    db.get_dps_ability_trend(character_name) if self._cached_dps_trend else [])
-                self._cached_consumable_trend = db.get_consumable_trend(character_name)
+                self._all_healer_trend = db.get_healer_trend(character_name)
+                self._all_healer_spell_trend = (
+                    db.get_healer_spell_trend(character_name) if self._all_healer_trend else [])
+                self._all_tank_trend = db.get_tank_trend(character_name)
+                self._all_dps_trend = db.get_dps_trend(character_name)
+                self._all_dps_ability_trend = (
+                    db.get_dps_ability_trend(character_name) if self._all_dps_trend else [])
+                self._all_consumable_trend = db.get_consumable_trend(character_name)
 
-                # Healing
-                if self._cached_healer_trend:
-                    self._healer_trend_model.set_data(
-                        self._cached_healer_trend,
-                        ["raid_date", "title", "total_healing", "total_overhealing", "overheal_percent"])
-                else:
-                    self._healer_trend_model.set_data([], [])
-                self._rebuild_healer_chart()
-
-                # Tank
-                if self._cached_tank_trend:
-                    self._tank_trend_model.set_data(
-                        self._cached_tank_trend,
-                        ["raid_date", "title", "total_damage_taken", "total_mitigated", "mitigation_percent"])
-                else:
-                    self._tank_trend_model.set_data([], [])
-                self._rebuild_tank_chart()
-
-                # DPS
-                if self._cached_dps_trend:
-                    self._dps_trend_model.set_data(
-                        self._cached_dps_trend,
-                        ["raid_date", "title", "role", "total_damage"])
-                else:
-                    self._dps_trend_model.set_data([], [])
-                self._rebuild_dps_chart()
-
-                # Consumables
                 consumes_summary = db.get_consumable_summary(character_name, limit=5)
                 if consumes_summary:
                     all_consumable_names = set()
@@ -832,17 +822,8 @@ class CharacterView(QWidget):
                     self._consumes_trend_model.set_data(consumes_summary, cols)
                 else:
                     self._consumes_trend_model.set_data([], [])
-                self._rebuild_consumable_chart()
 
-                # Auto-select the tab with data
-                if self._cached_healer_trend:
-                    self._trend_tabs.setCurrentIndex(0)
-                elif self._cached_tank_trend:
-                    self._trend_tabs.setCurrentIndex(1)
-                elif self._cached_dps_trend:
-                    self._trend_tabs.setCurrentIndex(2)
-                elif self._cached_consumable_trend:
-                    self._trend_tabs.setCurrentIndex(3)
+                self._apply_raid_size_filter()
 
         except (sqlite3.Error, OSError, KeyError) as e:
             self._no_trends_label.setText(
@@ -850,6 +831,68 @@ class CharacterView(QWidget):
             self._no_trends_label.setVisible(True)
             self._trend_tabs.setVisible(False)
             self._db_stats_group.setVisible(False)
+
+    # ── Raid size filtering ──
+
+    @staticmethod
+    def _filter_by_raid_size(rows: list[dict], mode: int) -> list[dict]:
+        if mode == 0:
+            return rows
+        if mode == 1:
+            return [r for r in rows if r.get("raid_size") is not None and r["raid_size"] <= 15]
+        return [r for r in rows if r.get("raid_size") is not None and r["raid_size"] > 15]
+
+    def _on_raid_size_changed(self):
+        self._apply_raid_size_filter()
+
+    def _apply_raid_size_filter(self):
+        mode = self._raid_size_combo.currentIndex()
+
+        self._cached_healer_trend = self._filter_by_raid_size(self._all_healer_trend, mode)
+        self._cached_healer_spell_trend = self._filter_by_raid_size(self._all_healer_spell_trend, mode)
+        self._cached_tank_trend = self._filter_by_raid_size(self._all_tank_trend, mode)
+        self._cached_dps_trend = self._filter_by_raid_size(self._all_dps_trend, mode)
+        self._cached_dps_ability_trend = self._filter_by_raid_size(self._all_dps_ability_trend, mode)
+        self._cached_consumable_trend = self._filter_by_raid_size(self._all_consumable_trend, mode)
+
+        if self._cached_healer_trend:
+            self._healer_trend_model.set_data(
+                self._cached_healer_trend,
+                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent"])
+        else:
+            self._healer_trend_model.set_data([], [])
+        self._rebuild_healer_chart()
+
+        if self._cached_tank_trend:
+            self._tank_trend_model.set_data(
+                self._cached_tank_trend,
+                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent"])
+        else:
+            self._tank_trend_model.set_data([], [])
+        self._rebuild_tank_chart()
+
+        if self._cached_dps_trend:
+            self._dps_trend_model.set_data(
+                self._cached_dps_trend,
+                ["raid_date", "title", "raid_size", "role", "total_damage"])
+        else:
+            self._dps_trend_model.set_data([], [])
+        self._rebuild_dps_chart()
+
+        if self._cached_consumable_trend:
+            self._rebuild_consumable_chart()
+        else:
+            self._consumes_trend_model.set_data([], [])
+            self._clear_chart(self._consumes_chart_container, "consumes")
+
+        if self._cached_healer_trend:
+            self._trend_tabs.setCurrentIndex(0)
+        elif self._cached_tank_trend:
+            self._trend_tabs.setCurrentIndex(1)
+        elif self._cached_dps_trend:
+            self._trend_tabs.setCurrentIndex(2)
+        elif self._cached_consumable_trend:
+            self._trend_tabs.setCurrentIndex(3)
 
     # ── Chart rebuild handlers ──
 

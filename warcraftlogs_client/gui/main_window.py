@@ -1,22 +1,26 @@
 """
-Main application window with sidebar navigation.
+Main application window with sidebar navigation and drill-down support.
 """
 
 import os
+import sqlite3
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QListWidget, QListWidgetItem, QStackedWidget,
+    QListWidget, QListWidgetItem,
     QStatusBar, QLabel,
 )
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QIcon, QPixmap
+from PySide6.QtGui import QFont, QPixmap
 
-from .analyze_view import AnalyzeView
-from .history_view import HistoryView
+from .download_view import DownloadView
+from .raids_view import RaidsView
 from .raid_group_view import RaidGroupView
 from .character_view import CharacterView
 from .settings_view import SettingsView
+from .nav_stack import NavigationStack
+from .raid_analysis_widget import RaidAnalysisWidget
+from ..database import PerformanceDB
 
 
 class MainWindow(QMainWindow):
@@ -35,16 +39,11 @@ class MainWindow(QMainWindow):
         # ── Sidebar ──
         sidebar = QWidget()
         sidebar.setFixedWidth(200)
-        sidebar.setStyleSheet("""
-            QWidget {
-                background-color: #1a1a2e;
-            }
-        """)
+        sidebar.setStyleSheet("QWidget { background-color: #1a1a2e; }")
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
-        # App title
         title = QLabel("WCL Analyzer")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFixedHeight(60)
@@ -58,7 +57,6 @@ class MainWindow(QMainWindow):
         """)
         sidebar_layout.addWidget(title)
 
-        # Nav list
         self.nav_list = QListWidget()
         self.nav_list.setIconSize(QSize(20, 20))
         self.nav_list.setStyleSheet("""
@@ -84,10 +82,10 @@ class MainWindow(QMainWindow):
         """)
 
         nav_items = [
-            ("Analyze Raid", "Run analysis on a WarcraftLogs report"),
-            ("History", "View historical character performance"),
-            ("Raid Groups", "Manage raid groups and members"),
-            ("Character", "View character profile and rankings"),
+            ("Download", "Fetch guild reports and analyze raids"),
+            ("Raids", "Browse analyzed raids"),
+            ("Raid Groups", "Manage raid groups and compare classes"),
+            ("My Character", "View your character profile and rankings"),
             ("Settings", "Configure credentials and thresholds"),
         ]
         for name, tooltip in nav_items:
@@ -99,8 +97,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.nav_list)
         sidebar_layout.addStretch()
 
-        # Version label at bottom
-        version_label = QLabel("v3.0.0\nTBC enabled")
+        version_label = QLabel("v3.2.0")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("color: #555; padding: 10px; font-size: 11px;")
         sidebar_layout.addWidget(version_label)
@@ -113,7 +110,6 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
-        # ── Top bar with guild logo ──
         top_bar = QWidget()
         top_bar.setFixedHeight(60)
         top_bar.setStyleSheet("background-color: #16213e;")
@@ -122,6 +118,17 @@ class MainWindow(QMainWindow):
 
         top_bar_layout.addStretch()
 
+        self._guild_name_label = QLabel()
+        self._guild_name_label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        self._guild_name_label.setStyleSheet("color: #e94560; background: transparent;")
+        top_bar_layout.addWidget(self._guild_name_label)
+
+        self._guild_server_label = QLabel()
+        self._guild_server_label.setStyleSheet("color: #8899aa; font-size: 11px; background: transparent; margin-left: 6px;")
+        top_bar_layout.addWidget(self._guild_server_label)
+
+        top_bar_layout.addSpacing(10)
+
         self.guild_logo_label = QLabel()
         self.guild_logo_label.setFixedSize(44, 44)
         self.guild_logo_label.setScaledContents(True)
@@ -129,26 +136,26 @@ class MainWindow(QMainWindow):
         self._load_guild_logo()
         top_bar_layout.addWidget(self.guild_logo_label)
 
+        self._load_guild_info()
+
         content_layout.addWidget(top_bar)
 
-        self.stack = QStackedWidget()
-        self.stack.setStyleSheet("""
-            QStackedWidget {
-                background-color: #0f3460;
-            }
-        """)
+        # ── Navigation stack (replaces plain QStackedWidget) ──
+        self.stack = NavigationStack()
+        self.stack.setStyleSheet("QStackedWidget { background-color: #0f3460; }")
 
-        self.analyze_view = AnalyzeView()
-        self.history_view = HistoryView()
+        self.download_view = DownloadView()
+        self.raids_view = RaidsView()
         self.raid_group_view = RaidGroupView()
         self.character_view = CharacterView()
         self.settings_view = SettingsView()
 
-        self.stack.addWidget(self.analyze_view)
-        self.stack.addWidget(self.history_view)
+        self.stack.addWidget(self.download_view)
+        self.stack.addWidget(self.raids_view)
         self.stack.addWidget(self.raid_group_view)
         self.stack.addWidget(self.character_view)
         self.stack.addWidget(self.settings_view)
+        self.stack.set_base_count(5)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
@@ -167,16 +174,59 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Ready")
 
         # ── Connect signals ──
-        self.nav_list.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.nav_list.currentRowChanged.connect(self._on_nav_changed)
         self.nav_list.setCurrentRow(0)
 
-        self.analyze_view.status_message.connect(self.status_bar.showMessage)
-        self.history_view.status_message.connect(self.status_bar.showMessage)
+        self.download_view.status_message.connect(self.status_bar.showMessage)
+        self.download_view.raid_downloaded.connect(self._on_raid_downloaded)
+        self.raids_view.status_message.connect(self.status_bar.showMessage)
+        self.raids_view.open_raid.connect(self._drill_into_raid)
         self.raid_group_view.status_message.connect(self.status_bar.showMessage)
+        self.raid_group_view.open_raid.connect(self._drill_into_raid)
         self.character_view.status_message.connect(self.status_bar.showMessage)
         self.character_view.analyze_report.connect(self._analyze_report)
-        self.character_view.view_character_history.connect(self._go_to_character)
-        self.analyze_view.navigate_to_character.connect(self._go_to_character)
+        self.character_view.view_character_history.connect(self._drill_into_character_history)
+        self.settings_view.status_message.connect(self._on_settings_saved)
+
+    def _on_nav_changed(self, index: int):
+        self.stack.show_base_page(index)
+
+    def _drill_into_raid(self, report_id: str):
+        try:
+            with PerformanceDB() as db:
+                analysis = db.get_raid_analysis(report_id)
+        except (sqlite3.Error, OSError) as e:
+            self.status_bar.showMessage(f"Failed to load raid: {e}")
+            return
+
+        if not analysis:
+            self.status_bar.showMessage(f"Raid {report_id} not found in database")
+            return
+
+        widget = RaidAnalysisWidget(analysis)
+        widget.status_message.connect(self.status_bar.showMessage)
+        widget.request_back.connect(self.stack.pop_view)
+        widget.navigate_to_character.connect(self._drill_into_character_history)
+        widget.raid_deleted.connect(self._on_raid_deleted)
+        self.stack.push_view(widget)
+
+    def _drill_into_character_history(self, name: str):
+        from .character_history_widget import CharacterHistoryWidget
+        widget = CharacterHistoryWidget(name)
+        widget.status_message.connect(self.status_bar.showMessage)
+        widget.request_back.connect(self.stack.pop_view)
+        self.stack.push_view(widget)
+
+    def _on_raid_downloaded(self):
+        pass
+
+    def _on_raid_deleted(self, report_id: str):
+        pass
+
+    def _analyze_report(self, report_code: str):
+        self.nav_list.setCurrentRow(0)
+        self.download_view._report_input.setText(report_code)
+        self.download_view._analyze_single()
 
     def _load_guild_logo(self):
         from .. import paths
@@ -188,12 +238,19 @@ class MainWindow(QMainWindow):
         else:
             self.guild_logo_label.setText("")
 
-    def _go_to_character(self, name: str):
-        """Switch to History view and show the selected character."""
-        self.nav_list.setCurrentRow(1)
-        self.history_view.navigate_to_character(name)
+    def _on_settings_saved(self, msg: str):
+        self.status_bar.showMessage(msg)
+        if "saved" in msg.lower():
+            self._load_guild_info()
 
-    def _analyze_report(self, report_code: str):
-        """Switch to Analyze view and start analysis for a report."""
-        self.nav_list.setCurrentRow(0)
-        self.analyze_view.set_report_id(report_code)
+    def _load_guild_info(self):
+        try:
+            from ..config import load_config
+            config = load_config()
+            name = config.get("guild_name", "")
+            server = config.get("guild_server", "")
+        except Exception:
+            name, server = "", ""
+
+        self._guild_name_label.setText(name)
+        self._guild_server_label.setText(f"— {server}" if server else "")
