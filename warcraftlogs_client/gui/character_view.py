@@ -6,6 +6,7 @@ recent reports, and performance trends from parsed raid history.
 import json
 import os
 import sqlite3
+import webbrowser
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -18,9 +19,8 @@ from PySide6.QtGui import QFont, QColor
 
 from .styles import COMMON_STYLES, COLORS
 from .charts import SpiderChartWidget, CalendarHeatmapWidget
-from .table_models import HistoryTableModel
-from .worker import CharacterProfileWorker
-from .table_models import HistoryTableModel
+from .table_models import HistoryTableModel, GearTableModel
+from .worker import CharacterProfileWorker, ItemNameWorker
 from .charts import (
     build_healer_chart, build_healer_overheal_chart,
     build_tank_chart, build_tank_mitigation_chart,
@@ -378,6 +378,26 @@ class CharacterView(QWidget):
         self._reports_section.set_collapsed(True)
         layout.addWidget(self._reports_section)
 
+        # ── Gear (collapsible) ──
+        self._gear_section = _CollapsibleSection("Gear")
+        self._gear_model = GearTableModel()
+        self._gear_table = QTableView()
+        self._gear_table.setModel(self._gear_model)
+        self._gear_table.setAlternatingRowColors(True)
+        self._gear_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        self._gear_table.verticalHeader().setVisible(False)
+        self._gear_table.horizontalHeader().setStretchLastSection(True)
+        self._gear_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        self._gear_table.setStyleSheet(
+            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        self._gear_table.setMaximumHeight(400)
+        self._gear_table.clicked.connect(self._on_gear_clicked)
+
+        self._gear_section.content_layout().addWidget(self._gear_table)
+        self._gear_section.set_collapsed(True)
+        layout.addWidget(self._gear_section)
+
         # ── Performance Trends (main content) ──
         trends_label = QLabel("Performance Trends")
         trends_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
@@ -698,6 +718,13 @@ class CharacterView(QWidget):
                 item.setForeground(QColor(COLORS['success']))
             self._reports_list.addItem(item)
 
+        self._gear_model.set_data(profile.gear_items)
+        if profile.gear_items:
+            item_ids = [g.item_id for g in profile.gear_items if g.item_id]
+            self._item_name_worker = ItemNameWorker(item_ids)
+            self._item_name_worker.finished.connect(self._on_item_names_loaded)
+            self._item_name_worker.start()
+
         self._load_local_performance(profile.name)
         self._load_trends(profile.name)
         self.status_message.emit(f"Loaded profile for {profile.name}")
@@ -982,6 +1009,18 @@ class CharacterView(QWidget):
         name = self._char_name_input.text().strip()
         if name:
             self.view_character_history.emit(name)
+
+    def _on_gear_clicked(self, index: QModelIndex):
+        if index.column() != 1:
+            return
+        if index.row() >= len(self._gear_model._items):
+            return
+        item = self._gear_model._items[index.row()]
+        if item.item_id:
+            webbrowser.open(f"https://www.wowhead.com/classic/item={item.item_id}")
+
+    def _on_item_names_loaded(self, names: dict):
+        self._gear_model.set_item_names(names)
 
     def _on_report_double_clicked(self, index):
         item = self._reports_list.item(index.row())

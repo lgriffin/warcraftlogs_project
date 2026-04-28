@@ -14,6 +14,7 @@ from .cache import get_cached_response, save_response_cache
 from .models import (
     RaidMetadata, CharacterProfile, ZoneRankingResult,
     EncounterRanking, AllStarRanking, CharacterReportEntry,
+    GearItem, GEAR_SLOT_ORDER, GEAR_SLOTS_HIDDEN,
 )
 
 
@@ -502,9 +503,6 @@ class WarcraftLogsClient:
             if zr and isinstance(zr, dict) and "error" not in zr:
                 profile.zone_rankings = [self._parse_zone_rankings(zr)]
 
-            # Fetch additional zones the character has data in
-            # (the default query returns only the current zone)
-
             # Parse recent reports
             reports_data = char.get("recentReports", {}).get("data", [])
             profile.recent_reports = [
@@ -517,9 +515,82 @@ class WarcraftLogsClient:
                 for r in reports_data
             ]
 
+            # Fetch gear from CombatantInfo in the most recent report
+            if profile.recent_reports:
+                profile.gear_items = self._fetch_gear_from_report(
+                    profile.recent_reports[0].code, profile.name)
+
             return profile
         finally:
             self.API_URL = original_url
+
+    def _fetch_gear_from_report(self, report_code: str, char_name: str) -> list[GearItem]:
+        """Pull equipped gear from CombatantInfo events in a report."""
+        try:
+            actors_query = f"""
+            {{
+              reportData {{
+                report(code: "{report_code}") {{
+                  masterData {{ actors(type: "Player") {{ id name }} }}
+                  fights(killType: Encounters) {{ id }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(actors_query, use_cache=True)
+            report = result["data"]["reportData"]["report"]
+
+            actors = report.get("masterData", {}).get("actors", [])
+            source_id = None
+            for a in actors:
+                if a.get("name", "").lower() == char_name.lower():
+                    source_id = a["id"]
+                    break
+            if source_id is None:
+                return []
+
+            fights = report.get("fights", [])
+            if not fights:
+                return []
+            fight_id = fights[-1]["id"]
+
+            events_query = f"""
+            {{
+              reportData {{
+                report(code: "{report_code}") {{
+                  events(dataType: CombatantInfo, fightIDs: [{fight_id}],
+                         sourceID: {source_id}, limit: 10) {{
+                    data
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(events_query, use_cache=True)
+            events = result["data"]["reportData"]["report"]["events"]["data"]
+            if not events:
+                return []
+
+            gear_array = events[0].get("gear", [])
+            items = []
+            for i, g in enumerate(gear_array):
+                if not isinstance(g, dict) or not g.get("id"):
+                    continue
+                slot_name = GEAR_SLOT_ORDER[i] if i < len(GEAR_SLOT_ORDER) else f"Slot {i}"
+                if slot_name in GEAR_SLOTS_HIDDEN:
+                    continue
+                gems = [gem["id"] for gem in g.get("gems", []) if gem.get("id")]
+                items.append(GearItem(
+                    slot=slot_name,
+                    item_id=g["id"],
+                    item_level=g.get("itemLevel", 0),
+                    quality=g.get("quality", 0),
+                    enchant_id=g.get("permanentEnchant", 0),
+                    gems=gems,
+                ))
+            return items
+        except (KeyError, TypeError, IndexError):
+            return []
 
     def get_character_zone_rankings(self, name: str, server_slug: str,
                                      server_region: str, zone_id: int,

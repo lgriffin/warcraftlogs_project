@@ -120,3 +120,33 @@ class CharacterProfileWorker(QThread):
             self.finished.emit(profile)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
+
+
+class ItemNameWorker(QThread):
+    """Resolves item names from Wowhead tooltip API in a background thread."""
+
+    finished = Signal(dict)
+
+    def __init__(self, item_ids: list[int], parent=None):
+        super().__init__(parent)
+        self.item_ids = item_ids
+
+    def run(self):
+        names = {}
+        for item_id in self.item_ids:
+            if not item_id:
+                continue
+            try:
+                resp = requests.get(
+                    f"https://nether.wowhead.com/tooltip/item/{item_id}",
+                    params={"dataEnv": 5, "locale": 0},
+                    timeout=5,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    name = data.get("name")
+                    if name:
+                        names[item_id] = name
+            except (requests.RequestException, ValueError, KeyError):
+                continue
+        self.finished.emit(names)
