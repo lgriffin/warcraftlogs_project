@@ -798,7 +798,7 @@ class PerformanceDB:
         """Aggregate performance for all group members per raid, ordered by date."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size,
                       AVG(hp.total_healing) as avg_healing,
                       AVG(dp.total_damage) as avg_damage,
                       AVG(tp.mitigation_percent) as avg_mitigation,
@@ -929,7 +929,7 @@ class PerformanceDB:
 
             if role in (None, "healer"):
                 rows = conn.execute(
-                    """SELECT r.raid_date, r.title, hp.total_healing as metric_value
+                    """SELECT r.raid_date, r.title, r.raid_size, hp.total_healing as metric_value
                        FROM healer_performance hp
                        JOIN raids r ON r.id = hp.raid_id
                        WHERE hp.character_id = ?
@@ -940,7 +940,8 @@ class PerformanceDB:
                     for r in reversed(rows):
                         results.append({
                             "name": name, "raid_date": r["raid_date"],
-                            "title": r["title"], "metric_value": r["metric_value"],
+                            "title": r["title"], "raid_size": r["raid_size"],
+                            "metric_value": r["metric_value"],
                             "metric_key": "healing",
                         })
                     if role is not None:
@@ -948,7 +949,7 @@ class PerformanceDB:
 
             if role in (None, "tank"):
                 rows = conn.execute(
-                    """SELECT r.raid_date, r.title, tp.mitigation_percent as metric_value
+                    """SELECT r.raid_date, r.title, r.raid_size, tp.mitigation_percent as metric_value
                        FROM tank_performance tp
                        JOIN raids r ON r.id = tp.raid_id
                        WHERE tp.character_id = ?
@@ -959,7 +960,8 @@ class PerformanceDB:
                     for r in reversed(rows):
                         results.append({
                             "name": name, "raid_date": r["raid_date"],
-                            "title": r["title"], "metric_value": r["metric_value"],
+                            "title": r["title"], "raid_size": r["raid_size"],
+                            "metric_value": r["metric_value"],
                             "metric_key": "mitigation",
                         })
                     if role is not None:
@@ -967,7 +969,7 @@ class PerformanceDB:
 
             if role in (None, "dps"):
                 rows = conn.execute(
-                    """SELECT r.raid_date, r.title, dp.total_damage as metric_value
+                    """SELECT r.raid_date, r.title, r.raid_size, dp.total_damage as metric_value
                        FROM dps_performance dp
                        JOIN raids r ON r.id = dp.raid_id
                        WHERE dp.character_id = ?
@@ -978,7 +980,8 @@ class PerformanceDB:
                     for r in reversed(rows):
                         results.append({
                             "name": name, "raid_date": r["raid_date"],
-                            "title": r["title"], "metric_value": r["metric_value"],
+                            "title": r["title"], "raid_size": r["raid_size"],
+                            "metric_value": r["metric_value"],
                             "metric_key": "damage",
                         })
 

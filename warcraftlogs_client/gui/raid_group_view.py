@@ -138,6 +138,32 @@ class RaidGroupView(QWidget):
         name_row.addStretch()
         header_layout.addLayout(name_row)
 
+        raid_size_row = QHBoxLayout()
+        raid_size_label = QLabel("Raid Size:")
+        raid_size_label.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px; font-weight: bold;")
+        raid_size_row.addWidget(raid_size_label)
+        self._raid_size_combo = QComboBox()
+        self._raid_size_combo.addItems(["All Raids", "10-man", "25-man"])
+        self._raid_size_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {COLORS['bg_input']};
+                color: {COLORS['text']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px; padding: 4px 8px;
+                font-size: 12px; min-width: 120px;
+            }}
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox QAbstractItemView {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text']};
+                selection-background-color: {COLORS['bg_dark']};
+            }}
+        """)
+        self._raid_size_combo.currentIndexChanged.connect(self._on_raid_size_changed)
+        raid_size_row.addWidget(self._raid_size_combo)
+        raid_size_row.addStretch()
+        header_layout.addLayout(raid_size_row)
+
         days_row = QHBoxLayout()
         days_row.setSpacing(16)
         days_label = QLabel("Raid Days:")
@@ -585,6 +611,21 @@ class RaidGroupView(QWidget):
                 self._group_list.blockSignals(False)
                 break
 
+    # ── Raid size filtering ──
+
+    @staticmethod
+    def _filter_by_raid_size(rows: list[dict], mode: int) -> list[dict]:
+        if mode == 0:
+            return rows
+        if mode == 1:
+            return [r for r in rows if r.get("raid_size") is not None and r["raid_size"] <= 15]
+        return [r for r in rows if r.get("raid_size") is not None and r["raid_size"] > 15]
+
+    def _on_raid_size_changed(self):
+        if self._current_group_id:
+            self._load_dashboard(self._current_group_id)
+            self._refresh_comparison()
+
     # ── Dashboard ──
 
     def _load_dashboard(self, group_id: int):
@@ -593,6 +634,9 @@ class RaidGroupView(QWidget):
                 perf_trend = db.get_group_performance_trend(group_id)
                 attendance = db.get_group_attendance(group_id)
                 role_coverage = db.get_group_role_coverage(group_id)
+
+            mode = self._raid_size_combo.currentIndex()
+            perf_trend = self._filter_by_raid_size(perf_trend, mode)
 
             if self._perf_chart_widget:
                 self._perf_chart_container.removeWidget(self._perf_chart_widget)
@@ -681,6 +725,9 @@ class RaidGroupView(QWidget):
                     self._current_group_id, class_name, role=role)
                 summary = db.get_class_comparison_summary(
                     self._current_group_id, class_name)
+
+            mode = self._raid_size_combo.currentIndex()
+            trend_data = self._filter_by_raid_size(trend_data, mode)
 
             self._clear_comparison_chart()
             if trend_data:
