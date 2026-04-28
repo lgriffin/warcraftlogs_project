@@ -206,7 +206,36 @@ class RaidGroup:
     members: list[str] = field(default_factory=list)
 
 
-# ── WCL Character Profile models ──
+# ── WCL Character Profile / Gear models ──
+
+GEAR_SLOT_ORDER = [
+    "Head", "Neck", "Shoulder", "Shirt", "Chest",
+    "Waist", "Legs", "Feet", "Wrist", "Hands",
+    "Finger 1", "Finger 2", "Trinket 1", "Trinket 2",
+    "Back", "Main Hand", "Off Hand", "Ranged/Relic", "Tabard",
+]
+
+GEAR_SLOTS_HIDDEN = {"Shirt", "Tabard"}
+
+QUALITY_NAMES = {0: "Poor", 1: "Common", 2: "Uncommon", 3: "Rare", 4: "Epic", 5: "Legendary"}
+
+
+@dataclass
+class GearItem:
+    slot: str
+    item_id: int
+    item_level: int = 0
+    quality: int = 0
+    enchant_id: int = 0
+    gems: list[int] = field(default_factory=list)
+
+    @property
+    def quality_name(self) -> str:
+        return QUALITY_NAMES.get(self.quality, "Unknown")
+
+    @property
+    def wowhead_url(self) -> str:
+        return f"https://www.wowhead.com/classic/item={self.item_id}" if self.item_id else ""
 
 WOW_CLASS_NAMES = {
     1: "Death Knight", 2: "Druid", 3: "Hunter", 4: "Mage",
@@ -286,6 +315,7 @@ class CharacterProfile:
     guild_name: str = ""
     zone_rankings: list[ZoneRankingResult] = field(default_factory=list)
     recent_reports: list[CharacterReportEntry] = field(default_factory=list)
+    gear_items: list[GearItem] = field(default_factory=list)
 
     @property
     def class_name(self) -> str:

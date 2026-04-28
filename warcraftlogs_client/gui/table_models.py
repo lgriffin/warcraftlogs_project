@@ -5,7 +5,7 @@ Qt table models for displaying analysis results.
 from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
 from PySide6.QtGui import QColor, QFont
 
-from ..models import HealerPerformance, TankPerformance, DPSPerformance
+from ..models import HealerPerformance, TankPerformance, DPSPerformance, GearItem
 
 
 class HealerTableModel(QAbstractTableModel):
@@ -270,6 +270,78 @@ class HistoryTableModel(QAbstractTableModel):
             self.dataChanged.emit(index, index, [role])
             return True
         return False
+
+
+QUALITY_COLORS = {
+    0: QColor("#9d9d9d"),  # Poor
+    1: QColor("#ffffff"),  # Common
+    2: QColor("#1eff00"),  # Uncommon
+    3: QColor("#0070dd"),  # Rare
+    4: QColor("#a335ee"),  # Epic
+    5: QColor("#ff8000"),  # Legendary
+}
+
+
+class GearTableModel(QAbstractTableModel):
+    COLUMNS = ["Slot", "Item ID", "iLvl", "Quality", "Enchant", "Gems"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._items: list[GearItem] = []
+        self._names: dict[int, str] = {}
+
+    def set_data(self, items: list[GearItem]):
+        self.beginResetModel()
+        self._items = list(items)
+        self.endResetModel()
+
+    def set_item_names(self, names: dict[int, str]):
+        self.beginResetModel()
+        self._names = names
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._items)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.COLUMNS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.COLUMNS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or index.row() >= len(self._items):
+            return None
+
+        item = self._items[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0: return item.slot
+            if col == 1: return self._names.get(item.item_id, f"#{item.item_id}")
+            if col == 2: return item.item_level if item.item_level else ""
+            if col == 3: return item.quality_name
+            if col == 4: return f"#{item.enchant_id}" if item.enchant_id else ""
+            if col == 5: return f"{len(item.gems)} gem(s)" if item.gems else ""
+
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            if col == 2:
+                return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if col == 1:
+                return QUALITY_COLORS.get(item.quality, _link_color())
+            if col == 3:
+                return QUALITY_COLORS.get(item.quality, QColor("#eeeeee"))
+
+        if role == Qt.ItemDataRole.FontRole:
+            if col == 1:
+                return _link_font()
+
+        return None
 
 
 def _link_color() -> QColor:
