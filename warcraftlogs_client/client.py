@@ -119,37 +119,46 @@ class WarcraftLogsClient:
             "server": server.get("name", ""),
         }
 
-    def get_guild_reports(self, guild_id: int, limit: int = 50) -> list[dict]:
-        """Fetch recent reports for a guild by guild ID."""
-        query = f"""
-        {{
-          reportData {{
-            reports(guildID: {guild_id}, limit: {limit}) {{
-              data {{
-                code
-                title
-                owner {{ name }}
-                startTime
-                endTime
-                zone {{ name }}
+    def get_guild_reports(self, guild_id: int, total: int = 350) -> list[dict]:
+        """Fetch recent reports for a guild, paginating to collect *total* reports."""
+        all_reports: list[dict] = []
+        page = 1
+        per_page = min(total, 100)
+
+        while len(all_reports) < total:
+            query = f"""
+            {{
+              reportData {{
+                reports(guildID: {guild_id}, limit: {per_page}, page: {page}) {{
+                  data {{
+                    code
+                    title
+                    owner {{ name }}
+                    startTime
+                    endTime
+                    zone {{ name }}
+                  }}
+                  has_more_pages
+                }}
               }}
             }}
-          }}
-        }}
-        """
-        result = self.run_query(query, use_cache=False)
-        reports = result["data"]["reportData"]["reports"]["data"]
-        return [
-            {
-                "code": r["code"],
-                "title": r["title"],
-                "owner": r["owner"]["name"] if r.get("owner") else "",
-                "start_time": r["startTime"],
-                "end_time": r.get("endTime"),
-                "zone": r["zone"]["name"] if r.get("zone") else "",
-            }
-            for r in reports
-        ]
+            """
+            result = self.run_query(query, use_cache=False)
+            page_data = result["data"]["reportData"]["reports"]
+            for r in page_data["data"]:
+                all_reports.append({
+                    "code": r["code"],
+                    "title": r["title"],
+                    "owner": r["owner"]["name"] if r.get("owner") else "",
+                    "start_time": r["startTime"],
+                    "end_time": r.get("endTime"),
+                    "zone": r["zone"]["name"] if r.get("zone") else "",
+                })
+            if not page_data.get("has_more_pages"):
+                break
+            page += 1
+
+        return all_reports[:total]
 
     def get_master_data(self, report_id: str) -> list[dict]:
         query = f"""

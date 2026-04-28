@@ -88,6 +88,13 @@ class DownloadView(QWidget):
 
         day_row.addStretch()
 
+        self._analyze_selected_btn = QPushButton("Analyze Selected")
+        self._analyze_selected_btn.setProperty("secondary", True)
+        self._analyze_selected_btn.setFixedHeight(30)
+        self._analyze_selected_btn.setEnabled(False)
+        self._analyze_selected_btn.clicked.connect(self._analyze_selected)
+        day_row.addWidget(self._analyze_selected_btn)
+
         self._analyze_new_btn = QPushButton("Analyze All New")
         self._analyze_new_btn.setProperty("secondary", True)
         self._analyze_new_btn.setFixedHeight(30)
@@ -97,7 +104,8 @@ class DownloadView(QWidget):
 
         layout.addLayout(day_row)
 
-        self._table_model = HistoryTableModel()
+        self._table_model = HistoryTableModel(checkable=True)
+        self._table_model.dataChanged.connect(self._on_check_changed)
         self._table = QTableView()
         self._table.setModel(self._table_model)
         self._table.setAlternatingRowColors(True)
@@ -198,6 +206,8 @@ class DownloadView(QWidget):
                 "code": code,
                 "status": "Downloaded" if is_saved else "",
             })
+            if len(display_rows) >= 50:
+                break
 
         self._table_model.set_data(
             display_rows,
@@ -205,12 +215,16 @@ class DownloadView(QWidget):
         )
         self._analyze_new_btn.setEnabled(new_count > 0)
         self._analyze_new_btn.setText(f"Analyze All New ({new_count})" if new_count else "Analyze All New")
+        self._analyze_selected_btn.setEnabled(False)
 
     def _on_click(self, index: QModelIndex):
         rows = self._table_model._rows
         if index.row() >= len(rows):
             return
-        col_name = self._table_model._columns[index.column()]
+        col_idx = index.column() - 1 if self._table_model._checkable else index.column()
+        if col_idx < 0 or col_idx >= len(self._table_model._columns):
+            return
+        col_name = self._table_model._columns[col_idx]
         if col_name == "code":
             code = rows[index.row()].get("code", "")
             if code:
@@ -221,6 +235,20 @@ class DownloadView(QWidget):
                     api_url = ""
                 base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
                 webbrowser.open(f"{base}/reports/{code}")
+
+    def _on_check_changed(self):
+        selected = self._table_model.checked_rows()
+        count = len(selected)
+        self._analyze_selected_btn.setEnabled(count > 0)
+        self._analyze_selected_btn.setText(
+            f"Analyze Selected ({count})" if count else "Analyze Selected"
+        )
+
+    def _analyze_selected(self):
+        selected = self._table_model.checked_rows()
+        codes = [r["code"] for r in selected if r.get("code")]
+        if codes:
+            self._start_batch(codes)
 
     def _on_double_click(self, index: QModelIndex):
         rows = self._table_model._rows
