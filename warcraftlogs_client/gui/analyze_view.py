@@ -404,6 +404,8 @@ class AnalyzeView(QWidget):
                 "code": code,
                 "saved": "Yes" if code in cached else "",
             })
+            if len(display_rows) >= 50:
+                break
 
         self.guild_reports_model.set_data(
             display_rows,

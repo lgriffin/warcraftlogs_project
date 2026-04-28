@@ -180,36 +180,62 @@ class DPSTableModel(QAbstractTableModel):
 class HistoryTableModel(QAbstractTableModel):
     """Generic table model for history trend data (list of dicts)."""
 
-    def __init__(self, columns: list[str] = None, link_columns: set[str] = None, parent=None):
+    def __init__(self, columns: list[str] = None, link_columns: set[str] = None,
+                 checkable: bool = False, parent=None):
         super().__init__(parent)
         self._columns = columns or []
         self._rows: list[dict] = []
         self._link_columns = link_columns or set()
+        self._checkable = checkable
+        self._checked: set[int] = set()
 
     def set_data(self, rows: list[dict], columns: list[str] = None):
         self.beginResetModel()
         self._rows = rows
         if columns:
             self._columns = columns
+        self._checked.clear()
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._rows)
 
     def columnCount(self, parent=QModelIndex()):
-        return len(self._columns)
+        extra = 1 if self._checkable else 0
+        return len(self._columns) + extra
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            if self._checkable:
+                if section == 0:
+                    return ""
+                return self._columns[section - 1]
             return self._columns[section]
         return None
+
+    def flags(self, index):
+        base = super().flags(index)
+        if self._checkable and index.column() == 0:
+            return base | Qt.ItemFlag.ItemIsUserCheckable
+        return base
+
+    def checked_rows(self) -> list[dict]:
+        return [self._rows[i] for i in sorted(self._checked) if i < len(self._rows)]
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid() or index.row() >= len(self._rows):
             return None
 
+        if self._checkable and index.column() == 0:
+            if role == Qt.ItemDataRole.CheckStateRole:
+                return Qt.CheckState.Checked if index.row() in self._checked else Qt.CheckState.Unchecked
+            return None
+
         row = self._rows[index.row()]
-        col_key = self._columns[index.column()]
+        col_idx = index.column() - 1 if self._checkable else index.column()
+        if col_idx < 0 or col_idx >= len(self._columns):
+            return None
+        col_key = self._columns[col_idx]
 
         if role == Qt.ItemDataRole.DisplayRole:
             val = row.get(col_key, row.get(col_key.lower().replace(" ", "_"), ""))
@@ -234,6 +260,16 @@ class HistoryTableModel(QAbstractTableModel):
                 return _link_font()
 
         return None
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if self._checkable and index.column() == 0 and role == Qt.ItemDataRole.CheckStateRole:
+            if value == Qt.CheckState.Checked.value or value == Qt.CheckState.Checked:
+                self._checked.add(index.row())
+            else:
+                self._checked.discard(index.row())
+            self.dataChanged.emit(index, index, [role])
+            return True
+        return False
 
 
 def _link_color() -> QColor:
