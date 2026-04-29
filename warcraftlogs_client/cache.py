@@ -69,3 +69,25 @@ def save_response_cache(query: str, data: dict) -> None:
             json.dump(data, f)
     except OSError:
         pass
+
+
+WOWHEAD_CACHE_FILE = os.path.join(CACHE_DIR, "wowhead_names.json")
+
+
+def load_wowhead_cache() -> dict:
+    if os.path.exists(WOWHEAD_CACHE_FILE):
+        try:
+            with open(WOWHEAD_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"items": {}, "enchants": {}, "tooltips": {}}
+
+
+def save_wowhead_cache(cache: dict) -> None:
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    try:
+        with open(WOWHEAD_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f)
+    except OSError:
+        pass
