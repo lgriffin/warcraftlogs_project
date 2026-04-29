@@ -392,7 +392,8 @@ class RaidCrossAnalysisWidget(QWidget):
         if size_mode == 2 and rs <= 15:
             return False
         if self._zone:
-            if row.get("zone") != self._zone:
+            row_zone = row.get("zone")
+            if row_zone and row_zone != self._zone:
                 return False
         selected_day = self._day_combo.currentText()
         if selected_day != "Any Day":
