@@ -1313,7 +1313,7 @@ class PerformanceDB:
         params: list = [exclude_report_id]
         zone_clause = ""
         if zone:
-            zone_clause = "AND r.zone = ?"
+            zone_clause = "AND (r.zone = ? OR r.zone IS NULL)"
             params.append(zone)
         params.append(limit)
 
