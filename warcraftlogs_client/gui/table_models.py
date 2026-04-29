@@ -283,13 +283,12 @@ QUALITY_COLORS = {
 
 
 class GearTableModel(QAbstractTableModel):
-    COLUMNS = ["Slot", "Item", "iLvl", "Quality", "Enchant", "Gems"]
+    COLUMNS = ["Slot", "Item", "iLvl", "Quality", "Gems"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._items: list[GearItem] = []
         self._names: dict[int, str] = {}
-        self._enchant_names: dict[int, str] = {}
         self._tooltips: dict[int, str] = {}
 
     def set_data(self, items: list[GearItem]):
@@ -297,10 +296,9 @@ class GearTableModel(QAbstractTableModel):
         self._items = list(items)
         self.endResetModel()
 
-    def set_resolved(self, item_names: dict, enchant_names: dict, tooltips: dict):
+    def set_resolved(self, item_names: dict, tooltips: dict):
         self.beginResetModel()
         self._names = item_names
-        self._enchant_names = enchant_names
         self._tooltips = tooltips
         self.endResetModel()
 
@@ -328,10 +326,6 @@ class GearTableModel(QAbstractTableModel):
             if col == 2: return item.item_level if item.item_level else ""
             if col == 3: return item.quality_name
             if col == 4:
-                if item.enchant_id:
-                    return self._enchant_names.get(item.enchant_id, f"#{item.enchant_id}")
-                return ""
-            if col == 5:
                 if not item.gems:
                     return ""
                 return ", ".join(
@@ -352,11 +346,11 @@ class GearTableModel(QAbstractTableModel):
                 return QUALITY_COLORS.get(item.quality, _link_color())
             if col == 3:
                 return QUALITY_COLORS.get(item.quality, QColor("#eeeeee"))
-            if col in (4, 5):
+            if col == 4:
                 return _link_color()
 
         if role == Qt.ItemDataRole.FontRole:
-            if col in (1, 4, 5):
+            if col in (1, 4):
                 return _link_font()
 
         return None

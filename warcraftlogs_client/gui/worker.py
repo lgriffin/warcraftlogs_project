@@ -124,17 +124,16 @@ class CharacterProfileWorker(QThread):
 
 
 class WowheadResolverWorker(QThread):
-    """Resolves item/gem/enchant names and tooltips from Wowhead API with persistent caching."""
+    """Resolves item/gem names and tooltips from Wowhead API with persistent caching."""
 
     finished = Signal(dict)
 
     WOWHEAD_API = "https://nether.wowhead.com/tooltip"
     PARAMS = {"dataEnv": 5, "locale": 0}
 
-    def __init__(self, item_ids: list[int], enchant_ids: list[int], parent=None):
+    def __init__(self, item_ids: list[int], parent=None):
         super().__init__(parent)
         self.item_ids = item_ids
-        self.enchant_ids = enchant_ids
 
     def _resolve_item(self, item_id: int, cache: dict,
                       names: dict, tooltips: dict) -> bool:
@@ -167,7 +166,6 @@ class WowheadResolverWorker(QThread):
     def run(self):
         cache = load_wowhead_cache()
         item_names: dict[int, str] = {}
-        enchant_names: dict[int, str] = {}
         tooltips: dict[int, str] = {}
         dirty = False
 
@@ -175,35 +173,10 @@ class WowheadResolverWorker(QThread):
             if item_id:
                 dirty |= self._resolve_item(item_id, cache, item_names, tooltips)
 
-        for ench_id in self.enchant_ids:
-            if not ench_id:
-                continue
-            sid = str(ench_id)
-            if sid in cache["enchants"]:
-                enchant_names[ench_id] = cache["enchants"][sid]
-                continue
-            for endpoint in ("spell", "item"):
-                try:
-                    resp = requests.get(
-                        f"{self.WOWHEAD_API}/{endpoint}/{ench_id}",
-                        params=self.PARAMS, timeout=5,
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        name = data.get("name")
-                        if name:
-                            enchant_names[ench_id] = name
-                            cache["enchants"][sid] = name
-                            dirty = True
-                            break
-                except (requests.RequestException, ValueError, KeyError):
-                    continue
-
         if dirty:
             save_wowhead_cache(cache)
 
         self.finished.emit({
             "items": item_names,
-            "enchants": enchant_names,
             "tooltips": tooltips,
         })

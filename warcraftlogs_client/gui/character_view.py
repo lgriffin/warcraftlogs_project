@@ -723,9 +723,7 @@ class CharacterView(QWidget):
         if profile.gear_items:
             item_ids = [g.item_id for g in profile.gear_items if g.item_id]
             gem_ids = [gid for g in profile.gear_items for gid in g.gems if gid]
-            enchant_ids = [g.enchant_id for g in profile.gear_items if g.enchant_id]
-            self._wowhead_worker = WowheadResolverWorker(
-                item_ids + gem_ids, enchant_ids)
+            self._wowhead_worker = WowheadResolverWorker(item_ids + gem_ids)
             self._wowhead_worker.finished.connect(self._on_wowhead_resolved)
             self._wowhead_worker.start()
 
@@ -1031,16 +1029,11 @@ class CharacterView(QWidget):
         col = index.column()
         if col == 1 and item.item_id:
             webbrowser.open(self._wowhead_item_url(item.item_id))
-        elif col == 4 and item.enchant_id:
-            name = self._gear_model._enchant_names.get(item.enchant_id)
-            slug = f"/{self._wowhead_slug(name)}" if name else ""
-            webbrowser.open(f"https://www.wowhead.com/tbc/spell={item.enchant_id}{slug}")
-        elif col == 5 and item.gems:
+        elif col == 4 and item.gems:
             webbrowser.open(self._wowhead_item_url(item.gems[0]))
 
     def _on_wowhead_resolved(self, result: dict):
-        self._gear_model.set_resolved(
-            result["items"], result["enchants"], result["tooltips"])
+        self._gear_model.set_resolved(result["items"], result["tooltips"])
 
     def _on_report_double_clicked(self, index):
         item = self._reports_list.item(index.row())

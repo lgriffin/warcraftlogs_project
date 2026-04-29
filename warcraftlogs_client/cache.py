@@ -81,7 +81,7 @@ def load_wowhead_cache() -> dict:
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
-    return {"items": {}, "enchants": {}, "tooltips": {}}
+    return {"items": {}, "tooltips": {}}
 
 
 def save_wowhead_cache(cache: dict) -> None:
