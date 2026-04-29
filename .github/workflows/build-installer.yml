@@ -27,20 +27,38 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller warcraftlogs_analyzer.spec
 
+      - name: Create portable zip
+        run: Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath "dist\WarcraftLogsAnalyzer-${{ github.ref_name }}-portable.zip"
+
       - name: Build installer with Inno Setup
+        id: inno
+        continue-on-error: true
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.4
         with:
           path: installer.iss
 
-      - name: Upload installer artifact
+      - name: Generate SHA256 checksums
+        run: |
+          Get-ChildItem dist\*.zip, installer_output\*.exe -ErrorAction SilentlyContinue | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -Append -FilePath SHA256SUMS.txt -Encoding utf8
+          }
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: WarcraftLogsAnalyzer-Installer
-          path: installer_output/*.exe
+          name: WarcraftLogsAnalyzer
+          path: |
+            installer_output/*.exe
+            dist/*.zip
+            SHA256SUMS.txt
 
-      - name: Create GitHub Release
+      - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer_output/*.exe
+          files: |
+            installer_output/*.exe
+            dist/*.zip
+            SHA256SUMS.txt
           generate_release_notes: true
