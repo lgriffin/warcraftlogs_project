@@ -2,11 +2,11 @@
 
 [Setup]
 AppName=WarcraftLogs Analyzer
-AppVersion=3.2.1
+AppVersion=3.4.0
 AppPublisher=WarcraftLogs Analyzer
 DefaultDirName={autopf}\WarcraftLogs Analyzer
 DefaultGroupName=WarcraftLogs Analyzer
-OutputBaseFilename=WarcraftLogsAnalyzer-3.2.1-Setup
+OutputBaseFilename=WarcraftLogsAnalyzer-3.4.0-Setup
 OutputDir=installer_output
 Compression=lzma2
 SolidCompression=yes
