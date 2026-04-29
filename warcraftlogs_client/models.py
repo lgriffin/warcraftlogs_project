@@ -233,9 +233,12 @@ class GearItem:
     def quality_name(self) -> str:
         return QUALITY_NAMES.get(self.quality, "Unknown")
 
-    @property
-    def wowhead_url(self) -> str:
-        return f"https://www.wowhead.com/classic/item={self.item_id}" if self.item_id else ""
+    def wowhead_url(self, name: str = "") -> str:
+        if not self.item_id:
+            return ""
+        import re
+        slug = "/" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") if name else ""
+        return f"https://www.wowhead.com/tbc/item={self.item_id}{slug}"
 
 WOW_CLASS_NAMES = {
     1: "Death Knight", 2: "Druid", 3: "Hunter", 4: "Mage",

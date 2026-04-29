@@ -9,6 +9,7 @@ import requests
 from PySide6.QtCore import QThread, Signal
 
 from ..auth import TokenManager
+from ..cache import load_wowhead_cache, save_wowhead_cache
 from ..client import WarcraftLogsClient
 from ..common.errors import WarcraftLogsError
 from ..config import load_config
@@ -122,31 +123,60 @@ class CharacterProfileWorker(QThread):
             self.error.emit(str(e))
 
 
-class ItemNameWorker(QThread):
-    """Resolves item names from Wowhead tooltip API in a background thread."""
+class WowheadResolverWorker(QThread):
+    """Resolves item/gem names and tooltips from Wowhead API with persistent caching."""
 
     finished = Signal(dict)
+
+    WOWHEAD_API = "https://nether.wowhead.com/tooltip"
+    PARAMS = {"dataEnv": 5, "locale": 0}
 
     def __init__(self, item_ids: list[int], parent=None):
         super().__init__(parent)
         self.item_ids = item_ids
 
+    def _resolve_item(self, item_id: int, cache: dict,
+                      names: dict, tooltips: dict) -> bool:
+        sid = str(item_id)
+        if sid in cache["items"]:
+            names[item_id] = cache["items"][sid]
+            if sid in cache["tooltips"]:
+                tooltips[item_id] = cache["tooltips"][sid]
+            return False
+        try:
+            resp = requests.get(
+                f"{self.WOWHEAD_API}/item/{item_id}",
+                params=self.PARAMS, timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                name = data.get("name")
+                if name:
+                    names[item_id] = name
+                    cache["items"][sid] = name
+                    tooltip_html = data.get("tooltip")
+                    if tooltip_html:
+                        tooltips[item_id] = tooltip_html
+                        cache["tooltips"][sid] = tooltip_html
+                    return True
+        except (requests.RequestException, ValueError, KeyError):
+            pass
+        return False
+
     def run(self):
-        names = {}
+        cache = load_wowhead_cache()
+        item_names: dict[int, str] = {}
+        tooltips: dict[int, str] = {}
+        dirty = False
+
         for item_id in self.item_ids:
-            if not item_id:
-                continue
-            try:
-                resp = requests.get(
-                    f"https://nether.wowhead.com/tooltip/item/{item_id}",
-                    params={"dataEnv": 5, "locale": 0},
-                    timeout=5,
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    name = data.get("name")
-                    if name:
-                        names[item_id] = name
-            except (requests.RequestException, ValueError, KeyError):
-                continue
-        self.finished.emit(names)
+            if item_id:
+                dirty |= self._resolve_item(item_id, cache, item_names, tooltips)
+
+        if dirty:
+            save_wowhead_cache(cache)
+
+        self.finished.emit({
+            "items": item_names,
+            "tooltips": tooltips,
+        })

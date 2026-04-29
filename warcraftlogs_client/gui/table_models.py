@@ -283,21 +283,23 @@ QUALITY_COLORS = {
 
 
 class GearTableModel(QAbstractTableModel):
-    COLUMNS = ["Slot", "Item ID", "iLvl", "Quality", "Enchant", "Gems"]
+    COLUMNS = ["Slot", "Item", "iLvl", "Quality", "Gems"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._items: list[GearItem] = []
         self._names: dict[int, str] = {}
+        self._tooltips: dict[int, str] = {}
 
     def set_data(self, items: list[GearItem]):
         self.beginResetModel()
         self._items = list(items)
         self.endResetModel()
 
-    def set_item_names(self, names: dict[int, str]):
+    def set_resolved(self, item_names: dict, tooltips: dict):
         self.beginResetModel()
-        self._names = names
+        self._names = item_names
+        self._tooltips = tooltips
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -323,8 +325,16 @@ class GearTableModel(QAbstractTableModel):
             if col == 1: return self._names.get(item.item_id, f"#{item.item_id}")
             if col == 2: return item.item_level if item.item_level else ""
             if col == 3: return item.quality_name
-            if col == 4: return f"#{item.enchant_id}" if item.enchant_id else ""
-            if col == 5: return f"{len(item.gems)} gem(s)" if item.gems else ""
+            if col == 4:
+                if not item.gems:
+                    return ""
+                return ", ".join(
+                    self._names.get(gid, f"#{gid}") for gid in item.gems
+                )
+
+        if role == Qt.ItemDataRole.ToolTipRole:
+            if col == 1 and item.item_id in self._tooltips:
+                return self._tooltips[item.item_id]
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             if col == 2:
@@ -336,9 +346,11 @@ class GearTableModel(QAbstractTableModel):
                 return QUALITY_COLORS.get(item.quality, _link_color())
             if col == 3:
                 return QUALITY_COLORS.get(item.quality, QColor("#eeeeee"))
+            if col == 4:
+                return _link_color()
 
         if role == Qt.ItemDataRole.FontRole:
-            if col == 1:
+            if col in (1, 4):
                 return _link_font()
 
         return None

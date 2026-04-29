@@ -20,7 +20,7 @@ from PySide6.QtGui import QFont, QColor
 from .styles import COMMON_STYLES, COLORS
 from .charts import SpiderChartWidget, CalendarHeatmapWidget
 from .table_models import HistoryTableModel, GearTableModel
-from .worker import CharacterProfileWorker, ItemNameWorker
+from .worker import CharacterProfileWorker, WowheadResolverWorker
 from .charts import (
     build_healer_chart, build_healer_overheal_chart,
     build_tank_chart, build_tank_mitigation_chart,
@@ -392,6 +392,7 @@ class CharacterView(QWidget):
         self._gear_table.setStyleSheet(
             f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         self._gear_table.setMaximumHeight(400)
+        self._gear_table.setMouseTracking(True)
         self._gear_table.clicked.connect(self._on_gear_clicked)
 
         self._gear_section.content_layout().addWidget(self._gear_table)
@@ -721,9 +722,10 @@ class CharacterView(QWidget):
         self._gear_model.set_data(profile.gear_items)
         if profile.gear_items:
             item_ids = [g.item_id for g in profile.gear_items if g.item_id]
-            self._item_name_worker = ItemNameWorker(item_ids)
-            self._item_name_worker.finished.connect(self._on_item_names_loaded)
-            self._item_name_worker.start()
+            gem_ids = [gid for g in profile.gear_items for gid in g.gems if gid]
+            self._wowhead_worker = WowheadResolverWorker(item_ids + gem_ids)
+            self._wowhead_worker.finished.connect(self._on_wowhead_resolved)
+            self._wowhead_worker.start()
 
         self._load_local_performance(profile.name)
         self._load_trends(profile.name)
@@ -1010,17 +1012,28 @@ class CharacterView(QWidget):
         if name:
             self.view_character_history.emit(name)
 
+    @staticmethod
+    def _wowhead_slug(name: str) -> str:
+        import re
+        return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+    def _wowhead_item_url(self, item_id: int) -> str:
+        name = self._gear_model._names.get(item_id)
+        slug = f"/{self._wowhead_slug(name)}" if name else ""
+        return f"https://www.wowhead.com/tbc/item={item_id}{slug}"
+
     def _on_gear_clicked(self, index: QModelIndex):
-        if index.column() != 1:
-            return
         if index.row() >= len(self._gear_model._items):
             return
         item = self._gear_model._items[index.row()]
-        if item.item_id:
-            webbrowser.open(f"https://www.wowhead.com/classic/item={item.item_id}")
+        col = index.column()
+        if col == 1 and item.item_id:
+            webbrowser.open(self._wowhead_item_url(item.item_id))
+        elif col == 4 and item.gems:
+            webbrowser.open(self._wowhead_item_url(item.gems[0]))
 
-    def _on_item_names_loaded(self, names: dict):
-        self._gear_model.set_item_names(names)
+    def _on_wowhead_resolved(self, result: dict):
+        self._gear_model.set_resolved(result["items"], result["tooltips"])
 
     def _on_report_double_clicked(self, index):
         item = self._reports_list.item(index.row())
