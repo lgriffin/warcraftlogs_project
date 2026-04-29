@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from PySide6.QtCharts import (
     QChart, QChartView, QLineSeries, QValueAxis, QDateTimeAxis,
 )
-from PySide6.QtCore import Qt, QDateTime, QPointF, QMargins, QRectF
+from PySide6.QtCore import Qt, QDateTime, QPointF, QMargins, QRectF, Signal
 from PySide6.QtGui import QPen, QColor, QPainter, QFont, QBrush, QPainterPath
 from PySide6.QtWidgets import QWidget, QToolTip
 
@@ -428,6 +428,164 @@ class SpiderChartWidget(QWidget):
                 QToolTip.showText(
                     event.globalPosition().toPoint(),
                     f"<b>{key.title()}: {val}/100</b><br>{desc}",
+                    self,
+                )
+                return
+        QToolTip.hideText()
+
+
+# ── Comparison Spider Chart ──
+
+
+class ComparisonSpiderChart(QWidget):
+    """Radar chart with multiple overlaid character datasets and clickable legend."""
+
+    character_removed = Signal(str)
+
+    LABELS = SpiderChartWidget.LABELS
+    KEYS = SpiderChartWidget.KEYS
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._datasets: dict[str, dict] = {}
+        self._legend_rects: list[tuple[QRectF, str]] = []
+        self.setMinimumHeight(350)
+        self.setMinimumWidth(350)
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def set_datasets(self, datasets: dict[str, dict]):
+        self._datasets = dict(datasets)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+        legend_width = 160
+        chart_w = w - legend_width
+        cx, cy = chart_w / 2, h / 2
+        radius = min(chart_w, h) / 2 - 40
+        n = len(self.LABELS)
+        angles = [2 * math.pi * i / n - math.pi / 2 for i in range(n)]
+
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        grid_pen = QPen(QColor(COLORS["border"]))
+        grid_pen.setWidth(1)
+        painter.setPen(grid_pen)
+
+        for ring in [0.25, 0.5, 0.75, 1.0]:
+            path = QPainterPath()
+            r = radius * ring
+            for i, angle in enumerate(angles):
+                x = cx + r * math.cos(angle)
+                y = cy + r * math.sin(angle)
+                if i == 0:
+                    path.moveTo(x, y)
+                else:
+                    path.lineTo(x, y)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        for angle in angles:
+            painter.drawLine(
+                QPointF(cx, cy),
+                QPointF(cx + radius * math.cos(angle),
+                        cy + radius * math.sin(angle)))
+
+        label_font = QFont("Segoe UI", 9)
+        painter.setFont(label_font)
+        painter.setPen(QColor(COLORS["text"]))
+        fm = painter.fontMetrics()
+
+        for i, (angle, label) in enumerate(zip(angles, self.LABELS)):
+            tw = fm.horizontalAdvance(label)
+            th = fm.height()
+            lx = cx + (radius + 20) * math.cos(angle) - tw / 2
+            ly = cy + (radius + 20) * math.sin(angle) + th / 4
+            painter.drawText(QPointF(lx, ly), label)
+
+        names = list(self._datasets.keys())
+        for idx, name in enumerate(names):
+            data = self._datasets[name]
+            color = SERIES_COLORS[idx % len(SERIES_COLORS)]
+            values = [data.get(k, 0) / 100.0 for k in self.KEYS]
+            if not any(v > 0 for v in values):
+                continue
+
+            fill_path = QPainterPath()
+            for i, (angle, val) in enumerate(zip(angles, values)):
+                r = radius * max(val, 0.02)
+                x = cx + r * math.cos(angle)
+                y = cy + r * math.sin(angle)
+                if i == 0:
+                    fill_path.moveTo(x, y)
+                else:
+                    fill_path.lineTo(x, y)
+            fill_path.closeSubpath()
+
+            fill_color = QColor(color)
+            fill_color.setAlpha(40)
+            painter.setBrush(QBrush(fill_color))
+            border_pen = QPen(color)
+            border_pen.setWidth(2)
+            painter.setPen(border_pen)
+            painter.drawPath(fill_path)
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+            for i, (angle, val) in enumerate(zip(angles, values)):
+                r = radius * max(val, 0.02)
+                x = cx + r * math.cos(angle)
+                y = cy + r * math.sin(angle)
+                painter.drawEllipse(QPointF(x, y), 4, 4)
+
+        self._legend_rects = []
+        legend_x = chart_w + 10
+        legend_y = 20
+        legend_font = QFont("Segoe UI", 10)
+        painter.setFont(legend_font)
+        lfm = painter.fontMetrics()
+
+        for idx, name in enumerate(names):
+            color = SERIES_COLORS[idx % len(SERIES_COLORS)]
+            entry_y = legend_y + idx * 28
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+            painter.drawRect(int(legend_x), int(entry_y), 14, 14)
+
+            painter.setPen(QColor(COLORS["text"]))
+            text_x = legend_x + 20
+            text_y = entry_y + 12
+            painter.drawText(QPointF(text_x, text_y), name)
+
+            tw = lfm.horizontalAdvance(name)
+            rect = QRectF(legend_x, entry_y - 2, 20 + tw + 4, 20)
+            self._legend_rects.append((rect, name))
+
+            remove_x = legend_x + 24 + tw
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.drawText(QPointF(remove_x, text_y), "  x")
+
+        painter.end()
+
+    def mousePressEvent(self, event):
+        pos = event.position()
+        for rect, name in self._legend_rects:
+            if rect.adjusted(0, 0, 30, 0).contains(pos):
+                self.character_removed.emit(name)
+                return
+
+    def mouseMoveEvent(self, event):
+        pos = event.position()
+        for rect, name in self._legend_rects:
+            if rect.adjusted(0, 0, 30, 0).contains(pos):
+                QToolTip.showText(
+                    event.globalPosition().toPoint(),
+                    f"Click to remove {name}",
                     self,
                 )
                 return

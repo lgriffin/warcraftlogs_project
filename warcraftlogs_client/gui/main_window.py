@@ -17,6 +17,7 @@ from .download_view import DownloadView
 from .raids_view import RaidsView
 from .raid_group_view import RaidGroupView
 from .character_view import CharacterView
+from .compare_view import CompareView
 from .settings_view import SettingsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
@@ -27,8 +28,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("WarcraftLogs Analyzer")
-        self.setMinimumSize(1100, 700)
-        self.resize(1300, 800)
+        self.setMinimumSize(1200, 800)
+        self.resize(1500, 950)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow):
             ("Raids", "Browse analyzed raids"),
             ("Raid Groups", "Manage raid groups and compare classes"),
             ("My Character", "View your character profile and rankings"),
+            ("Compare", "Compare character stats and radar overlays"),
             ("Settings", "Configure credentials and thresholds"),
         ]
         for name, tooltip in nav_items:
@@ -139,14 +141,16 @@ class MainWindow(QMainWindow):
         self.raids_view = RaidsView()
         self.raid_group_view = RaidGroupView()
         self.character_view = CharacterView()
+        self.compare_view = CompareView()
         self.settings_view = SettingsView()
 
         self.stack.addWidget(self.download_view)
         self.stack.addWidget(self.raids_view)
         self.stack.addWidget(self.raid_group_view)
         self.stack.addWidget(self.character_view)
+        self.stack.addWidget(self.compare_view)
         self.stack.addWidget(self.settings_view)
-        self.stack.set_base_count(5)
+        self.stack.set_base_count(6)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
@@ -177,6 +181,7 @@ class MainWindow(QMainWindow):
         self.character_view.status_message.connect(self.status_bar.showMessage)
         self.character_view.analyze_report.connect(self._analyze_report)
         self.character_view.view_character_history.connect(self._drill_into_character_history)
+        self.compare_view.status_message.connect(self.status_bar.showMessage)
         self.settings_view.status_message.connect(self._on_settings_saved)
 
         self._load_guild_info()
