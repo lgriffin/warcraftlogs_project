@@ -1257,6 +1257,126 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # ── Cross-analysis queries ──
+
+    def get_raid_aggregate_stats(self, report_id: str) -> dict | None:
+        conn = self._get_conn()
+        raid = conn.execute(
+            "SELECT id, report_id, title, raid_date, start_time, end_time, raid_size FROM raids WHERE report_id = ?",
+            (report_id,),
+        ).fetchone()
+        if not raid:
+            return None
+        raid_id = raid["id"]
+
+        total_healing = conn.execute(
+            "SELECT COALESCE(SUM(total_healing), 0) as val FROM healer_performance WHERE raid_id = ?",
+            (raid_id,),
+        ).fetchone()["val"]
+
+        total_damage = conn.execute(
+            "SELECT COALESCE(SUM(total_damage), 0) as val FROM dps_performance WHERE raid_id = ?",
+            (raid_id,),
+        ).fetchone()["val"]
+
+        total_damage_taken = conn.execute(
+            "SELECT COALESCE(SUM(total_damage_taken), 0) as val FROM tank_performance WHERE raid_id = ?",
+            (raid_id,),
+        ).fetchone()["val"]
+
+        duration_ms = (raid["end_time"] - raid["start_time"]) if raid["end_time"] and raid["start_time"] else 0
+        return {
+            "report_id": raid["report_id"],
+            "title": raid["title"],
+            "raid_date": raid["raid_date"],
+            "raid_size": raid["raid_size"],
+            "duration_ms": duration_ms,
+            "total_healing": total_healing,
+            "total_damage": total_damage,
+            "total_damage_taken": total_damage_taken,
+        }
+
+    def get_historical_raid_aggregates(self, raid_size_mode: int, exclude_report_id: str, limit: int = 50) -> list[dict]:
+        conn = self._get_conn()
+        if raid_size_mode == 1:
+            size_clause = "AND r.raid_size <= 15"
+        elif raid_size_mode == 2:
+            size_clause = "AND r.raid_size > 15"
+        else:
+            size_clause = ""
+
+        rows = conn.execute(
+            f"""SELECT r.report_id, r.title, r.raid_date, r.start_time, r.end_time, r.raid_size,
+                       COALESCE((SELECT SUM(hp.total_healing) FROM healer_performance hp WHERE hp.raid_id = r.id), 0) as total_healing,
+                       COALESCE((SELECT SUM(dp.total_damage) FROM dps_performance dp WHERE dp.raid_id = r.id), 0) as total_damage,
+                       COALESCE((SELECT SUM(tp.total_damage_taken) FROM tank_performance tp WHERE tp.raid_id = r.id), 0) as total_damage_taken
+                FROM raids r
+                WHERE r.report_id != ? {size_clause} AND r.raid_size IS NOT NULL
+                ORDER BY r.raid_date ASC
+                LIMIT ?""",
+            (exclude_report_id, limit),
+        ).fetchall()
+
+        results = []
+        for r in rows:
+            duration_ms = (r["end_time"] - r["start_time"]) if r["end_time"] and r["start_time"] else 0
+            results.append({
+                "report_id": r["report_id"],
+                "title": r["title"],
+                "raid_date": r["raid_date"],
+                "raid_size": r["raid_size"],
+                "duration_ms": duration_ms,
+                "total_healing": r["total_healing"],
+                "total_damage": r["total_damage"],
+                "total_damage_taken": r["total_damage_taken"],
+            })
+        return results
+
+    def get_player_performance_for_raid(self, report_id: str) -> list[dict]:
+        conn = self._get_conn()
+        raid = conn.execute("SELECT id FROM raids WHERE report_id = ?", (report_id,)).fetchone()
+        if not raid:
+            return []
+        raid_id = raid["id"]
+        results = []
+
+        for r in conn.execute(
+            """SELECT c.name, c.player_class, hp.total_healing, hp.overheal_percent
+               FROM healer_performance hp
+               JOIN characters c ON c.id = hp.character_id
+               WHERE hp.raid_id = ?""", (raid_id,),
+        ).fetchall():
+            results.append({
+                "name": r["name"], "player_class": r["player_class"],
+                "role": "healer", "total_healing": r["total_healing"],
+                "overheal_percent": r["overheal_percent"],
+            })
+
+        for r in conn.execute(
+            """SELECT c.name, c.player_class, tp.total_damage_taken, tp.mitigation_percent
+               FROM tank_performance tp
+               JOIN characters c ON c.id = tp.character_id
+               WHERE tp.raid_id = ?""", (raid_id,),
+        ).fetchall():
+            results.append({
+                "name": r["name"], "player_class": r["player_class"],
+                "role": "tank", "total_damage_taken": r["total_damage_taken"],
+                "mitigation_percent": r["mitigation_percent"],
+            })
+
+        for r in conn.execute(
+            """SELECT c.name, c.player_class, dp.role as sub_role, dp.total_damage
+               FROM dps_performance dp
+               JOIN characters c ON c.id = dp.character_id
+               WHERE dp.raid_id = ?""", (raid_id,),
+        ).fetchall():
+            results.append({
+                "name": r["name"], "player_class": r["player_class"],
+                "role": r["sub_role"], "total_damage": r["total_damage"],
+            })
+
+        return results
+
     def clear_all(self) -> None:
         """Delete all data from the database."""
         conn = self._get_conn()

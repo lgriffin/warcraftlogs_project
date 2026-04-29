@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from PySide6.QtCharts import (
-    QChart, QChartView, QLineSeries, QValueAxis, QDateTimeAxis,
+    QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QDateTimeAxis,
 )
 from PySide6.QtCore import Qt, QDateTime, QPointF, QMargins, QRectF, Signal
 from PySide6.QtGui import QPen, QColor, QPainter, QFont, QBrush, QPainterPath
@@ -777,6 +777,74 @@ def build_group_performance_chart(trend_data: list[dict]) -> QChartView:
         y2.setRange(0, max_m + 2)
         y2.setLabelFormat("%d")
         _add_series(chart, members_pts, "Members Present", 3, x_axis, y2)
+
+    return make_chart_view(chart)
+
+
+def build_raid_trend_chart(historical: list[dict], selected: dict,
+                           value_key: str, title: str, y_label: str) -> QChartView:
+    chart = _make_chart(title)
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText(y_label)
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    hist_points = []
+    for row in historical:
+        date_str = row.get("raid_date", "")
+        val = row.get(value_key, 0) or 0
+        try:
+            dt = datetime.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            continue
+        hist_points.append((dt, float(val)))
+
+    sel_val = selected.get(value_key, 0) or 0
+    try:
+        sel_dt = datetime.fromisoformat(selected.get("raid_date", ""))
+        sel_point = (sel_dt, float(sel_val))
+    except (ValueError, TypeError):
+        sel_point = None
+
+    all_pts = list(hist_points)
+    if sel_point:
+        all_pts.append(sel_point)
+    _fit_axes(x_axis, y_axis, all_pts)
+
+    if hist_points:
+        _add_series(chart, hist_points, "Historical", 1, x_axis, y_axis)
+
+        avg_val = sum(v for _, v in hist_points) / len(hist_points)
+        avg_series = QLineSeries()
+        avg_series.setName(f"Avg ({avg_val:,.0f})")
+        pen = QPen(QColor(COLORS["text_dim"]))
+        pen.setWidth(1)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        avg_series.setPen(pen)
+        dates = [d for d, _ in hist_points]
+        avg_series.append(QPointF(QDateTime(min(dates)).toMSecsSinceEpoch(), avg_val))
+        avg_series.append(QPointF(QDateTime(max(dates)).toMSecsSinceEpoch(), avg_val))
+        chart.addSeries(avg_series)
+        avg_series.attachAxis(x_axis)
+        avg_series.attachAxis(y_axis)
+
+    if sel_point:
+        scatter = QScatterSeries()
+        scatter.setName("This Raid")
+        scatter.setMarkerSize(12)
+        scatter.setColor(QColor("#e94560"))
+        scatter.setBorderColor(QColor("#e94560"))
+        ms = QDateTime(sel_point[0]).toMSecsSinceEpoch()
+        scatter.append(QPointF(ms, sel_point[1]))
+        chart.addSeries(scatter)
+        scatter.attachAxis(x_axis)
+        scatter.attachAxis(y_axis)
 
     return make_chart_view(chart)
 

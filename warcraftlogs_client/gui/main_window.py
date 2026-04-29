@@ -206,6 +206,14 @@ class MainWindow(QMainWindow):
         widget.request_back.connect(self.stack.pop_view)
         widget.navigate_to_character.connect(self._drill_into_character_history)
         widget.raid_deleted.connect(self._on_raid_deleted)
+        widget.cross_analyze.connect(self._drill_into_cross_analysis)
+        self.stack.push_view(widget)
+
+    def _drill_into_cross_analysis(self, report_id: str):
+        from .raid_cross_analysis_widget import RaidCrossAnalysisWidget
+        widget = RaidCrossAnalysisWidget(report_id)
+        widget.status_message.connect(self.status_bar.showMessage)
+        widget.request_back.connect(self.stack.pop_view)
         self.stack.push_view(widget)
 
     def _drill_into_character_history(self, name: str):
