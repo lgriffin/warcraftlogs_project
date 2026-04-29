@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.nav_list)
         sidebar_layout.addStretch()
 
-        version_label = QLabel("v3.4.0")
+        version_label = QLabel("v3.5.0")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("color: #555; padding: 10px; font-size: 11px;")
         sidebar_layout.addWidget(version_label)
@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         widget = RaidCrossAnalysisWidget(report_id)
         widget.status_message.connect(self.status_bar.showMessage)
         widget.request_back.connect(self.stack.pop_view)
+        widget.open_raid.connect(self._drill_into_raid)
         self.stack.push_view(widget)
 
     def _drill_into_character_history(self, name: str):

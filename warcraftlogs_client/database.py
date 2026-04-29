@@ -197,6 +197,8 @@ class PerformanceDB:
         raid_cols = {row[1] for row in conn.execute("PRAGMA table_info(raids)").fetchall()}
         if "raid_size" not in raid_cols:
             conn.execute("ALTER TABLE raids ADD COLUMN raid_size INTEGER DEFAULT NULL")
+        if "zone" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN zone TEXT DEFAULT NULL")
 
         conn.execute("""
             UPDATE raids SET raid_size = (
@@ -274,12 +276,13 @@ class PerformanceDB:
         conn = self._get_conn()
         raid_date = metadata.date.strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
-            """INSERT INTO raids (report_id, title, owner, raid_date, start_time, end_time)
-               VALUES (?, ?, ?, ?, ?, ?)
+            """INSERT INTO raids (report_id, title, owner, raid_date, start_time, end_time, zone)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(report_id) DO UPDATE SET
-                   title = excluded.title""",
+                   title = excluded.title,
+                   zone = COALESCE(excluded.zone, raids.zone)""",
             (metadata.report_id, metadata.title, metadata.owner, raid_date,
-             metadata.start_time, metadata.end_time),
+             metadata.start_time, metadata.end_time, metadata.zone),
         )
         cursor = conn.execute("SELECT id FROM raids WHERE report_id = ?", (metadata.report_id,))
         return cursor.fetchone()["id"]
@@ -494,7 +497,7 @@ class PerformanceDB:
         """Get healing performance over time for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       hp.total_healing, hp.total_overhealing, hp.overheal_percent,
                       hp.fear_ward_casts, hp.total_dispels
                FROM healer_performance hp
@@ -511,7 +514,7 @@ class PerformanceDB:
         """Get tank performance over time for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       tp.total_damage_taken, tp.total_mitigated, tp.mitigation_percent
                FROM tank_performance tp
                JOIN characters c ON c.id = tp.character_id
@@ -527,7 +530,7 @@ class PerformanceDB:
         """Get DPS performance over time for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       dp.role, dp.total_damage
                FROM dps_performance dp
                JOIN characters c ON c.id = dp.character_id
@@ -543,7 +546,7 @@ class PerformanceDB:
         """Get per-spell healing data across raids for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.raid_size,
+            """SELECT r.raid_date, r.title, r.raid_size, r.zone,
                       hs.spell_name, hs.casts, hs.total_healing
                FROM healer_spells hs
                JOIN healer_performance hp ON hp.id = hs.healer_performance_id
@@ -560,7 +563,7 @@ class PerformanceDB:
         """Get per-ability damage data across raids for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.raid_size,
+            """SELECT r.raid_date, r.title, r.raid_size, r.zone,
                       da.spell_name, da.casts, da.total_damage
                FROM dps_abilities da
                JOIN dps_performance dp ON dp.id = da.dps_performance_id
@@ -577,7 +580,7 @@ class PerformanceDB:
         """Get consumable usage over time for a character (all rows, for charting)."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       cu.consumable_name, cu.count
                FROM consumable_usage cu
                JOIN characters c ON c.id = cu.character_id
@@ -1262,7 +1265,7 @@ class PerformanceDB:
     def get_raid_aggregate_stats(self, report_id: str) -> dict | None:
         conn = self._get_conn()
         raid = conn.execute(
-            "SELECT id, report_id, title, raid_date, start_time, end_time, raid_size FROM raids WHERE report_id = ?",
+            "SELECT id, report_id, title, raid_date, start_time, end_time, raid_size, zone FROM raids WHERE report_id = ?",
             (report_id,),
         ).fetchone()
         if not raid:
@@ -1290,13 +1293,15 @@ class PerformanceDB:
             "title": raid["title"],
             "raid_date": raid["raid_date"],
             "raid_size": raid["raid_size"],
+            "zone": raid["zone"],
             "duration_ms": duration_ms,
             "total_healing": total_healing,
             "total_damage": total_damage,
             "total_damage_taken": total_damage_taken,
         }
 
-    def get_historical_raid_aggregates(self, raid_size_mode: int, exclude_report_id: str, limit: int = 50) -> list[dict]:
+    def get_historical_raid_aggregates(self, raid_size_mode: int, exclude_report_id: str,
+                                       zone: str | None = None, limit: int = 50) -> list[dict]:
         conn = self._get_conn()
         if raid_size_mode == 1:
             size_clause = "AND r.raid_size <= 15"
@@ -1305,16 +1310,23 @@ class PerformanceDB:
         else:
             size_clause = ""
 
+        params: list = [exclude_report_id]
+        zone_clause = ""
+        if zone:
+            zone_clause = "AND r.zone = ?"
+            params.append(zone)
+        params.append(limit)
+
         rows = conn.execute(
-            f"""SELECT r.report_id, r.title, r.raid_date, r.start_time, r.end_time, r.raid_size,
+            f"""SELECT r.report_id, r.title, r.raid_date, r.start_time, r.end_time, r.raid_size, r.zone,
                        COALESCE((SELECT SUM(hp.total_healing) FROM healer_performance hp WHERE hp.raid_id = r.id), 0) as total_healing,
                        COALESCE((SELECT SUM(dp.total_damage) FROM dps_performance dp WHERE dp.raid_id = r.id), 0) as total_damage,
                        COALESCE((SELECT SUM(tp.total_damage_taken) FROM tank_performance tp WHERE tp.raid_id = r.id), 0) as total_damage_taken
                 FROM raids r
-                WHERE r.report_id != ? {size_clause} AND r.raid_size IS NOT NULL
+                WHERE r.report_id != ? {size_clause} {zone_clause} AND r.raid_size IS NOT NULL
                 ORDER BY r.raid_date ASC
                 LIMIT ?""",
-            (exclude_report_id, limit),
+            params,
         ).fetchall()
 
         results = []
@@ -1325,6 +1337,7 @@ class PerformanceDB:
                 "title": r["title"],
                 "raid_date": r["raid_date"],
                 "raid_size": r["raid_size"],
+                "zone": r["zone"],
                 "duration_ms": duration_ms,
                 "total_healing": r["total_healing"],
                 "total_damage": r["total_damage"],
