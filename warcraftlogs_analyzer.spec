@@ -30,6 +30,7 @@ a = Analysis(
         "warcraftlogs_client.gui.raid_analysis_widget",
         "warcraftlogs_client.gui.raid_list_widget",
         "warcraftlogs_client.gui.character_history_widget",
+        "warcraftlogs_client.gui.raid_cross_analysis_widget",
         "warcraftlogs_client.gui.charts",
         "warcraftlogs_client.gui.detail_panel",
         "warcraftlogs_client.gui.table_models",

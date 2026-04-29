@@ -50,6 +50,7 @@ class RaidAnalysisWidget(QWidget):
     navigate_to_character = Signal(str)
     request_back = Signal()
     raid_deleted = Signal(str)
+    cross_analyze = Signal(str)
 
     def __init__(self, analysis: RaidAnalysis, show_back: bool = True,
                  show_delete: bool = True, parent=None):
@@ -91,6 +92,12 @@ class RaidAnalysisWidget(QWidget):
         export_btn.setFixedHeight(32)
         export_btn.clicked.connect(self._export_markdown)
         header_layout.addWidget(export_btn)
+
+        cross_btn = QPushButton("Cross-Analyze")
+        cross_btn.setProperty("secondary", True)
+        cross_btn.setFixedHeight(32)
+        cross_btn.clicked.connect(lambda: self.cross_analyze.emit(self._analysis.metadata.report_id))
+        header_layout.addWidget(cross_btn)
 
         if self._show_delete:
             delete_btn = QPushButton("Delete")

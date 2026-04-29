@@ -251,6 +251,154 @@ def _render_dps_summary_tables(all_dps: list[DPSPerformance], role: str) -> str:
     return "\n".join(lines)
 
 
+def render_cross_analysis(raid_stats: dict, historical: list[dict],
+                          player_deltas: list[dict], size_label: str) -> str:
+    lines = [
+        f"# Cross-Analysis: {raid_stats['title']}",
+        "",
+        f"- **Date:** {raid_stats.get('raid_date', '')[:10]}",
+        f"- **Raid Size:** {size_label}",
+        f"- **Compared Against:** {len(historical)} raids",
+        "",
+    ]
+
+    if historical:
+        def _fmt(val):
+            if val is None:
+                return "N/A"
+            if abs(val) >= 1_000_000:
+                return f"{val / 1_000_000:.1f}M"
+            if abs(val) >= 1_000:
+                return f"{val / 1_000:.1f}K"
+            return f"{val:,.0f}"
+
+        def _dur(ms):
+            if not ms or ms <= 0:
+                return "N/A"
+            s = ms / 1000
+            h = int(s // 3600)
+            m = int((s % 3600) // 60)
+            return f"{h}h {m}m" if h else f"{m}m"
+
+        def _pct(cur, avg):
+            if not avg:
+                return "—"
+            p = (cur - avg) / avg * 100
+            return f"{p:+.1f}%"
+
+        avg_dur = sum(h["duration_ms"] for h in historical) / len(historical)
+        avg_dmg = sum(h["total_damage"] for h in historical) / len(historical)
+        avg_hps = sum(h["total_healing"] for h in historical) / len(historical)
+        avg_taken = sum(h["total_damage_taken"] for h in historical) / len(historical)
+
+        lines.extend([
+            "## Raid Summary",
+            "",
+            "| Metric | This Raid | Historical Avg | Change |",
+            "| --- | --- | --- | --- |",
+            f"| Duration | {_dur(raid_stats['duration_ms'])} | {_dur(avg_dur)} | {_pct(raid_stats['duration_ms'], avg_dur)} |",
+            f"| Total Damage | {_fmt(raid_stats['total_damage'])} | {_fmt(avg_dmg)} | {_pct(raid_stats['total_damage'], avg_dmg)} |",
+            f"| Total Healing | {_fmt(raid_stats['total_healing'])} | {_fmt(avg_hps)} | {_pct(raid_stats['total_healing'], avg_hps)} |",
+            f"| Damage Taken | {_fmt(raid_stats['total_damage_taken'])} | {_fmt(avg_taken)} | {_pct(raid_stats['total_damage_taken'], avg_taken)} |",
+            "",
+        ])
+
+    role_order = [
+        ("Healers", "healer"),
+        ("Tanks", "tank"),
+        ("Melee DPS", "melee"),
+        ("Ranged DPS", "ranged"),
+    ]
+
+    for role_label, role_key in role_order:
+        players = [p for p in player_deltas if p["role"] == role_key]
+        if not players:
+            continue
+
+        lines.extend([f"## {role_label}", ""])
+
+        for p in sorted(players, key=lambda x: x["name"]):
+            m = p["metrics"]
+            lines.append(f"### {p['name']} ({p['player_class']})")
+            lines.append("")
+
+            if role_key == "healer":
+                lines.extend([
+                    "| Metric | This Raid | Avg | Change |",
+                    "| --- | --- | --- | --- |",
+                    f"| Healing | {_fmt(m.get('total_healing'))} | {_fmt(m.get('avg_healing'))} | {_pct(m.get('total_healing', 0), m.get('avg_healing'))} |",
+                    f"| Overheal % | {m.get('overheal_percent', 0):.1f}% | {m.get('avg_overheal', 0):.1f}% | — |",
+                    "",
+                ])
+            elif role_key == "tank":
+                lines.extend([
+                    "| Metric | This Raid | Avg | Change |",
+                    "| --- | --- | --- | --- |",
+                    f"| Damage Taken | {_fmt(m.get('total_damage_taken'))} | {_fmt(m.get('avg_damage_taken'))} | {_pct(m.get('total_damage_taken', 0), m.get('avg_damage_taken'))} |",
+                    f"| Mitigation % | {m.get('mitigation_percent', 0):.1f}% | {m.get('avg_mitigation', 0):.1f}% | {_pct(m.get('mitigation_percent', 0), m.get('avg_mitigation'))} |",
+                    "",
+                ])
+            else:
+                lines.extend([
+                    "| Metric | This Raid | Avg | Change |",
+                    "| --- | --- | --- | --- |",
+                    f"| Total Damage | {_fmt(m.get('total_damage'))} | {_fmt(m.get('avg_damage'))} | {_pct(m.get('total_damage', 0), m.get('avg_damage'))} |",
+                    "",
+                ])
+
+            if p.get("spell_deltas"):
+                lines.extend([
+                    "**Spell Changes**",
+                    "",
+                    "| Spell | Casts | Avg | Delta |",
+                    "| --- | --- | --- | --- |",
+                ])
+                for s in p["spell_deltas"][:10]:
+                    d = s["cast_delta"]
+                    delta_str = f"+{d:.0f}" if d > 0 else f"{d:.0f}" if d < 0 else "—"
+                    lines.append(
+                        f"| {s['spell_name']} | {s['this_casts']} | {s['avg_casts']:.1f} | {delta_str} |"
+                    )
+                lines.append("")
+
+            if p.get("consumable_deltas"):
+                lines.extend([
+                    "**Consumable Changes**",
+                    "",
+                    "| Consumable | Count | Avg | Delta |",
+                    "| --- | --- | --- | --- |",
+                ])
+                for c in p["consumable_deltas"][:10]:
+                    d = c["delta"]
+                    delta_str = f"+{d:.0f}" if d > 0.5 else f"{d:.0f}" if d < -0.5 else "—"
+                    lines.append(
+                        f"| {c['consumable_name']} | {c['this_count']} | {c['avg_count']:.1f} | {delta_str} |"
+                    )
+                lines.append("")
+
+    return "\n".join(lines)
+
+
+def export_cross_analysis(raid_stats: dict, historical: list[dict],
+                          player_deltas: list[dict], size_label: str,
+                          output_path: str | None = None) -> str:
+    content = render_cross_analysis(raid_stats, historical, player_deltas, size_label)
+
+    if not output_path:
+        safe_title = "".join(
+            c if c.isalnum() or c in " _-" else "_"
+            for c in raid_stats.get("title", "report")
+        ).strip().replace(" ", "_")
+        from .. import paths
+        output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}_cross_analysis.md")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    return output_path
+
+
 def _render_consumables(consumables: list[ConsumableUsage]) -> str:
     if not consumables:
         return ""
