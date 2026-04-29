@@ -37,11 +37,19 @@ jobs:
         with:
           path: installer.iss
 
+      - name: Wait for Inno Setup to release files
+        if: steps.inno.outcome == 'success'
+        run: Start-Sleep -Seconds 5
+
       - name: Generate SHA256 checksums
         run: |
-          Get-ChildItem dist\*.zip, installer_output\*.exe -ErrorAction SilentlyContinue | ForEach-Object {
-            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
-            "$hash  $($_.Name)" | Out-File -Append -FilePath SHA256SUMS.txt -Encoding utf8
+          $files = @(Get-ChildItem "dist\*.zip" -ErrorAction SilentlyContinue)
+          if ("${{ steps.inno.outcome }}" -eq "success") {
+            $files += @(Get-ChildItem "installer_output\*.exe" -ErrorAction SilentlyContinue)
+          }
+          foreach ($f in $files) {
+            $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($f.Name)" | Out-File -Append -FilePath SHA256SUMS.txt -Encoding utf8
           }
 
       - name: Upload artifacts
