@@ -77,6 +77,7 @@ class WarcraftLogsClient:
               owner {{ name }}
               startTime
               endTime
+              zone {{ name }}
             }}
           }}
         }}
@@ -85,12 +86,14 @@ class WarcraftLogsClient:
         report = result["data"]["reportData"]["report"]
         if report is None:
             raise ValueError(f"Report '{report_id}' not found or inaccessible")
+        zone_data = report.get("zone")
         return RaidMetadata(
             report_id=report_id,
             title=report["title"],
             owner=report["owner"]["name"],
             start_time=report["startTime"],
             end_time=report.get("endTime"),
+            zone=zone_data["name"] if zone_data else None,
         )
 
     def get_guild_info(self, guild_id: int) -> dict:

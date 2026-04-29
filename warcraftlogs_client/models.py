@@ -123,6 +123,7 @@ class RaidMetadata:
     owner: str
     start_time: int
     end_time: Optional[int] = None
+    zone: Optional[str] = None
 
     @property
     def date(self) -> datetime:
