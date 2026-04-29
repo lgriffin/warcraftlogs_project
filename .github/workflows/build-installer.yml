@@ -27,30 +27,50 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller warcraftlogs_analyzer.spec
 
+      - name: Create portable zip
+        run: Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath "dist\WarcraftLogsAnalyzer-${{ github.ref_name }}-portable.zip"
+
       - name: Build installer with Inno Setup
+        id: inno
+        continue-on-error: true
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.4
         with:
           path: installer.iss
 
+      - name: Kill orphan ISCC process
+        if: always()
+        run: Get-Process -Name "ISCC" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Wait for file locks to release
+        if: steps.inno.outcome == 'success'
+        run: Start-Sleep -Seconds 10
+
       - name: Generate SHA256 checksums
         run: |
-          cd installer_output
-          sha256sum *.exe > SHA256SUMS.txt
-        shell: bash
+          $files = @(Get-ChildItem "dist\*.zip" -ErrorAction SilentlyContinue)
+          if ("${{ steps.inno.outcome }}" -eq "success") {
+            $files += @(Get-ChildItem "installer_output\*.exe" -ErrorAction SilentlyContinue)
+          }
+          foreach ($f in $files) {
+            $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($f.Name)" | Out-File -Append -FilePath SHA256SUMS.txt -Encoding utf8
+          }
 
-      - name: Upload installer artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: WarcraftLogsAnalyzer-Installer
+          name: WarcraftLogsAnalyzer
           path: |
             installer_output/*.exe
-            installer_output/SHA256SUMS.txt
+            dist/*.zip
+            SHA256SUMS.txt
 
-      - name: Create GitHub Release
+      - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             installer_output/*.exe
-            installer_output/SHA256SUMS.txt
+            dist/*.zip
+            SHA256SUMS.txt
           generate_release_notes: true
