@@ -625,6 +625,343 @@ class PerformanceDB:
             results.append(row)
         return results
 
+    # ── Insights queries ──
+
+    def _build_day_size_filter(self, raid_day: str | None = None,
+                                raid_size: str | None = None) -> tuple[str, list]:
+        sql = ""
+        params: list = []
+        if raid_day:
+            day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
+                       "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
+            day_num = day_map.get(raid_day)
+            if day_num:
+                sql += " AND CAST(strftime('%w', r.raid_date) AS INTEGER) = ?"
+                params.append(int(day_num))
+        if raid_size == "25-man":
+            sql += " AND r.raid_size >= 20"
+        elif raid_size == "10-man":
+            sql += " AND r.raid_size BETWEEN 1 AND 19"
+        return sql, params
+
+    def get_dps_progression(self, top_n: int = 10, raid_day: str | None = None,
+                             raid_size: str | None = None) -> list[dict]:
+        """Per-raid damage for top N DPS characters by average."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        top_chars = conn.execute(
+            f"""SELECT dp.character_id
+               FROM dps_performance dp
+               JOIN raids r ON r.id = dp.raid_id
+               WHERE 1=1{ds_filter}
+               GROUP BY dp.character_id
+               HAVING COUNT(*) >= 3
+               ORDER BY AVG(dp.total_damage) DESC
+               LIMIT ?""",
+            ds_params + [top_n],
+        ).fetchall()
+        if not top_chars:
+            return []
+        ids = [r["character_id"] for r in top_chars]
+        placeholders = ",".join("?" * len(ids))
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, r.raid_date, dp.total_damage
+                FROM dps_performance dp
+                JOIN characters c ON c.id = dp.character_id
+                JOIN raids r ON r.id = dp.raid_id
+                WHERE dp.character_id IN ({placeholders}){ds_filter}
+                ORDER BY r.raid_date ASC""",
+            ids + ds_params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_dps_consistency(self, min_raids: int = 3, raid_day: str | None = None,
+                             raid_size: str | None = None) -> list[dict]:
+        """Consistency scores for DPS characters (100 - CV%)."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, dp.total_damage
+               FROM dps_performance dp
+               JOIN characters c ON c.id = dp.character_id
+               JOIN raids r ON r.id = dp.raid_id
+               WHERE 1=1{ds_filter}
+               ORDER BY c.name""",
+            ds_params,
+        ).fetchall()
+        from collections import defaultdict
+        import math
+        by_char: dict[str, dict] = {}
+        values_by_char: dict[str, list[int]] = defaultdict(list)
+        for r in rows:
+            name = r["name"]
+            if name not in by_char:
+                by_char[name] = {"name": name, "player_class": r["player_class"]}
+            values_by_char[name].append(r["total_damage"])
+        results = []
+        for name, info in by_char.items():
+            vals = values_by_char[name]
+            if len(vals) < min_raids:
+                continue
+            avg = sum(vals) / len(vals)
+            if avg == 0:
+                continue
+            variance = sum((v - avg) ** 2 for v in vals) / len(vals)
+            std = math.sqrt(variance)
+            cv = std / avg * 100
+            results.append({
+                **info,
+                "raids": len(vals),
+                "avg_damage": avg,
+                "consistency": round(100 - cv, 1),
+            })
+        results.sort(key=lambda x: x["consistency"], reverse=True)
+        return results
+
+    def get_raid_overview_trends(self, raid_day: str | None = None,
+                                  raid_size: str | None = None) -> list[dict]:
+        """Per-raid aggregates: duration, healing, damage, ratio."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT r.raid_date, r.title, r.raid_size,
+                      r.start_time, r.end_time,
+                      COALESCE(h.total_healing, 0) as total_healing,
+                      COALESCE(d.total_damage, 0) as total_damage
+               FROM raids r
+               LEFT JOIN (
+                   SELECT raid_id, SUM(total_healing) as total_healing
+                   FROM healer_performance GROUP BY raid_id
+               ) h ON h.raid_id = r.id
+               LEFT JOIN (
+                   SELECT raid_id, SUM(total_damage) as total_damage
+                   FROM dps_performance GROUP BY raid_id
+               ) d ON d.raid_id = r.id
+               WHERE r.end_time IS NOT NULL AND r.end_time > r.start_time{ds_filter}
+               ORDER BY r.raid_date ASC""",
+            ds_params,
+        ).fetchall()
+        results = []
+        for r in rows:
+            duration = (r["end_time"] - r["start_time"]) / 60000.0
+            total_dmg = r["total_damage"]
+            total_heal = r["total_healing"]
+            ratio = (total_heal / total_dmg * 100) if total_dmg > 0 else 0
+            results.append({
+                "raid_date": r["raid_date"],
+                "title": r["title"],
+                "raid_size": r["raid_size"],
+                "duration_minutes": round(duration, 1),
+                "total_healing": total_heal,
+                "total_damage": total_dmg,
+                "heal_damage_ratio": round(ratio, 1),
+            })
+        return results
+
+    def get_attendance_stats(self, min_raids: int = 1, raid_day: str | None = None,
+                              raid_size: str | None = None) -> list[dict]:
+        """Per-character raid attendance counts."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, COUNT(DISTINCT perf.raid_id) as raid_count,
+                      MIN(r.raid_date) as first_seen, MAX(r.raid_date) as last_seen
+               FROM characters c
+               JOIN (
+                   SELECT character_id, raid_id FROM healer_performance
+                   UNION SELECT character_id, raid_id FROM dps_performance
+                   UNION SELECT character_id, raid_id FROM tank_performance
+               ) perf ON perf.character_id = c.id
+               JOIN raids r ON r.id = perf.raid_id
+               WHERE 1=1{ds_filter}
+               GROUP BY c.id
+               HAVING raid_count >= ?
+               ORDER BY raid_count DESC""",
+            ds_params + [min_raids],
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_consumable_compliance(self, min_raids: int = 3, raid_day: str | None = None,
+                                   raid_size: str | None = None) -> dict:
+        """Consumable usage matrix: character x consumable avg per raid."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+
+        top_cons = conn.execute(
+            f"""SELECT cu.consumable_name
+                FROM consumable_usage cu
+                JOIN raids r ON r.id = cu.raid_id
+                WHERE 1=1{ds_filter}
+                GROUP BY cu.consumable_name
+                ORDER BY COUNT(DISTINCT cu.character_id) DESC
+                LIMIT 10""",
+            ds_params,
+        ).fetchall()
+        consumables = [r["consumable_name"] for r in top_cons]
+        if not consumables:
+            return {"characters": [], "consumables": [], "matrix": {}}
+
+        char_raids = conn.execute(
+            f"""SELECT c.name, c.player_class, COUNT(DISTINCT cu.raid_id) as raid_count
+                FROM consumable_usage cu
+                JOIN characters c ON c.id = cu.character_id
+                JOIN raids r ON r.id = cu.raid_id
+                WHERE 1=1{ds_filter}
+                GROUP BY c.id
+                HAVING raid_count >= ?
+                ORDER BY c.name""",
+            ds_params + [min_raids],
+        ).fetchall()
+        characters = [{"name": r["name"], "player_class": r["player_class"]} for r in char_raids]
+        char_raid_counts = {r["name"]: r["raid_count"] for r in char_raids}
+        if not characters:
+            return {"characters": [], "consumables": consumables, "matrix": {}}
+
+        char_names = [c["name"] for c in characters]
+        placeholders_c = ",".join("?" * len(char_names))
+        placeholders_con = ",".join("?" * len(consumables))
+        rows = conn.execute(
+            f"""SELECT c.name, cu.consumable_name, SUM(cu.count) as total
+                FROM consumable_usage cu
+                JOIN characters c ON c.id = cu.character_id
+                JOIN raids r ON r.id = cu.raid_id
+                WHERE c.name IN ({placeholders_c})
+                  AND cu.consumable_name IN ({placeholders_con})
+                  {ds_filter}
+                GROUP BY c.name, cu.consumable_name""",
+            char_names + consumables + ds_params,
+        ).fetchall()
+
+        from collections import defaultdict
+        matrix: dict[str, dict[str, float]] = defaultdict(dict)
+        for r in rows:
+            raids = char_raid_counts.get(r["name"], 1)
+            matrix[r["name"]][r["consumable_name"]] = round(r["total"] / raids, 1)
+
+        return {"characters": characters, "consumables": consumables, "matrix": dict(matrix)}
+
+    def get_healer_insights(self, min_raids: int = 3, raid_day: str | None = None,
+                              raid_size: str | None = None) -> list[dict]:
+        """Per-healer overheal %, dispels, and efficiency stats."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, COUNT(*) as raids,
+                      AVG(hp.total_healing) as avg_healing,
+                      AVG(hp.overheal_percent) as avg_overheal,
+                      SUM(hp.total_dispels) as total_dispels,
+                      SUM(hp.fear_ward_casts) as total_fear_wards
+               FROM healer_performance hp
+               JOIN characters c ON c.id = hp.character_id
+               JOIN raids r ON r.id = hp.raid_id
+               WHERE 1=1{ds_filter}
+               GROUP BY c.id
+               HAVING raids >= ?
+               ORDER BY avg_healing DESC""",
+            ds_params + [min_raids],
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_healer_overheal_trend(self, raid_day: str | None = None,
+                                    raid_size: str | None = None) -> list[dict]:
+        """Per-raid average overheal % across all healers."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT r.raid_date, r.title, r.raid_size,
+                      AVG(hp.overheal_percent) as avg_overheal,
+                      COUNT(*) as healer_count
+               FROM healer_performance hp
+               JOIN raids r ON r.id = hp.raid_id
+               WHERE 1=1{ds_filter}
+               GROUP BY hp.raid_id
+               ORDER BY r.raid_date ASC""",
+            ds_params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_dps_per_minute(self, min_raids: int = 3, raid_day: str | None = None,
+                            raid_size: str | None = None) -> list[dict]:
+        """Per-character average DPS per minute (normalized by raid duration)."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class,
+                      dp.total_damage,
+                      (r.end_time - r.start_time) / 60000.0 as duration_min
+               FROM dps_performance dp
+               JOIN characters c ON c.id = dp.character_id
+               JOIN raids r ON r.id = dp.raid_id
+               WHERE r.end_time IS NOT NULL AND r.end_time > r.start_time{ds_filter}
+               ORDER BY c.name""",
+            ds_params,
+        ).fetchall()
+        from collections import defaultdict
+        by_char: dict[str, dict] = {}
+        dpms: dict[str, list[float]] = defaultdict(list)
+        for r in rows:
+            name = r["name"]
+            if name not in by_char:
+                by_char[name] = {"name": name, "player_class": r["player_class"]}
+            dur = r["duration_min"]
+            if dur > 0:
+                dpms[name].append(r["total_damage"] / dur)
+        results = []
+        for name, info in by_char.items():
+            vals = dpms[name]
+            if len(vals) < min_raids:
+                continue
+            avg_dpm = sum(vals) / len(vals)
+            results.append({**info, "raids": len(vals), "avg_dpm": round(avg_dpm, 0)})
+        results.sort(key=lambda x: x["avg_dpm"], reverse=True)
+        return results
+
+    def get_tank_mitigation_stats(self, min_raids: int = 3, raid_day: str | None = None,
+                                    raid_size: str | None = None) -> list[dict]:
+        """Per-tank mitigation and damage taken stats."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, COUNT(*) as raids,
+                      AVG(tp.mitigation_percent) as avg_mitigation,
+                      AVG(tp.total_damage_taken) as avg_damage_taken
+               FROM tank_performance tp
+               JOIN characters c ON c.id = tp.character_id
+               JOIN raids r ON r.id = tp.raid_id
+               WHERE 1=1{ds_filter}
+               GROUP BY c.id
+               HAVING raids >= ?
+               ORDER BY avg_mitigation DESC""",
+            ds_params + [min_raids],
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_consumable_usage_rates(self, raid_day: str | None = None,
+                                    raid_size: str | None = None) -> list[dict]:
+        """Per-consumable summary stats."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        rows = conn.execute(
+            f"""SELECT cu.consumable_name,
+                      COUNT(DISTINCT cu.character_id) as total_users,
+                      SUM(cu.count) as total_uses
+               FROM consumable_usage cu
+               JOIN raids r ON r.id = cu.raid_id
+               WHERE 1=1{ds_filter}
+               GROUP BY cu.consumable_name
+               ORDER BY total_users DESC""",
+            ds_params,
+        ).fetchall()
+        results = []
+        for r in rows:
+            results.append({
+                "consumable_name": r["consumable_name"],
+                "total_users": r["total_users"],
+                "total_uses": r["total_uses"],
+                "avg_per_user": round(r["total_uses"] / r["total_users"], 1) if r["total_users"] > 0 else 0,
+            })
+        return results
+
     def get_raid_list(self, limit: int = 50) -> list[dict]:
         """Get list of all imported raids."""
         conn = self._get_conn()
