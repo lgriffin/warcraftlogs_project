@@ -4,7 +4,8 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox,
-    QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
+    QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton,
+    QFileDialog,
 )
 
 from .styles import COMMON_STYLES, COLORS
@@ -216,7 +217,13 @@ class InsightsView(QWidget):
         layout.setContentsMargins(4, 8, 4, 4)
         layout.setSpacing(12)
 
-        layout.addWidget(_section_label("Consumable Compliance (avg per raid)"))
+        header_row = QHBoxLayout()
+        header_row.addWidget(_section_label("Consumable Compliance (avg per raid)"))
+        header_row.addStretch()
+        self._export_btn = QPushButton("Export as Image")
+        self._export_btn.clicked.connect(self._export_heatmap)
+        header_row.addWidget(self._export_btn)
+        layout.addLayout(header_row)
 
         self._heatmap_container = QVBoxLayout()
         layout.addLayout(self._heatmap_container)
@@ -315,6 +322,29 @@ class InsightsView(QWidget):
         if compliance and compliance.get("characters"):
             heatmap = ConsumableHeatmapWidget(compliance)
             self._heatmap_container.addWidget(heatmap)
+
+    def _export_heatmap(self):
+        widget = None
+        for i in range(self._heatmap_container.count()):
+            w = self._heatmap_container.itemAt(i).widget()
+            if isinstance(w, ConsumableHeatmapWidget):
+                widget = w
+                break
+        if not widget:
+            self.status_message.emit("No heatmap to export")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Heatmap", "consumable_heatmap.png",
+            "PNG Image (*.png);;JPEG Image (*.jpg)")
+        if not path:
+            return
+
+        pixmap = widget.grab()
+        if pixmap.save(path):
+            self.status_message.emit(f"Heatmap exported to {path}")
+        else:
+            self.status_message.emit("Failed to export heatmap")
 
     # ── Chart refresh ──
 
