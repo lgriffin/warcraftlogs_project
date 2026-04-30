@@ -628,27 +628,40 @@ class PerformanceDB:
     # ── Insights queries ──
 
     def _build_day_size_filter(self, raid_day: str | None = None,
-                                raid_size: str | None = None) -> tuple[str, list]:
-        sql = ""
-        params: list = []
-        if raid_day:
-            day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
-                       "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
-            day_num = day_map.get(raid_day)
-            if day_num:
-                sql += " AND CAST(strftime('%w', r.raid_date) AS INTEGER) = ?"
-                params.append(int(day_num))
-        if raid_size == "25-man":
-            sql += " AND r.raid_size >= 20"
-        elif raid_size == "10-man":
-            sql += " AND r.raid_size BETWEEN 1 AND 19"
+                                raid_size: str | None = None,
+                                last_n: int | None = None) -> tuple[str, list]:
+        def _core(alias: str) -> tuple[str, list]:
+            frag = ""
+            p: list = []
+            if raid_day:
+                day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
+                           "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
+                day_num = day_map.get(raid_day)
+                if day_num:
+                    frag += f" AND CAST(strftime('%w', {alias}.raid_date) AS INTEGER) = ?"
+                    p.append(int(day_num))
+            if raid_size == "25-man":
+                frag += f" AND {alias}.raid_size >= 20"
+            elif raid_size == "10-man":
+                frag += f" AND {alias}.raid_size BETWEEN 1 AND 19"
+            return frag, p
+
+        sql, params = _core("r")
+        if last_n:
+            inner_sql, inner_params = _core("r2")
+            sql += (f" AND r.id IN (SELECT r2.id FROM raids r2"
+                    f" WHERE 1=1{inner_sql}"
+                    f" ORDER BY r2.raid_date DESC LIMIT ?)")
+            params.extend(inner_params)
+            params.append(last_n)
         return sql, params
 
     def get_dps_progression(self, top_n: int = 10, raid_day: str | None = None,
-                             raid_size: str | None = None) -> list[dict]:
+                             raid_size: str | None = None,
+                             last_n: int | None = None) -> list[dict]:
         """Per-raid damage for top N DPS characters by average."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         top_chars = conn.execute(
             f"""SELECT dp.character_id
                FROM dps_performance dp
@@ -676,10 +689,11 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_dps_consistency(self, min_raids: int = 3, raid_day: str | None = None,
-                             raid_size: str | None = None) -> list[dict]:
+                             raid_size: str | None = None,
+                             last_n: int | None = None) -> list[dict]:
         """Consistency scores for DPS characters (100 - CV%)."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT c.name, c.player_class, dp.total_damage
                FROM dps_performance dp
@@ -719,10 +733,11 @@ class PerformanceDB:
         return results
 
     def get_raid_overview_trends(self, raid_day: str | None = None,
-                                  raid_size: str | None = None) -> list[dict]:
+                                  raid_size: str | None = None,
+                                  last_n: int | None = None) -> list[dict]:
         """Per-raid aggregates: duration, healing, damage, ratio."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT r.raid_date, r.title, r.raid_size,
                       r.start_time, r.end_time,
@@ -759,10 +774,11 @@ class PerformanceDB:
         return results
 
     def get_attendance_stats(self, min_raids: int = 1, raid_day: str | None = None,
-                              raid_size: str | None = None) -> list[dict]:
+                              raid_size: str | None = None,
+                              last_n: int | None = None) -> list[dict]:
         """Per-character raid attendance counts."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT c.name, c.player_class, COUNT(DISTINCT perf.raid_id) as raid_count,
                       MIN(r.raid_date) as first_seen, MAX(r.raid_date) as last_seen
@@ -782,10 +798,11 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_consumable_compliance(self, min_raids: int = 3, raid_day: str | None = None,
-                                   raid_size: str | None = None) -> dict:
+                                   raid_size: str | None = None,
+                                   last_n: int | None = None) -> dict:
         """Consumable usage matrix: character x consumable avg per raid."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
 
         top_cons = conn.execute(
             f"""SELECT cu.consumable_name
@@ -841,10 +858,11 @@ class PerformanceDB:
         return {"characters": characters, "consumables": consumables, "matrix": dict(matrix)}
 
     def get_healer_insights(self, min_raids: int = 3, raid_day: str | None = None,
-                              raid_size: str | None = None) -> list[dict]:
+                              raid_size: str | None = None,
+                              last_n: int | None = None) -> list[dict]:
         """Per-healer overheal %, dispels, and efficiency stats."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT c.name, c.player_class, COUNT(*) as raids,
                       AVG(hp.total_healing) as avg_healing,
@@ -863,10 +881,11 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_healer_overheal_trend(self, raid_day: str | None = None,
-                                    raid_size: str | None = None) -> list[dict]:
+                                    raid_size: str | None = None,
+                                    last_n: int | None = None) -> list[dict]:
         """Per-raid average overheal % across all healers."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT r.raid_date, r.title, r.raid_size,
                       AVG(hp.overheal_percent) as avg_overheal,
@@ -881,10 +900,11 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_dps_per_minute(self, min_raids: int = 3, raid_day: str | None = None,
-                            raid_size: str | None = None) -> list[dict]:
+                            raid_size: str | None = None,
+                            last_n: int | None = None) -> list[dict]:
         """Per-character average DPS per minute (normalized by raid duration)."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT c.name, c.player_class,
                       dp.total_damage,
@@ -917,10 +937,11 @@ class PerformanceDB:
         return results
 
     def get_tank_mitigation_stats(self, min_raids: int = 3, raid_day: str | None = None,
-                                    raid_size: str | None = None) -> list[dict]:
+                                    raid_size: str | None = None,
+                                    last_n: int | None = None) -> list[dict]:
         """Per-tank mitigation and damage taken stats."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT c.name, c.player_class, COUNT(*) as raids,
                       AVG(tp.mitigation_percent) as avg_mitigation,
@@ -937,10 +958,11 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_consumable_usage_rates(self, raid_day: str | None = None,
-                                    raid_size: str | None = None) -> list[dict]:
+                                    raid_size: str | None = None,
+                                    last_n: int | None = None) -> list[dict]:
         """Per-consumable summary stats."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
         rows = conn.execute(
             f"""SELECT cu.consumable_name,
                       COUNT(DISTINCT cu.character_id) as total_users,

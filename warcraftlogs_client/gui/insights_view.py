@@ -80,6 +80,12 @@ class InsightsView(QWidget):
         self._size_combo.currentTextChanged.connect(self._on_filter_changed)
         header_row.addWidget(self._size_combo)
 
+        header_row.addWidget(QLabel("Lookback:"))
+        self._last_n_combo = QComboBox()
+        self._last_n_combo.addItems(["All Raids", "Last 5", "Last 10", "Last 15", "Last 20"])
+        self._last_n_combo.currentTextChanged.connect(self._on_filter_changed)
+        header_row.addWidget(self._last_n_combo)
+
         outer.addLayout(header_row)
 
         self._tabs = QTabWidget()
@@ -277,6 +283,12 @@ class InsightsView(QWidget):
             return None
         return text
 
+    def _get_last_n_filter(self) -> int | None:
+        text = self._last_n_combo.currentText()
+        if text == "All Raids":
+            return None
+        return int(text.split()[-1])
+
     # ── Data loading ──
 
     def _load_data(self):
@@ -285,18 +297,19 @@ class InsightsView(QWidget):
         self.status_message.emit("Loading insights data...")
         size = self._get_size_filter()
         day = self._get_day_filter()
+        last_n = self._get_last_n_filter()
         try:
             with PerformanceDB() as db:
                 self._db_cache = {
-                    "dps_prog": db.get_dps_progression(top_n=10, raid_day=day, raid_size=size),
-                    "dps_cons": db.get_dps_consistency(min_raids=3, raid_day=day, raid_size=size),
-                    "dps_dpm": db.get_dps_per_minute(min_raids=3, raid_day=day, raid_size=size),
-                    "raid_overview": db.get_raid_overview_trends(raid_day=day, raid_size=size),
-                    "attendance": db.get_attendance_stats(min_raids=3, raid_day=day, raid_size=size),
-                    "usage_rates": db.get_consumable_usage_rates(raid_day=day, raid_size=size),
-                    "healer_insights": db.get_healer_insights(min_raids=3, raid_day=day, raid_size=size),
-                    "overheal_trend": db.get_healer_overheal_trend(raid_day=day, raid_size=size),
-                    "tank_stats": db.get_tank_mitigation_stats(min_raids=3, raid_day=day, raid_size=size),
+                    "dps_prog": db.get_dps_progression(top_n=10, raid_day=day, raid_size=size, last_n=last_n),
+                    "dps_cons": db.get_dps_consistency(min_raids=3, raid_day=day, raid_size=size, last_n=last_n),
+                    "dps_dpm": db.get_dps_per_minute(min_raids=3, raid_day=day, raid_size=size, last_n=last_n),
+                    "raid_overview": db.get_raid_overview_trends(raid_day=day, raid_size=size, last_n=last_n),
+                    "attendance": db.get_attendance_stats(min_raids=3, raid_day=day, raid_size=size, last_n=last_n),
+                    "usage_rates": db.get_consumable_usage_rates(raid_day=day, raid_size=size, last_n=last_n),
+                    "healer_insights": db.get_healer_insights(min_raids=3, raid_day=day, raid_size=size, last_n=last_n),
+                    "overheal_trend": db.get_healer_overheal_trend(raid_day=day, raid_size=size, last_n=last_n),
+                    "tank_stats": db.get_tank_mitigation_stats(min_raids=3, raid_day=day, raid_size=size, last_n=last_n),
                 }
         except Exception as e:
             self.status_message.emit(f"Error loading insights: {e}")
@@ -311,10 +324,11 @@ class InsightsView(QWidget):
 
         day = self._get_day_filter()
         size = self._get_size_filter()
+        last_n = self._get_last_n_filter()
         try:
             with PerformanceDB() as db:
                 compliance = db.get_consumable_compliance(min_raids=2, raid_day=day,
-                                                          raid_size=size)
+                                                          raid_size=size, last_n=last_n)
         except Exception as e:
             self.status_message.emit(f"Error loading heatmap: {e}")
             return
