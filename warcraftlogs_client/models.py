@@ -165,6 +165,29 @@ class RaidComposition:
 
 
 @dataclass
+class EncounterPerformance:
+    """One player's performance within a single boss encounter."""
+    name: str
+    player_class: str
+    source_id: int
+    role: str
+    total_damage: int = 0
+    total_healing: int = 0
+    total_damage_taken: int = 0
+
+
+@dataclass
+class EncounterSummary:
+    """A boss kill with per-player performance."""
+    encounter_id: int
+    name: str
+    start_time: int
+    end_time: int
+    duration_ms: int
+    players: list[EncounterPerformance] = field(default_factory=list)
+
+
+@dataclass
 class RaidAnalysis:
     """Complete result of analyzing a single raid report."""
     metadata: RaidMetadata
@@ -173,6 +196,7 @@ class RaidAnalysis:
     tanks: list[TankPerformance] = field(default_factory=list)
     dps: list[DPSPerformance] = field(default_factory=list)
     consumables: list[ConsumableUsage] = field(default_factory=list)
+    encounters: list[EncounterSummary] = field(default_factory=list)
 
 
 @dataclass

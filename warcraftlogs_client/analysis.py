@@ -17,6 +17,8 @@ from .models import (
     ConsumableUsage,
     DPSPerformance,
     DispelUsage,
+    EncounterPerformance,
+    EncounterSummary,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
@@ -49,6 +51,12 @@ def analyze_raid(client: WarcraftLogsClient, report_id: str,
 
     consumables = _analyze_consumables(client, report_id, composition)
 
+    try:
+        encounters = _analyze_encounters(client, report_id, composition)
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        print(f"Error analyzing encounters: {e}")
+        encounters = []
+
     return RaidAnalysis(
         metadata=metadata,
         composition=composition,
@@ -56,6 +64,7 @@ def analyze_raid(client: WarcraftLogsClient, report_id: str,
         tanks=tanks,
         dps=melee_dps + ranged_dps,
         consumables=consumables,
+        encounters=encounters,
     )
 
 
@@ -479,5 +488,83 @@ def _analyze_consumables(
                 ))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"Error analyzing cast consumables for {player.name}: {e}")
+
+    return results
+
+
+def _analyze_encounters(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+) -> list[EncounterSummary]:
+    """Analyze per-boss-kill performance using time-windowed table queries."""
+    fights = client.get_fights(report_id)
+    boss_kills = [
+        f for f in fights
+        if f.get("encounterID", 0) > 0 and f.get("kill")
+    ]
+    if not boss_kills:
+        return []
+
+    role_lookup = {p.name: p for p in composition.all_players}
+
+    results = []
+    for fight in boss_kills:
+        start = fight["startTime"]
+        end = fight["endTime"]
+
+        try:
+            damage_entries = client.get_encounter_table(report_id, start, end, "DamageDone")
+            healing_entries = client.get_encounter_table(report_id, start, end, "Healing")
+            taken_entries = client.get_encounter_table(report_id, start, end, "DamageTaken")
+        except (requests.RequestException, KeyError, TypeError) as e:
+            print(f"Error fetching encounter data for {fight['name']}: {e}")
+            continue
+
+        players_map: dict[str, dict] = {}
+        for entry in damage_entries:
+            name = entry.get("name", "")
+            if not name or entry.get("type") == "Pet":
+                continue
+            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0})
+            players_map[name]["damage"] += entry.get("total", 0)
+
+        for entry in healing_entries:
+            name = entry.get("name", "")
+            if not name or entry.get("type") == "Pet":
+                continue
+            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0})
+            players_map[name]["healing"] += entry.get("total", 0)
+
+        for entry in taken_entries:
+            name = entry.get("name", "")
+            if not name or entry.get("type") == "Pet":
+                continue
+            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0})
+            players_map[name]["taken"] += entry.get("total", 0)
+
+        encounter_players = []
+        for name, totals in players_map.items():
+            player = role_lookup.get(name)
+            encounter_players.append(EncounterPerformance(
+                name=name,
+                player_class=player.player_class if player else "Unknown",
+                source_id=player.source_id if player else 0,
+                role=player.role if player else "unknown",
+                total_damage=totals["damage"],
+                total_healing=totals["healing"],
+                total_damage_taken=totals["taken"],
+            ))
+
+        encounter_players.sort(key=lambda p: p.total_damage, reverse=True)
+
+        results.append(EncounterSummary(
+            encounter_id=fight["encounterID"],
+            name=fight["name"],
+            start_time=start,
+            end_time=end,
+            duration_ms=end - start,
+            players=encounter_players,
+        ))
 
     return results

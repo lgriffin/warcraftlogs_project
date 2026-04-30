@@ -10,8 +10,8 @@ import sqlite3
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTabWidget, QTableView, QHeaderView, QSplitter, QTextEdit,
-    QComboBox, QMessageBox, QFileDialog,
+    QTabWidget, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
+    QSplitter, QTextEdit, QComboBox, QMessageBox, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QCursor
@@ -19,7 +19,7 @@ from PySide6.QtGui import QFont, QCursor
 from .styles import COMMON_STYLES, COLORS
 from .table_models import HealerTableModel, TankTableModel, DPSTableModel, HistoryTableModel
 from .detail_panel import CharacterDetailPanel
-from ..models import RaidAnalysis
+from ..models import RaidAnalysis, EncounterSummary
 
 
 class _ClickableNameTableView(QTableView):
@@ -161,6 +161,37 @@ class RaidAnalysisWidget(QWidget):
         consumes_layout.addWidget(consumes_table)
         self._tabs.addTab(consumes_widget, "Consumables")
 
+        encounters_widget = QWidget()
+        enc_layout = QVBoxLayout(encounters_widget)
+        enc_layout.setContentsMargins(0, 8, 0, 0)
+
+        enc_header = QHBoxLayout()
+        enc_header.addWidget(QLabel("Encounter:"))
+        self._enc_combo = QComboBox()
+        self._enc_combo.currentIndexChanged.connect(self._on_encounter_changed)
+        enc_header.addWidget(self._enc_combo, 1)
+        self._enc_summary = QLabel()
+        self._enc_summary.setStyleSheet(f"color: {COLORS['text']}; padding: 0 8px;")
+        enc_header.addWidget(self._enc_summary)
+        enc_layout.addLayout(enc_header)
+
+        self._enc_table = QTableWidget()
+        self._enc_table.setColumnCount(6)
+        self._enc_table.setHorizontalHeaderLabels(
+            ["Name", "Class", "Role", "Damage Done", "Healing Done", "Damage Taken"])
+        self._enc_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        for col in range(1, 6):
+            self._enc_table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.ResizeMode.ResizeToContents)
+        self._enc_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._enc_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._enc_table.setAlternatingRowColors(True)
+        enc_layout.addWidget(self._enc_table)
+
+        self._encounters_tab_index = self._tabs.addTab(encounters_widget, "Encounters")
+        self._encounters: list[EncounterSummary] = []
+
         self._comp_text = QTextEdit()
         self._comp_text.setReadOnly(True)
         self._comp_text.setFont(QFont("Consolas", 11))
@@ -217,6 +248,7 @@ class RaidAnalysisWidget(QWidget):
         self._all_consumables = analysis.consumables
         self._filter_consumables()
         self._render_composition(analysis)
+        self._populate_encounters(analysis)
 
         if analysis.healers:
             self._tabs.setCurrentIndex(0)
@@ -261,6 +293,45 @@ class RaidAnalysisWidget(QWidget):
                 lines.append(f"  {p.name} ({p.player_class})")
 
         self._comp_text.setPlainText("\n".join(lines))
+
+    def _populate_encounters(self, analysis: RaidAnalysis):
+        self._encounters = analysis.encounters
+        self._enc_combo.blockSignals(True)
+        self._enc_combo.clear()
+        if not self._encounters:
+            self._tabs.setTabVisible(self._encounters_tab_index, False)
+            self._enc_combo.blockSignals(False)
+            return
+        self._tabs.setTabVisible(self._encounters_tab_index, True)
+        for enc in self._encounters:
+            duration_s = enc.duration_ms // 1000
+            label = f"{enc.name} ({duration_s // 60}:{duration_s % 60:02d})"
+            self._enc_combo.addItem(label)
+        self._enc_combo.blockSignals(False)
+        self._enc_combo.setCurrentIndex(0)
+        self._on_encounter_changed(0)
+
+    def _on_encounter_changed(self, index: int):
+        if index < 0 or index >= len(self._encounters):
+            return
+        enc = self._encounters[index]
+        duration_s = enc.duration_ms // 1000
+        total_dmg = sum(p.total_damage for p in enc.players)
+        total_heal = sum(p.total_healing for p in enc.players)
+        self._enc_summary.setText(
+            f"Duration: {duration_s // 60}:{duration_s % 60:02d}  |  "
+            f"Damage: {total_dmg:,}  |  Healing: {total_heal:,}")
+
+        self._enc_table.setRowCount(len(enc.players))
+        for i, p in enumerate(enc.players):
+            self._enc_table.setItem(i, 0, QTableWidgetItem(p.name))
+            self._enc_table.setItem(i, 1, QTableWidgetItem(p.player_class))
+            self._enc_table.setItem(i, 2, QTableWidgetItem(p.role))
+            for j, val in enumerate([p.total_damage, p.total_healing, p.total_damage_taken]):
+                item = QTableWidgetItem(f"{val:,}")
+                item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self._enc_table.setItem(i, j + 3, item)
 
     def _on_name_clicked(self, name: str):
         a = self._analysis
