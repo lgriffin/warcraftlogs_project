@@ -14,7 +14,6 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QFont, QPixmap
 
 from .download_view import DownloadView
-from .worker import AnalysisWorker
 from .raids_view import RaidsView
 from .raid_group_view import RaidGroupView
 from .character_view import CharacterView
@@ -213,8 +212,6 @@ class MainWindow(QMainWindow):
         widget.navigate_to_character.connect(self._drill_into_character_history)
         widget.raid_deleted.connect(self._on_raid_deleted)
         widget.cross_analyze.connect(self._drill_into_cross_analysis)
-        widget.request_reanalyze.connect(self._reanalyze_raid)
-        self._active_raid_widget = widget
         self.stack.push_view(widget)
 
     def _drill_into_cross_analysis(self, report_id: str):
@@ -231,33 +228,6 @@ class MainWindow(QMainWindow):
         widget.status_message.connect(self.status_bar.showMessage)
         widget.request_back.connect(self.stack.pop_view)
         self.stack.push_view(widget)
-
-    def _reanalyze_raid(self, report_id: str):
-        self.status_bar.showMessage(f"Re-analyzing {report_id}...")
-        self._reanalyze_worker = AnalysisWorker(report_id)
-        self._reanalyze_worker.finished.connect(self._on_reanalyze_finished)
-        self._reanalyze_worker.error.connect(self._on_reanalyze_error)
-        self._reanalyze_worker.progress.connect(self.status_bar.showMessage)
-        self._reanalyze_worker.start()
-
-    def _on_reanalyze_finished(self, analysis):
-        try:
-            with PerformanceDB() as db:
-                db.import_raid(analysis)
-        except (sqlite3.Error, OSError) as e:
-            self.status_bar.showMessage(f"DB save failed: {e}")
-
-        widget = getattr(self, "_active_raid_widget", None)
-        if widget:
-            widget.refresh(analysis)
-        self.status_bar.showMessage("Re-analysis complete")
-
-    def _on_reanalyze_error(self, error_msg: str):
-        self.status_bar.showMessage(f"Re-analysis failed: {error_msg}")
-        widget = getattr(self, "_active_raid_widget", None)
-        if widget:
-            widget._reanalyze_btn.setEnabled(True)
-            widget._reanalyze_btn.setText("Re-analyze")
 
     def _on_raid_downloaded(self):
         pass

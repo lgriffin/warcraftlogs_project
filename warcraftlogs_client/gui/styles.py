@@ -59,6 +59,28 @@ COMMON_STYLES = f"""
     QPushButton[secondary="true"]:hover {{
         background-color: {COLORS['border']};
     }}
+    QComboBox {{
+        background-color: {COLORS['bg_input']};
+        color: {COLORS['text']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-size: 13px;
+    }}
+    QComboBox:focus {{
+        border-color: {COLORS['accent']};
+    }}
+    QComboBox::drop-down {{
+        border: none;
+        width: 24px;
+    }}
+    QComboBox QAbstractItemView {{
+        background-color: {COLORS['bg_input']};
+        color: {COLORS['text']};
+        border: 1px solid {COLORS['border']};
+        selection-background-color: {COLORS['bg_dark']};
+        selection-color: {COLORS['text_header']};
+    }}
     QCheckBox {{
         color: {COLORS['text']};
         spacing: 8px;

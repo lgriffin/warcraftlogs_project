@@ -225,6 +225,35 @@ class TestEncounterDatabase:
         assert history[0]["total_damage"] == 150_000
         assert history[0]["encounter_name"] == "Attumen the Huntsman"
 
+    def test_distinct_encounters(self, db, sample_raid_analysis, sample_encounter_summary):
+        sample_raid_analysis.encounters = [sample_encounter_summary]
+        db.import_raid(sample_raid_analysis)
+
+        encounters = db.get_distinct_encounters()
+        assert len(encounters) == 1
+        assert encounters[0]["encounter_id"] == 658
+        assert encounters[0]["name"] == "Attumen the Huntsman"
+        assert encounters[0]["kill_count"] == 1
+
+    def test_encounter_player_breakdown(self, db, sample_raid_analysis, sample_encounter_summary):
+        sample_raid_analysis.encounters = [sample_encounter_summary]
+        db.import_raid(sample_raid_analysis)
+
+        breakdown = db.get_encounter_player_breakdown(658)
+        assert len(breakdown) == 3
+        by_name = {r["name"]: r for r in breakdown}
+        assert by_name["StabbyRogue"]["avg_damage"] == 150_000
+        assert by_name["StabbyRogue"]["kills"] == 1
+        assert by_name["HolyPriest"]["avg_healing"] == 120_000
+        assert by_name["TankWarrior"]["avg_damage_taken"] == 200_000
+
+    def test_day_filter_with_multiple_days(self, db, sample_raid_analysis, sample_encounter_summary):
+        sample_raid_analysis.encounters = [sample_encounter_summary]
+        db.import_raid(sample_raid_analysis)
+
+        history = db.get_encounter_history(658, raid_day="Wednesday,Thursday")
+        assert isinstance(history, list)
+
 
 # ── Client method tests ──
 

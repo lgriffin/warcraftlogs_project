@@ -730,10 +730,12 @@ class PerformanceDB:
             if raid_day:
                 day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
                            "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
-                day_num = day_map.get(raid_day)
-                if day_num:
-                    frag += f" AND CAST(strftime('%w', {alias}.raid_date) AS INTEGER) = ?"
-                    p.append(int(day_num))
+                days = [d.strip() for d in raid_day.split(",")]
+                day_nums = [int(day_map[d]) for d in days if d in day_map]
+                if day_nums:
+                    placeholders = ",".join("?" * len(day_nums))
+                    frag += f" AND CAST(strftime('%w', {alias}.raid_date) AS INTEGER) IN ({placeholders})"
+                    p.extend(day_nums)
             if raid_size == "25-man":
                 frag += f" AND {alias}.raid_size >= 20"
             elif raid_size == "10-man":
@@ -2060,6 +2062,52 @@ class PerformanceDB:
                WHERE c.name = ? AND e.encounter_id = ?
                ORDER BY r.raid_date DESC""",
             (character_name, encounter_id),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_distinct_encounters(self, raid_day: str | None = None,
+                                raid_size: str | None = None,
+                                last_n: int | None = None) -> list[dict]:
+        """All unique boss encounters in the database with kill counts."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(
+            raid_day, raid_size, last_n)
+        rows = conn.execute(
+            f"""SELECT e.encounter_id, e.name,
+                       COUNT(DISTINCT e.id) as kill_count
+                FROM encounters e
+                JOIN raids r ON r.id = e.raid_id
+                WHERE 1=1{ds_filter}
+                GROUP BY e.encounter_id
+                ORDER BY e.name""",
+            ds_params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_encounter_player_breakdown(
+        self, encounter_id: int,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+    ) -> list[dict]:
+        """Per-player averages for a specific boss across kills."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(
+            raid_day, raid_size, last_n)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, ep.role,
+                       COUNT(*) as kills,
+                       CAST(AVG(ep.total_damage) AS INTEGER) as avg_damage,
+                       CAST(AVG(ep.total_healing) AS INTEGER) as avg_healing,
+                       CAST(AVG(ep.total_damage_taken) AS INTEGER) as avg_damage_taken
+                FROM encounter_performance ep
+                JOIN encounters e ON e.id = ep.encounter_row_id
+                JOIN raids r ON r.id = e.raid_id
+                JOIN characters c ON c.id = ep.character_id
+                WHERE e.encounter_id = ?{ds_filter}
+                GROUP BY c.id, ep.role
+                ORDER BY avg_damage DESC""",
+            [encounter_id] + ds_params,
         ).fetchall()
         return [dict(r) for r in rows]
 
