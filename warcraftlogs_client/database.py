@@ -17,6 +17,8 @@ from .models import (
     ConsumableUsage,
     DPSPerformance,
     DispelUsage,
+    EncounterPerformance,
+    EncounterSummary,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
@@ -159,6 +161,32 @@ CREATE TABLE IF NOT EXISTS raid_group_members (
 
 CREATE INDEX IF NOT EXISTS idx_rgm_group ON raid_group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_rgm_char ON raid_group_members(character_id);
+
+CREATE TABLE IF NOT EXISTS encounters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    raid_id INTEGER NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+    encounter_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    start_time INTEGER NOT NULL,
+    end_time INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    UNIQUE(raid_id, encounter_id, start_time)
+);
+
+CREATE TABLE IF NOT EXISTS encounter_performance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    encounter_row_id INTEGER NOT NULL REFERENCES encounters(id) ON DELETE CASCADE,
+    character_id INTEGER NOT NULL REFERENCES characters(id),
+    role TEXT CHECK(role IN ('healer', 'tank', 'melee', 'ranged', 'unknown')),
+    total_damage INTEGER DEFAULT 0,
+    total_healing INTEGER DEFAULT 0,
+    total_damage_taken INTEGER DEFAULT 0,
+    UNIQUE(encounter_row_id, character_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_encounter_raid ON encounters(raid_id);
+CREATE INDEX IF NOT EXISTS idx_encounter_perf_enc ON encounter_performance(encounter_row_id);
+CREATE INDEX IF NOT EXISTS idx_encounter_perf_char ON encounter_performance(character_id);
 """
 
 
@@ -229,6 +257,33 @@ class PerformanceDB:
                 );
                 CREATE INDEX IF NOT EXISTS idx_rgm_group ON raid_group_members(group_id);
                 CREATE INDEX IF NOT EXISTS idx_rgm_char ON raid_group_members(character_id);
+            """)
+
+        if "encounters" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS encounters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    raid_id INTEGER NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+                    encounter_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    start_time INTEGER NOT NULL,
+                    end_time INTEGER NOT NULL,
+                    duration_ms INTEGER NOT NULL,
+                    UNIQUE(raid_id, encounter_id, start_time)
+                );
+                CREATE TABLE IF NOT EXISTS encounter_performance (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    encounter_row_id INTEGER NOT NULL REFERENCES encounters(id) ON DELETE CASCADE,
+                    character_id INTEGER NOT NULL REFERENCES characters(id),
+                    role TEXT CHECK(role IN ('healer', 'tank', 'melee', 'ranged', 'unknown')),
+                    total_damage INTEGER DEFAULT 0,
+                    total_healing INTEGER DEFAULT 0,
+                    total_damage_taken INTEGER DEFAULT 0,
+                    UNIQUE(encounter_row_id, character_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_encounter_raid ON encounters(raid_id);
+                CREATE INDEX IF NOT EXISTS idx_encounter_perf_enc ON encounter_performance(encounter_row_id);
+                CREATE INDEX IF NOT EXISTS idx_encounter_perf_char ON encounter_performance(character_id);
             """)
 
     def close(self) -> None:
@@ -324,7 +379,46 @@ class PerformanceDB:
                 (char_id, raid_id, cu.consumable_name, cu.count, ts_json),
             )
 
+        if analysis.encounters:
+            self._import_encounters(conn, raid_id, raid_date, analysis.encounters)
+
         conn.commit()
+
+    def _import_encounters(self, conn: sqlite3.Connection, raid_id: int,
+                            raid_date: str,
+                            encounters: list[EncounterSummary]) -> None:
+        conn.execute(
+            "DELETE FROM encounter_performance WHERE encounter_row_id IN "
+            "(SELECT id FROM encounters WHERE raid_id = ?)", (raid_id,))
+        conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
+
+        for enc in encounters:
+            conn.execute(
+                """INSERT INTO encounters
+                   (raid_id, encounter_id, name, start_time, end_time, duration_ms)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (raid_id, enc.encounter_id, enc.name,
+                 enc.start_time, enc.end_time, enc.duration_ms),
+            )
+            enc_row_id = conn.execute(
+                "SELECT id FROM encounters WHERE raid_id = ? AND encounter_id = ? AND start_time = ?",
+                (raid_id, enc.encounter_id, enc.start_time),
+            ).fetchone()["id"]
+
+            for player in enc.players:
+                char_id = self._upsert_character(player.name, player.player_class, raid_date)
+                conn.execute(
+                    """INSERT INTO encounter_performance
+                       (encounter_row_id, character_id, role, total_damage, total_healing, total_damage_taken)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(encounter_row_id, character_id) DO UPDATE SET
+                           role = excluded.role,
+                           total_damage = excluded.total_damage,
+                           total_healing = excluded.total_healing,
+                           total_damage_taken = excluded.total_damage_taken""",
+                    (enc_row_id, char_id, player.role,
+                     player.total_damage, player.total_healing, player.total_damage_taken),
+                )
 
     def _import_healer(self, conn: sqlite3.Connection, char_id: int, raid_id: int, h: HealerPerformance) -> None:
         total_dispels = sum(d.casts for d in h.dispels)
@@ -636,10 +730,12 @@ class PerformanceDB:
             if raid_day:
                 day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
                            "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
-                day_num = day_map.get(raid_day)
-                if day_num:
-                    frag += f" AND CAST(strftime('%w', {alias}.raid_date) AS INTEGER) = ?"
-                    p.append(int(day_num))
+                days = [d.strip() for d in raid_day.split(",")]
+                day_nums = [int(day_map[d]) for d in days if d in day_map]
+                if day_nums:
+                    placeholders = ",".join("?" * len(day_nums))
+                    frag += f" AND CAST(strftime('%w', {alias}.raid_date) AS INTEGER) IN ({placeholders})"
+                    p.extend(day_nums)
             if raid_size == "25-man":
                 frag += f" AND {alias}.raid_size >= 20"
             elif raid_size == "10-man":
@@ -1020,6 +1116,10 @@ class PerformanceDB:
             "(SELECT id FROM tank_performance WHERE raid_id = ?)", (raid_id,))
         conn.execute("DELETE FROM tank_performance WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM consumable_usage WHERE raid_id = ?", (raid_id,))
+        conn.execute(
+            "DELETE FROM encounter_performance WHERE encounter_row_id IN "
+            "(SELECT id FROM encounters WHERE raid_id = ?)", (raid_id,))
+        conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM raids WHERE id = ?", (raid_id,))
         conn.commit()
 
@@ -1752,6 +1852,8 @@ class PerformanceDB:
     def clear_all(self) -> None:
         """Delete all data from the database."""
         conn = self._get_conn()
+        conn.execute("DELETE FROM encounter_performance")
+        conn.execute("DELETE FROM encounters")
         conn.execute("DELETE FROM raid_group_members")
         conn.execute("DELETE FROM raid_groups")
         conn.execute("DELETE FROM healer_spells")
@@ -1814,6 +1916,7 @@ class PerformanceDB:
         tanks = self._load_tanks_for_raid(conn, raid_id)
         dps_list = self._load_dps_for_raid(conn, raid_id)
         consumables = self._load_consumables_for_raid(conn, raid_id, report_id)
+        encounters = self._load_encounters_for_raid(conn, raid_id)
 
         tank_ids = [PlayerIdentity(name=t.name, player_class=t.player_class, source_id=t.source_id, role="tank") for t in tanks]
         healer_ids = [PlayerIdentity(name=h.name, player_class=h.player_class, source_id=h.source_id, role="healer") for h in healers]
@@ -1827,6 +1930,7 @@ class PerformanceDB:
             tanks=tanks,
             dps=dps_list,
             consumables=consumables,
+            encounters=encounters,
         )
 
     def _load_healers_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[HealerPerformance]:
@@ -1920,6 +2024,130 @@ class PerformanceDB:
             count=r["count"],
             timestamps=json.loads(r["timestamps"]) if r["timestamps"] else [],
         ) for r in rows]
+
+    def get_encounter_history(self, encounter_id: int,
+                              raid_day: str | None = None,
+                              raid_size: str | None = None,
+                              last_n: int | None = None) -> list[dict]:
+        """Historical kills of a specific boss across raids."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n)
+        rows = conn.execute(
+            f"""SELECT e.name, e.duration_ms, r.raid_date, r.report_id, r.title,
+                      SUM(ep.total_damage) as total_damage,
+                      SUM(ep.total_healing) as total_healing,
+                      COUNT(ep.id) as player_count
+               FROM encounters e
+               JOIN raids r ON r.id = e.raid_id
+               JOIN encounter_performance ep ON ep.encounter_row_id = e.id
+               WHERE e.encounter_id = ?{ds_filter}
+               GROUP BY e.id
+               ORDER BY r.raid_date DESC""",
+            [encounter_id] + ds_params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_character_encounter_history(self, character_name: str,
+                                         encounter_id: int) -> list[dict]:
+        """A character's performance on a specific boss over time."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT e.name as encounter_name, e.duration_ms,
+                      r.raid_date, r.report_id, r.title,
+                      ep.role, ep.total_damage, ep.total_healing, ep.total_damage_taken
+               FROM encounter_performance ep
+               JOIN encounters e ON e.id = ep.encounter_row_id
+               JOIN raids r ON r.id = e.raid_id
+               JOIN characters c ON c.id = ep.character_id
+               WHERE c.name = ? AND e.encounter_id = ?
+               ORDER BY r.raid_date DESC""",
+            (character_name, encounter_id),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_distinct_encounters(self, raid_day: str | None = None,
+                                raid_size: str | None = None,
+                                last_n: int | None = None) -> list[dict]:
+        """All unique boss encounters in the database with kill counts."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(
+            raid_day, raid_size, last_n)
+        rows = conn.execute(
+            f"""SELECT e.encounter_id, e.name,
+                       COUNT(DISTINCT e.id) as kill_count
+                FROM encounters e
+                JOIN raids r ON r.id = e.raid_id
+                WHERE 1=1{ds_filter}
+                GROUP BY e.encounter_id
+                ORDER BY e.name""",
+            ds_params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_encounter_player_breakdown(
+        self, encounter_id: int,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+    ) -> list[dict]:
+        """Per-player averages for a specific boss across kills."""
+        conn = self._get_conn()
+        ds_filter, ds_params = self._build_day_size_filter(
+            raid_day, raid_size, last_n)
+        rows = conn.execute(
+            f"""SELECT c.name, c.player_class, ep.role,
+                       COUNT(*) as kills,
+                       CAST(AVG(ep.total_damage) AS INTEGER) as avg_damage,
+                       CAST(AVG(ep.total_healing) AS INTEGER) as avg_healing,
+                       CAST(AVG(ep.total_damage_taken) AS INTEGER) as avg_damage_taken
+                FROM encounter_performance ep
+                JOIN encounters e ON e.id = ep.encounter_row_id
+                JOIN raids r ON r.id = e.raid_id
+                JOIN characters c ON c.id = ep.character_id
+                WHERE e.encounter_id = ?{ds_filter}
+                GROUP BY c.id, ep.role
+                ORDER BY avg_damage DESC""",
+            [encounter_id] + ds_params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def _load_encounters_for_raid(self, conn: sqlite3.Connection,
+                                   raid_id: int) -> list[EncounterSummary]:
+        enc_rows = conn.execute(
+            "SELECT * FROM encounters WHERE raid_id = ? ORDER BY start_time",
+            (raid_id,),
+        ).fetchall()
+        results = []
+        for er in enc_rows:
+            perf_rows = conn.execute(
+                """SELECT ep.*, c.name, c.player_class
+                   FROM encounter_performance ep
+                   JOIN characters c ON c.id = ep.character_id
+                   WHERE ep.encounter_row_id = ?
+                   ORDER BY ep.total_damage DESC""",
+                (er["id"],),
+            ).fetchall()
+            players = [
+                EncounterPerformance(
+                    name=pr["name"],
+                    player_class=pr["player_class"],
+                    source_id=0,
+                    role=pr["role"] or "unknown",
+                    total_damage=pr["total_damage"],
+                    total_healing=pr["total_healing"],
+                    total_damage_taken=pr["total_damage_taken"],
+                )
+                for pr in perf_rows
+            ]
+            results.append(EncounterSummary(
+                encounter_id=er["encounter_id"],
+                name=er["name"],
+                start_time=er["start_time"],
+                end_time=er["end_time"],
+                duration_ms=er["duration_ms"],
+                players=players,
+            ))
+        return results
 
     def compare_characters(self, names: list[str], role: str) -> list[dict]:
         """Compare multiple characters' average performance."""

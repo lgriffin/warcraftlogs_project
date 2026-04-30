@@ -205,6 +205,32 @@ class WarcraftLogsClient:
         result = self.run_query(query)
         return result["data"]["reportData"]["report"]["fights"]
 
+    def get_encounter_table(self, report_id: str, start_time: int,
+                             end_time: int, data_type: str) -> list[dict]:
+        """Query the table endpoint for a time window without sourceID.
+
+        Returns per-player aggregate totals for the given data_type
+        (DamageDone, Healing, or DamageTaken) within the fight window.
+        """
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              table(dataType: {data_type}, startTime: {start_time}, endTime: {end_time},
+                    hostilityType: Friendlies)
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        raw_table = result["data"]["reportData"]["report"]["table"]
+        if isinstance(raw_table, dict):
+            if "data" in raw_table and "entries" in raw_table["data"]:
+                return raw_table["data"]["entries"]
+            if "entries" in raw_table:
+                return raw_table["entries"]
+        return []
+
     # ── Player event queries ──
 
     def get_healing_data(self, report_id: str, source_id: int) -> list[dict]:

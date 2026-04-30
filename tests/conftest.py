@@ -10,6 +10,8 @@ from warcraftlogs_client.models import (
     ConsumableUsage,
     DPSPerformance,
     DispelUsage,
+    EncounterPerformance,
+    EncounterSummary,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
@@ -126,6 +128,31 @@ def sample_raid_analysis(sample_raid_metadata, sample_composition,
 
 
 @pytest.fixture
+def sample_encounter_summary():
+    return EncounterSummary(
+        encounter_id=658,
+        name="Attumen the Huntsman",
+        start_time=12000,
+        end_time=180000,
+        duration_ms=168000,
+        players=[
+            EncounterPerformance(
+                name="StabbyRogue", player_class="Rogue", source_id=3,
+                role="melee", total_damage=150_000, total_healing=0, total_damage_taken=20_000,
+            ),
+            EncounterPerformance(
+                name="HolyPriest", player_class="Priest", source_id=1,
+                role="healer", total_damage=5_000, total_healing=120_000, total_damage_taken=15_000,
+            ),
+            EncounterPerformance(
+                name="TankWarrior", player_class="Warrior", source_id=2,
+                role="tank", total_damage=30_000, total_healing=0, total_damage_taken=200_000,
+            ),
+        ],
+    )
+
+
+@pytest.fixture
 def sample_master_actors():
     return [
         {"name": "TankWarrior", "id": 2, "type": "Player", "subType": "Warrior"},
@@ -152,6 +179,7 @@ def mock_client():
     client.get_damage_done_table.return_value = []
     client.get_master_data.return_value = []
     client.get_fights.return_value = []
+    client.get_encounter_table.return_value = []
     return client
 
 
