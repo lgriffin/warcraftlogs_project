@@ -313,13 +313,20 @@ class DownloadView(QWidget):
         except (sqlite3.Error, OSError) as e:
             self.status_message.emit(f"DB save failed: {e}")
 
+        enc_count = len(analysis.encounters) if analysis.encounters else 0
+        report_id = analysis.metadata.report_id
+        title = analysis.metadata.title
+        self.status_message.emit(
+            f"Saved: {title} ({report_id}) — {enc_count} encounters")
+
         self._refresh_cached_codes()
         self._apply_day_filter()
         self.raid_downloaded.emit()
         self._run_next_in_batch()
 
     def _on_analysis_error(self, error_msg: str):
-        self.status_message.emit(f"Analysis failed: {error_msg}")
+        code = self._batch_total - len(self._batch_queue)
+        self.status_message.emit(f"Analysis failed ({code}/{self._batch_total}): {error_msg}")
         self._run_next_in_batch()
 
     def _on_batch_complete(self):
@@ -330,4 +337,5 @@ class DownloadView(QWidget):
         self._apply_day_filter()
         done = self._batch_total
         self._batch_total = 0
-        self.status_message.emit(f"Batch complete: {done} report(s) processed")
+        if done > 1:
+            self.status_message.emit(f"Batch complete: {done} report(s) processed")

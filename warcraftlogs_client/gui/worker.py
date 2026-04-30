@@ -49,8 +49,8 @@ class AnalysisWorker(QThread):
             self.progress.emit("Analysis complete!")
             self.finished.emit(result)
 
-        except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-            self.error.emit(str(e))
+        except Exception as e:
+            self.error.emit(f"{type(e).__name__}: {e}")
 
 
 class GuildInfoWorker(QThread):
