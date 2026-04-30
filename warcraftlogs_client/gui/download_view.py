@@ -235,6 +235,10 @@ class DownloadView(QWidget):
                     api_url = ""
                 base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
                 webbrowser.open(f"{base}/reports/{code}")
+        else:
+            code = rows[index.row()].get("code", "")
+            if code:
+                self._report_input.setText(code)
 
     def _on_check_changed(self):
         selected = self._table_model.checked_rows()

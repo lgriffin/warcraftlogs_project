@@ -51,6 +51,7 @@ class RaidAnalysisWidget(QWidget):
     request_back = Signal()
     raid_deleted = Signal(str)
     cross_analyze = Signal(str)
+    request_reanalyze = Signal(str)
 
     def __init__(self, analysis: RaidAnalysis, show_back: bool = True,
                  show_delete: bool = True, parent=None):
@@ -92,6 +93,12 @@ class RaidAnalysisWidget(QWidget):
         export_btn.setFixedHeight(32)
         export_btn.clicked.connect(self._export_markdown)
         header_layout.addWidget(export_btn)
+
+        self._reanalyze_btn = QPushButton("Re-analyze")
+        self._reanalyze_btn.setProperty("secondary", True)
+        self._reanalyze_btn.setFixedHeight(32)
+        self._reanalyze_btn.clicked.connect(self._request_reanalyze)
+        header_layout.addWidget(self._reanalyze_btn)
 
         cross_btn = QPushButton("Cross-Analyze")
         cross_btn.setProperty("secondary", True)
@@ -352,6 +359,17 @@ class RaidAnalysisWidget(QWidget):
                 self._detail_panel.show_dps(d, player_consumes)
                 self._splitter.setSizes([3, 1])
                 return
+
+    def _request_reanalyze(self):
+        self._reanalyze_btn.setEnabled(False)
+        self._reanalyze_btn.setText("Analyzing...")
+        self.request_reanalyze.emit(self._analysis.metadata.report_id)
+
+    def refresh(self, analysis: RaidAnalysis):
+        self._analysis = analysis
+        self._populate(analysis)
+        self._reanalyze_btn.setEnabled(True)
+        self._reanalyze_btn.setText("Re-analyze")
 
     def _export_markdown(self):
         title = self._analysis.metadata.title
