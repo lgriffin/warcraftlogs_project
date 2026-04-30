@@ -12,10 +12,7 @@ from .charts import (
     build_dps_progression_chart,
     build_heal_damage_ratio_chart,
     build_raid_duration_chart,
-    build_attendance_chart,
     build_overheal_trend_chart,
-    build_healer_overheal_bar_chart,
-    build_tank_mitigation_bar_chart,
     ConsumableHeatmapWidget,
 )
 
@@ -138,11 +135,37 @@ class InsightsView(QWidget):
         self._overheal_trend_container = QVBoxLayout()
         self._healer_layout.addLayout(self._overheal_trend_container)
 
-        self._overheal_bar_container = QVBoxLayout()
-        self._healer_layout.addLayout(self._overheal_bar_container)
+        self._healer_layout.addWidget(_section_label("Healer Summary"))
 
-        self._tank_mit_container = QVBoxLayout()
-        self._healer_layout.addLayout(self._tank_mit_container)
+        self._healer_table = QTableWidget()
+        self._healer_table.setColumnCount(6)
+        self._healer_table.setHorizontalHeaderLabels(
+            ["Name", "Class", "Raids", "Avg Healing", "Avg Overheal %", "Dispels"])
+        self._healer_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        for col in range(1, 6):
+            self._healer_table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.ResizeMode.ResizeToContents)
+        self._healer_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._healer_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._healer_table.setAlternatingRowColors(True)
+        self._healer_layout.addWidget(self._healer_table)
+
+        self._healer_layout.addWidget(_section_label("Tank Summary"))
+
+        self._tank_table = QTableWidget()
+        self._tank_table.setColumnCount(5)
+        self._tank_table.setHorizontalHeaderLabels(
+            ["Name", "Class", "Raids", "Avg Mitigation %", "Avg Damage Taken"])
+        self._tank_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        for col in range(1, 5):
+            self._tank_table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.ResizeMode.ResizeToContents)
+        self._tank_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._tank_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._tank_table.setAlternatingRowColors(True)
+        self._healer_layout.addWidget(self._tank_table)
 
         self._healer_layout.addStretch()
         scroll.setWidget(inner)
@@ -164,8 +187,21 @@ class InsightsView(QWidget):
         row1.addLayout(self._duration_container)
         self._overview_layout.addLayout(row1)
 
-        self._attendance_container = QVBoxLayout()
-        self._overview_layout.addLayout(self._attendance_container)
+        self._overview_layout.addWidget(_section_label("Attendance"))
+
+        self._attendance_table = QTableWidget()
+        self._attendance_table.setColumnCount(5)
+        self._attendance_table.setHorizontalHeaderLabels(
+            ["Name", "Class", "Raids Attended", "First Seen", "Last Seen"])
+        self._attendance_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        for col in range(1, 5):
+            self._attendance_table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.ResizeMode.ResizeToContents)
+        self._attendance_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._attendance_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._attendance_table.setAlternatingRowColors(True)
+        self._overview_layout.addWidget(self._attendance_table)
 
         self._overview_layout.addStretch()
         scroll.setWidget(inner)
@@ -330,36 +366,60 @@ class InsightsView(QWidget):
 
     def _refresh_healers(self, overheal_trend, healer_insights, tank_stats):
         _clear_layout_widgets(self._overheal_trend_container)
-        _clear_layout_widgets(self._overheal_bar_container)
-        _clear_layout_widgets(self._tank_mit_container)
 
         if overheal_trend:
             chart = build_overheal_trend_chart(overheal_trend)
             self._overheal_trend_container.addWidget(chart)
 
-        if healer_insights:
-            chart = build_healer_overheal_bar_chart(healer_insights)
-            chart.setMinimumHeight(max(250, len(healer_insights) * 22 + 80))
-            self._overheal_bar_container.addWidget(chart)
+        self._healer_table.setRowCount(len(healer_insights))
+        for i, row in enumerate(healer_insights):
+            self._healer_table.setItem(i, 0, QTableWidgetItem(row["name"]))
+            self._healer_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
+            for j, (key, fmt) in enumerate([
+                ("raids", lambda v: str(int(v))),
+                ("avg_healing", lambda v: f"{v:,.0f}"),
+                ("avg_overheal", lambda v: f"{v:.1f}"),
+                ("total_dispels", lambda v: f"{int(v):,}"),
+            ]):
+                item = QTableWidgetItem(fmt(row.get(key, 0) or 0))
+                item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self._healer_table.setItem(i, j + 2, item)
 
-        if tank_stats:
-            chart = build_tank_mitigation_bar_chart(tank_stats)
-            chart.setMinimumHeight(max(250, len(tank_stats) * 28 + 80))
-            self._tank_mit_container.addWidget(chart)
+        self._tank_table.setRowCount(len(tank_stats))
+        for i, row in enumerate(tank_stats):
+            self._tank_table.setItem(i, 0, QTableWidgetItem(row["name"]))
+            self._tank_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
+            for j, (key, fmt) in enumerate([
+                ("raids", lambda v: str(int(v))),
+                ("avg_mitigation", lambda v: f"{v:.1f}"),
+                ("avg_damage_taken", lambda v: f"{v:,.0f}"),
+            ]):
+                item = QTableWidgetItem(fmt(row.get(key, 0) or 0))
+                item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self._tank_table.setItem(i, j + 2, item)
 
     def _refresh_overview(self, raid_overview, attendance):
         _clear_layout_widgets(self._ratio_container)
         _clear_layout_widgets(self._duration_container)
-        _clear_layout_widgets(self._attendance_container)
 
         if raid_overview:
             self._ratio_container.addWidget(build_heal_damage_ratio_chart(raid_overview))
             self._duration_container.addWidget(build_raid_duration_chart(raid_overview))
 
-        if attendance:
-            chart = build_attendance_chart(attendance, top_n=25)
-            chart.setMinimumHeight(max(300, min(len(attendance), 25) * 22 + 80))
-            self._attendance_container.addWidget(chart)
+        self._attendance_table.setRowCount(len(attendance))
+        for i, row in enumerate(attendance):
+            self._attendance_table.setItem(i, 0, QTableWidgetItem(row["name"]))
+            self._attendance_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
+            item = QTableWidgetItem(str(row.get("raid_count", 0)))
+            item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._attendance_table.setItem(i, 2, item)
+            first = row.get("first_seen", "")
+            last = row.get("last_seen", "")
+            self._attendance_table.setItem(i, 3, QTableWidgetItem(first[:10] if first else ""))
+            self._attendance_table.setItem(i, 4, QTableWidgetItem(last[:10] if last else ""))
 
     def _refresh_usage(self, usage_rates):
         if not usage_rates or not self._usage_table:
