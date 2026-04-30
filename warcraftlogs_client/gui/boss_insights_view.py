@@ -83,8 +83,13 @@ class BossInsightsView(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}
+            QScrollArea > QWidget > QWidget {{ background-color: {COLORS['bg_dark']}; }}
+        """)
 
         content = QWidget()
+        content.setStyleSheet(f"background-color: {COLORS['bg_dark']};")
         self._content_layout = QVBoxLayout(content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
