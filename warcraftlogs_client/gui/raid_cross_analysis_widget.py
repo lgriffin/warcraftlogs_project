@@ -402,29 +402,31 @@ class RaidCrossAnalysisWidget(QWidget):
         return True
 
     def _compute_spell_deltas(self, spell_trend, size_mode, value_key, last_n=None):
-        by_raid: dict[str, dict[str, dict]] = defaultdict(dict)
+        by_raid: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(lambda: {"casts": 0, "value": 0}))
+        raid_dates: dict[str, str] = {}
         for row in spell_trend:
             if not self._matches_filter(row, size_mode):
                 continue
-            raid_key = row.get("raid_date", "")
+            raid_key = row.get("report_id") or row.get("raid_date", "")
             spell = row.get("spell_name", "")
-            by_raid[raid_key][spell] = {
-                "casts": row.get("casts", 0),
-                "value": row.get(value_key, 0) or 0,
-            }
+            by_raid[raid_key][spell]["casts"] += row.get("casts", 0)
+            by_raid[raid_key][spell]["value"] += row.get(value_key, 0) or 0
+            if raid_key not in raid_dates:
+                raid_dates[raid_key] = row.get("raid_date", "")
 
-        raid_dates = sorted(by_raid.keys())
-        if len(raid_dates) < 2:
+        if self._report_id not in by_raid or len(by_raid) < 2:
             return []
 
-        this_raid_date = raid_dates[-1]
-        this_spells = by_raid[this_raid_date]
-        hist_dates = raid_dates[:-1]
+        this_spells = by_raid[self._report_id]
+        hist_keys = sorted(
+            [k for k in by_raid if k != self._report_id],
+            key=lambda k: raid_dates.get(k, ""),
+        )
         if last_n is not None:
-            hist_dates = hist_dates[-last_n:]
+            hist_keys = hist_keys[-last_n:]
 
         spell_avgs: dict[str, dict] = defaultdict(lambda: {"casts": 0, "value": 0, "count": 0})
-        for d in hist_dates:
+        for d in hist_keys:
             for spell, data in by_raid[d].items():
                 spell_avgs[spell]["casts"] += data["casts"]
                 spell_avgs[spell]["value"] += data["value"]
@@ -441,6 +443,8 @@ class RaidCrossAnalysisWidget(QWidget):
             else:
                 avg_casts = 0
                 avg_value = 0
+            if this_data["casts"] == 0 and avg_casts == 0:
+                continue
             results.append({
                 "spell_name": spell,
                 "this_casts": this_data["casts"],
@@ -454,20 +458,24 @@ class RaidCrossAnalysisWidget(QWidget):
 
     def _compute_consumable_deltas(self, con_trend, size_mode, last_n=None):
         by_raid: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        raid_dates: dict[str, str] = {}
         for row in con_trend:
             if not self._matches_filter(row, size_mode):
                 continue
             raid_key = row.get("report_id") or row.get("raid_date", "")
             con = row.get("consumable_name", "")
             by_raid[raid_key][con] += row.get("count", 0)
+            if raid_key not in raid_dates:
+                raid_dates[raid_key] = row.get("raid_date", "")
 
-        if len(by_raid) < 2:
+        if self._report_id not in by_raid or len(by_raid) < 2:
             return []
 
-        raid_keys = sorted(by_raid.keys())
-        this_key = raid_keys[-1]
-        this_cons = by_raid[this_key]
-        hist_keys = raid_keys[:-1]
+        this_cons = by_raid[self._report_id]
+        hist_keys = sorted(
+            [k for k in by_raid if k != self._report_id],
+            key=lambda k: raid_dates.get(k, ""),
+        )
         if last_n is not None:
             hist_keys = hist_keys[-last_n:]
 
