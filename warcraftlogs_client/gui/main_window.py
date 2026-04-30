@@ -18,6 +18,7 @@ from .raids_view import RaidsView
 from .raid_group_view import RaidGroupView
 from .character_view import CharacterView
 from .compare_view import CompareView
+from .insights_view import InsightsView
 from .settings_view import SettingsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
             ("Raid Groups", "Manage raid groups and compare classes"),
             ("My Character", "View your character profile and rankings"),
             ("Compare", "Compare character stats and radar overlays"),
+            ("GM/RL Insights", "Explore performance trends and comparisons"),
             ("Settings", "Configure credentials and thresholds"),
         ]
         for name, tooltip in nav_items:
@@ -99,7 +101,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.nav_list)
         sidebar_layout.addStretch()
 
-        version_label = QLabel("v3.5.1")
+        version_label = QLabel("v3.6.0")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("color: #555; padding: 10px; font-size: 11px;")
         sidebar_layout.addWidget(version_label)
@@ -142,6 +144,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view = RaidGroupView()
         self.character_view = CharacterView()
         self.compare_view = CompareView()
+        self.insights_view = InsightsView()
         self.settings_view = SettingsView()
 
         self.stack.addWidget(self.download_view)
@@ -149,8 +152,9 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.raid_group_view)
         self.stack.addWidget(self.character_view)
         self.stack.addWidget(self.compare_view)
+        self.stack.addWidget(self.insights_view)
         self.stack.addWidget(self.settings_view)
-        self.stack.set_base_count(6)
+        self.stack.set_base_count(7)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
@@ -182,6 +186,7 @@ class MainWindow(QMainWindow):
         self.character_view.analyze_report.connect(self._analyze_report)
         self.character_view.view_character_history.connect(self._drill_into_character_history)
         self.compare_view.status_message.connect(self.status_bar.showMessage)
+        self.insights_view.status_message.connect(self.status_bar.showMessage)
         self.settings_view.status_message.connect(self._on_settings_saved)
 
         self._load_guild_info()

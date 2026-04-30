@@ -895,3 +895,331 @@ def build_class_comparison_chart(trend_data: list[dict], metric_key: str) -> QCh
 
     _fit_axes(x_axis, y_axis, all_pts)
     return make_chart_view(chart)
+
+
+# ── Insights charts ──
+
+def _make_horizontal_bar_chart(title: str, data: list[dict], name_key: str,
+                                value_key: str, value_label: str,
+                                color_idx: int = 1, top_n: int = 25,
+                                value_format: str = "%d",
+                                max_range: float | None = None) -> QChartView:
+    """Reusable horizontal bar chart builder with proper dark-theme styling."""
+    from PySide6.QtCharts import QBarSet, QBarCategoryAxis, QHorizontalBarSeries
+
+    chart = _make_chart(title)
+    chart.legend().setVisible(False)
+
+    entries = data[:top_n]
+    entries = list(reversed(entries))
+
+    categories = [str(e[name_key]) for e in entries]
+    bar_set = QBarSet("")
+    bar_set.setColor(SERIES_COLORS[color_idx % len(SERIES_COLORS)])
+    for e in entries:
+        bar_set.append(float(e[value_key]))
+
+    series = QHorizontalBarSeries()
+    series.append(bar_set)
+    series.setBarWidth(0.7)
+    chart.addSeries(series)
+
+    cat_axis = QBarCategoryAxis()
+    cat_axis.append(categories)
+    cat_axis.setLabelsColor(QColor(COLORS["text"]))
+    cat_axis.setGridLineColor(QColor(COLORS["border"]))
+    cat_axis.setLinePenColor(QColor(COLORS["border"]))
+    cat_axis.setLabelsFont(QFont("Segoe UI", 8))
+    chart.addAxis(cat_axis, Qt.AlignmentFlag.AlignLeft)
+    series.attachAxis(cat_axis)
+
+    val_axis = QValueAxis()
+    val_axis.setTitleText(value_label)
+    if max_range is not None:
+        val_axis.setRange(0, max_range)
+    else:
+        max_v = max((float(e[value_key]) for e in entries), default=1)
+        val_axis.setRange(0, max_v * 1.1)
+    val_axis.setLabelFormat(value_format)
+    _style_axis(val_axis)
+    chart.addAxis(val_axis, Qt.AlignmentFlag.AlignBottom)
+    series.attachAxis(val_axis)
+
+    return make_chart_view(chart)
+
+
+def build_dps_progression_chart(data: list[dict], top_n: int = 8) -> QChartView:
+    """Multi-series line chart of top DPS characters over time."""
+    chart = _make_chart("DPS Progression Over Time")
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText("Total Damage")
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    by_player: dict[str, list[tuple[datetime, float]]] = {}
+    for row in data:
+        name = row["name"]
+        try:
+            dt = datetime.fromisoformat(row["raid_date"])
+        except (ValueError, TypeError):
+            continue
+        by_player.setdefault(name, []).append((dt, float(row["total_damage"])))
+
+    avgs = {name: sum(v for _, v in pts) / len(pts) for name, pts in by_player.items()}
+    top_names = sorted(avgs, key=avgs.get, reverse=True)[:top_n]
+
+    all_pts = []
+    for i, name in enumerate(top_names):
+        pts = sorted(by_player[name], key=lambda p: p[0])
+        all_pts.extend(pts)
+        _add_series(chart, pts, name, i, x_axis, y_axis)
+
+    _fit_axes(x_axis, y_axis, all_pts)
+    return make_chart_view(chart)
+
+
+def build_consistency_chart(data: list[dict], top_n: int = 20) -> QChartView:
+    return _make_horizontal_bar_chart(
+        "DPS Consistency (higher = more reliable)", data,
+        "name", "consistency", "Consistency %", color_idx=2, top_n=top_n,
+        max_range=100)
+
+
+def build_heal_damage_ratio_chart(data: list[dict]) -> QChartView:
+    """Line chart of healing-to-damage ratio over time."""
+    chart = _make_chart("Healing / Damage Ratio Over Time")
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText("Ratio %")
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    points = []
+    for row in data:
+        try:
+            dt = datetime.fromisoformat(row["raid_date"])
+        except (ValueError, TypeError):
+            continue
+        points.append((dt, float(row["heal_damage_ratio"])))
+    points.sort(key=lambda p: p[0])
+
+    _add_series(chart, points, "Heal/Dmg %", 0, x_axis, y_axis)
+    _fit_axes(x_axis, y_axis, points)
+    if points:
+        vals = [v for _, v in points]
+        y_axis.setRange(0, max(vals) * 1.2)
+        y_axis.setLabelFormat("%.1f")
+
+    return make_chart_view(chart)
+
+
+def build_raid_duration_chart(data: list[dict]) -> QChartView:
+    """Line + scatter chart of raid duration over time."""
+    chart = _make_chart("Raid Duration Over Time")
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText("Minutes")
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    points = []
+    for row in data:
+        try:
+            dt = datetime.fromisoformat(row["raid_date"])
+        except (ValueError, TypeError):
+            continue
+        points.append((dt, float(row["duration_minutes"])))
+    points.sort(key=lambda p: p[0])
+
+    _add_series(chart, points, "Duration", 0, x_axis, y_axis)
+
+    scatter = QScatterSeries()
+    scatter.setName("Raids")
+    scatter.setMarkerSize(8)
+    scatter.setColor(SERIES_COLORS[1])
+    for dt, val in points:
+        scatter.append(QPointF(QDateTime(dt).toMSecsSinceEpoch(), val))
+    chart.addSeries(scatter)
+    scatter.attachAxis(x_axis)
+    scatter.attachAxis(y_axis)
+
+    _fit_axes(x_axis, y_axis, points)
+    return make_chart_view(chart)
+
+
+def build_attendance_chart(data: list[dict], top_n: int = 25) -> QChartView:
+    return _make_horizontal_bar_chart(
+        "Raid Attendance", data, "name", "raid_count",
+        "Raids Attended", color_idx=1, top_n=top_n)
+
+
+def build_overheal_trend_chart(data: list[dict]) -> QChartView:
+    """Raid-level average overheal % over time."""
+    chart = _make_chart("Avg Overheal % Per Raid")
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText("Overheal %")
+    y_axis.setRange(0, 100)
+    y_axis.setLabelFormat("%.0f")
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    points = []
+    for row in data:
+        try:
+            dt = datetime.fromisoformat(row["raid_date"])
+        except (ValueError, TypeError):
+            continue
+        points.append((dt, float(row["avg_overheal"])))
+    points.sort(key=lambda p: p[0])
+
+    _add_series(chart, points, "Avg OH%", 3, x_axis, y_axis)
+    if points:
+        dates = [p[0] for p in points]
+        x_axis.setRange(QDateTime(min(dates)), QDateTime(max(dates)))
+
+    return make_chart_view(chart)
+
+
+def build_healer_overheal_bar_chart(data: list[dict]) -> QChartView:
+    return _make_horizontal_bar_chart(
+        "Healer Overheal % (lower = more efficient)", data,
+        "name", "avg_overheal", "Overheal %", color_idx=3,
+        top_n=len(data), max_range=100, value_format="%.0f")
+
+
+def build_dpm_chart(data: list[dict], top_n: int = 20) -> QChartView:
+    return _make_horizontal_bar_chart(
+        "Avg Damage Per Minute (duration-normalized)", data,
+        "name", "avg_dpm", "Damage / Min", color_idx=0, top_n=top_n,
+        value_format="%'.0f")
+
+
+def build_tank_mitigation_bar_chart(data: list[dict]) -> QChartView:
+    return _make_horizontal_bar_chart(
+        "Tank Avg Mitigation %", data,
+        "name", "avg_mitigation", "Mitigation %", color_idx=4,
+        top_n=len(data), max_range=100, value_format="%.0f")
+
+
+class ConsumableHeatmapWidget(QWidget):
+    """Character x consumable grid heatmap colored by avg usage per raid."""
+
+    def __init__(self, compliance: dict, parent=None):
+        super().__init__(parent)
+        self._compliance = compliance
+        self._cells: list[tuple[QRectF, str, str, float]] = []
+        self.setMouseTracking(True)
+        characters = compliance.get("characters", [])
+        if characters:
+            cell_h, gap, header_h = 20, 1, 60
+            self.setMinimumHeight(header_h + len(characters) * (cell_h + gap) + 10)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        characters = self._compliance.get("characters", [])
+        consumables = self._compliance.get("consumables", [])
+        matrix = self._compliance.get("matrix", {})
+
+        if not characters or not consumables:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 11))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No consumable data")
+            painter.end()
+            return
+
+        cell_w = 48
+        cell_h = 20
+        gap = 1
+        name_col_w = 120
+        header_h = 60
+        label_font = QFont("Segoe UI", 7)
+        name_font = QFont("Segoe UI", 8)
+
+        max_val = 0.0
+        for char_data in matrix.values():
+            for v in char_data.values():
+                max_val = max(max_val, v)
+        if max_val == 0:
+            max_val = 1
+
+        painter.setPen(QColor(COLORS["text_dim"]))
+        painter.setFont(label_font)
+        for j, con_name in enumerate(consumables):
+            x = name_col_w + j * (cell_w + gap)
+            painter.save()
+            painter.translate(x + cell_w // 2, header_h - 4)
+            painter.rotate(-45)
+            painter.drawText(0, 0, con_name[:18])
+            painter.restore()
+
+        self._cells = []
+        painter.setFont(name_font)
+        for i, char_info in enumerate(characters):
+            char_name = char_info["name"]
+            y = header_h + i * (cell_h + gap)
+
+            painter.setPen(QColor(COLORS["text"]))
+            painter.drawText(4, int(y + cell_h - 4), char_name[:14])
+
+            char_matrix = matrix.get(char_name, {})
+            for j, con_name in enumerate(consumables):
+                x = name_col_w + j * (cell_w + gap)
+                val = char_matrix.get(con_name, 0)
+                rect = QRectF(x, y, cell_w, cell_h)
+                self._cells.append((rect, char_name, con_name, val))
+
+                intensity = min(val / max_val, 1.0) if max_val > 0 else 0
+                if val == 0:
+                    color = QColor(COLORS["bg_dark"])
+                else:
+                    g = int(80 + intensity * 175)
+                    color = QColor(20, g, 40)
+
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(color))
+                painter.drawRect(rect)
+
+                if val > 0:
+                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setFont(label_font)
+                    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"{val:.0f}" if val >= 1 else f"{val:.1f}")
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, 'position') else event.pos()
+        for rect, char_name, con_name, val in self._cells:
+            if rect.contains(pos):
+                tip = f"{char_name}: {con_name}\nAvg per raid: {val:.1f}"
+                tip_pos = (event.globalPosition().toPoint()
+                           if hasattr(event, 'globalPosition')
+                           else event.globalPos())
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
