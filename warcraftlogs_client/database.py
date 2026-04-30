@@ -546,7 +546,7 @@ class PerformanceDB:
         """Get per-spell healing data across raids for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.raid_size, r.zone,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       hs.spell_name, hs.casts, hs.total_healing
                FROM healer_spells hs
                JOIN healer_performance hp ON hp.id = hs.healer_performance_id
@@ -563,7 +563,7 @@ class PerformanceDB:
         """Get per-ability damage data across raids for a character."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.raid_size, r.zone,
+            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       da.spell_name, da.casts, da.total_damage
                FROM dps_abilities da
                JOIN dps_performance dp ON dp.id = da.dps_performance_id
