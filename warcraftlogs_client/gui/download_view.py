@@ -27,6 +27,7 @@ from ..common.errors import WarcraftLogsError
 class DownloadView(QWidget):
     status_message = Signal(str)
     raid_downloaded = Signal()
+    open_raid = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -258,8 +259,13 @@ class DownloadView(QWidget):
         rows = self._table_model._rows
         if index.row() >= len(rows):
             return
-        code = rows[index.row()].get("code", "")
-        if code:
+        row = rows[index.row()]
+        code = row.get("code", "")
+        if not code:
+            return
+        if row.get("status") == "Downloaded":
+            self.open_raid.emit(code)
+        else:
             self._start_batch([code])
 
     def _analyze_single(self):

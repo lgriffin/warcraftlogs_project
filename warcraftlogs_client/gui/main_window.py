@@ -15,6 +15,7 @@ from PySide6.QtGui import QFont, QPixmap
 
 from .download_view import DownloadView
 from .raids_view import RaidsView
+from .find_character_view import FindCharacterView
 from .raid_group_view import RaidGroupView
 from .character_view import CharacterView
 from .compare_view import CompareView
@@ -30,8 +31,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("WarcraftLogs Analyzer")
-        self.setMinimumSize(1200, 800)
-        self.resize(1500, 950)
+        self.setMinimumSize(1440, 960)
+        self.resize(1800, 1140)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -62,6 +63,10 @@ class MainWindow(QMainWindow):
 
         self.nav_list = QListWidget()
         self.nav_list.setIconSize(QSize(20, 20))
+        self.nav_list.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.nav_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.nav_list.setStyleSheet("""
             QListWidget {
                 background-color: #1a1a2e;
@@ -87,6 +92,7 @@ class MainWindow(QMainWindow):
         nav_items = [
             ("Download", "Fetch guild reports and analyze raids"),
             ("Raids", "Browse analyzed raids"),
+            ("Find Character", "Search and browse all tracked characters"),
             ("Raid Groups", "Manage raid groups and compare classes"),
             ("My Character", "View your character profile and rankings"),
             ("Compare", "Compare character stats and radar overlays"),
@@ -100,8 +106,7 @@ class MainWindow(QMainWindow):
             item.setSizeHint(QSize(200, 48))
             self.nav_list.addItem(item)
 
-        sidebar_layout.addWidget(self.nav_list)
-        sidebar_layout.addStretch()
+        sidebar_layout.addWidget(self.nav_list, 1)
 
         version_label = QLabel("v3.7.0")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -143,6 +148,7 @@ class MainWindow(QMainWindow):
 
         self.download_view = DownloadView()
         self.raids_view = RaidsView()
+        self.find_character_view = FindCharacterView()
         self.raid_group_view = RaidGroupView()
         self.character_view = CharacterView()
         self.compare_view = CompareView()
@@ -152,13 +158,14 @@ class MainWindow(QMainWindow):
 
         self.stack.addWidget(self.download_view)
         self.stack.addWidget(self.raids_view)
+        self.stack.addWidget(self.find_character_view)
         self.stack.addWidget(self.raid_group_view)
         self.stack.addWidget(self.character_view)
         self.stack.addWidget(self.compare_view)
         self.stack.addWidget(self.insights_view)
         self.stack.addWidget(self.boss_insights_view)
         self.stack.addWidget(self.settings_view)
-        self.stack.set_base_count(8)
+        self.stack.set_base_count(9)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
@@ -182,10 +189,14 @@ class MainWindow(QMainWindow):
 
         self.download_view.status_message.connect(self.status_bar.showMessage)
         self.download_view.raid_downloaded.connect(self._on_raid_downloaded)
+        self.download_view.open_raid.connect(self._drill_into_raid)
         self.raids_view.status_message.connect(self.status_bar.showMessage)
         self.raids_view.open_raid.connect(self._drill_into_raid)
         self.raid_group_view.status_message.connect(self.status_bar.showMessage)
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
+        self.find_character_view.status_message.connect(self.status_bar.showMessage)
+        self.find_character_view.view_character_history.connect(
+            self._drill_into_character_history)
         self.character_view.status_message.connect(self.status_bar.showMessage)
         self.character_view.analyze_report.connect(self._analyze_report)
         self.character_view.view_character_history.connect(self._drill_into_character_history)
@@ -275,6 +286,21 @@ class MainWindow(QMainWindow):
         self._guild_info_worker = GuildInfoWorker(guild_id)
         self._guild_info_worker.finished.connect(self._on_guild_info_loaded)
         self._guild_info_worker.start()
+
+    def closeEvent(self, event):
+        workers = []
+        for view in [self.download_view, self.character_view]:
+            for attr in ('_worker', '_guild_worker', '_wowhead_worker'):
+                w = getattr(view, attr, None)
+                if w and w.isRunning():
+                    workers.append(w)
+        w = getattr(self, '_guild_info_worker', None)
+        if w and w.isRunning():
+            workers.append(w)
+        for w in workers:
+            w.quit()
+            w.wait(3000)
+        super().closeEvent(event)
 
     def _on_guild_info_loaded(self, info: dict):
         name = info.get("name", "")

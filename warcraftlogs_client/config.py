@@ -14,9 +14,11 @@ from pathlib import Path
 @dataclass
 class RoleThresholds:
     """Configuration for role detection thresholds."""
-    healer_min_healing: int = 50000
+    healer_min_healing: int = 40000
     tank_min_taken: int = 150000
     tank_min_mitigation: int = 40
+    healer_min_healing_10: int = 400000
+    tank_min_taken_10: int = 300000
 
 @dataclass
 class ApiConfig:
@@ -121,9 +123,11 @@ class ConfigManager:
         # Parse role thresholds with defaults
         role_thresholds_data = raw_config.get("role_thresholds", {})
         role_thresholds = RoleThresholds(
-            healer_min_healing=role_thresholds_data.get("healer_min_healing", 50000),
+            healer_min_healing=role_thresholds_data.get("healer_min_healing", 40000),
             tank_min_taken=role_thresholds_data.get("tank_min_taken", 150000),
-            tank_min_mitigation=role_thresholds_data.get("tank_min_mitigation", 40)
+            tank_min_mitigation=role_thresholds_data.get("tank_min_mitigation", 40),
+            healer_min_healing_10=role_thresholds_data.get("healer_min_healing_10", 400000),
+            tank_min_taken_10=role_thresholds_data.get("tank_min_taken_10", 300000),
         )
         
         # Create main config with optional settings
@@ -152,7 +156,9 @@ class ConfigManager:
         return {
             "healer_min_healing": config.role_thresholds.healer_min_healing,
             "tank_min_taken": config.role_thresholds.tank_min_taken,
-            "tank_min_mitigation": config.role_thresholds.tank_min_mitigation
+            "tank_min_mitigation": config.role_thresholds.tank_min_mitigation,
+            "healer_min_healing_10": config.role_thresholds.healer_min_healing_10,
+            "tank_min_taken_10": config.role_thresholds.tank_min_taken_10,
         }
 
 # Global config manager instance
@@ -184,7 +190,9 @@ def load_config(config_file: Optional[str] = None) -> Dict[str, Any]:
         "role_thresholds": {
             "healer_min_healing": config.role_thresholds.healer_min_healing,
             "tank_min_taken": config.role_thresholds.tank_min_taken,
-            "tank_min_mitigation": config.role_thresholds.tank_min_mitigation
+            "tank_min_mitigation": config.role_thresholds.tank_min_mitigation,
+            "healer_min_healing_10": config.role_thresholds.healer_min_healing_10,
+            "tank_min_taken_10": config.role_thresholds.tank_min_taken_10,
         },
         "guild_logo": config.guild_logo,
         "guild_name": config.guild_name,

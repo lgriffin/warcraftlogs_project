@@ -71,6 +71,20 @@ def save_response_cache(query: str, data: dict) -> None:
         pass
 
 
+def clear_response_cache() -> int:
+    """Delete all cached API responses. Returns number of files removed."""
+    count = 0
+    if os.path.isdir(QUERY_CACHE_DIR):
+        for fname in os.listdir(QUERY_CACHE_DIR):
+            fpath = os.path.join(QUERY_CACHE_DIR, fname)
+            try:
+                os.remove(fpath)
+                count += 1
+            except OSError:
+                pass
+    return count
+
+
 WOWHEAD_CACHE_FILE = os.path.join(CACHE_DIR, "wowhead_names.json")
 
 
