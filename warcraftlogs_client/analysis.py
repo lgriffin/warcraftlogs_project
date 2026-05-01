@@ -236,28 +236,29 @@ def _identify_healers(
     return healers
 
 
-_RESOURCE_BUFFS = {
+_RESOURCE_SPELL_IDS = {
     28499: "Super Mana Potion",
     27869: "Dark Rune",
+    16666: "Demonic Rune",
 }
 
 
-def _get_resources_from_buffs(
+def _get_resources_from_events(
     client: WarcraftLogsClient, report_id: str, source_id: int,
 ) -> dict[str, int]:
-    """Fall back to the Buffs table to count consumable usage."""
+    """Count consumable usage from cast events."""
     try:
-        buffs_raw = client.get_buffs_table(report_id, source_id)
-        auras = []
-        if isinstance(buffs_raw, dict):
-            auras = buffs_raw.get("data", {}).get("auras", buffs_raw.get("auras", []))
-        resources: dict[str, int] = {}
-        for aura in auras:
-            ability_id = aura.get("guid")
-            if ability_id in _RESOURCE_BUFFS:
-                bands = aura.get("bands", [])
-                resources[_RESOURCE_BUFFS[ability_id]] = len(bands)
-        return resources
+        cast_events = client.get_cast_events_paginated(report_id, source_id)
+        resources: dict[str, int] = defaultdict(int)
+        for e in cast_events:
+            aid = e.get("abilityGameID")
+            if aid in _RESOURCE_SPELL_IDS:
+                resources[_RESOURCE_SPELL_IDS[aid]] += 1
+        if resources.get("Demonic Rune") and not resources.get("Dark Rune"):
+            resources["Dark Rune"] = resources.pop("Demonic Rune")
+        elif resources.get("Demonic Rune"):
+            resources["Dark Rune"] += resources.pop("Demonic Rune")
+        return dict(resources)
     except (requests.RequestException, KeyError, TypeError, ValueError):
         return {}
 
@@ -297,7 +298,7 @@ def _analyze_healers(
 
             resource_data = SpellBreakdown.get_resources_used(cast_entries)
             if not any(resource_data.values()):
-                resource_data = _get_resources_from_buffs(client, report_id, player.source_id)
+                resource_data = _get_resources_from_events(client, report_id, player.source_id)
             resources = [ResourceUsage(name=k, count=v) for k, v in resource_data.items()]
 
             fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
