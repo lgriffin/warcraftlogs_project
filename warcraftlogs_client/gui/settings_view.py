@@ -138,6 +138,22 @@ class SettingsView(QWidget):
         self.tank_min_mitigation.setSuffix("%")
         thresh_layout.addRow("Min Tank Mitigation:", self.tank_min_mitigation)
 
+        sep = QLabel("10-Man Raid Overrides")
+        sep.setStyleSheet(f"color: {COLORS['accent']}; font-weight: bold; margin-top: 8px;")
+        thresh_layout.addRow(sep)
+
+        self.healer_threshold_10 = QSpinBox()
+        self.healer_threshold_10.setRange(0, 10_000_000)
+        self.healer_threshold_10.setSingleStep(50000)
+        self.healer_threshold_10.setSuffix(" healing")
+        thresh_layout.addRow("Min Healer Healing (10-man):", self.healer_threshold_10)
+
+        self.tank_min_taken_10 = QSpinBox()
+        self.tank_min_taken_10.setRange(0, 10_000_000)
+        self.tank_min_taken_10.setSingleStep(50000)
+        self.tank_min_taken_10.setSuffix(" damage")
+        thresh_layout.addRow("Min Tank Damage Taken (10-man):", self.tank_min_taken_10)
+
         layout.addWidget(thresh_group)
 
         # ── Database info ──
@@ -184,6 +200,39 @@ class SettingsView(QWidget):
 
         layout.addWidget(db_group)
 
+        # ── API Cache ──
+        cache_group = QGroupBox("API Response Cache")
+        cache_layout = QVBoxLayout(cache_group)
+
+        cache_note = QLabel(
+            "WarcraftLogs API responses are cached locally to avoid redundant requests.\n"
+            "Clear the cache to force fresh data on the next analysis."
+        )
+        cache_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        cache_note.setWordWrap(True)
+        cache_layout.addWidget(cache_note)
+
+        clear_cache_btn = QPushButton("Clear API Cache")
+        clear_cache_btn.setFixedWidth(160)
+        clear_cache_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['error']};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #c0392b;
+            }}
+        """)
+        clear_cache_btn.clicked.connect(self._clear_api_cache)
+        cache_layout.addWidget(clear_cache_btn)
+
+        layout.addWidget(cache_group)
+
         # ── Save button ──
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -206,9 +255,11 @@ class SettingsView(QWidget):
 
     def _load_current_config(self):
         if not os.path.exists(self.CONFIG_PATH):
-            self.healer_threshold.setValue(50000)
+            self.healer_threshold.setValue(40000)
             self.tank_min_taken.setValue(150000)
             self.tank_min_mitigation.setValue(40)
+            self.healer_threshold_10.setValue(400000)
+            self.tank_min_taken_10.setValue(300000)
             self.guild_id_input.setText("774065")
             return
 
@@ -224,9 +275,11 @@ class SettingsView(QWidget):
             self.guild_server_input.setText(config.get("guild_server", ""))
 
             thresholds = config.get("role_thresholds", {})
-            self.healer_threshold.setValue(thresholds.get("healer_min_healing", 50000))
+            self.healer_threshold.setValue(thresholds.get("healer_min_healing", 40000))
             self.tank_min_taken.setValue(thresholds.get("tank_min_taken", 150000))
             self.tank_min_mitigation.setValue(thresholds.get("tank_min_mitigation", 40))
+            self.healer_threshold_10.setValue(thresholds.get("healer_min_healing_10", 400000))
+            self.tank_min_taken_10.setValue(thresholds.get("tank_min_taken_10", 300000))
 
         except (json.JSONDecodeError, OSError, KeyError, ValueError) as e:
             QMessageBox.warning(self, "Config Error", f"Could not load config.json:\n{e}")
@@ -263,6 +316,8 @@ class SettingsView(QWidget):
             "healer_min_healing": self.healer_threshold.value(),
             "tank_min_taken": self.tank_min_taken.value(),
             "tank_min_mitigation": self.tank_min_mitigation.value(),
+            "healer_min_healing_10": self.healer_threshold_10.value(),
+            "tank_min_taken_10": self.tank_min_taken_10.value(),
         }
         try:
             with open(self.CONFIG_PATH, "w") as f:
@@ -310,3 +365,34 @@ class SettingsView(QWidget):
             self.status_message.emit("Database cleared")
         except (sqlite3.Error, OSError) as e:
             QMessageBox.critical(self, "Error", f"Failed to clear database:\n{e}")
+
+    def _clear_api_cache(self):
+        from PySide6.QtWidgets import QInputDialog
+        dlg = QInputDialog(self)
+        dlg.setWindowTitle("Confirm Cache Clear")
+        dlg.setLabelText(
+            "This will delete all cached WarcraftLogs API responses.\n"
+            "Reports will need to be re-fetched from the API on next analysis.\n\n"
+            "Type 'I am Toad' to confirm:"
+        )
+        dlg.setStyleSheet(f"""
+            QInputDialog, QLabel, QLineEdit, QPushButton {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text']};
+            }}
+            QLineEdit {{
+                background-color: {COLORS['bg_input']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px;
+                padding: 6px 10px;
+            }}
+        """)
+        ok = dlg.exec()
+        text = dlg.textValue()
+        if not ok or text.strip() != "I am Toad":
+            self.status_message.emit("Cache clear cancelled")
+            return
+        from ..cache import clear_response_cache
+        count = clear_response_cache()
+        QMessageBox.information(self, "Cleared", f"Removed {count} cached API responses.")
+        self.status_message.emit(f"API cache cleared ({count} files)")

@@ -27,6 +27,8 @@ a = Analysis(
         "warcraftlogs_client.gui.character_view",
         "warcraftlogs_client.gui.settings_view",
         "warcraftlogs_client.gui.compare_view",
+        "warcraftlogs_client.gui.insights_view",
+        "warcraftlogs_client.gui.boss_insights_view",
         "warcraftlogs_client.gui.nav_stack",
         "warcraftlogs_client.gui.raid_analysis_widget",
         "warcraftlogs_client.gui.raid_list_widget",

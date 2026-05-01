@@ -135,7 +135,13 @@ class RaidMetadata:
 
     @property
     def url(self) -> str:
-        return f"https://www.warcraftlogs.com/reports/{self.report_id}"
+        try:
+            from .config import load_config
+            api_url = load_config().get("wcl_api_url", "")
+            base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
+        except Exception:
+            base = "https://www.warcraftlogs.com"
+        return f"{base}/reports/{self.report_id}"
 
 
 @dataclass

@@ -87,6 +87,12 @@ class RaidAnalysisWidget(QWidget):
 
         header_layout.addStretch()
 
+        wcl_btn = QPushButton("View on WCL")
+        wcl_btn.setProperty("secondary", True)
+        wcl_btn.setFixedHeight(32)
+        wcl_btn.clicked.connect(self._open_wcl_url)
+        header_layout.addWidget(wcl_btn)
+
         export_btn = QPushButton("Export")
         export_btn.setProperty("secondary", True)
         export_btn.setFixedHeight(32)
@@ -352,6 +358,10 @@ class RaidAnalysisWidget(QWidget):
                 self._detail_panel.show_dps(d, player_consumes)
                 self._splitter.setSizes([3, 1])
                 return
+
+    def _open_wcl_url(self):
+        import webbrowser
+        webbrowser.open(self._analysis.metadata.url)
 
     def _export_markdown(self):
         title = self._analysis.metadata.title

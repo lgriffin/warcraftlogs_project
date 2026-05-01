@@ -31,13 +31,22 @@ from .models import (
 from .spell_manager import SpellBreakdown, get_spell_manager
 
 
+_TEN_MAN_ZONES = {"Karazhan", "Zul'Aman"}
+
+
 def analyze_raid(client: WarcraftLogsClient, report_id: str,
-                 healer_threshold: int = 200000,
+                 healer_threshold: int = 40000,
                  tank_min_taken: int = 150000,
-                 tank_min_mitigation: int = 40) -> RaidAnalysis:
+                 tank_min_mitigation: int = 40,
+                 healer_threshold_10: int = 400000,
+                 tank_min_taken_10: int = 300000) -> RaidAnalysis:
     """Run a full raid analysis and return structured results."""
     metadata = client.get_report_metadata(report_id)
     master_actors = client.get_master_data(report_id)
+
+    if metadata.zone in _TEN_MAN_ZONES:
+        healer_threshold = healer_threshold_10
+        tank_min_taken = tank_min_taken_10
 
     composition = _identify_composition(
         client, report_id, master_actors,
@@ -227,6 +236,32 @@ def _identify_healers(
     return healers
 
 
+_RESOURCE_BUFFS = {
+    28499: "Super Mana Potion",
+    27869: "Dark Rune",
+}
+
+
+def _get_resources_from_buffs(
+    client: WarcraftLogsClient, report_id: str, source_id: int,
+) -> dict[str, int]:
+    """Fall back to the Buffs table to count consumable usage."""
+    try:
+        buffs_raw = client.get_buffs_table(report_id, source_id)
+        auras = []
+        if isinstance(buffs_raw, dict):
+            auras = buffs_raw.get("data", {}).get("auras", buffs_raw.get("auras", []))
+        resources: dict[str, int] = {}
+        for aura in auras:
+            ability_id = aura.get("guid")
+            if ability_id in _RESOURCE_BUFFS:
+                bands = aura.get("bands", [])
+                resources[_RESOURCE_BUFFS[ability_id]] = len(bands)
+        return resources
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        return {}
+
+
 def _analyze_healers(
     client: WarcraftLogsClient,
     report_id: str,
@@ -261,6 +296,8 @@ def _analyze_healers(
             dispels = [DispelUsage(spell_name=k, casts=v) for k, v in dispel_data.items() if v > 0]
 
             resource_data = SpellBreakdown.get_resources_used(cast_entries)
+            if not any(resource_data.values()):
+                resource_data = _get_resources_from_buffs(client, report_id, player.source_id)
             resources = [ResourceUsage(name=k, count=v) for k, v in resource_data.items()]
 
             fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
@@ -373,12 +410,16 @@ def _analyze_dps(
             )
 
             done_table = client.get_damage_done_table(report_id, player.source_id)
+            table_hits: dict[int, int] = {}
             for entry in done_table:
                 eid = entry.get("guid")
                 ename = entry.get("name")
-                if eid and ename:
+                if eid is not None and ename:
                     canonical = alias_map.get(eid, eid)
                     spell_map.setdefault(canonical, ename)
+                    hits = entry.get("hitCount", 0) + entry.get("tickCount", 0)
+                    if hits:
+                        table_hits[canonical] = table_hits.get(canonical, 0) + hits
 
             total_damage = 0
             damage_by_ability: dict[int, int] = defaultdict(int)
@@ -394,6 +435,10 @@ def _analyze_dps(
             for sid, count in spell_casts.items():
                 canonical = alias_map.get(sid, sid)
                 casts_by_id[canonical] += count
+
+            for sid in damage_by_ability:
+                if not casts_by_id.get(sid) and table_hits.get(sid):
+                    casts_by_id[sid] = table_hits[sid]
 
             abilities = [
                 SpellUsage(

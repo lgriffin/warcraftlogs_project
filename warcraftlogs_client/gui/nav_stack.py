@@ -16,6 +16,7 @@ class NavigationStack(QStackedWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._base_count = 0
+        self._active_base = 0
         self._drill_stack: list[QWidget] = []
 
     def set_base_count(self, count: int):
@@ -23,6 +24,7 @@ class NavigationStack(QStackedWidget):
 
     def show_base_page(self, index: int):
         self._clear_drill_stack()
+        self._active_base = index
         self.setCurrentIndex(index)
 
     def push_view(self, widget: QWidget):
@@ -39,6 +41,8 @@ class NavigationStack(QStackedWidget):
         widget.deleteLater()
         if self._drill_stack:
             self.setCurrentWidget(self._drill_stack[-1])
+        else:
+            self.setCurrentIndex(self._active_base)
         self.depth_changed.emit(len(self._drill_stack))
 
     def current_depth(self) -> int:

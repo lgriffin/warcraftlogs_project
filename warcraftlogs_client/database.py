@@ -12,6 +12,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
+from .spell_manager import get_spell_manager
 from .models import (
     CharacterHistory,
     ConsumableUsage,
@@ -31,6 +32,15 @@ from .models import (
 )
 
 SCHEMA_VERSION = 2
+
+
+def _resolve_name(spell_id: int, stored_name: str) -> str:
+    if stored_name.startswith("(ID "):
+        resolved = get_spell_manager().get_spell_name(spell_id)
+        if not resolved.startswith("(ID "):
+            return resolved
+    return stored_name
+
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -1946,7 +1956,7 @@ class PerformanceDB:
             spells_rows = conn.execute(
                 "SELECT * FROM healer_spells WHERE healer_performance_id = ?", (r["id"],)
             ).fetchall()
-            spells = [SpellUsage(spell_id=s["spell_id"], spell_name=s["spell_name"],
+            spells = [SpellUsage(spell_id=s["spell_id"], spell_name=_resolve_name(s["spell_id"], s["spell_name"]),
                                  casts=s["casts"], total_amount=s["total_healing"]) for s in spells_rows]
             results.append(HealerPerformance(
                 name=r["name"], player_class=r["player_class"], source_id=0,
@@ -1968,13 +1978,13 @@ class PerformanceDB:
             taken_rows = conn.execute(
                 "SELECT * FROM tank_damage_taken WHERE tank_performance_id = ?", (r["id"],)
             ).fetchall()
-            taken_breakdown = [SpellUsage(spell_id=a["spell_id"], spell_name=a["spell_name"],
+            taken_breakdown = [SpellUsage(spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
                                           casts=a["hits"]) for a in taken_rows]
 
             ability_rows = conn.execute(
                 "SELECT * FROM tank_abilities WHERE tank_performance_id = ?", (r["id"],)
             ).fetchall()
-            abilities = [SpellUsage(spell_id=a["spell_id"], spell_name=a["spell_name"],
+            abilities = [SpellUsage(spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
                                     casts=a["casts"]) for a in ability_rows]
 
             results.append(TankPerformance(
@@ -1997,7 +2007,7 @@ class PerformanceDB:
             ability_rows = conn.execute(
                 "SELECT * FROM dps_abilities WHERE dps_performance_id = ?", (r["id"],)
             ).fetchall()
-            abilities = [SpellUsage(spell_id=a["spell_id"], spell_name=a["spell_name"],
+            abilities = [SpellUsage(spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
                                     casts=a["casts"], total_amount=a["total_damage"]) for a in ability_rows]
             results.append(DPSPerformance(
                 name=r["name"], player_class=r["player_class"], source_id=0,
