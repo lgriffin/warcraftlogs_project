@@ -8,7 +8,7 @@ import sqlite3
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QGroupBox, QSpinBox, QMessageBox, QFormLayout,
+    QPushButton, QGroupBox, QSpinBox, QMessageBox, QFormLayout, QCheckBox,
 )
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
@@ -204,6 +204,48 @@ class SettingsView(QWidget):
 
         layout.addWidget(data_group)
 
+        # ── Application Updates ──
+        update_group = QGroupBox("Application Updates")
+        update_layout = QVBoxLayout(update_group)
+
+        from ..version import __version__
+        ver_label = QLabel(f"Current version: v{__version__}")
+        ver_label.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px;")
+        update_layout.addWidget(ver_label)
+
+        self.auto_update_check = QCheckBox("Check for updates automatically on startup")
+        self.auto_update_check.setChecked(True)
+        update_layout.addWidget(self.auto_update_check)
+
+        check_btn_layout = QHBoxLayout()
+        check_update_btn = QPushButton("Check for Updates")
+        check_update_btn.setFixedWidth(180)
+        check_update_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['border']};
+            }}
+        """)
+        check_update_btn.clicked.connect(self._check_for_updates)
+        check_btn_layout.addWidget(check_update_btn)
+        check_btn_layout.addStretch()
+        update_layout.addLayout(check_btn_layout)
+
+        self._update_status_label = QLabel("")
+        self._update_status_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        self._update_status_label.setVisible(False)
+        update_layout.addWidget(self._update_status_label)
+
+        layout.addWidget(update_group)
+
         # ── Save button ──
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -252,6 +294,8 @@ class SettingsView(QWidget):
             self.healer_threshold_10.setValue(thresholds.get("healer_min_healing_10", 400000))
             self.tank_min_taken_10.setValue(thresholds.get("tank_min_taken_10", 300000))
 
+            self.auto_update_check.setChecked(config.get("auto_check_updates", True))
+
         except (json.JSONDecodeError, OSError, KeyError, ValueError) as e:
             QMessageBox.warning(self, "Config Error", f"Could not load config.json:\n{e}")
 
@@ -290,6 +334,7 @@ class SettingsView(QWidget):
             "healer_min_healing_10": self.healer_threshold_10.value(),
             "tank_min_taken_10": self.tank_min_taken_10.value(),
         }
+        config["auto_check_updates"] = self.auto_update_check.isChecked()
         try:
             with open(self.CONFIG_PATH, "w") as f:
                 json.dump(config, f, indent=4)
@@ -343,3 +388,26 @@ class SettingsView(QWidget):
             self.status_message.emit(f"All data cleared ({cache_count} cache files)")
         except (sqlite3.Error, OSError) as e:
             QMessageBox.critical(self, "Error", f"Failed to clear data:\n{e}")
+
+    def _check_for_updates(self):
+        self._update_status_label.setText("Checking...")
+        self._update_status_label.setVisible(True)
+        self._update_status_label.repaint()
+
+        from ..updater import check_for_update
+        try:
+            info = check_for_update(force=True)
+        except Exception as e:
+            self._update_status_label.setText(f"Check failed: {e}")
+            return
+
+        if info:
+            self._update_status_label.setVisible(False)
+            from .update_dialog import UpdateDialog
+            dlg = UpdateDialog(info, parent=self)
+            dlg.exec()
+        else:
+            from ..version import __version__
+            self._update_status_label.setText(
+                f"You're up to date (v{__version__})")
+            self.status_message.emit("No updates available")

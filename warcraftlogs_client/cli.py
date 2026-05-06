@@ -18,6 +18,7 @@ import sys
 import requests
 
 from .common.errors import WarcraftLogsError
+from .version import __version__
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -38,7 +39,7 @@ Examples:
         """
     )
 
-    parser.add_argument('--version', action='version', version='%(prog)s 3.9.0')
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
 
     subparsers = parser.add_subparsers(
         dest='command',

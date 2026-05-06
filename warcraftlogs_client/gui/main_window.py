@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QListWidget, QListWidgetItem,
     QStatusBar, QLabel,
 )
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtCore import Qt, QSize, QTimer, QThread, Signal
+from PySide6.QtGui import QFont, QPixmap, QCursor
 
 from .download_view import DownloadView
 from .raids_view import RaidsView
@@ -25,6 +25,22 @@ from .settings_view import SettingsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
 from ..database import PerformanceDB
+from ..version import __version__
+
+
+class _UpdateCheckWorker(QThread):
+    """Runs the update check off the main thread."""
+    update_available = Signal(object)  # UpdateInfo or None
+
+    def __init__(self, force: bool = False, parent=None):
+        super().__init__(parent)
+        self._force = force
+
+    def run(self):
+        from ..updater import check_for_update
+        info = check_for_update(force=self._force)
+        if info:
+            self.update_available.emit(info)
 
 
 class MainWindow(QMainWindow):
@@ -108,7 +124,7 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addWidget(self.nav_list, 1)
 
-        version_label = QLabel("v3.9.0")
+        version_label = QLabel(f"v{__version__}")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("color: #555; padding: 10px; font-size: 11px;")
         sidebar_layout.addWidget(version_label)
@@ -207,6 +223,56 @@ class MainWindow(QMainWindow):
 
         self._load_guild_info()
 
+        self._pending_update = None
+        self._update_label = None
+        self._auto_check_updates()
+
+    def _auto_check_updates(self):
+        try:
+            from ..config import load_config
+            config = load_config()
+            if not config.get("auto_check_updates", True):
+                return
+        except Exception:
+            pass
+        QTimer.singleShot(3000, self._run_update_check)
+
+    def _run_update_check(self, force: bool = False):
+        self._update_worker = _UpdateCheckWorker(force=force, parent=self)
+        self._update_worker.update_available.connect(self._on_update_available)
+        self._update_worker.start()
+
+    def _on_update_available(self, info):
+        self._pending_update = info
+        if self._update_label:
+            self._update_label.deleteLater()
+
+        self._update_label = QLabel(
+            f"  Update available: v{info.version} — click to update  ")
+        self._update_label.setStyleSheet("""
+            QLabel {
+                color: #e94560;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 2px 8px;
+                background: transparent;
+            }
+            QLabel:hover {
+                color: #ff6b81;
+                text-decoration: underline;
+            }
+        """)
+        self._update_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self._update_label.mousePressEvent = lambda _: self._show_update_dialog()
+        self.status_bar.addPermanentWidget(self._update_label)
+
+    def _show_update_dialog(self):
+        if not self._pending_update:
+            return
+        from .update_dialog import UpdateDialog
+        dlg = UpdateDialog(self._pending_update, parent=self)
+        dlg.exec()
+
     def _on_nav_changed(self, index: int):
         self.stack.show_base_page(index)
 
@@ -294,9 +360,10 @@ class MainWindow(QMainWindow):
                 w = getattr(view, attr, None)
                 if w and w.isRunning():
                     workers.append(w)
-        w = getattr(self, '_guild_info_worker', None)
-        if w and w.isRunning():
-            workers.append(w)
+        for attr in ('_guild_info_worker', '_update_worker'):
+            w = getattr(self, attr, None)
+            if w and w.isRunning():
+                workers.append(w)
         for w in workers:
             w.wait(5000)
         super().closeEvent(event)
