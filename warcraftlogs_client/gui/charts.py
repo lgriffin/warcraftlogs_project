@@ -223,6 +223,29 @@ def build_dps_chart(trend_data: list[dict]) -> QChartView:
     return make_chart_view(chart)
 
 
+def build_active_time_chart(trend_data: list[dict]) -> QChartView:
+    chart = _make_chart("Active Time %")
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    x_axis.setTitleText("Raid Date")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText("Active %")
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    pts = _parse_dates_and_values(trend_data, "active_time_percent")
+    _fit_axes(x_axis, y_axis, pts)
+    if pts:
+        y_axis.setRange(0, min(100, max(v for _, v in pts) * 1.1))
+    _add_series(chart, pts, "Active Time %", 2, x_axis, y_axis)
+
+    return make_chart_view(chart)
+
+
 # ── Per-spell/ability multi-series charts ──
 
 def _group_spell_data(spell_trend: list[dict], value_key: str,
@@ -319,12 +342,15 @@ def build_consumable_trend_chart(consumable_trend: list[dict]) -> QChartView:
 class SpiderChartWidget(QWidget):
     """Custom-painted radar chart for multi-dimensional character comparison."""
 
-    LABELS = ["Healing", "Damage", "Mitigation", "Activity", "Consumables", "Consistency"]
-    KEYS = ["healing", "damage", "mitigation", "activity", "consumables", "consistency"]
+    LABELS = ["Healing", "Damage", "Mitigation", "Active Time",
+              "Activity", "Consumables", "Consistency"]
+    KEYS = ["healing", "damage", "mitigation", "active_time",
+            "activity", "consumables", "consistency"]
     DESCRIPTIONS = {
         "healing": "Percentile rank of average healing output compared to all tracked characters.",
         "damage": "Percentile rank of average damage output compared to all tracked characters.",
         "mitigation": "Percentile rank of average damage mitigation compared to all tracked tanks.",
+        "active_time": "Percentile rank of average active time during encounters.",
         "activity": "Percentile rank of total raids attended compared to all tracked characters.",
         "consumables": "Percentile rank of total consumables used compared to all tracked characters.",
         "consistency": "How stable performance is across raids (100 = identical every raid, lower = more variance).",

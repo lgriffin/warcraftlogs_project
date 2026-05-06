@@ -21,7 +21,7 @@ from .charts import (
     build_healer_chart, build_healer_overheal_chart,
     build_tank_chart, build_tank_mitigation_chart,
     build_dps_chart, build_spell_trend_chart,
-    build_consumable_trend_chart,
+    build_consumable_trend_chart, build_active_time_chart,
     SpiderChartWidget, CalendarHeatmapWidget,
 )
 from .table_models import HistoryTableModel
@@ -91,7 +91,7 @@ class CharacterHistoryWidget(QWidget):
         self.summary_labels: dict[str, QLabel] = {}
         for key in [
             "Name", "Class", "Raids Tracked", "Active Period",
-            "Avg Healing", "Avg Damage", "Avg Mitigation",
+            "Avg Active Time", "Avg Healing", "Avg Damage", "Avg Mitigation",
             "Consumables Used", "Consistency", "Consumable Compliance",
         ]:
             row = QHBoxLayout()
@@ -146,6 +146,7 @@ class CharacterHistoryWidget(QWidget):
         self._healer_chart_combo = QComboBox()
         self._healer_chart_combo.addItems([
             "Healing & Overhealing", "Overheal %", "Spell Healing", "Spell Casts",
+            "Active Time %",
         ])
         self._healer_chart_combo.setStyleSheet(combo_style)
         self._healer_chart_combo.currentIndexChanged.connect(self._rebuild_healer_chart)
@@ -165,7 +166,7 @@ class CharacterHistoryWidget(QWidget):
         bar = QHBoxLayout()
         bar.addWidget(QLabel("Chart:"))
         self._tank_chart_combo = QComboBox()
-        self._tank_chart_combo.addItems(["Damage & Mitigation", "Mitigation %"])
+        self._tank_chart_combo.addItems(["Damage & Mitigation", "Mitigation %", "Active Time %"])
         self._tank_chart_combo.setStyleSheet(combo_style)
         self._tank_chart_combo.currentIndexChanged.connect(self._rebuild_tank_chart)
         bar.addWidget(self._tank_chart_combo)
@@ -184,7 +185,7 @@ class CharacterHistoryWidget(QWidget):
         bar = QHBoxLayout()
         bar.addWidget(QLabel("Chart:"))
         self._dps_chart_combo = QComboBox()
-        self._dps_chart_combo.addItems(["Total Damage", "Ability Damage", "Ability Casts"])
+        self._dps_chart_combo.addItems(["Total Damage", "Ability Damage", "Ability Casts", "Active Time %"])
         self._dps_chart_combo.setStyleSheet(combo_style)
         self._dps_chart_combo.currentIndexChanged.connect(self._rebuild_dps_chart)
         bar.addWidget(self._dps_chart_combo)
@@ -263,6 +264,9 @@ class CharacterHistoryWidget(QWidget):
                     )
                     self.summary_labels["Active Period"].setText(period)
 
+                self.summary_labels["Avg Active Time"].setText(
+                    f"{history.avg_active_time:.1f}%" if history.avg_active_time else "-"
+                )
                 self.summary_labels["Avg Healing"].setText(
                     f"{history.avg_healing:,.0f}" if history.avg_healing else "-"
                 )
@@ -373,7 +377,7 @@ class CharacterHistoryWidget(QWidget):
         if self._cached_healer_trend:
             self._healer_trend_model.set_data(
                 self._cached_healer_trend,
-                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent"])
+                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent", "active_time_percent"])
         else:
             self._healer_trend_model.set_data([], [])
         self._rebuild_healer_chart()
@@ -381,7 +385,7 @@ class CharacterHistoryWidget(QWidget):
         if self._cached_tank_trend:
             self._tank_trend_model.set_data(
                 self._cached_tank_trend,
-                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent"])
+                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent", "active_time_percent"])
         else:
             self._tank_trend_model.set_data([], [])
         self._rebuild_tank_chart()
@@ -389,7 +393,7 @@ class CharacterHistoryWidget(QWidget):
         if self._cached_dps_trend:
             self._dps_trend_model.set_data(
                 self._cached_dps_trend,
-                ["raid_date", "title", "raid_size", "role", "total_damage"])
+                ["raid_date", "title", "raid_size", "role", "total_damage", "active_time_percent"])
         else:
             self._dps_trend_model.set_data([], [])
         self._rebuild_dps_chart()
@@ -440,6 +444,8 @@ class CharacterHistoryWidget(QWidget):
         elif choice == 3:
             view = build_spell_trend_chart(
                 spell_trend, "casts", "Spell Casts Over Time", "Casts")
+        elif choice == 4:
+            view = build_active_time_chart(trend)
         else:
             return
         self._set_chart(self._healer_chart_container, "healer", view)
@@ -454,6 +460,8 @@ class CharacterHistoryWidget(QWidget):
             view = build_tank_chart(trend)
         elif choice == 1:
             view = build_tank_mitigation_chart(trend)
+        elif choice == 2:
+            view = build_active_time_chart(trend)
         else:
             return
         self._set_chart(self._tank_chart_container, "tank", view)
@@ -473,6 +481,8 @@ class CharacterHistoryWidget(QWidget):
         elif choice == 2:
             view = build_spell_trend_chart(
                 ability_trend, "casts", "Ability Casts Over Time", "Casts")
+        elif choice == 3:
+            view = build_active_time_chart(trend)
         else:
             return
         self._set_chart(self._dps_chart_container, "dps", view)

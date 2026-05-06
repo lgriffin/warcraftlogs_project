@@ -73,6 +73,8 @@ def _render_tanks(tanks: list[TankPerformance]) -> None:
         print(f"\n{tank.name} ({tank.player_class})")
         print(f"Total Taken: {tank.total_damage_taken:,}")
         print(f"Total Mitigated: {tank.total_mitigated:,} ({tank.mitigation_percent}%)")
+        if tank.active_time_percent > 0:
+            print(f"Active Time: {tank.active_time_percent:.1f}%")
 
         print("Damage Taken Breakdown:")
         for spell in tank.damage_taken_breakdown:
@@ -96,6 +98,8 @@ def _render_healers(healers: list[HealerPerformance]) -> None:
 
         print(f"Total Healing: {h.total_healing:,}")
         print(f"Total Overhealing: {h.total_overhealing:,}")
+        if h.active_time_percent > 0:
+            print(f"Active Time: {h.active_time_percent:.1f}%")
 
         if h.fear_ward_casts > 0:
             print(f"Fear Ward Casts: {h.fear_ward_casts}")
@@ -118,7 +122,8 @@ def _render_dps(all_dps: list[DPSPerformance], role: str) -> None:
     label = "Melee" if role == "melee" else "Ranged"
     print(f"\n===== Individual {label} Reports =====")
     for d in dps:
-        print(f"\n{d.name:<15} {d.total_damage:>15,}")
+        at_str = f"  Active Time: {d.active_time_percent:.1f}%" if d.active_time_percent > 0 else ""
+        print(f"\n{d.name:<15} {d.total_damage:>15,}{at_str}")
         print(f"{'Ability':<30} {'Damage':>12} {'Casts':>8}")
         print("-" * 55)
         for a in d.abilities:

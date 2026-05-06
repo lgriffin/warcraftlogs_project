@@ -13,7 +13,7 @@ class HealerTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._healers = healers or []
         self._columns = ["Name", "Class", "Healing", "Overhealing", "OH%",
-                         "Top Spell (Casts)", "Dispels", "Mana Pot", "Dark Rune"]
+                         "Active Time%", "Top Spell (Casts)", "Dispels", "Mana Pot", "Dark Rune"]
 
     def set_data(self, healers: list[HealerPerformance]):
         self.beginResetModel()
@@ -46,14 +46,16 @@ class HealerTableModel(QAbstractTableModel):
             if col == 3: return f"{h.total_overhealing:,}"
             if col == 4: return f"{h.overheal_percent:.1f}%"
             if col == 5:
+                return f"{h.active_time_percent:.1f}%" if h.active_time_percent > 0 else "-"
+            if col == 6:
                 top = h.spells[0] if h.spells else None
                 if not top:
                     return "-"
                 if top.casts:
                     return f"{top.spell_name} ({top.casts})"
                 return top.spell_name
-            if col == 6: return sum(d.casts for d in h.dispels)
-            if col == 7:
+            if col == 7: return sum(d.casts for d in h.dispels)
+            if col == 8:
                 mana = resource_lookup.get("Super Mana Potion", 0)
                 if not mana:
                     for name, count in resource_lookup.items():
@@ -61,10 +63,10 @@ class HealerTableModel(QAbstractTableModel):
                             mana = count
                             break
                 return mana
-            if col == 8: return resource_lookup.get("Dark Rune", 0)
+            if col == 9: return resource_lookup.get("Dark Rune", 0)
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
-            if col in (0, 1, 5):
+            if col in (0, 1, 6):
                 return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             if col >= 2:
                 return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -87,7 +89,7 @@ class TankTableModel(QAbstractTableModel):
     def __init__(self, tanks: list[TankPerformance] = None, parent=None):
         super().__init__(parent)
         self._tanks = tanks or []
-        self._columns = ["Name", "Class", "Damage Taken", "Mitigated", "Mitigation%"]
+        self._columns = ["Name", "Class", "Damage Taken", "Mitigated", "Mitigation%", "Active Time%"]
 
     def set_data(self, tanks: list[TankPerformance]):
         self.beginResetModel()
@@ -118,6 +120,8 @@ class TankTableModel(QAbstractTableModel):
             if col == 2: return f"{t.total_damage_taken:,}"
             if col == 3: return f"{t.total_mitigated:,}"
             if col == 4: return f"{t.mitigation_percent:.1f}%"
+            if col == 5:
+                return f"{t.active_time_percent:.1f}%" if t.active_time_percent > 0 else "-"
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             if col >= 2:
@@ -141,7 +145,7 @@ class DPSTableModel(QAbstractTableModel):
     def __init__(self, dps_list: list[DPSPerformance] = None, parent=None):
         super().__init__(parent)
         self._dps = dps_list or []
-        self._columns = ["Name", "Class", "Total Damage", "Top Ability (Casts)"]
+        self._columns = ["Name", "Class", "Total Damage", "Active Time%", "Top Ability (Casts)"]
 
     def set_data(self, dps_list: list[DPSPerformance]):
         self.beginResetModel()
@@ -173,6 +177,8 @@ class DPSTableModel(QAbstractTableModel):
             if col == 1: return d.player_class
             if col == 2: return f"{d.total_damage:,}"
             if col == 3:
+                return f"{d.active_time_percent:.1f}%" if d.active_time_percent > 0 else "-"
+            if col == 4:
                 if not top:
                     return "-"
                 if top.casts:
@@ -180,7 +186,7 @@ class DPSTableModel(QAbstractTableModel):
                 return top.spell_name
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
-            if col == 2:
+            if col in (2, 3):
                 return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 

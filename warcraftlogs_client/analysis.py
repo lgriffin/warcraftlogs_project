@@ -66,6 +66,8 @@ def analyze_raid(client: WarcraftLogsClient, report_id: str,
         print(f"Error analyzing encounters: {e}")
         encounters = []
 
+    _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
+
     return RaidAnalysis(
         metadata=metadata,
         composition=composition,
@@ -567,31 +569,45 @@ def _analyze_encounters(
             print(f"Error fetching encounter data for {fight['name']}: {e}")
             continue
 
+        fight_duration = end - start
         players_map: dict[str, dict] = {}
         for entry in damage_entries:
             name = entry.get("name", "")
             if not name or entry.get("type") == "Pet":
                 continue
-            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0})
+            players_map.setdefault(
+                name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
             players_map[name]["damage"] += entry.get("total", 0)
+            active = entry.get("activeTime", 0)
+            if active > players_map[name]["active_time"]:
+                players_map[name]["active_time"] = active
 
         for entry in healing_entries:
             name = entry.get("name", "")
             if not name or entry.get("type") == "Pet":
                 continue
-            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0})
+            players_map.setdefault(
+                name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
             players_map[name]["healing"] += entry.get("total", 0)
+            active = entry.get("activeTime", 0)
+            if active > players_map[name]["active_time"]:
+                players_map[name]["active_time"] = active
 
         for entry in taken_entries:
             name = entry.get("name", "")
             if not name or entry.get("type") == "Pet":
                 continue
-            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0})
+            players_map.setdefault(
+                name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
             players_map[name]["taken"] += entry.get("total", 0)
 
         encounter_players = []
         for name, totals in players_map.items():
             player = role_lookup.get(name)
+            at_pct = 0.0
+            if fight_duration > 0 and totals["active_time"] > 0:
+                at_pct = min(100.0, round(
+                    totals["active_time"] / fight_duration * 100, 1))
             encounter_players.append(EncounterPerformance(
                 name=name,
                 player_class=player.player_class if player else "Unknown",
@@ -600,6 +616,7 @@ def _analyze_encounters(
                 total_damage=totals["damage"],
                 total_healing=totals["healing"],
                 total_damage_taken=totals["taken"],
+                active_time_percent=at_pct,
             ))
 
         encounter_players.sort(key=lambda p: p.total_damage, reverse=True)
@@ -614,3 +631,18 @@ def _analyze_encounters(
         ))
 
     return results
+
+
+def _apply_active_time(encounters, healers, tanks, dps):
+    """Average per-encounter active time and store on each player's raid performance."""
+    player_times: dict[str, list[float]] = {}
+    for enc in encounters:
+        for p in enc.players:
+            if p.active_time_percent > 0:
+                player_times.setdefault(p.name, []).append(p.active_time_percent)
+
+    for performer_list in [healers, tanks, dps]:
+        for perf in performer_list:
+            times = player_times.get(perf.name)
+            if times:
+                perf.active_time_percent = round(sum(times) / len(times), 1)

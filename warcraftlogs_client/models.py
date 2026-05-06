@@ -45,6 +45,7 @@ class HealerPerformance:
     dispels: list[DispelUsage] = field(default_factory=list)
     resources: list[ResourceUsage] = field(default_factory=list)
     fear_ward_casts: int = 0
+    active_time_percent: float = 0.0
 
     def __post_init__(self):
         total = self.total_healing + self.total_overhealing
@@ -62,6 +63,7 @@ class TankPerformance:
     mitigation_percent: float = 0.0
     damage_taken_breakdown: list[SpellUsage] = field(default_factory=list)
     abilities_used: list[SpellUsage] = field(default_factory=list)
+    active_time_percent: float = 0.0
 
     def __post_init__(self):
         total = self.total_damage_taken + self.total_mitigated
@@ -77,6 +79,7 @@ class DPSPerformance:
     role: str  # "melee" or "ranged"
     total_damage: int = 0
     abilities: list[SpellUsage] = field(default_factory=list)
+    active_time_percent: float = 0.0
 
 
 @dataclass
@@ -180,6 +183,7 @@ class EncounterPerformance:
     total_damage: int = 0
     total_healing: int = 0
     total_damage_taken: int = 0
+    active_time_percent: float = 0.0
 
 
 @dataclass
@@ -225,6 +229,7 @@ class CharacterHistory:
     avg_damage: Optional[float] = None
     avg_mitigation_percent: Optional[float] = None
     total_consumables_used: int = 0
+    avg_active_time: Optional[float] = None
 
 
 @dataclass

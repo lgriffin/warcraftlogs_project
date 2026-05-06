@@ -45,11 +45,11 @@ ROLE_SPECIFIC_KEYS = {"avg_healing", "avg_damage", "avg_mitigation"}
 class _ComparisonTableModel(QAbstractTableModel):
     ROWS = [
         "Role", "Raids Tracked", "Avg Healing", "Avg Damage",
-        "Avg Mitigation%", "Total Consumables", "Consistency",
+        "Avg Mitigation%", "Avg Active Time%", "Total Consumables", "Consistency",
     ]
     ROW_KEYS = [
         "role", "total_raids", "avg_healing", "avg_damage",
-        "avg_mitigation", "total_consumables", "consistency",
+        "avg_mitigation", "avg_active_time", "total_consumables", "consistency",
     ]
 
     def __init__(self, parent=None):
@@ -560,12 +560,21 @@ class CompareView(QWidget):
                     scores.append(consistency[key])
             consistency_val = round(sum(scores) / len(scores), 1) if scores else None
 
+        all_at = []
+        for trends in (healer_trends, dps_trends, tank_trends):
+            for r in trends:
+                at = r.get("active_time_percent")
+                if at and at > 0:
+                    all_at.append(at)
+        avg_active_time = round(sum(all_at) / len(all_at), 1) if all_at else None
+
         return {
             "role": role,
             "total_raids": len(raid_dates),
             "avg_healing": round(avg_healing, 1) if avg_healing else None,
             "avg_damage": round(avg_damage, 1) if avg_damage else None,
             "avg_mitigation": round(avg_mitigation, 1) if avg_mitigation else None,
+            "avg_active_time": avg_active_time,
             "total_consumables": total_consumables,
             "consistency": consistency_val,
         }
