@@ -667,6 +667,9 @@ class CharacterView(QWidget):
         self._progress.setVisible(True)
         self.status_message.emit(f"Fetching profile for {char_name}...")
 
+        if self._worker is not None:
+            self._worker.wait()
+
         self._worker = CharacterProfileWorker(char_name, server, region, api_url)
         self._worker.finished.connect(self._on_profile_loaded)
         self._worker.error.connect(self._on_profile_error)
@@ -723,6 +726,9 @@ class CharacterView(QWidget):
         if profile.gear_items:
             item_ids = [g.item_id for g in profile.gear_items if g.item_id]
             gem_ids = [gid for g in profile.gear_items for gid in g.gems if gid]
+            if getattr(self, '_wowhead_worker', None) is not None:
+                self._wowhead_worker.wait()
+
             self._wowhead_worker = WowheadResolverWorker(item_ids + gem_ids)
             self._wowhead_worker.finished.connect(self._on_wowhead_resolved)
             self._wowhead_worker.start()
