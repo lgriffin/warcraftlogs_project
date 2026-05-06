@@ -225,10 +225,11 @@ class CharacterDetailPanel(QWidget):
     def show_healer(self, h: HealerPerformance, consumables: list[ConsumableUsage] = None):
         self._current_name = h.name
         self._name_label.setText(h.name)
+        at_str = f"  |  Active: {h.active_time_percent:.1f}%" if h.active_time_percent > 0 else ""
         self._summary_label.setText(
             f"{h.player_class}  |  Healer  |  "
             f"Healing: {h.total_healing:,}  |  Overhealing: {h.total_overhealing:,}  |  "
-            f"OH%: {h.overheal_percent:.1f}%"
+            f"OH%: {h.overheal_percent:.1f}%{at_str}"
         )
 
         rows = [(s.spell_name, s.casts, s.total_amount) for s in h.spells if s.total_amount > 0]
@@ -249,10 +250,11 @@ class CharacterDetailPanel(QWidget):
     def show_tank(self, t: TankPerformance, consumables: list[ConsumableUsage] = None):
         self._current_name = t.name
         self._name_label.setText(t.name)
+        at_str = f"  |  Active: {t.active_time_percent:.1f}%" if t.active_time_percent > 0 else ""
         self._summary_label.setText(
             f"{t.player_class}  |  Tank  |  "
             f"Taken: {t.total_damage_taken:,}  |  Mitigated: {t.total_mitigated:,}  |  "
-            f"Mit%: {t.mitigation_percent:.1f}%"
+            f"Mit%: {t.mitigation_percent:.1f}%{at_str}"
         )
 
         rows = [(s.spell_name, s.casts) for s in t.damage_taken_breakdown]
@@ -271,8 +273,9 @@ class CharacterDetailPanel(QWidget):
     def show_dps(self, d: DPSPerformance, consumables: list[ConsumableUsage] = None):
         self._current_name = d.name
         self._name_label.setText(d.name)
+        at_str = f"  |  Active: {d.active_time_percent:.1f}%" if d.active_time_percent > 0 else ""
         self._summary_label.setText(
-            f"{d.player_class}  |  {d.role.title()} DPS  |  Total Damage: {d.total_damage:,}"
+            f"{d.player_class}  |  {d.role.title()} DPS  |  Total Damage: {d.total_damage:,}{at_str}"
         )
 
         rows = [(a.spell_name, a.casts, a.total_amount) for a in d.abilities if a.total_amount > 0]

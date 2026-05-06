@@ -296,6 +296,14 @@ class PerformanceDB:
                 CREATE INDEX IF NOT EXISTS idx_encounter_perf_char ON encounter_performance(character_id);
             """)
 
+        for table in ("healer_performance", "tank_performance",
+                      "dps_performance", "encounter_performance"):
+            t_cols = {row[1] for row in conn.execute(
+                f"PRAGMA table_info({table})").fetchall()}
+            if "active_time_percent" not in t_cols:
+                conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN active_time_percent REAL DEFAULT 0.0")
+
     def close(self) -> None:
         if self._conn:
             self._conn.close()
@@ -419,31 +427,36 @@ class PerformanceDB:
                 char_id = self._upsert_character(player.name, player.player_class, raid_date)
                 conn.execute(
                     """INSERT INTO encounter_performance
-                       (encounter_row_id, character_id, role, total_damage, total_healing, total_damage_taken)
-                       VALUES (?, ?, ?, ?, ?, ?)
+                       (encounter_row_id, character_id, role, total_damage, total_healing,
+                        total_damage_taken, active_time_percent)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(encounter_row_id, character_id) DO UPDATE SET
                            role = excluded.role,
                            total_damage = excluded.total_damage,
                            total_healing = excluded.total_healing,
-                           total_damage_taken = excluded.total_damage_taken""",
+                           total_damage_taken = excluded.total_damage_taken,
+                           active_time_percent = excluded.active_time_percent""",
                     (enc_row_id, char_id, player.role,
-                     player.total_damage, player.total_healing, player.total_damage_taken),
+                     player.total_damage, player.total_healing,
+                     player.total_damage_taken, player.active_time_percent),
                 )
 
     def _import_healer(self, conn: sqlite3.Connection, char_id: int, raid_id: int, h: HealerPerformance) -> None:
         total_dispels = sum(d.casts for d in h.dispels)
         conn.execute(
             """INSERT INTO healer_performance
-               (character_id, raid_id, total_healing, total_overhealing, overheal_percent, fear_ward_casts, total_dispels)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+               (character_id, raid_id, total_healing, total_overhealing, overheal_percent,
+                fear_ward_casts, total_dispels, active_time_percent)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(character_id, raid_id) DO UPDATE SET
                    total_healing = excluded.total_healing,
                    total_overhealing = excluded.total_overhealing,
                    overheal_percent = excluded.overheal_percent,
                    fear_ward_casts = excluded.fear_ward_casts,
-                   total_dispels = excluded.total_dispels""",
+                   total_dispels = excluded.total_dispels,
+                   active_time_percent = excluded.active_time_percent""",
             (char_id, raid_id, h.total_healing, h.total_overhealing,
-             h.overheal_percent, h.fear_ward_casts, total_dispels),
+             h.overheal_percent, h.fear_ward_casts, total_dispels, h.active_time_percent),
         )
         perf_id = conn.execute(
             "SELECT id FROM healer_performance WHERE character_id = ? AND raid_id = ?",
@@ -461,13 +474,16 @@ class PerformanceDB:
     def _import_tank(self, conn: sqlite3.Connection, char_id: int, raid_id: int, t: TankPerformance) -> None:
         conn.execute(
             """INSERT INTO tank_performance
-               (character_id, raid_id, total_damage_taken, total_mitigated, mitigation_percent)
-               VALUES (?, ?, ?, ?, ?)
+               (character_id, raid_id, total_damage_taken, total_mitigated, mitigation_percent,
+                active_time_percent)
+               VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(character_id, raid_id) DO UPDATE SET
                    total_damage_taken = excluded.total_damage_taken,
                    total_mitigated = excluded.total_mitigated,
-                   mitigation_percent = excluded.mitigation_percent""",
-            (char_id, raid_id, t.total_damage_taken, t.total_mitigated, t.mitigation_percent),
+                   mitigation_percent = excluded.mitigation_percent,
+                   active_time_percent = excluded.active_time_percent""",
+            (char_id, raid_id, t.total_damage_taken, t.total_mitigated,
+             t.mitigation_percent, t.active_time_percent),
         )
         perf_id = conn.execute(
             "SELECT id FROM tank_performance WHERE character_id = ? AND raid_id = ?",
@@ -492,12 +508,14 @@ class PerformanceDB:
 
     def _import_dps(self, conn: sqlite3.Connection, char_id: int, raid_id: int, d: DPSPerformance) -> None:
         conn.execute(
-            """INSERT INTO dps_performance (character_id, raid_id, role, total_damage)
-               VALUES (?, ?, ?, ?)
+            """INSERT INTO dps_performance
+               (character_id, raid_id, role, total_damage, active_time_percent)
+               VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(character_id, raid_id) DO UPDATE SET
                    role = excluded.role,
-                   total_damage = excluded.total_damage""",
-            (char_id, raid_id, d.role, d.total_damage),
+                   total_damage = excluded.total_damage,
+                   active_time_percent = excluded.active_time_percent""",
+            (char_id, raid_id, d.role, d.total_damage, d.active_time_percent),
         )
         perf_id = conn.execute(
             "SELECT id FROM dps_performance WHERE character_id = ? AND raid_id = ?",
@@ -574,6 +592,20 @@ class PerformanceDB:
             (char_id,),
         ).fetchone()["total"]
 
+        avg_at = conn.execute(
+            """SELECT AVG(active_time_percent) as avg FROM (
+                SELECT active_time_percent FROM healer_performance
+                    WHERE character_id = ? AND active_time_percent > 0
+                UNION ALL
+                SELECT active_time_percent FROM tank_performance
+                    WHERE character_id = ? AND active_time_percent > 0
+                UNION ALL
+                SELECT active_time_percent FROM dps_performance
+                    WHERE character_id = ? AND active_time_percent > 0
+            )""",
+            (char_id, char_id, char_id),
+        ).fetchone()["avg"]
+
         return CharacterHistory(
             name=char["name"],
             player_class=char["player_class"],
@@ -584,6 +616,7 @@ class PerformanceDB:
             avg_damage=round(avg_damage, 1) if avg_damage else None,
             avg_mitigation_percent=round(avg_mit, 2) if avg_mit else None,
             total_consumables_used=total_consumes,
+            avg_active_time=round(avg_at, 1) if avg_at else None,
         )
 
     def get_all_characters(self) -> list[CharacterHistory]:
@@ -603,7 +636,7 @@ class PerformanceDB:
         rows = conn.execute(
             """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       hp.total_healing, hp.total_overhealing, hp.overheal_percent,
-                      hp.fear_ward_casts, hp.total_dispels
+                      hp.fear_ward_casts, hp.total_dispels, hp.active_time_percent
                FROM healer_performance hp
                JOIN characters c ON c.id = hp.character_id
                JOIN raids r ON r.id = hp.raid_id
@@ -619,7 +652,8 @@ class PerformanceDB:
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
-                      tp.total_damage_taken, tp.total_mitigated, tp.mitigation_percent
+                      tp.total_damage_taken, tp.total_mitigated, tp.mitigation_percent,
+                      tp.active_time_percent
                FROM tank_performance tp
                JOIN characters c ON c.id = tp.character_id
                JOIN raids r ON r.id = tp.raid_id
@@ -635,7 +669,7 @@ class PerformanceDB:
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
-                      dp.role, dp.total_damage
+                      dp.role, dp.total_damage, dp.active_time_percent
                FROM dps_performance dp
                JOIN characters c ON c.id = dp.character_id
                JOIN raids r ON r.id = dp.raid_id
@@ -1688,6 +1722,7 @@ class PerformanceDB:
         all_mitigation = [c.avg_mitigation_percent for c in all_chars if c.avg_mitigation_percent]
         all_raids = [c.total_raids for c in all_chars]
         all_consumes = [c.total_consumables_used for c in all_chars]
+        all_active_time = [c.avg_active_time for c in all_chars if c.avg_active_time]
 
         consistency = self.get_character_consistency(character_name)
         con_scores = []
@@ -1700,6 +1735,7 @@ class PerformanceDB:
             "healing": percentile(history.avg_healing, all_healing),
             "damage": percentile(history.avg_damage, all_damage),
             "mitigation": percentile(history.avg_mitigation_percent, all_mitigation),
+            "active_time": percentile(history.avg_active_time, all_active_time),
             "activity": percentile(history.total_raids, all_raids),
             "consumables": percentile(history.total_consumables_used, all_consumes),
             "consistency": min(100, max(0, round(avg_consistency))),
@@ -1962,6 +1998,7 @@ class PerformanceDB:
                 name=r["name"], player_class=r["player_class"], source_id=0,
                 total_healing=r["total_healing"], total_overhealing=r["total_overhealing"],
                 spells=spells, fear_ward_casts=r["fear_ward_casts"],
+                active_time_percent=r["active_time_percent"] or 0.0,
             ))
         return results
 
@@ -1991,6 +2028,7 @@ class PerformanceDB:
                 name=r["name"], player_class=r["player_class"], source_id=0,
                 total_damage_taken=r["total_damage_taken"], total_mitigated=r["total_mitigated"],
                 damage_taken_breakdown=taken_breakdown, abilities_used=abilities,
+                active_time_percent=r["active_time_percent"] or 0.0,
             ))
         return results
 
@@ -2012,6 +2050,7 @@ class PerformanceDB:
             results.append(DPSPerformance(
                 name=r["name"], player_class=r["player_class"], source_id=0,
                 role=r["role"], total_damage=r["total_damage"], abilities=abilities,
+                active_time_percent=r["active_time_percent"] or 0.0,
             ))
         return results
 
@@ -2146,6 +2185,7 @@ class PerformanceDB:
                     total_damage=pr["total_damage"],
                     total_healing=pr["total_healing"],
                     total_damage_taken=pr["total_damage_taken"],
+                    active_time_percent=pr["active_time_percent"] or 0.0,
                 )
                 for pr in perf_rows
             ]

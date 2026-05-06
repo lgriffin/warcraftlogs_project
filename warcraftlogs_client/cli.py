@@ -38,7 +38,7 @@ Examples:
         """
     )
 
-    parser.add_argument('--version', action='version', version='%(prog)s 2.0.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 3.9.0')
 
     subparsers = parser.add_subparsers(
         dest='command',

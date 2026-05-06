@@ -121,7 +121,7 @@ def _render_healer_summary_tables(healers: list[HealerPerformance]) -> str:
         lines.append(f"### {class_name}")
         lines.append("")
 
-        headers = ["Character", "Healing", "Overheal%"]
+        headers = ["Character", "Healing", "Overheal%", "Active Time%"]
         headers.extend(spell_names)
         headers.extend(dispel_names)
         headers.extend(["Mana Pot", "Dark Rune"])
@@ -138,6 +138,7 @@ def _render_healer_summary_tables(healers: list[HealerPerformance]) -> str:
                 h.name,
                 f"{h.total_healing:,}",
                 f"{h.overheal_percent:.1f}%",
+                f"{h.active_time_percent:.1f}%" if h.active_time_percent > 0 else "-",
             ]
             cells.extend(
                 str(spell_lookup[s].casts) if s in spell_lookup else "0"
@@ -169,7 +170,7 @@ def _render_tank_summary_tables(tanks: list[TankPerformance]) -> str:
     if taken_names:
         lines.append("### Damage Taken")
         lines.append("")
-        headers = ["Character", "Total Taken", "Mitigation%"] + taken_names
+        headers = ["Character", "Total Taken", "Mitigation%", "Active Time%"] + taken_names
         lines.append("| " + " | ".join(headers) + " |")
         lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
@@ -179,6 +180,7 @@ def _render_tank_summary_tables(tanks: list[TankPerformance]) -> str:
                 t.name,
                 f"{t.total_damage_taken:,}",
                 f"{t.mitigation_percent:.1f}%",
+                f"{t.active_time_percent:.1f}%" if t.active_time_percent > 0 else "-",
             ]
             cells.extend(str(lookup.get(n, 0)) for n in taken_names)
             lines.append("| " + " | ".join(cells) + " |")
@@ -236,13 +238,14 @@ def _render_dps_summary_tables(all_dps: list[DPSPerformance], role: str) -> str:
 
         lines.append(f"### {class_name}")
         lines.append("")
-        headers = ["Character", "Total Damage"] + abilities
+        headers = ["Character", "Total Damage", "Active Time%"] + abilities
         lines.append("| " + " | ".join(headers) + " |")
         lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
         for d in sorted(group, key=lambda x: x.total_damage, reverse=True):
             cast_lookup = {a.spell_name: a.casts for a in d.abilities}
-            cells = [d.name, f"{d.total_damage:,}"]
+            at = f"{d.active_time_percent:.1f}%" if d.active_time_percent > 0 else "-"
+            cells = [d.name, f"{d.total_damage:,}", at]
             cells.extend(str(cast_lookup.get(a, 0)) for a in abilities)
             lines.append("| " + " | ".join(cells) + " |")
 

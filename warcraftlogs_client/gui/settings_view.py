@@ -156,9 +156,9 @@ class SettingsView(QWidget):
 
         layout.addWidget(thresh_group)
 
-        # ── Database info ──
-        db_group = QGroupBox("Local Database")
-        db_layout = QVBoxLayout(db_group)
+        # ── Data Management ──
+        data_group = QGroupBox("Data Management")
+        data_layout = QVBoxLayout(data_group)
 
         db_path = str(self._paths.get_db_path())
         exists = os.path.exists(db_path)
@@ -170,51 +170,22 @@ class SettingsView(QWidget):
             else:
                 size = f" ({size_bytes / 1024:.1f} KB)"
 
-        db_info = QLabel(f"Path: {db_path}{size}")
+        db_info = QLabel(f"Database: {db_path}{size}")
         db_info.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
         db_info.setWordWrap(True)
-        db_layout.addWidget(db_info)
+        data_layout.addWidget(db_info)
 
-        db_status = QLabel("Status: " + ("Exists" if exists else "Not created yet (will be created on first save)"))
-        db_status.setStyleSheet(f"color: {COLORS['success'] if exists else COLORS['text_dim']}; font-size: 12px;")
-        db_layout.addWidget(db_status)
-
-        clear_db_btn = QPushButton("Clear Database")
-        clear_db_btn.setFixedWidth(140)
-        clear_db_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {COLORS['error']};
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #c0392b;
-            }}
-        """)
-        clear_db_btn.clicked.connect(self._clear_database)
-        db_layout.addWidget(clear_db_btn)
-
-        layout.addWidget(db_group)
-
-        # ── API Cache ──
-        cache_group = QGroupBox("API Response Cache")
-        cache_layout = QVBoxLayout(cache_group)
-
-        cache_note = QLabel(
-            "WarcraftLogs API responses are cached locally to avoid redundant requests.\n"
-            "Clear the cache to force fresh data on the next analysis."
+        data_note = QLabel(
+            "Clears all raid history from the database and removes cached API responses.\n"
+            "Raids will need to be re-downloaded and re-analyzed."
         )
-        cache_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
-        cache_note.setWordWrap(True)
-        cache_layout.addWidget(cache_note)
+        data_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        data_note.setWordWrap(True)
+        data_layout.addWidget(data_note)
 
-        clear_cache_btn = QPushButton("Clear API Cache")
-        clear_cache_btn.setFixedWidth(160)
-        clear_cache_btn.setStyleSheet(f"""
+        clear_all_btn = QPushButton("Clear All Data")
+        clear_all_btn.setFixedWidth(160)
+        clear_all_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {COLORS['error']};
                 color: white;
@@ -228,10 +199,10 @@ class SettingsView(QWidget):
                 background-color: #c0392b;
             }}
         """)
-        clear_cache_btn.clicked.connect(self._clear_api_cache)
-        cache_layout.addWidget(clear_cache_btn)
+        clear_all_btn.clicked.connect(self._clear_all_data)
+        data_layout.addWidget(clear_all_btn)
 
-        layout.addWidget(cache_group)
+        layout.addWidget(data_group)
 
         # ── Save button ──
         btn_layout = QHBoxLayout()
@@ -332,12 +303,13 @@ class SettingsView(QWidget):
         except (json.JSONDecodeError, OSError) as e:
             QMessageBox.critical(self, "Save Error", f"Could not save config.json:\n{e}")
 
-    def _clear_database(self):
+    def _clear_all_data(self):
         from PySide6.QtWidgets import QInputDialog
         dlg = QInputDialog(self)
-        dlg.setWindowTitle("Confirm Database Clear")
+        dlg.setWindowTitle("Confirm Clear All Data")
         dlg.setLabelText(
-            "This will permanently delete ALL character and raid history.\n\n"
+            "This will permanently delete ALL raid history, character data,\n"
+            "and cached API responses.\n\n"
             "Type 'I am Toad' to confirm:"
         )
         dlg.setStyleSheet(f"""
@@ -355,44 +327,19 @@ class SettingsView(QWidget):
         ok = dlg.exec()
         text = dlg.textValue()
         if not ok or text.strip() != "I am Toad":
-            self.status_message.emit("Database clear cancelled")
+            self.status_message.emit("Clear cancelled")
             return
         try:
             from ..database import PerformanceDB
             with PerformanceDB() as db:
                 db.clear_all()
-            QMessageBox.information(self, "Cleared", "Database has been cleared.")
-            self.status_message.emit("Database cleared")
-        except (sqlite3.Error, OSError) as e:
-            QMessageBox.critical(self, "Error", f"Failed to clear database:\n{e}")
 
-    def _clear_api_cache(self):
-        from PySide6.QtWidgets import QInputDialog
-        dlg = QInputDialog(self)
-        dlg.setWindowTitle("Confirm Cache Clear")
-        dlg.setLabelText(
-            "This will delete all cached WarcraftLogs API responses.\n"
-            "Reports will need to be re-fetched from the API on next analysis.\n\n"
-            "Type 'I am Toad' to confirm:"
-        )
-        dlg.setStyleSheet(f"""
-            QInputDialog, QLabel, QLineEdit, QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-            }}
-            QLineEdit {{
-                background-color: {COLORS['bg_input']};
-                border: 1px solid {COLORS['border']};
-                border-radius: 4px;
-                padding: 6px 10px;
-            }}
-        """)
-        ok = dlg.exec()
-        text = dlg.textValue()
-        if not ok or text.strip() != "I am Toad":
-            self.status_message.emit("Cache clear cancelled")
-            return
-        from ..cache import clear_response_cache
-        count = clear_response_cache()
-        QMessageBox.information(self, "Cleared", f"Removed {count} cached API responses.")
-        self.status_message.emit(f"API cache cleared ({count} files)")
+            from ..cache import clear_response_cache
+            cache_count = clear_response_cache()
+
+            QMessageBox.information(
+                self, "Cleared",
+                f"Database cleared and {cache_count} cached API responses removed.")
+            self.status_message.emit(f"All data cleared ({cache_count} cache files)")
+        except (sqlite3.Error, OSError) as e:
+            QMessageBox.critical(self, "Error", f"Failed to clear data:\n{e}")

@@ -182,12 +182,13 @@ class RaidAnalysisWidget(QWidget):
         enc_layout.addLayout(enc_header)
 
         self._enc_table = QTableWidget()
-        self._enc_table.setColumnCount(6)
+        self._enc_table.setColumnCount(7)
         self._enc_table.setHorizontalHeaderLabels(
-            ["Name", "Class", "Role", "Damage Done", "Healing Done", "Damage Taken"])
+            ["Name", "Class", "Role", "Damage Done", "Healing Done",
+             "Damage Taken", "Active Time%"])
         self._enc_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch)
-        for col in range(1, 6):
+        for col in range(1, 7):
             self._enc_table.horizontalHeader().setSectionResizeMode(
                 col, QHeaderView.ResizeMode.ResizeToContents)
         self._enc_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -338,6 +339,10 @@ class RaidAnalysisWidget(QWidget):
                 item.setTextAlignment(
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._enc_table.setItem(i, j + 3, item)
+            at_item = QTableWidgetItem(f"{p.active_time_percent:.1f}%")
+            at_item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._enc_table.setItem(i, 6, at_item)
 
     def _on_name_clicked(self, name: str):
         a = self._analysis
