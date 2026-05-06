@@ -7,9 +7,15 @@ INSTALLER="installer_output/WarcraftLogsAnalyzer-${VERSION}-Setup.exe"
 
 echo "=== Building WarcraftLogs Analyzer v${VERSION} ==="
 
-# Update version in installer.iss and spec
-sed -i "s/^AppVersion=.*/AppVersion=${VERSION}/" installer.iss
-sed -i "s/^OutputBaseFilename=.*/OutputBaseFilename=WarcraftLogsAnalyzer-${VERSION}-Setup/" installer.iss
+# Update version strings
+sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" warcraftlogs_client/version.py
+sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
+
+# Update version in installer.iss and spec (if present)
+if [ -f installer.iss ]; then
+    sed -i "s/^AppVersion=.*/AppVersion=${VERSION}/" installer.iss
+    sed -i "s/^OutputBaseFilename=.*/OutputBaseFilename=WarcraftLogsAnalyzer-${VERSION}-Setup/" installer.iss
+fi
 
 echo "[1/3] Running PyInstaller..."
 rm -rf build dist

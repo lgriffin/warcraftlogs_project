@@ -8,13 +8,14 @@ from PySide6.QtGui import QFont
 
 from .main_window import MainWindow
 from .. import paths
+from ..version import __version__
 
 
 def run():
     paths.ensure_first_run_config()
     app = QApplication(sys.argv)
     app.setApplicationName("WarcraftLogs Analyzer")
-    app.setApplicationVersion("3.0.0")
+    app.setApplicationVersion(__version__)
 
     app.setStyleSheet("""
         QToolTip {

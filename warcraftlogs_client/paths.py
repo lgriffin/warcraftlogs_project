@@ -73,6 +73,21 @@ def get_consumes_config_path() -> Path:
     return get_app_dir() / "consumes_config.json"
 
 
+def get_update_dir() -> Path:
+    """Temp directory for downloading and staging updates."""
+    base = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))
+    update_dir = Path(base) / APP_NAME / "updates"
+    update_dir.mkdir(parents=True, exist_ok=True)
+    return update_dir
+
+
+def get_install_dir() -> Path:
+    """The directory containing WarcraftLogsAnalyzer.exe (the portable install root)."""
+    if is_frozen():
+        return Path(sys.executable).parent
+    return get_app_dir()
+
+
 def ensure_first_run_config():
     """Copy config.example.json to user data dir if config.json doesn't exist yet."""
     config_path = get_config_path()
