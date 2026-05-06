@@ -298,8 +298,7 @@ class MainWindow(QMainWindow):
         if w and w.isRunning():
             workers.append(w)
         for w in workers:
-            w.quit()
-            w.wait(3000)
+            w.wait(5000)
         super().closeEvent(event)
 
     def _on_guild_info_loaded(self, info: dict):

@@ -303,6 +303,9 @@ class DownloadView(QWidget):
         self._progress_label.setText(f"Analyzing {done + 1}/{self._batch_total}: {code}")
         self.status_message.emit(f"Analyzing {code}...")
 
+        if self._worker is not None:
+            self._worker.wait()
+
         self._worker = AnalysisWorker(code)
         self._worker.progress.connect(lambda msg: self._progress_label.setText(
             f"[{self._batch_total - len(self._batch_queue)}/{self._batch_total}] {msg}"
