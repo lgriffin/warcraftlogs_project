@@ -89,9 +89,23 @@ The full-featured PySide6 desktop app provides:
 
 - **Analyze Tab** — Enter a report ID or select from your guild's recent reports to run a full raid analysis. Results are broken down by role (Healers, Tanks, Melee DPS, Ranged DPS) with clickable character names for detailed spell/ability breakdowns.
 - **History Tab** — Browse all imported raids and characters. View performance trends over time with charts for healing, damage, mitigation, and consumables. Character insights include consistency scores, personal bests, radar charts, and calendar heatmaps.
+- **Insights Tab** — GM/RL cross-raid analytics with filtering by raid day, raid size (10-man/25-man), zone (Karazhan, Gruul's Lair, Magtheridon's Lair, Serpentshrine Cavern, Tempest Keep, etc.), and lookback window. Zone list populates dynamically from imported raids — new content is available automatically.
 - **Raid Groups Tab** — Create and manage raid groups, assign characters, set raid days, and view group dashboards with aggregated performance, attendance, and role coverage.
 - **Character Tab** — Set up your main character to view WarcraftLogs profile data, rankings, and recent reports. Links directly to your WCL profile page.
 - **Settings Tab** — Configure API credentials, role detection thresholds, and manage the local database.
+
+### Raid Filtering
+
+The Insights tab supports filtering across multiple dimensions to isolate performance data:
+
+| Filter | Options | Notes |
+|--------|---------|-------|
+| **Raid Day** | All Days, or specific day (Mon–Sun) | Filter by raid night |
+| **Raid Size** | All Sizes, 25-man, 10-man | Based on participant count |
+| **Zone** | All Zones, or specific raid instance | Dynamically populated from imported data |
+| **Lookback** | All Raids, Last 5/10/15/20 | Limit analysis to recent raids |
+
+The Zone filter scales automatically with new content — when SSC, TK, or any future raid logs are imported, they appear in the dropdown without code changes.
 
 ### Raid Analysis
 
