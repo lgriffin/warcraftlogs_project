@@ -18,6 +18,14 @@ from .models import (
 )
 
 
+def _extract_report(result: dict) -> dict:
+    """Safely extract the report object from a GraphQL response."""
+    report = result.get("data", {}).get("reportData", {}).get("report")
+    if report is None:
+        raise ValueError("Report not found or inaccessible")
+    return report
+
+
 class WarcraftLogsClient:
     API_URL = "https://www.warcraftlogs.com/api/v2/client"
     MIN_REQUEST_INTERVAL = 0.25
@@ -83,9 +91,7 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        report = result["data"]["reportData"]["report"]
-        if report is None:
-            raise ValueError(f"Report '{report_id}' not found or inaccessible")
+        report = _extract_report(result)
         zone_data = report.get("zone")
         return RaidMetadata(
             report_id=report_id,
@@ -182,7 +188,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        actors = result["data"]["reportData"]["report"]["masterData"]["actors"]
+        report = _extract_report(result)
+        actors = (report.get("masterData") or {}).get("actors") or []
         return [a for a in actors if a["type"] == "Player"]
 
     def get_fights(self, report_id: str) -> list[dict]:
@@ -203,7 +210,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["fights"]
+        report = _extract_report(result)
+        return report.get("fights") or []
 
     def get_encounter_table(self, report_id: str, start_time: int,
                              end_time: int, data_type: str) -> list[dict]:
@@ -223,7 +231,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        raw_table = result["data"]["reportData"]["report"]["table"]
+        report = _extract_report(result)
+        raw_table = report.get("table")
         if isinstance(raw_table, dict):
             if "data" in raw_table and "entries" in raw_table["data"]:
                 return raw_table["data"]["entries"]
@@ -247,7 +256,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["events"]["data"]
+        report = _extract_report(result)
+        return (report.get("events") or {}).get("data") or []
 
     def get_cast_data(self, report_id: str, source_id: int) -> list[dict]:
         query = f"""
@@ -263,7 +273,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["events"]["data"]
+        report = _extract_report(result)
+        return (report.get("events") or {}).get("data") or []
 
     def get_cast_events_paginated(self, report_id: str, source_id: int) -> list[dict]:
         all_data = []
@@ -283,7 +294,8 @@ class WarcraftLogsClient:
             }}
             """
             result = self.run_query(query)
-            events = result["data"]["reportData"]["report"]["events"]
+            report = _extract_report(result)
+            events = report.get("events") or {}
             all_data.extend(events.get("data", []))
             next_page = events.get("nextPageTimestamp")
             if not next_page:
@@ -302,7 +314,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        raw_table = result["data"]["reportData"]["report"]["table"]
+        report = _extract_report(result)
+        raw_table = report.get("table")
         if isinstance(raw_table, dict):
             if "data" in raw_table and "entries" in raw_table["data"]:
                 return raw_table["data"]["entries"]
@@ -322,7 +335,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        raw_table = result["data"]["reportData"]["report"]["table"]
+        report = _extract_report(result)
+        raw_table = report.get("table")
         if isinstance(raw_table, dict):
             if "data" in raw_table and "entries" in raw_table["data"]:
                 return raw_table["data"]["entries"]
@@ -341,7 +355,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        raw_table = result["data"]["reportData"]["report"]["table"]
+        report = _extract_report(result)
+        raw_table = report.get("table")
         if isinstance(raw_table, dict):
             if "data" in raw_table and "entries" in raw_table["data"]:
                 return raw_table["data"]["entries"]
@@ -363,7 +378,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["events"]["data"]
+        report = _extract_report(result)
+        return (report.get("events") or {}).get("data") or []
 
     def get_auras_paginated(self, report_id: str, source_id: int) -> list[dict]:
         all_data = []
@@ -383,7 +399,8 @@ class WarcraftLogsClient:
             }}
             """
             result = self.run_query(query)
-            events = result["data"]["reportData"]["report"]["events"]
+            report = _extract_report(result)
+            events = report.get("events") or {}
             all_data.extend(events.get("data", []))
             next_page = events.get("nextPageTimestamp")
             if not next_page:
@@ -405,7 +422,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["events"]["data"]
+        report = _extract_report(result)
+        return (report.get("events") or {}).get("data") or []
 
     def get_buffs_table(self, report_id: str, source_id: int) -> dict:
         query = f"""
@@ -419,7 +437,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["table"]
+        report = _extract_report(result)
+        return report.get("table") or {}
 
     def get_damage_done_data(self, report_id: str, source_id: int) -> list[dict]:
         query = f"""
@@ -435,7 +454,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["events"]["data"]
+        report = _extract_report(result)
+        return (report.get("events") or {}).get("data") or []
 
     def get_damage_taken_data(self, report_id: str, source_id: int) -> list[dict]:
         query = f"""
@@ -451,7 +471,8 @@ class WarcraftLogsClient:
         }}
         """
         result = self.run_query(query)
-        return result["data"]["reportData"]["report"]["events"]["data"]
+        report = _extract_report(result)
+        return (report.get("events") or {}).get("data") or []
 
     def get_threat_data(self, report_id: str, source_id: int) -> list[dict]:
         all_data = []
@@ -471,7 +492,8 @@ class WarcraftLogsClient:
             }}
             """
             result = self.run_query(query)
-            events = result["data"]["reportData"]["report"]["events"]
+            report = _extract_report(result)
+            events = report.get("events") or {}
             all_data.extend(events.get("data", []))
             next_page = events.get("nextPageTimestamp")
             if not next_page:
@@ -567,7 +589,7 @@ class WarcraftLogsClient:
             }}
             """
             result = self.run_query(actors_query, use_cache=True)
-            report = result["data"]["reportData"]["report"]
+            report = _extract_report(result)
 
             actors = report.get("masterData", {}).get("actors", [])
             source_id = None
@@ -596,7 +618,8 @@ class WarcraftLogsClient:
             }}
             """
             result = self.run_query(events_query, use_cache=True)
-            events = result["data"]["reportData"]["report"]["events"]["data"]
+            gear_report = _extract_report(result)
+            events = (gear_report.get("events") or {}).get("data") or []
             if not events:
                 return []
 

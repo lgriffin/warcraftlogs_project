@@ -21,6 +21,7 @@ from .character_view import CharacterView
 from .compare_view import CompareView
 from .insights_view import InsightsView
 from .boss_insights_view import BossInsightsView
+from .reference_view import ReferenceView
 from .settings_view import SettingsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
@@ -114,6 +115,7 @@ class MainWindow(QMainWindow):
             ("Compare", "Compare character stats and radar overlays"),
             ("GM/RL Insights", "Explore performance trends and comparisons"),
             ("Boss Insights", "Aggregate boss encounter performance"),
+            ("Reference Reports", "Import and compare reference reports"),
             ("Settings", "Configure credentials and thresholds"),
         ]
         for name, tooltip in nav_items:
@@ -170,6 +172,7 @@ class MainWindow(QMainWindow):
         self.compare_view = CompareView()
         self.insights_view = InsightsView()
         self.boss_insights_view = BossInsightsView()
+        self.reference_view = ReferenceView()
         self.settings_view = SettingsView()
 
         self.stack.addWidget(self.download_view)
@@ -180,8 +183,9 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.compare_view)
         self.stack.addWidget(self.insights_view)
         self.stack.addWidget(self.boss_insights_view)
+        self.stack.addWidget(self.reference_view)
         self.stack.addWidget(self.settings_view)
-        self.stack.set_base_count(9)
+        self.stack.set_base_count(10)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
@@ -219,6 +223,8 @@ class MainWindow(QMainWindow):
         self.compare_view.status_message.connect(self.status_bar.showMessage)
         self.insights_view.status_message.connect(self.status_bar.showMessage)
         self.boss_insights_view.status_message.connect(self.status_bar.showMessage)
+        self.reference_view.status_message.connect(self.status_bar.showMessage)
+        self.reference_view.open_raid.connect(self._drill_into_raid)
         self.settings_view.status_message.connect(self._on_settings_saved)
 
         self._load_guild_info()

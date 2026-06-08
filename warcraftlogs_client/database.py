@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS raids (
     raid_date TEXT NOT NULL,
     start_time INTEGER NOT NULL,
     end_time INTEGER,
-    imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+    imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+    source TEXT NOT NULL DEFAULT 'guild',
+    label TEXT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS healer_performance (
@@ -237,6 +239,11 @@ class PerformanceDB:
             conn.execute("ALTER TABLE raids ADD COLUMN raid_size INTEGER DEFAULT NULL")
         if "zone" not in raid_cols:
             conn.execute("ALTER TABLE raids ADD COLUMN zone TEXT DEFAULT NULL")
+        if "source" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN source TEXT DEFAULT 'guild'")
+        if "label" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN label TEXT DEFAULT NULL")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_raids_source ON raids(source)")
 
         conn.execute("""
             UPDATE raids SET raid_size = (
@@ -345,28 +352,28 @@ class PerformanceDB:
         )
         return cursor.fetchone()["id"]
 
-    def _upsert_raid(self, metadata: RaidMetadata) -> int:
+    def _upsert_raid(self, metadata: RaidMetadata, source: str = "guild") -> int:
         conn = self._get_conn()
         raid_date = metadata.date.strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
-            """INSERT INTO raids (report_id, title, owner, raid_date, start_time, end_time, zone)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO raids (report_id, title, owner, raid_date, start_time, end_time, zone, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(report_id) DO UPDATE SET
                    title = excluded.title,
                    zone = COALESCE(excluded.zone, raids.zone)""",
             (metadata.report_id, metadata.title, metadata.owner, raid_date,
-             metadata.start_time, metadata.end_time, metadata.zone),
+             metadata.start_time, metadata.end_time, metadata.zone, source),
         )
         cursor = conn.execute("SELECT id FROM raids WHERE report_id = ?", (metadata.report_id,))
         return cursor.fetchone()["id"]
 
     # ── Import a full raid analysis ──
 
-    def import_raid(self, analysis: RaidAnalysis) -> None:
+    def import_raid(self, analysis: RaidAnalysis, source: str = "guild") -> None:
         """Import all performance data from a completed raid analysis."""
         conn = self._get_conn()
         raid_date = analysis.metadata.date.strftime("%Y-%m-%d %H:%M:%S")
-        raid_id = self._upsert_raid(analysis.metadata)
+        raid_id = self._upsert_raid(analysis.metadata, source=source)
 
         raid_size = len(analysis.composition.all_players)
         if raid_size > 0:
@@ -551,7 +558,8 @@ class PerformanceDB:
 
     # ── Query operations ──
 
-    def get_character_history(self, character_name: str) -> Optional[CharacterHistory]:
+    def get_character_history(self, character_name: str,
+                              source: str = "guild") -> Optional[CharacterHistory]:
         """Get historical performance summary for a character."""
         conn = self._get_conn()
         char = conn.execute(
@@ -565,45 +573,62 @@ class PerformanceDB:
 
         raid_count = conn.execute(
             """SELECT COUNT(DISTINCT raid_id) as cnt FROM (
-                SELECT raid_id FROM healer_performance WHERE character_id = ?
-                UNION SELECT raid_id FROM tank_performance WHERE character_id = ?
-                UNION SELECT raid_id FROM dps_performance WHERE character_id = ?
+                SELECT hp.raid_id FROM healer_performance hp
+                    JOIN raids r ON r.id = hp.raid_id
+                    WHERE hp.character_id = ? AND r.source = ?
+                UNION SELECT tp.raid_id FROM tank_performance tp
+                    JOIN raids r ON r.id = tp.raid_id
+                    WHERE tp.character_id = ? AND r.source = ?
+                UNION SELECT dp.raid_id FROM dps_performance dp
+                    JOIN raids r ON r.id = dp.raid_id
+                    WHERE dp.character_id = ? AND r.source = ?
             )""",
-            (char_id, char_id, char_id),
+            (char_id, source, char_id, source, char_id, source),
         ).fetchone()["cnt"]
 
         avg_healing = conn.execute(
-            "SELECT AVG(total_healing) as avg FROM healer_performance WHERE character_id = ?",
-            (char_id,),
+            """SELECT AVG(hp.total_healing) as avg FROM healer_performance hp
+               JOIN raids r ON r.id = hp.raid_id
+               WHERE hp.character_id = ? AND r.source = ?""",
+            (char_id, source),
         ).fetchone()["avg"]
 
         avg_damage = conn.execute(
-            "SELECT AVG(total_damage) as avg FROM dps_performance WHERE character_id = ?",
-            (char_id,),
+            """SELECT AVG(dp.total_damage) as avg FROM dps_performance dp
+               JOIN raids r ON r.id = dp.raid_id
+               WHERE dp.character_id = ? AND r.source = ?""",
+            (char_id, source),
         ).fetchone()["avg"]
 
         avg_mit = conn.execute(
-            "SELECT AVG(mitigation_percent) as avg FROM tank_performance WHERE character_id = ?",
-            (char_id,),
+            """SELECT AVG(tp.mitigation_percent) as avg FROM tank_performance tp
+               JOIN raids r ON r.id = tp.raid_id
+               WHERE tp.character_id = ? AND r.source = ?""",
+            (char_id, source),
         ).fetchone()["avg"]
 
         total_consumes = conn.execute(
-            "SELECT COALESCE(SUM(count), 0) as total FROM consumable_usage WHERE character_id = ?",
-            (char_id,),
+            """SELECT COALESCE(SUM(cu.count), 0) as total FROM consumable_usage cu
+               JOIN raids r ON r.id = cu.raid_id
+               WHERE cu.character_id = ? AND r.source = ?""",
+            (char_id, source),
         ).fetchone()["total"]
 
         avg_at = conn.execute(
             """SELECT AVG(active_time_percent) as avg FROM (
-                SELECT active_time_percent FROM healer_performance
-                    WHERE character_id = ? AND active_time_percent > 0
+                SELECT hp.active_time_percent FROM healer_performance hp
+                    JOIN raids r ON r.id = hp.raid_id
+                    WHERE hp.character_id = ? AND r.source = ? AND hp.active_time_percent > 0
                 UNION ALL
-                SELECT active_time_percent FROM tank_performance
-                    WHERE character_id = ? AND active_time_percent > 0
+                SELECT tp.active_time_percent FROM tank_performance tp
+                    JOIN raids r ON r.id = tp.raid_id
+                    WHERE tp.character_id = ? AND r.source = ? AND tp.active_time_percent > 0
                 UNION ALL
-                SELECT active_time_percent FROM dps_performance
-                    WHERE character_id = ? AND active_time_percent > 0
+                SELECT dp.active_time_percent FROM dps_performance dp
+                    JOIN raids r ON r.id = dp.raid_id
+                    WHERE dp.character_id = ? AND r.source = ? AND dp.active_time_percent > 0
             )""",
-            (char_id, char_id, char_id),
+            (char_id, source, char_id, source, char_id, source),
         ).fetchone()["avg"]
 
         return CharacterHistory(
@@ -620,9 +645,25 @@ class PerformanceDB:
         )
 
     def get_all_characters(self) -> list[CharacterHistory]:
-        """Get summary for all tracked characters."""
+        """Get summary for all tracked characters (guild raids only)."""
         conn = self._get_conn()
-        rows = conn.execute("SELECT name FROM characters ORDER BY name").fetchall()
+        rows = conn.execute("""
+            SELECT DISTINCT c.name FROM characters c
+            WHERE EXISTS (
+                SELECT 1 FROM healer_performance hp
+                JOIN raids r ON r.id = hp.raid_id
+                WHERE hp.character_id = c.id AND r.source = 'guild'
+            ) OR EXISTS (
+                SELECT 1 FROM tank_performance tp
+                JOIN raids r ON r.id = tp.raid_id
+                WHERE tp.character_id = c.id AND r.source = 'guild'
+            ) OR EXISTS (
+                SELECT 1 FROM dps_performance dp
+                JOIN raids r ON r.id = dp.raid_id
+                WHERE dp.character_id = c.id AND r.source = 'guild'
+            )
+            ORDER BY c.name
+        """).fetchall()
         results = []
         for row in rows:
             history = self.get_character_history(row["name"])
@@ -640,7 +681,7 @@ class PerformanceDB:
                FROM healer_performance hp
                JOIN characters c ON c.id = hp.character_id
                JOIN raids r ON r.id = hp.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -657,7 +698,7 @@ class PerformanceDB:
                FROM tank_performance tp
                JOIN characters c ON c.id = tp.character_id
                JOIN raids r ON r.id = tp.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -673,7 +714,7 @@ class PerformanceDB:
                FROM dps_performance dp
                JOIN characters c ON c.id = dp.character_id
                JOIN raids r ON r.id = dp.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -690,7 +731,7 @@ class PerformanceDB:
                JOIN healer_performance hp ON hp.id = hs.healer_performance_id
                JOIN characters c ON c.id = hp.character_id
                JOIN raids r ON r.id = hp.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit * 20),
@@ -707,7 +748,7 @@ class PerformanceDB:
                JOIN dps_performance dp ON dp.id = da.dps_performance_id
                JOIN characters c ON c.id = dp.character_id
                JOIN raids r ON r.id = dp.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit * 20),
@@ -723,7 +764,7 @@ class PerformanceDB:
                FROM consumable_usage cu
                JOIN characters c ON c.id = cu.character_id
                JOIN raids r ON r.id = cu.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit * 10),
@@ -738,7 +779,7 @@ class PerformanceDB:
                FROM consumable_usage cu
                JOIN characters c ON c.id = cu.character_id
                JOIN raids r ON r.id = cu.raid_id
-               WHERE c.name = ? COLLATE NOCASE
+               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                ORDER BY r.raid_date DESC
                LIMIT ?""",
             (character_name, limit),
@@ -768,10 +809,11 @@ class PerformanceDB:
     def _build_day_size_filter(self, raid_day: str | None = None,
                                 raid_size: str | None = None,
                                 last_n: int | None = None,
-                                zone: str | None = None) -> tuple[str, list]:
+                                zone: str | None = None,
+                                source: str = "guild") -> tuple[str, list]:
         def _core(alias: str) -> tuple[str, list]:
-            frag = ""
-            p: list = []
+            frag = f" AND {alias}.source = ?"
+            p: list = [source]
             if raid_day:
                 day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
                            "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
@@ -1138,19 +1180,21 @@ class PerformanceDB:
             })
         return results
 
-    def get_distinct_zones(self) -> list[str]:
+    def get_distinct_zones(self, source: str = "guild") -> list[str]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT DISTINCT zone FROM raids WHERE zone IS NOT NULL ORDER BY zone"
+            "SELECT DISTINCT zone FROM raids WHERE zone IS NOT NULL AND source = ? ORDER BY zone",
+            (source,),
         ).fetchall()
         return [r["zone"] for r in rows]
 
     def get_raid_list(self, limit: int = 50) -> list[dict]:
-        """Get list of all imported raids."""
+        """Get list of all imported guild raids."""
         conn = self._get_conn()
         rows = conn.execute(
             """SELECT report_id, title, owner, raid_date, imported_at
-               FROM raids ORDER BY raid_date DESC LIMIT ?""",
+               FROM raids WHERE source = 'guild'
+               ORDER BY raid_date DESC LIMIT ?""",
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -1336,7 +1380,8 @@ class PerformanceDB:
                LEFT JOIN healer_performance hp ON hp.character_id = c.id AND hp.raid_id = r.id
                LEFT JOIN dps_performance dp ON dp.character_id = c.id AND dp.raid_id = r.id
                LEFT JOIN tank_performance tp ON tp.character_id = c.id AND tp.raid_id = r.id
-               WHERE hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL
+               WHERE r.source = 'guild'
+                 AND (hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL)
                GROUP BY r.id
                ORDER BY r.raid_date ASC""",
             (group_id,),
@@ -1362,7 +1407,8 @@ class PerformanceDB:
                LEFT JOIN healer_performance hp ON hp.character_id = c.id AND hp.raid_id = r.id
                LEFT JOIN dps_performance dp ON dp.character_id = c.id AND dp.raid_id = r.id
                LEFT JOIN tank_performance tp ON tp.character_id = c.id AND tp.raid_id = r.id
-               WHERE hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL""",
+               WHERE r.source = 'guild'
+                 AND (hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL)""",
             (group_id,),
         ).fetchall()
         total_raids = len(group_raid_ids)
@@ -1402,13 +1448,19 @@ class PerformanceDB:
         results = []
         for m in members:
             healer_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM healer_performance WHERE character_id = ?",
+                """SELECT COUNT(*) as cnt FROM healer_performance hp
+                   JOIN raids r ON r.id = hp.raid_id
+                   WHERE hp.character_id = ? AND r.source = 'guild'""",
                 (m["id"],)).fetchone()["cnt"]
             tank_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM tank_performance WHERE character_id = ?",
+                """SELECT COUNT(*) as cnt FROM tank_performance tp
+                   JOIN raids r ON r.id = tp.raid_id
+                   WHERE tp.character_id = ? AND r.source = 'guild'""",
                 (m["id"],)).fetchone()["cnt"]
             dps_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM dps_performance WHERE character_id = ?",
+                """SELECT COUNT(*) as cnt FROM dps_performance dp
+                   JOIN raids r ON r.id = dp.raid_id
+                   WHERE dp.character_id = ? AND r.source = 'guild'""",
                 (m["id"],)).fetchone()["cnt"]
             results.append({
                 "name": m["name"], "player_class": m["player_class"],
@@ -1459,7 +1511,7 @@ class PerformanceDB:
                     """SELECT r.raid_date, r.title, r.raid_size, hp.total_healing as metric_value
                        FROM healer_performance hp
                        JOIN raids r ON r.id = hp.raid_id
-                       WHERE hp.character_id = ?
+                       WHERE hp.character_id = ? AND r.source = 'guild'
                        ORDER BY r.raid_date DESC LIMIT ?""",
                     (cid, limit),
                 ).fetchall()
@@ -1479,7 +1531,7 @@ class PerformanceDB:
                     """SELECT r.raid_date, r.title, r.raid_size, tp.mitigation_percent as metric_value
                        FROM tank_performance tp
                        JOIN raids r ON r.id = tp.raid_id
-                       WHERE tp.character_id = ?
+                       WHERE tp.character_id = ? AND r.source = 'guild'
                        ORDER BY r.raid_date DESC LIMIT ?""",
                     (cid, limit),
                 ).fetchall()
@@ -1499,7 +1551,7 @@ class PerformanceDB:
                     """SELECT r.raid_date, r.title, r.raid_size, dp.total_damage as metric_value
                        FROM dps_performance dp
                        JOIN raids r ON r.id = dp.raid_id
-                       WHERE dp.character_id = ?
+                       WHERE dp.character_id = ? AND r.source = 'guild'
                        ORDER BY r.raid_date DESC LIMIT ?""",
                     (cid, limit),
                 ).fetchall()
@@ -1598,7 +1650,9 @@ class PerformanceDB:
         result = {"name": character_name}
 
         healing_rows = conn.execute(
-            "SELECT total_healing FROM healer_performance WHERE character_id = ?", (cid,)
+            """SELECT hp.total_healing FROM healer_performance hp
+               JOIN raids r ON r.id = hp.raid_id
+               WHERE hp.character_id = ? AND r.source = 'guild'""", (cid,)
         ).fetchall()
         if len(healing_rows) >= 2:
             vals = [r["total_healing"] for r in healing_rows]
@@ -1610,7 +1664,9 @@ class PerformanceDB:
             result["healing_consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
 
         damage_rows = conn.execute(
-            "SELECT total_damage FROM dps_performance WHERE character_id = ?", (cid,)
+            """SELECT dp.total_damage FROM dps_performance dp
+               JOIN raids r ON r.id = dp.raid_id
+               WHERE dp.character_id = ? AND r.source = 'guild'""", (cid,)
         ).fetchall()
         if len(damage_rows) >= 2:
             vals = [r["total_damage"] for r in damage_rows]
@@ -1622,7 +1678,9 @@ class PerformanceDB:
             result["damage_consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
 
         tank_rows = conn.execute(
-            "SELECT mitigation_percent FROM tank_performance WHERE character_id = ?", (cid,)
+            """SELECT tp.mitigation_percent FROM tank_performance tp
+               JOIN raids r ON r.id = tp.raid_id
+               WHERE tp.character_id = ? AND r.source = 'guild'""", (cid,)
         ).fetchall()
         if len(tank_rows) >= 2:
             vals = [r["mitigation_percent"] for r in tank_rows]
@@ -1659,7 +1717,7 @@ class PerformanceDB:
                 f"""SELECT r.raid_date, r.title, r.report_id, p.{metric} as value
                     FROM {table} p
                     JOIN raids r ON r.id = p.raid_id
-                    WHERE p.character_id = ?
+                    WHERE p.character_id = ? AND r.source = 'guild'
                     ORDER BY p.{metric} {order}
                     LIMIT 1""",
                 (cid,),
@@ -1685,21 +1743,31 @@ class PerformanceDB:
 
         total_raids = conn.execute(
             """SELECT COUNT(DISTINCT raid_id) as cnt FROM (
-                SELECT raid_id FROM healer_performance WHERE character_id = ?
-                UNION SELECT raid_id FROM tank_performance WHERE character_id = ?
-                UNION SELECT raid_id FROM dps_performance WHERE character_id = ?
+                SELECT hp.raid_id FROM healer_performance hp
+                    JOIN raids r ON r.id = hp.raid_id
+                    WHERE hp.character_id = ? AND r.source = 'guild'
+                UNION SELECT tp.raid_id FROM tank_performance tp
+                    JOIN raids r ON r.id = tp.raid_id
+                    WHERE tp.character_id = ? AND r.source = 'guild'
+                UNION SELECT dp.raid_id FROM dps_performance dp
+                    JOIN raids r ON r.id = dp.raid_id
+                    WHERE dp.character_id = ? AND r.source = 'guild'
             )""", (cid, cid, cid),
         ).fetchone()["cnt"]
 
         raids_with_consumes = conn.execute(
-            "SELECT COUNT(DISTINCT raid_id) as cnt FROM consumable_usage WHERE character_id = ?",
+            """SELECT COUNT(DISTINCT cu.raid_id) as cnt FROM consumable_usage cu
+               JOIN raids r ON r.id = cu.raid_id
+               WHERE cu.character_id = ? AND r.source = 'guild'""",
             (cid,),
         ).fetchone()["cnt"]
 
         avg_per_raid = conn.execute(
             """SELECT AVG(total) as avg FROM (
-                SELECT SUM(count) as total FROM consumable_usage
-                WHERE character_id = ? GROUP BY raid_id
+                SELECT SUM(cu.count) as total FROM consumable_usage cu
+                JOIN raids r ON r.id = cu.raid_id
+                WHERE cu.character_id = ? AND r.source = 'guild'
+                GROUP BY cu.raid_id
             )""", (cid,),
         ).fetchone()["avg"]
 
@@ -1780,7 +1848,8 @@ class PerformanceDB:
                LEFT JOIN healer_performance hp ON hp.character_id = ? AND hp.raid_id = r.id
                LEFT JOIN dps_performance dp ON dp.character_id = ? AND dp.raid_id = r.id
                LEFT JOIN tank_performance tp ON tp.character_id = ? AND tp.raid_id = r.id
-               WHERE hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL
+               WHERE r.source = 'guild'
+                 AND (hp.id IS NOT NULL OR dp.id IS NOT NULL OR tp.id IS NOT NULL)
                ORDER BY r.raid_date ASC""",
             (cid, cid, cid),
         ).fetchall()
@@ -1849,7 +1918,7 @@ class PerformanceDB:
                        COALESCE((SELECT SUM(dp.total_damage) FROM dps_performance dp WHERE dp.raid_id = r.id), 0) as total_damage,
                        COALESCE((SELECT SUM(tp.total_damage_taken) FROM tank_performance tp WHERE tp.raid_id = r.id), 0) as total_damage_taken
                 FROM raids r
-                WHERE r.report_id != ? {size_clause} {zone_clause} AND r.raid_size IS NOT NULL
+                WHERE r.report_id != ? AND r.source = 'guild' {size_clause} {zone_clause} AND r.raid_size IS NOT NULL
                 ORDER BY r.raid_date ASC
                 LIMIT ?""",
             params,
@@ -2130,7 +2199,7 @@ class PerformanceDB:
                JOIN encounters e ON e.id = ep.encounter_row_id
                JOIN raids r ON r.id = e.raid_id
                JOIN characters c ON c.id = ep.character_id
-               WHERE c.name = ? AND e.encounter_id = ?
+               WHERE c.name = ? AND e.encounter_id = ? AND r.source = 'guild'
                ORDER BY r.raid_date DESC""",
             (character_name, encounter_id),
         ).fetchall()
@@ -2224,7 +2293,7 @@ class PerformanceDB:
         return results
 
     def compare_characters(self, names: list[str], role: str) -> list[dict]:
-        """Compare multiple characters' average performance."""
+        """Compare multiple characters' average performance (guild raids only)."""
         conn = self._get_conn()
         results = []
         for name in names:
@@ -2237,7 +2306,8 @@ class PerformanceDB:
                               AVG(hp.total_dispels) as avg_dispels
                        FROM healer_performance hp
                        JOIN characters c ON c.id = hp.character_id
-                       WHERE c.name = ? COLLATE NOCASE
+                       JOIN raids r ON r.id = hp.raid_id
+                       WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                        GROUP BY c.id""",
                     (name,),
                 ).fetchone()
@@ -2249,7 +2319,8 @@ class PerformanceDB:
                               AVG(tp.mitigation_percent) as avg_mitigation
                        FROM tank_performance tp
                        JOIN characters c ON c.id = tp.character_id
-                       WHERE c.name = ? COLLATE NOCASE
+                       JOIN raids r ON r.id = tp.raid_id
+                       WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
                        GROUP BY c.id""",
                     (name,),
                 ).fetchone()
@@ -2260,7 +2331,8 @@ class PerformanceDB:
                               AVG(dp.total_damage) as avg_damage
                        FROM dps_performance dp
                        JOIN characters c ON c.id = dp.character_id
-                       WHERE c.name = ? COLLATE NOCASE AND dp.role = ?
+                       JOIN raids r ON r.id = dp.raid_id
+                       WHERE c.name = ? COLLATE NOCASE AND dp.role = ? AND r.source = 'guild'
                        GROUP BY c.id""",
                     (name, role),
                 ).fetchone()
@@ -2268,3 +2340,133 @@ class PerformanceDB:
             if row:
                 results.append(dict(row))
         return results
+
+    # ── Reference report operations ──
+
+    def get_reference_raids(self, limit: int = 50) -> list[dict]:
+        """Get list of all imported reference raids."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT report_id, title, owner, raid_date, imported_at, zone, label, raid_size
+               FROM raids WHERE source = 'reference'
+               ORDER BY raid_date DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_raid_label(self, report_id: str, label: str) -> None:
+        """Set a user-supplied label on a raid (typically a reference raid)."""
+        conn = self._get_conn()
+        conn.execute("UPDATE raids SET label = ? WHERE report_id = ?", (label, report_id))
+        conn.commit()
+
+    def get_raid_source(self, report_id: str) -> str | None:
+        """Get the source classification of a raid, or None if not imported."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT source FROM raids WHERE report_id = ?", (report_id,)
+        ).fetchone()
+        return row["source"] if row else None
+
+    def get_comparison_aggregates(self, source: str = "guild",
+                                   zone: str | None = None,
+                                   raid_size: str | None = None) -> dict:
+        """Aggregate performance metrics for guild or reference raids."""
+        conn = self._get_conn()
+        params: list = [source]
+        size_clause = ""
+        if raid_size == "25-man":
+            size_clause = " AND r.raid_size >= 20"
+        elif raid_size == "10-man":
+            size_clause = " AND r.raid_size BETWEEN 1 AND 19"
+        zone_clause = ""
+        if zone:
+            zone_clause = " AND r.zone = ?"
+            params.append(zone)
+
+        base_where = f"r.source = ?{size_clause}{zone_clause}"
+
+        healer = conn.execute(
+            f"""SELECT AVG(hp.total_healing) as avg_healing,
+                       AVG(hp.overheal_percent) as avg_overheal,
+                       AVG(hp.active_time_percent) as avg_active_time,
+                       COUNT(DISTINCT hp.character_id) as healer_count
+                FROM healer_performance hp
+                JOIN raids r ON r.id = hp.raid_id
+                WHERE {base_where}""",
+            params,
+        ).fetchone()
+
+        dps = conn.execute(
+            f"""SELECT AVG(dp.total_damage) as avg_damage,
+                       AVG(dp.active_time_percent) as avg_active_time,
+                       COUNT(DISTINCT dp.character_id) as dps_count
+                FROM dps_performance dp
+                JOIN raids r ON r.id = dp.raid_id
+                WHERE {base_where}""",
+            params,
+        ).fetchone()
+
+        tank = conn.execute(
+            f"""SELECT AVG(tp.mitigation_percent) as avg_mitigation,
+                       AVG(tp.total_damage_taken) as avg_damage_taken,
+                       AVG(tp.active_time_percent) as avg_active_time,
+                       COUNT(DISTINCT tp.character_id) as tank_count
+                FROM tank_performance tp
+                JOIN raids r ON r.id = tp.raid_id
+                WHERE {base_where}""",
+            params,
+        ).fetchone()
+
+        raid_count = conn.execute(
+            f"SELECT COUNT(*) as cnt FROM raids r WHERE {base_where}",
+            params,
+        ).fetchone()["cnt"]
+
+        return {
+            "raid_count": raid_count,
+            "avg_healing": healer["avg_healing"],
+            "avg_overheal": healer["avg_overheal"],
+            "healer_count": healer["healer_count"],
+            "avg_damage": dps["avg_damage"],
+            "dps_count": dps["dps_count"],
+            "avg_mitigation": tank["avg_mitigation"],
+            "avg_damage_taken": tank["avg_damage_taken"],
+            "tank_count": tank["tank_count"],
+        }
+
+    def get_common_encounters(self) -> list[dict]:
+        """Get encounters that exist in both guild and reference data."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT DISTINCT e.encounter_id, e.name
+               FROM encounters e
+               JOIN raids r ON r.id = e.raid_id
+               WHERE r.source = 'guild'
+                 AND e.encounter_id IN (
+                     SELECT e2.encounter_id FROM encounters e2
+                     JOIN raids r2 ON r2.id = e2.raid_id
+                     WHERE r2.source = 'reference'
+                 )
+               ORDER BY e.name"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_encounter_comparison(self, encounter_id: int) -> dict:
+        """Side-by-side guild vs reference averages for a specific boss."""
+        conn = self._get_conn()
+        result = {}
+        for source in ("guild", "reference"):
+            row = conn.execute(
+                """SELECT AVG(e.duration_ms) as avg_duration,
+                          AVG(ep.total_damage) as avg_damage,
+                          AVG(ep.total_healing) as avg_healing,
+                          COUNT(DISTINCT e.id) as kill_count
+                   FROM encounter_performance ep
+                   JOIN encounters e ON e.id = ep.encounter_row_id
+                   JOIN raids r ON r.id = e.raid_id
+                   WHERE e.encounter_id = ? AND r.source = ?""",
+                (encounter_id, source),
+            ).fetchone()
+            result[source] = dict(row) if row else {}
+        return result
