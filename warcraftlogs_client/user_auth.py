@@ -6,7 +6,6 @@ To access detailed event/table data for reports the user doesn't own,
 we need a user-scoped token via the Authorization Code flow (/api/v2/user).
 """
 
-import base64
 import json
 import secrets
 import time
@@ -71,15 +70,11 @@ class UserTokenManager:
         client_id = config["client_id"]
         client_secret = config["client_secret"]
 
-        auth_string = f"{client_id}:{client_secret}"
-        b64_auth = base64.b64encode(auth_string.encode()).decode()
-
-        response = requests.post(TOKEN_URL, headers={
-            "Authorization": f"Basic {b64_auth}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        }, data={
+        response = requests.post(TOKEN_URL, data={
             "grant_type": "refresh_token",
             "refresh_token": self._refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret,
         })
 
         if response.status_code != 200:
@@ -94,16 +89,12 @@ class UserTokenManager:
 
     def complete_auth(self, code: str, client_id: str, client_secret: str,
                       redirect_port: int = DEFAULT_REDIRECT_PORT):
-        auth_string = f"{client_id}:{client_secret}"
-        b64_auth = base64.b64encode(auth_string.encode()).decode()
-
-        response = requests.post(TOKEN_URL, headers={
-            "Authorization": f"Basic {b64_auth}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        }, data={
+        response = requests.post(TOKEN_URL, data={
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": f"http://localhost:{redirect_port}/callback",
+            "client_id": client_id,
+            "client_secret": client_secret,
         })
         response.raise_for_status()
 
