@@ -114,6 +114,35 @@ class SettingsView(QWidget):
 
         layout.addWidget(creds_group)
 
+        # ── WarcraftLogs Account ──
+        auth_group = QGroupBox("WarcraftLogs Account")
+        auth_layout = QVBoxLayout(auth_group)
+
+        auth_desc = QLabel(
+            "User authentication is required to import reference reports "
+            "from other guilds. This uses OAuth2 to securely connect your "
+            "WarcraftLogs account."
+        )
+        auth_desc.setWordWrap(True)
+        auth_desc.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        auth_layout.addWidget(auth_desc)
+
+        auth_status_row = QHBoxLayout()
+        self._settings_auth_status = QLabel("")
+        self._settings_auth_status.setStyleSheet("font-size: 13px;")
+        auth_status_row.addWidget(self._settings_auth_status)
+        auth_status_row.addStretch()
+
+        self._settings_auth_btn = QPushButton("")
+        self._settings_auth_btn.setFixedWidth(160)
+        self._settings_auth_btn.setFixedHeight(32)
+        self._settings_auth_btn.clicked.connect(self._toggle_auth)
+        auth_status_row.addWidget(self._settings_auth_btn)
+        auth_layout.addLayout(auth_status_row)
+
+        layout.addWidget(auth_group)
+        self._refresh_auth_status()
+
         # ── Role Thresholds ──
         thresh_group = QGroupBox("Role Detection Thresholds")
         thresh_layout = QFormLayout(thresh_group)
@@ -411,3 +440,67 @@ class SettingsView(QWidget):
             self._update_status_label.setText(
                 f"You're up to date (v{__version__})")
             self.status_message.emit("No updates available")
+
+    def _refresh_auth_status(self):
+        from ..user_auth import UserTokenManager
+        user_tm = UserTokenManager()
+        if user_tm.is_authenticated():
+            self._settings_auth_status.setText("Connected to WarcraftLogs")
+            self._settings_auth_status.setStyleSheet(f"color: {COLORS['success']}; font-size: 13px;")
+            self._settings_auth_btn.setText("Disconnect")
+        else:
+            self._settings_auth_status.setText("Not connected")
+            self._settings_auth_status.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 13px;")
+            self._settings_auth_btn.setText("Authenticate")
+
+    def _toggle_auth(self):
+        from ..user_auth import UserTokenManager, start_oauth_flow
+        user_tm = UserTokenManager()
+        if user_tm.is_authenticated():
+            user_tm.revoke()
+            self._refresh_auth_status()
+            self.status_message.emit("Disconnected from WarcraftLogs")
+            return
+
+        client_id = self.client_id_input.text().strip()
+        if not client_id:
+            QMessageBox.warning(self, "Missing Credentials",
+                                "Please enter a Client ID first.")
+            return
+
+        self._settings_auth_btn.setEnabled(False)
+        self._settings_auth_btn.setText("Waiting...")
+        self.status_message.emit("Opening browser for WarcraftLogs authentication...")
+
+        self._oauth_server, self._oauth_state = start_oauth_flow(client_id)
+
+        from PySide6.QtCore import QThread
+        from .reference_view import _AuthWaitThread
+        self._auth_wait_thread = _AuthWaitThread(
+            self._oauth_server, self._oauth_state)
+        self._auth_wait_thread.auth_complete.connect(self._on_settings_auth_complete)
+        self._auth_wait_thread.auth_error.connect(self._on_settings_auth_error)
+        self._auth_wait_thread.start()
+
+    def _on_settings_auth_complete(self, code: str):
+        from ..user_auth import UserTokenManager
+        client_id = self.client_id_input.text().strip()
+        client_secret = self.client_secret_input.text().strip()
+        try:
+            user_tm = UserTokenManager()
+            user_tm.complete_auth(code, client_id, client_secret)
+        except Exception as e:
+            self._settings_auth_btn.setEnabled(True)
+            self._refresh_auth_status()
+            QMessageBox.warning(self, "Authentication Failed",
+                                f"Token exchange failed:\n{e}")
+            return
+
+        self._settings_auth_btn.setEnabled(True)
+        self._refresh_auth_status()
+        self.status_message.emit("Successfully authenticated with WarcraftLogs!")
+
+    def _on_settings_auth_error(self, error: str):
+        self._settings_auth_btn.setEnabled(True)
+        self._refresh_auth_status()
+        QMessageBox.warning(self, "Authentication Failed", error)

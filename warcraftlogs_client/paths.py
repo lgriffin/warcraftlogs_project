@@ -69,6 +69,10 @@ def get_logo_path() -> Path:
     return get_app_dir() / "logo.png"
 
 
+def get_user_token_path() -> Path:
+    return get_user_data_dir() / "user_token.json"
+
+
 def get_consumes_config_path() -> Path:
     return get_app_dir() / "consumes_config.json"
 

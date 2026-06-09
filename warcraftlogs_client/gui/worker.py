@@ -55,6 +55,56 @@ class AnalysisWorker(QThread):
             self.error.emit(f"{type(e).__name__}: {e}")
 
 
+from ..user_auth import _get_base_url
+
+
+class ReferenceAnalysisWorker(QThread):
+    """Runs raid analysis using user-level OAuth token for full data access."""
+
+    progress = Signal(str)
+    finished = Signal(RaidAnalysis)
+    error = Signal(str)
+    auth_required = Signal()
+
+    def __init__(self, report_id: str, parent=None):
+        super().__init__(parent)
+        self.report_id = report_id
+
+    def run(self):
+        try:
+            from ..user_auth import UserTokenManager
+
+            self.progress.emit("Checking authentication...")
+            user_tm = UserTokenManager()
+            if not user_tm.is_authenticated():
+                self.auth_required.emit()
+                return
+
+            self.progress.emit("Loading configuration...")
+            config = load_config()
+            role_thresholds = config.get("role_thresholds", {})
+
+            self.progress.emit("Connecting with user credentials...")
+            client = WarcraftLogsClient(user_tm, cache_enabled=False)
+            client.API_URL = f"{_get_base_url()}/api/v2/user"
+
+            self.progress.emit("Downloading and analyzing raid data (this may take a minute)...")
+            result = analyze_raid(
+                client, self.report_id,
+                healer_threshold=role_thresholds.get("healer_min_healing", 40000),
+                tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
+                tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
+                healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
+                tank_min_taken_10=role_thresholds.get("tank_min_taken_10", 300000),
+            )
+
+            self.progress.emit("Analysis complete!")
+            self.finished.emit(result)
+
+        except Exception as e:
+            self.error.emit(f"{type(e).__name__}: {e}")
+
+
 class GuildInfoWorker(QThread):
     """Fetches guild name and server in a background thread."""
 

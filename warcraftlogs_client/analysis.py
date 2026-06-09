@@ -6,9 +6,12 @@ No printing — presentation is handled by renderers (console, markdown, GUI).
 """
 
 import json
+import logging
 import os
 from collections import defaultdict
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 import requests
 
@@ -41,8 +44,13 @@ def analyze_raid(client: WarcraftLogsClient, report_id: str,
                  healer_threshold_10: int = 400000,
                  tank_min_taken_10: int = 300000) -> RaidAnalysis:
     """Run a full raid analysis and return structured results."""
+    logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.API_URL)
+
     metadata = client.get_report_metadata(report_id)
+    logger.info("  metadata: title=%s zone=%s", metadata.title, metadata.zone)
+
     master_actors = client.get_master_data(report_id)
+    logger.info("  master_actors: %d entries", len(master_actors) if master_actors else 0)
 
     if metadata.zone in _TEN_MAN_ZONES:
         healer_threshold = healer_threshold_10
@@ -52,22 +60,30 @@ def analyze_raid(client: WarcraftLogsClient, report_id: str,
         client, report_id, master_actors,
         healer_threshold, tank_min_taken, tank_min_mitigation,
     )
+    logger.info("  composition: %d healers, %d tanks, %d melee, %d ranged",
+                len(composition.healers), len(composition.tanks),
+                len(composition.melee), len(composition.ranged))
 
     healers = _analyze_healers(client, report_id, composition.healers)
+    logger.info("  healers analyzed: %d", len(healers))
     tanks = _analyze_tanks(client, report_id, composition.tanks)
+    logger.info("  tanks analyzed: %d", len(tanks))
     melee_dps = _analyze_dps(client, report_id, composition.melee, "melee")
     ranged_dps = _analyze_dps(client, report_id, composition.ranged, "ranged")
+    logger.info("  dps analyzed: %d melee, %d ranged", len(melee_dps), len(ranged_dps))
 
     consumables = _analyze_consumables(client, report_id, composition)
 
     try:
         encounters = _analyze_encounters(client, report_id, composition)
+        logger.info("  encounters analyzed: %d", len(encounters))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-        print(f"Error analyzing encounters: {e}")
+        logger.error("  encounter analysis failed: %s", e)
         encounters = []
 
     _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
 
+    logger.info("analyze_raid: complete for %s", report_id)
     return RaidAnalysis(
         metadata=metadata,
         composition=composition,
