@@ -55,7 +55,7 @@ class AnalysisWorker(QThread):
             self.error.emit(f"{type(e).__name__}: {e}")
 
 
-USER_API_URL = "https://www.warcraftlogs.com/api/v2/user"
+from ..user_auth import _get_base_url
 
 
 class ReferenceAnalysisWorker(QThread):
@@ -85,8 +85,8 @@ class ReferenceAnalysisWorker(QThread):
             role_thresholds = config.get("role_thresholds", {})
 
             self.progress.emit("Connecting with user credentials...")
-            client = WarcraftLogsClient(user_tm)
-            client.API_URL = USER_API_URL
+            client = WarcraftLogsClient(user_tm, cache_enabled=False)
+            client.API_URL = f"{_get_base_url()}/api/v2/user"
 
             self.progress.emit("Downloading and analyzing raid data (this may take a minute)...")
             result = analyze_raid(

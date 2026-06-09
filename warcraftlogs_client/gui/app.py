@@ -2,6 +2,7 @@
 Application entry point for the WarcraftLogs Analyzer GUI.
 """
 
+import logging
 import sys
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
@@ -12,6 +13,7 @@ from ..version import __version__
 
 
 def run():
+    logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s")
     paths.ensure_first_run_config()
     app = QApplication(sys.argv)
     app.setApplicationName("WarcraftLogs Analyzer")

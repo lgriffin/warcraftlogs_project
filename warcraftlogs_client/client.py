@@ -5,10 +5,13 @@ All API interactions go through WarcraftLogsClient. Methods return
 extracted data (not raw JSON wrappers), with consistent signatures.
 """
 
+import logging
 import time
 
 import requests
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from .cache import get_cached_response, save_response_cache
 from .models import (
@@ -46,16 +49,22 @@ class WarcraftLogsClient:
         if use_cache:
             cached = get_cached_response(query)
             if cached is not None:
+                logger.debug("Cache hit for query")
                 return cached
 
         token = self.token_manager.get_token()
         headers = {"Authorization": f"Bearer {token}"}
+
+        logger.info("API request: POST %s", self.API_URL)
+        logger.debug("Query: %s", query[:200])
 
         for attempt in range(self.MAX_RETRIES):
             self._throttle()
             self._last_request_time = time.monotonic()
 
             response = requests.post(self.API_URL, headers=headers, json={"query": query})
+
+            logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
             if response.status_code == 429 or response.status_code >= 500:
                 if attempt < self.MAX_RETRIES - 1:
@@ -64,6 +73,9 @@ class WarcraftLogsClient:
                     continue
             response.raise_for_status()
             result = response.json()
+            logger.debug("Response data keys: %s", list(result.get("data", {}).keys()) if "data" in result else "no data key")
+            if result.get("errors"):
+                logger.warning("GraphQL errors: %s", result["errors"])
             if use_cache:
                 save_response_cache(query, result)
             return result

@@ -12,7 +12,7 @@ import pytest
 from warcraftlogs_client.user_auth import (
     UserTokenManager,
     OAuthCallbackServer,
-    AUTHORIZE_URL,
+    get_authorize_url,
     DEFAULT_REDIRECT_PORT,
 )
 
@@ -142,9 +142,11 @@ class TestUserTokenManager:
             tm.get_token()
         assert not tm.is_authenticated()
 
-    def test_build_authorize_url(self):
+    @patch("warcraftlogs_client.user_auth._get_base_url",
+           return_value="https://www.warcraftlogs.com")
+    def test_build_authorize_url(self, _mock_base):
         url = UserTokenManager.build_authorize_url("my_client_id", "my_state", 8764)
-        assert AUTHORIZE_URL in url
+        assert "warcraftlogs.com/oauth/authorize" in url
         assert "client_id=my_client_id" in url
         assert "state=my_state" in url
         assert "response_type=code" in url

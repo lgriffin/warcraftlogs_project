@@ -7,6 +7,7 @@ we need a user-scoped token via the Authorization Code flow (/api/v2/user).
 """
 
 import json
+import logging
 import secrets
 import time
 import webbrowser
@@ -19,9 +20,30 @@ import requests
 
 from . import paths
 
-AUTHORIZE_URL = "https://www.warcraftlogs.com/oauth/authorize"
-TOKEN_URL = "https://www.warcraftlogs.com/oauth/token"
+logger = logging.getLogger(__name__)
+
 DEFAULT_REDIRECT_PORT = 8764
+
+
+def _get_base_url() -> str:
+    """Derive the WCL domain from the configured API URL."""
+    from .config import load_config
+    try:
+        api_url = load_config().get("wcl_api_url", "")
+        parsed = urlparse(api_url)
+        if parsed.hostname:
+            return f"{parsed.scheme}://{parsed.hostname}"
+    except Exception:
+        pass
+    return "https://www.warcraftlogs.com"
+
+
+def get_authorize_url() -> str:
+    return f"{_get_base_url()}/oauth/authorize"
+
+
+def get_token_url() -> str:
+    return f"{_get_base_url()}/oauth/token"
 
 
 class UserTokenManager:
@@ -70,7 +92,8 @@ class UserTokenManager:
         client_id = config["client_id"]
         client_secret = config["client_secret"]
 
-        response = requests.post(TOKEN_URL, data={
+        token_url = get_token_url()
+        response = requests.post(token_url, data={
             "grant_type": "refresh_token",
             "refresh_token": self._refresh_token,
             "client_id": client_id,
@@ -89,20 +112,38 @@ class UserTokenManager:
 
     def complete_auth(self, code: str, client_id: str, client_secret: str,
                       redirect_port: int = DEFAULT_REDIRECT_PORT):
-        response = requests.post(TOKEN_URL, data={
+        redirect_uri = f"http://localhost:{redirect_port}/callback"
+        token_url = get_token_url()
+        logger.info("Token exchange: POST %s", token_url)
+        logger.info("  grant_type=authorization_code")
+        logger.info("  redirect_uri=%s", redirect_uri)
+        logger.info("  client_id=%s", client_id)
+        logger.info("  client_secret=%s...%s (len=%d)",
+                     client_secret[:4], client_secret[-4:], len(client_secret))
+        logger.info("  code=%s...%s", code[:8], code[-4:] if len(code) > 8 else "")
+
+        response = requests.post(token_url, data={
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": f"http://localhost:{redirect_port}/callback",
+            "redirect_uri": redirect_uri,
             "client_id": client_id,
             "client_secret": client_secret,
         })
-        response.raise_for_status()
+
+        logger.info("Token response: %d", response.status_code)
+        logger.info("  headers: %s", dict(response.headers))
+        logger.info("  body: %s", response.text)
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"Token exchange failed (HTTP {response.status_code}): {response.text}")
 
         token_data = response.json()
         self._access_token = token_data["access_token"]
         self._refresh_token = token_data.get("refresh_token")
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
         self._save()
+        logger.info("Token exchange successful, token saved.")
 
     def revoke(self):
         self._access_token = None
@@ -123,7 +164,7 @@ class UserTokenManager:
             "response_type": "code",
             "state": state,
         }
-        return f"{AUTHORIZE_URL}?{urlencode(params)}"
+        return f"{get_authorize_url()}?{urlencode(params)}"
 
 
 class _CallbackHandler(BaseHTTPRequestHandler):
