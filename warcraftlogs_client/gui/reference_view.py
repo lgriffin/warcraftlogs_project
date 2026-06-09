@@ -11,12 +11,13 @@ from PySide6.QtWidgets import (
     QLineEdit, QTableView, QHeaderView, QTabWidget, QComboBox,
     QMessageBox, QGridLayout, QFrame,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread
 from PySide6.QtGui import QFont, QColor
 
 from .styles import COMMON_STYLES, COLORS
-from .worker import AnalysisWorker
+from .worker import ReferenceAnalysisWorker
 from ..database import PerformanceDB
+from ..user_auth import UserTokenManager, start_oauth_flow
 
 
 class _ReferenceRaidModel(QAbstractTableModel):
@@ -208,6 +209,42 @@ class _EncounterComparisonModel(QAbstractTableModel):
         return f"{val:,.0f}"
 
 
+class _AuthWaitThread(QThread):
+    """Waits for OAuth callback server result in a background thread."""
+    auth_complete = Signal(str)
+    auth_error = Signal(str)
+
+    def __init__(self, server, expected_state, parent=None):
+        super().__init__(parent)
+        self._server = server
+        self._expected_state = expected_state
+
+    def run(self):
+        result = self._server.wait()
+        self._server.shutdown()
+
+        if result is None:
+            self.auth_error.emit("Authentication timed out — please try again.")
+            return
+
+        error = result.get("error")
+        if error:
+            self.auth_error.emit(f"WarcraftLogs denied access: {error}")
+            return
+
+        code = result.get("code")
+        state = result.get("state")
+        if state != self._expected_state:
+            self.auth_error.emit("OAuth state mismatch — possible CSRF. Please try again.")
+            return
+
+        if not code:
+            self.auth_error.emit("No authorization code received.")
+            return
+
+        self.auth_complete.emit(code)
+
+
 class ReferenceView(QWidget):
     status_message = Signal(str)
     open_raid = Signal(str)
@@ -268,6 +305,21 @@ class ReferenceView(QWidget):
         desc.setWordWrap(True)
         desc.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
         layout.addWidget(desc)
+
+        # Auth status row
+        auth_row = QHBoxLayout()
+        auth_row.setSpacing(8)
+        self._auth_status = QLabel("")
+        self._auth_status.setStyleSheet(f"font-size: 12px;")
+        auth_row.addWidget(self._auth_status)
+        self._auth_btn = QPushButton("Authenticate")
+        self._auth_btn.setFixedHeight(28)
+        self._auth_btn.setFixedWidth(140)
+        self._auth_btn.clicked.connect(self._start_auth)
+        auth_row.addWidget(self._auth_btn)
+        auth_row.addStretch()
+        layout.addLayout(auth_row)
+        self._update_auth_status()
 
         import_row = QHBoxLayout()
         import_row.setSpacing(10)
@@ -451,12 +503,37 @@ class ReferenceView(QWidget):
         except (sqlite3.Error, OSError):
             pass
 
+        user_tm = UserTokenManager()
+        if not user_tm.is_authenticated():
+            reply = QMessageBox.question(
+                self, "Authentication Required",
+                "WarcraftLogs user authentication is required to access "
+                "other guilds' report data.\n\n"
+                "Click Yes to open your browser and authenticate.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._pending_report_id = report_id
+                self._start_auth()
+            return
+
+        self._start_import(report_id)
+
+    def _start_import(self, report_id: str):
         self._set_importing(True, f"Downloading report {report_id}...")
-        self._worker = AnalysisWorker(report_id)
+        self._worker = ReferenceAnalysisWorker(report_id)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_analysis_done)
         self._worker.error.connect(self._on_analysis_error)
+        self._worker.auth_required.connect(self._on_auth_required)
         self._worker.start()
+
+    def _on_auth_required(self):
+        self._set_importing(False)
+        QMessageBox.warning(
+            self, "Authentication Required",
+            "Your WarcraftLogs session has expired.\n"
+            "Please authenticate again using the button above.")
 
     def _set_importing(self, busy: bool, message: str = ""):
         self._import_btn.setEnabled(not busy)
@@ -498,6 +575,76 @@ class ReferenceView(QWidget):
         self.status_message.emit(f"Analysis failed: {error_msg}")
         QMessageBox.warning(self, "Import Failed",
                             f"Failed to download report:\n{error_msg}")
+
+    # ── Auth flow ──
+
+    def _update_auth_status(self):
+        user_tm = UserTokenManager()
+        if user_tm.is_authenticated():
+            self._auth_status.setText("Authenticated with WarcraftLogs")
+            self._auth_status.setStyleSheet(f"color: {COLORS['success']}; font-size: 12px;")
+            self._auth_btn.setText("Disconnect")
+        else:
+            self._auth_status.setText("Not authenticated — required for importing reference reports")
+            self._auth_status.setStyleSheet(f"color: {COLORS['error']}; font-size: 12px;")
+            self._auth_btn.setText("Authenticate")
+
+    def _start_auth(self):
+        user_tm = UserTokenManager()
+        if user_tm.is_authenticated():
+            user_tm.revoke()
+            self._update_auth_status()
+            self.status_message.emit("Disconnected from WarcraftLogs")
+            return
+
+        try:
+            from ..config import load_config
+            config = load_config()
+            client_id = config["client_id"]
+        except Exception as e:
+            QMessageBox.warning(self, "Configuration Error",
+                                f"Could not load API credentials:\n{e}")
+            return
+
+        self._auth_btn.setEnabled(False)
+        self._auth_btn.setText("Waiting...")
+        self.status_message.emit("Opening browser for WarcraftLogs authentication...")
+
+        self._oauth_server, self._oauth_state = start_oauth_flow(client_id)
+
+        self._auth_wait_thread = _AuthWaitThread(
+            self._oauth_server, self._oauth_state)
+        self._auth_wait_thread.auth_complete.connect(self._on_auth_complete)
+        self._auth_wait_thread.auth_error.connect(self._on_auth_error)
+        self._auth_wait_thread.start()
+
+    def _on_auth_complete(self, code: str):
+        try:
+            from ..config import load_config
+            config = load_config()
+            user_tm = UserTokenManager()
+            user_tm.complete_auth(code, config["client_id"], config["client_secret"])
+        except Exception as e:
+            self._auth_btn.setEnabled(True)
+            self._update_auth_status()
+            QMessageBox.warning(self, "Authentication Failed",
+                                f"Token exchange failed:\n{e}")
+            return
+
+        self._auth_btn.setEnabled(True)
+        self._update_auth_status()
+        self.status_message.emit("Successfully authenticated with WarcraftLogs!")
+
+        pending = getattr(self, "_pending_report_id", None)
+        if pending:
+            self._pending_report_id = None
+            self._start_import(pending)
+
+    def _on_auth_error(self, error: str):
+        self._auth_btn.setEnabled(True)
+        self._update_auth_status()
+        self.status_message.emit(f"Authentication failed: {error}")
+        QMessageBox.warning(self, "Authentication Failed", error)
 
     def _on_raid_double_clicked(self, index):
         report_id = self._ref_model.get_report_id(index.row())
