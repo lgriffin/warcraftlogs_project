@@ -1069,6 +1069,7 @@ class _HeadToHeadPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        self.setStyleSheet(COMMON_STYLES)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
@@ -1118,8 +1119,12 @@ class _HeadToHeadPanel(QWidget):
                 border: none;
                 background-color: {COLORS['bg_dark']};
             }}
+            QScrollArea > QWidget > QWidget {{
+                background-color: {COLORS['bg_dark']};
+            }}
         """)
         self._content = QWidget()
+        self._content.setStyleSheet(f"background-color: {COLORS['bg_dark']};")
         self._content_layout = QVBoxLayout(self._content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
@@ -1218,6 +1223,7 @@ class _HeadToHeadPanel(QWidget):
         if old:
             old.deleteLater()
         self._content = QWidget()
+        self._content.setStyleSheet(f"background-color: {COLORS['bg_dark']};")
         self._content_layout = QVBoxLayout(self._content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
