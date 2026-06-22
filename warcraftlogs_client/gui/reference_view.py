@@ -13,13 +13,38 @@ from PySide6.QtWidgets import (
     QMessageBox, QGridLayout, QFrame, QScrollArea, QFileDialog,
     QDialog, QDialogButtonBox,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF
+from PySide6.QtCore import (
+    Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF,
+    QSortFilterProxyModel,
+)
 from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
 
 from .styles import COMMON_STYLES, COLORS
 from .worker import ReferenceAnalysisWorker
 from ..database import PerformanceDB
 from ..user_auth import UserTokenManager, start_oauth_flow
+
+
+class _NumericSortProxy(QSortFilterProxyModel):
+    """Proxy that sorts columns numerically when the display text looks like a number."""
+
+    def lessThan(self, left, right):
+        l_val = self.sourceModel().data(left, Qt.ItemDataRole.DisplayRole)
+        r_val = self.sourceModel().data(right, Qt.ItemDataRole.DisplayRole)
+        l_num = self._parse_number(l_val)
+        r_num = self._parse_number(r_val)
+        if l_num is not None and r_num is not None:
+            return l_num < r_num
+        return super().lessThan(left, right)
+
+    @staticmethod
+    def _parse_number(text):
+        if not isinstance(text, str) or text in ("", "—"):
+            return None
+        try:
+            return float(text.replace(",", "").replace("%", "").replace("+", ""))
+        except (ValueError, AttributeError):
+            return None
 
 
 class _ReferenceRaidModel(QAbstractTableModel):
@@ -2022,14 +2047,19 @@ class _HeadToHeadPanel(QWidget):
 
     @staticmethod
     def _make_table(model):
+        proxy = _NumericSortProxy()
+        proxy.setSourceModel(model)
         table = QTableView()
-        table.setModel(model)
+        table.setModel(proxy)
+        table.setSortingEnabled(True)
         table.setAlternatingRowColors(True)
         table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setStretchLastSection(True)
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
+        header = table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         row_count = model.rowCount()
         row_height = 30
         header_height = 32
