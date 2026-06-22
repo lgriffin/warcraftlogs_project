@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableView, QHeaderView, QTabWidget, QComboBox,
     QMessageBox, QGridLayout, QFrame, QScrollArea, QFileDialog,
+    QDialog, QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF
 from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
@@ -868,6 +869,81 @@ def _match_encounters(guild_analysis, ref_analysis):
     return rows
 
 
+def _build_timeline_data(analysis, consumable_name):
+    """Return per-player timeline rows for a specific consumable."""
+    rows = []
+    for cu in (analysis.consumables or []):
+        if cu.consumable_name != consumable_name:
+            continue
+        ts_parts = []
+        for ms in sorted(cu.timestamps):
+            total_s = ms // 1000
+            ts_parts.append(f"{total_s // 60:02d}:{total_s % 60:02d}")
+        rows.append({
+            "player": cu.player_name,
+            "role": cu.player_role,
+            "count": cu.count,
+            "timestamps": ", ".join(ts_parts) if ts_parts else "—",
+            "first_ts": cu.timestamps[0] if cu.timestamps else float("inf"),
+        })
+    rows.sort(key=lambda r: r["first_ts"])
+    return rows
+
+
+ENGINEERING_ITEMS = {
+    "Super Sapper Charge", "Goblin Sapper Charge",
+    "Adamantite Grenade", "Gnomish Flame Turret",
+    "Fel Iron Bomb", "Bomb",
+}
+
+
+def _compute_engineering_stats(analysis):
+    """Compute min/median/max avg-damage-per-cast for engineering items."""
+    from statistics import median as stat_median
+
+    item_data = defaultdict(lambda: {"player_avgs": [], "total_casts": 0,
+                                      "total_damage": 0, "users": 0})
+    all_players = list(analysis.dps or [])
+    for player in all_players:
+        for ability in (player.abilities or []):
+            if ability.spell_name not in ENGINEERING_ITEMS:
+                continue
+            if ability.casts <= 0:
+                continue
+            avg_dmg = ability.total_amount / ability.casts
+            entry = item_data[ability.spell_name]
+            entry["player_avgs"].append(avg_dmg)
+            entry["total_casts"] += ability.casts
+            entry["total_damage"] += ability.total_amount
+            entry["users"] += 1
+
+    result = {}
+    for name, data in item_data.items():
+        avgs = sorted(data["player_avgs"])
+        result[name] = {
+            "total_casts": data["total_casts"],
+            "total_damage": data["total_damage"],
+            "users": data["users"],
+            "min_avg": avgs[0] if avgs else 0,
+            "median_avg": stat_median(avgs) if avgs else 0,
+            "max_avg": avgs[-1] if avgs else 0,
+        }
+    return result
+
+
+def _classify_consumable_usage(analysis):
+    """Classify each consumable use as boss or trash based on encounter windows."""
+    encounters = analysis.encounters or []
+    intervals = [(e.start_time, e.end_time) for e in encounters]
+
+    by_name = defaultdict(lambda: {"boss": 0, "trash": 0})
+    for cu in (analysis.consumables or []):
+        for ts in cu.timestamps:
+            in_boss = any(s <= ts <= e for s, e in intervals)
+            by_name[cu.consumable_name]["boss" if in_boss else "trash"] += 1
+    return dict(by_name)
+
+
 # ── Head-to-Head table models ──
 
 class _ClassComparisonModel(QAbstractTableModel):
@@ -1171,6 +1247,246 @@ class _ConsumableComparisonChart(QWidget):
                              str(r_val))
 
         painter.end()
+
+
+class _EngineeringComparisonModel(QAbstractTableModel):
+    HEADERS = [
+        "Item", "Guild Casts", "Ref Casts",
+        "Guild Min", "Guild Med", "Guild Max",
+        "Ref Min", "Ref Med", "Ref Max",
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+
+    def set_data(self, rows: list[dict]):
+        self.beginResetModel()
+        self._rows = list(rows)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        row = self._rows[index.row()]
+        col = index.column()
+        g = row.get("guild", {})
+        r = row.get("ref", {})
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return row.get("name", "")
+            elif col == 1:
+                return str(g.get("total_casts", 0))
+            elif col == 2:
+                return str(r.get("total_casts", 0))
+            elif col == 3:
+                return f"{g.get('min_avg', 0):,.0f}" if g.get("total_casts") else "—"
+            elif col == 4:
+                return f"{g.get('median_avg', 0):,.0f}" if g.get("total_casts") else "—"
+            elif col == 5:
+                return f"{g.get('max_avg', 0):,.0f}" if g.get("total_casts") else "—"
+            elif col == 6:
+                return f"{r.get('min_avg', 0):,.0f}" if r.get("total_casts") else "—"
+            elif col == 7:
+                return f"{r.get('median_avg', 0):,.0f}" if r.get("total_casts") else "—"
+            elif col == 8:
+                return f"{r.get('max_avg', 0):,.0f}" if r.get("total_casts") else "—"
+        elif role == Qt.ItemDataRole.ForegroundRole:
+            if col in (4, 7):
+                g_med = g.get("median_avg", 0)
+                r_med = r.get("median_avg", 0)
+                if col == 4 and g_med and r_med:
+                    return QColor(COLORS["success"] if g_med >= r_med else COLORS["error"])
+                if col == 7 and g_med and r_med:
+                    return QColor(COLORS["success"] if r_med >= g_med else COLORS["error"])
+            return QColor(COLORS["text"])
+        return None
+
+
+class _BossTrashModel(QAbstractTableModel):
+    HEADERS = ["Consumable", "Guild Boss", "Guild Trash", "Ref Boss", "Ref Trash"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+
+    def set_data(self, rows: list[dict]):
+        self.beginResetModel()
+        self._rows = list(rows)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        row = self._rows[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return row.get("name", "")
+            elif col == 1:
+                return str(row.get("guild_boss", 0))
+            elif col == 2:
+                return str(row.get("guild_trash", 0))
+            elif col == 3:
+                return str(row.get("ref_boss", 0))
+            elif col == 4:
+                return str(row.get("ref_trash", 0))
+        elif role == Qt.ItemDataRole.ForegroundRole:
+            return QColor(COLORS["text"])
+        return None
+
+
+class _TimelineTableModel(QAbstractTableModel):
+    HEADERS = ["Player", "Role", "Count", "Timestamps"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+
+    def set_data(self, rows: list[dict]):
+        self.beginResetModel()
+        self._rows = list(rows)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        row = self._rows[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return row.get("player", "")
+            elif col == 1:
+                return row.get("role", "")
+            elif col == 2:
+                return str(row.get("count", 0))
+            elif col == 3:
+                return row.get("timestamps", "—")
+        elif role == Qt.ItemDataRole.ForegroundRole:
+            return QColor(COLORS["text"])
+        return None
+
+
+class _ConsumableTimelineDialog(QDialog):
+    """Modal dialog showing per-player consumable usage timestamps."""
+
+    def __init__(self, guild_analysis, ref_analysis, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Consumable Timeline")
+        self.setMinimumSize(700, 500)
+        self.setStyleSheet(COMMON_STYLES)
+        self._guild = guild_analysis
+        self._ref = ref_analysis
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        g_dur_ms = (self._guild.metadata.end_time or 0) - self._guild.metadata.start_time
+        r_dur_ms = (self._ref.metadata.end_time or 0) - self._ref.metadata.start_time
+        g_dur_s = max(g_dur_ms, 0) // 1000
+        r_dur_s = max(r_dur_ms, 0) // 1000
+        dur_label = QLabel(
+            f"Guild duration: {g_dur_s // 60}:{g_dur_s % 60:02d}  |  "
+            f"Reference duration: {r_dur_s // 60}:{r_dur_s % 60:02d}")
+        dur_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        layout.addWidget(dur_label)
+
+        combo_row = QHBoxLayout()
+        combo_row.addWidget(QLabel("Consumable:"))
+        self._combo = QComboBox()
+        self._combo.setMinimumWidth(300)
+
+        guild_names = {cu.consumable_name for cu in (self._guild.consumables or [])}
+        ref_names = {cu.consumable_name for cu in (self._ref.consumables or [])}
+        all_names = sorted(guild_names | ref_names)
+        for name in all_names:
+            self._combo.addItem(name)
+        self._combo.currentIndexChanged.connect(self._refresh)
+        combo_row.addWidget(self._combo, 1)
+        combo_row.addStretch()
+        layout.addLayout(combo_row)
+
+        guild_header = QLabel("Guild Players")
+        guild_header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        guild_header.setStyleSheet(f"color: {COLORS['accent']};")
+        layout.addWidget(guild_header)
+
+        self._guild_model = _TimelineTableModel()
+        self._guild_table = QTableView()
+        self._guild_table.setModel(self._guild_model)
+        self._guild_table.setAlternatingRowColors(True)
+        self._guild_table.verticalHeader().setVisible(False)
+        self._guild_table.horizontalHeader().setStretchLastSection(True)
+        self._guild_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self._guild_table, 1)
+
+        ref_header = QLabel("Reference Players")
+        ref_header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        ref_header.setStyleSheet(f"color: {COLORS['text_header']};")
+        layout.addWidget(ref_header)
+
+        self._ref_model = _TimelineTableModel()
+        self._ref_table = QTableView()
+        self._ref_table.setModel(self._ref_model)
+        self._ref_table.setAlternatingRowColors(True)
+        self._ref_table.verticalHeader().setVisible(False)
+        self._ref_table.horizontalHeader().setStretchLastSection(True)
+        self._ref_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self._ref_table, 1)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+        if all_names:
+            self._refresh()
+
+    def _refresh(self):
+        name = self._combo.currentText()
+        if not name:
+            return
+        self._guild_model.set_data(_build_timeline_data(self._guild, name))
+        self._ref_model.set_data(_build_timeline_data(self._ref, name))
 
 
 # ── Head-to-Head panel ──
@@ -1480,9 +1796,20 @@ class _HeadToHeadPanel(QWidget):
         layout.addWidget(class_table)
 
         # ── Section: Consumables ──
+        self._h2h_guild = guild
+        self._h2h_ref = ref
+
         cons_header_row = QHBoxLayout()
         self._add_section_header(cons_header_row, "Consumable Usage")
         cons_header_row.addStretch()
+
+        timeline_btn = QPushButton("Timeline")
+        timeline_btn.setProperty("secondary", True)
+        timeline_btn.setFixedHeight(28)
+        timeline_btn.setFixedWidth(80)
+        timeline_btn.clicked.connect(self._show_consumable_timeline)
+        cons_header_row.addWidget(timeline_btn)
+
         self._export_cons_btn = QPushButton("Export")
         self._export_cons_btn.setProperty("secondary", True)
         self._export_cons_btn.setFixedHeight(28)
@@ -1523,6 +1850,62 @@ class _HeadToHeadPanel(QWidget):
             no_cons = QLabel("No consumable data in either raid.")
             no_cons.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_cons)
+
+        # ── Section: Boss vs Trash ──
+        self._add_section_header(layout, "Consumable Usage: Boss vs Trash")
+
+        guild_bt = _classify_consumable_usage(guild)
+        ref_bt = _classify_consumable_usage(ref)
+
+        if (guild.encounters or ref.encounters) and (guild_bt or ref_bt):
+            all_bt_names = sorted(set(guild_bt.keys()) | set(ref_bt.keys()))
+            bt_rows = []
+            for name in all_bt_names:
+                gb = guild_bt.get(name, {})
+                rb = ref_bt.get(name, {})
+                bt_rows.append({
+                    "name": name,
+                    "guild_boss": gb.get("boss", 0),
+                    "guild_trash": gb.get("trash", 0),
+                    "ref_boss": rb.get("boss", 0),
+                    "ref_trash": rb.get("trash", 0),
+                })
+            bt_rows.sort(key=lambda r: r["guild_boss"] + r["ref_boss"], reverse=True)
+            self._bt_model = _BossTrashModel()
+            self._bt_model.set_data(bt_rows)
+            bt_table = self._make_table(self._bt_model)
+            layout.addWidget(bt_table)
+        else:
+            no_bt = QLabel(
+                "No encounter data available — cannot classify boss vs trash usage. "
+                "Re-import raids to capture encounter data.")
+            no_bt.setWordWrap(True)
+            no_bt.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            layout.addWidget(no_bt)
+
+        # ── Section: Engineering Effectiveness ──
+        self._add_section_header(layout, "Engineering Item Effectiveness")
+
+        guild_eng = _compute_engineering_stats(guild)
+        ref_eng = _compute_engineering_stats(ref)
+        all_eng_names = sorted(set(guild_eng.keys()) | set(ref_eng.keys()))
+
+        if all_eng_names:
+            eng_rows = []
+            for name in all_eng_names:
+                eng_rows.append({
+                    "name": name,
+                    "guild": guild_eng.get(name, {}),
+                    "ref": ref_eng.get(name, {}),
+                })
+            self._eng_model = _EngineeringComparisonModel()
+            self._eng_model.set_data(eng_rows)
+            eng_table = self._make_table(self._eng_model)
+            layout.addWidget(eng_table)
+        else:
+            no_eng = QLabel("No engineering item usage found in either raid.")
+            no_eng.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            layout.addWidget(no_eng)
 
         # ── Section: Encounters ──
         self._add_section_header(layout, "Encounter Comparison (shared bosses)")
@@ -1567,6 +1950,14 @@ class _HeadToHeadPanel(QWidget):
         lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(lbl)
+
+    def _show_consumable_timeline(self):
+        guild = getattr(self, "_h2h_guild", None)
+        ref = getattr(self, "_h2h_ref", None)
+        if not guild or not ref:
+            return
+        dlg = _ConsumableTimelineDialog(guild, ref, parent=self)
+        dlg.exec()
 
     def _export_consumable_chart(self):
         chart = getattr(self, "_cons_chart", None)
