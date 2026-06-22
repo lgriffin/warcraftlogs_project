@@ -1852,7 +1852,17 @@ class _HeadToHeadPanel(QWidget):
             layout.addWidget(no_cons)
 
         # ── Section: Boss vs Trash ──
-        self._add_section_header(layout, "Consumable Usage: Boss vs Trash")
+        bt_header_row = QHBoxLayout()
+        self._add_section_header(bt_header_row, "Consumable Usage: Boss vs Trash")
+        bt_header_row.addStretch()
+        bt_export_btn = QPushButton("Export")
+        bt_export_btn.setProperty("secondary", True)
+        bt_export_btn.setFixedHeight(28)
+        bt_export_btn.setFixedWidth(80)
+        bt_export_btn.clicked.connect(
+            lambda: self._export_table("_bt_table", "boss_vs_trash.png"))
+        bt_header_row.addWidget(bt_export_btn)
+        layout.addLayout(bt_header_row)
 
         guild_bt = _classify_consumable_usage(guild)
         ref_bt = _classify_consumable_usage(ref)
@@ -1873,9 +1883,12 @@ class _HeadToHeadPanel(QWidget):
             bt_rows.sort(key=lambda r: r["guild_boss"] + r["ref_boss"], reverse=True)
             self._bt_model = _BossTrashModel()
             self._bt_model.set_data(bt_rows)
-            bt_table = self._make_table(self._bt_model)
-            layout.addWidget(bt_table)
+            self._bt_table = self._make_table(self._bt_model)
+            layout.addWidget(self._bt_table)
+            bt_export_btn.setEnabled(True)
         else:
+            self._bt_table = None
+            bt_export_btn.setEnabled(False)
             no_bt = QLabel(
                 "No encounter data available — cannot classify boss vs trash usage. "
                 "Re-import raids to capture encounter data.")
@@ -1884,7 +1897,17 @@ class _HeadToHeadPanel(QWidget):
             layout.addWidget(no_bt)
 
         # ── Section: Engineering Effectiveness ──
-        self._add_section_header(layout, "Engineering Item Effectiveness")
+        eng_header_row = QHBoxLayout()
+        self._add_section_header(eng_header_row, "Engineering Item Effectiveness")
+        eng_header_row.addStretch()
+        eng_export_btn = QPushButton("Export")
+        eng_export_btn.setProperty("secondary", True)
+        eng_export_btn.setFixedHeight(28)
+        eng_export_btn.setFixedWidth(80)
+        eng_export_btn.clicked.connect(
+            lambda: self._export_table("_eng_table", "engineering_effectiveness.png"))
+        eng_header_row.addWidget(eng_export_btn)
+        layout.addLayout(eng_header_row)
 
         guild_eng = _compute_engineering_stats(guild)
         ref_eng = _compute_engineering_stats(ref)
@@ -1900,9 +1923,12 @@ class _HeadToHeadPanel(QWidget):
                 })
             self._eng_model = _EngineeringComparisonModel()
             self._eng_model.set_data(eng_rows)
-            eng_table = self._make_table(self._eng_model)
-            layout.addWidget(eng_table)
+            self._eng_table = self._make_table(self._eng_model)
+            layout.addWidget(self._eng_table)
+            eng_export_btn.setEnabled(True)
         else:
+            self._eng_table = None
+            eng_export_btn.setEnabled(False)
             no_eng = QLabel("No engineering item usage found in either raid.")
             no_eng.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_eng)
@@ -1958,6 +1984,22 @@ class _HeadToHeadPanel(QWidget):
             return
         dlg = _ConsumableTimelineDialog(guild, ref, parent=self)
         dlg.exec()
+
+    def _export_table(self, attr_name, default_filename):
+        widget = getattr(self, attr_name, None)
+        if not widget:
+            self.status_message.emit("No data to export")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Table", default_filename,
+            "PNG Image (*.png);;JPEG Image (*.jpg)")
+        if not path:
+            return
+        pixmap = widget.grab()
+        if pixmap.save(path):
+            self.status_message.emit(f"Exported to {path}")
+        else:
+            self.status_message.emit("Failed to export")
 
     def _export_consumable_chart(self):
         chart = getattr(self, "_cons_chart", None)
