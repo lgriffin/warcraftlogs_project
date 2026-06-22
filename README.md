@@ -1,8 +1,22 @@
-# WCL Analyzer v3.0 — TBC Edition
+# WCL Analyzer v4.1.0 — TBC Edition
 
 A desktop application for analyzing **Warcraft Logs** reports with a focus on **spell casts, utility usage, and consumable tracking** for The Burning Crusade Classic.
 
 Traditional metrics are heavily influenced by gear, but **casts and abilities** offer a clearer view of player behavior, decision-making, and contribution to the raid.
+
+```mermaid
+graph LR
+    A[WCL Analyzer] --> B[Download]
+    A --> C[Raids]
+    A --> D[Find Character]
+    A --> E[Raid Groups]
+    A --> F[My Character]
+    A --> G[Compare]
+    A --> H[GM/RL Insights]
+    A --> I[Boss Insights]
+    A --> J[Reference Reports]
+    A --> K[Settings]
+```
 
 ---
 
@@ -10,7 +24,7 @@ Traditional metrics are heavily influenced by gear, but **casts and abilities** 
 
 A standalone Windows installer is available that bundles everything — no Python installation required.
 
-1. Download `WarcraftLogsAnalyzer-3.0.0-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
+1. Download `WarcraftLogsAnalyzer-4.1.0-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
 2. Run the installer and follow the prompts
 3. Launch **WarcraftLogs Analyzer** from the Start Menu or desktop shortcut
 
@@ -23,6 +37,8 @@ On first launch the app copies a default config and creates a local SQLite datab
 | Cache | `%LOCALAPPDATA%\WarcraftLogsAnalyzer\cache\` |
 
 Uninstalling the app does not remove user data — delete the folders above manually if needed.
+
+The app checks for updates automatically on launch via GitHub Releases. When a new version is available, a notification dialog offers to download and apply it.
 
 ### Building the Installer
 
@@ -49,8 +65,8 @@ To create the installer `.exe`, install [Inno Setup](https://jrsoftware.org/isin
 ### 2. Download the Project
 
 ```bash
-git clone https://github.com/your-username/warcraftlogs-client.git
-cd warcraftlogs-client
+git clone https://github.com/lgriffin/warcraftlogs_project.git
+cd warcraftlogs_project
 ```
 
 Or download and extract the ZIP from GitHub.
@@ -58,7 +74,7 @@ Or download and extract the ZIP from GitHub.
 ### 3. Install Dependencies
 
 ```bash
-python -m pip install -r requirements.txt
+pip install -e ".[gui]"
 ```
 
 ### 4. Launch the App
@@ -87,12 +103,41 @@ python -m warcraftlogs_client.gui.app
 
 The full-featured PySide6 desktop app provides:
 
-- **Analyze Tab** — Enter a report ID or select from your guild's recent reports to run a full raid analysis. Results are broken down by role (Healers, Tanks, Melee DPS, Ranged DPS) with clickable character names for detailed spell/ability breakdowns.
-- **History Tab** — Browse all imported raids and characters. View performance trends over time with charts for healing, damage, mitigation, and consumables. Character insights include consistency scores, personal bests, radar charts, and calendar heatmaps.
-- **Insights Tab** — GM/RL cross-raid analytics with filtering by raid day, raid size (10-man/25-man), zone (Karazhan, Gruul's Lair, Magtheridon's Lair, Serpentshrine Cavern, Tempest Keep, etc.), and lookback window. Zone list populates dynamically from imported raids — new content is available automatically.
-- **Raid Groups Tab** — Create and manage raid groups, assign characters, set raid days, and view group dashboards with aggregated performance, attendance, and role coverage.
-- **Character Tab** — Set up your main character to view WarcraftLogs profile data, rankings, and recent reports. Links directly to your WCL profile page.
-- **Settings Tab** — Configure API credentials, role detection thresholds, and manage the local database.
+- **Download** — Fetch your guild's recent reports from WarcraftLogs and run a full raid analysis. Reports are filtered by day-of-week and show cached/saved status for previously imported raids.
+- **Raids** — Browse all imported raids with encounter details. Each raid shows role-based performance breakdowns (Healers, Tanks, Melee DPS, Ranged DPS), consumable tracking, Boss vs Trash usage breakdown, Engineering Stats, and a Consumable Timeline.
+- **Find Character** — Search and browse all tracked characters across your imported raids.
+- **Raid Groups** — Create and manage raid groups, assign characters, set raid days, and view group dashboards with aggregated performance, attendance, and role coverage.
+- **My Character** — Set up your main character to view WarcraftLogs profile data, rankings, gear, and recent reports. Links directly to your WCL profile page.
+- **Compare** — Side-by-side character comparison with radar chart overlay across six dimensions.
+- **GM/RL Insights** — Cross-raid analytics for guild leaders and raid leaders, with filtering by raid day, raid size, zone, and lookback window.
+- **Boss Insights** — Aggregate boss encounter performance across all imported raids.
+- **Reference Reports** — Import non-guild reports for benchmarking. Head-to-Head comparison shows consumable differences scoped to shared encounters, with Boss vs Trash breakdown, Engineering Stats, and Consumable Timeline.
+- **Settings** — Configure API credentials, role detection thresholds, and manage the local database.
+
+### Raid Analysis
+
+For each raid, the analyzer automatically classifies players into roles and provides:
+
+- **Healers**: Healing output, overhealing %, spell breakdown, dispels, resource usage
+- **Tanks**: Damage taken, mitigation %, damage taken breakdown, abilities used
+- **Melee DPS**: Total damage, ability breakdown with casts and damage per ability
+- **Ranged DPS**: Same as melee, with automatic hybrid class detection (Shadow Priest, Boomkin, Elemental Shaman)
+- **Consumables**: Per-player consumable usage with timestamps
+- **Boss vs Trash**: Breakdown of consumable usage during boss encounters vs trash
+- **Engineering Stats**: Engineering item tracking (Super Sapper Charge, Goblin Sapper Charge, Adamantite Grenade, Gnomish Flame Turret, Fel Iron Bomb) with min/median/max average damage per cast
+- **Consumable Timeline**: Per-player timestamp visualization for any tracked consumable
+
+### Consumable Tracking
+
+Tracks consumable usage per player per raid:
+
+- **Buff-based tracking** via the WCL Buffs table (protection potions, mana potions, dark runes)
+- **Cast-based tracking** for specific potions with timestamps:
+  - Destruction Potion, Super Mana Potion, Haste Potion
+  - Master Healthstone (all rank variants unified under one name)
+  - Fel Iron Bomb, Goblin Sapper Charge
+
+Consumables to track are configured in `consumes_config.json`.
 
 ### Raid Filtering
 
@@ -107,65 +152,30 @@ The Insights tab supports filtering across multiple dimensions to isolate perfor
 
 The Zone filter scales automatically with new content — when SSC, TK, or any future raid logs are imported, they appear in the dropdown without code changes.
 
-### Raid Analysis
+### Reference Reports
 
-For each raid, the analyzer automatically classifies players into roles and provides:
+Import reports from other guilds for benchmarking:
 
-- **Healers**: Healing output, overhealing %, spell breakdown, dispels, resource usage
-- **Tanks**: Damage taken, mitigation %, damage taken breakdown, abilities used
-- **Melee DPS**: Total damage, ability breakdown with casts and damage per ability
-- **Ranged DPS**: Same as melee, with automatic hybrid class detection (Shadow Priest, Boomkin, Elemental Shaman)
-- **Consumables**: Protection potions, mana potions, and tracked consumable usage across all roles
-
-### Consumable Tracking
-
-Tracks consumable usage per player per raid:
-
-- **Buff-based tracking** via the WCL Buffs table (protection potions, mana potions, dark runes)
-- **Cast-based tracking** for specific potions with timestamps:
-  - Destruction Potion (22839)
-  - Super Mana Potion (22832)
-  - Haste Potion (22838)
-
-Timestamps show when each potion was used during the raid, visible in both the overall raid Consumables tab and individual character detail panels.
-
-Consumables to track via buffs are configured in `consumes_config.json`.
+- Reports are tagged with a "reference" source so they don't mix with guild data
+- **Head-to-Head Comparison** — select a guild raid and a reference raid for side-by-side analysis
+- Consumable data is automatically scoped to shared encounters when the guild raid covers more bosses than the reference
+- Requires OAuth2 user authorization (the app opens a browser for WarcraftLogs login)
 
 ### Raid Groups
 
 Create named groups of characters to track your raid roster over time:
 
 - **Group Management** — Create, rename, and delete raid groups. Add/remove characters detected from imported reports.
-- **Raid Days** — Select which days your group raids (Mon-Sun). The view automatically shows matching raids from your history.
+- **Raid Days** — Select which days your group raids (Mon–Sun). The view automatically shows matching raids from your history.
 - **Group Dashboard** — Aggregated performance chart, attendance tracker, and role coverage matrix for group members.
-- **History Integration** — Characters show colored group tag pills in the History tab. Filter the character list by raid group.
+- **History Integration** — Characters show colored group tag pills. Filter the character list by raid group.
 
-### Character Insights
+### Charts & Visualizations
 
-The History tab includes advanced analytics per character:
-
-- **Consistency Score** — How stable performance is across raids (lower variance = higher score)
-- **Consumable Compliance** — Percentage of raids where consumables were used, with average per raid
-- **Personal Bests** — Best and worst performances for healing, damage, and mitigation with raid context
-
-### Radar Chart
-
-The Radar (spider) chart shows a character's relative standing across six dimensions, each scored 0-100:
-
-| Axis | How it's calculated |
-|------|-------------------|
-| **Healing** | Percentile rank of average healing output vs. all tracked characters |
-| **Damage** | Percentile rank of average damage output vs. all tracked characters |
-| **Mitigation** | Percentile rank of average mitigation % vs. all tracked tanks |
-| **Activity** | Percentile rank of total raids attended vs. all tracked characters |
-| **Consumables** | Percentile rank of total consumables used vs. all tracked characters |
-| **Consistency** | Average consistency score across roles (100 = identical every raid, lower = more variance between raids) |
-
-Hover over any axis label on the chart for a tooltip explanation.
-
-### Calendar Heatmap
-
-A GitHub-style activity heatmap showing raid participation over the last 6 months, colored by performance intensity.
+- **Radar Chart** — Six-axis spider chart showing a character's relative standing (Healing, Damage, Mitigation, Activity, Consumables, Consistency) scored 0–100
+- **Calendar Heatmap** — GitHub-style activity heatmap showing raid participation over the last 6 months, colored by performance intensity
+- **Line Charts** — Performance trends over time per character
+- **Compare Overlay** — Multiple characters on a single radar chart for direct comparison
 
 ### Local Database
 
@@ -177,15 +187,6 @@ All analyzed raids are saved to a local SQLite database (`warcraftlogs_history.d
 - Guild report list shows which raids are already cached
 
 The database can be cleared from **Settings > Clear Database** (requires typing "I am Toad" to confirm).
-
-### Guild Reports
-
-The Analyze tab automatically fetches your guild's recent reports with:
-
-- Day-of-week filtering (defaults to Wed/Thu/Sun raid days)
-- Saved/cached indicators for previously imported raids
-- Clickable report codes that open the raid on WarcraftLogs
-- Double-click to immediately analyze a report
 
 ---
 
@@ -246,7 +247,7 @@ python manage_spells.py list-groups        # Show alias groups
 
 ## CLI Mode
 
-The command-line interface is still available for scripting and automation:
+The command-line interface is available for scripting and automation:
 
 ```bash
 python -m warcraftlogs_client.cli unified --md    # Full analysis with markdown output
@@ -266,15 +267,15 @@ Markdown reports are saved to the `reports/` directory.
 | File | Purpose |
 |------|---------|
 | `config.json` | API credentials, guild ID, role thresholds, character settings |
-| `consumes_config.json` | Buff-based consumable tracking IDs (protection pots, mana pots, etc.) |
-| `spell_data/spell_names.json` | Spell ID to name mappings |
+| `consumes_config.json` | Consumable spell ID mappings (buff-based and cast-based) |
+| `spell_data/spell_names.json` | Spell ID to name mappings by category |
 | `spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 
 ---
 
 ## Output
 
-- GUI: Results displayed in interactive tables with charts
+- GUI: Results displayed in interactive tables with sortable columns and charts
 - CLI: Markdown files saved to `reports/` directory
 - Database: SQLite file at `warcraftlogs_history.db`
 
