@@ -19,7 +19,7 @@ from warcraftlogs_client.models import (
 
 def _make_analysis(report_id, title="Test Raid", healer_name="Healer1",
                    tank_name="Tank1", dps_name="DPS1",
-                   encounter_id=None):
+                   encounter_id=None, encounter_name="Attumen"):
     metadata = RaidMetadata(
         report_id=report_id, title=title, owner="Owner",
         start_time=1_700_000_000_000, end_time=1_700_003_600_000,
@@ -50,7 +50,7 @@ def _make_analysis(report_id, title="Test Raid", healer_name="Healer1",
     encounters = []
     if encounter_id is not None:
         encounters = [EncounterSummary(
-            encounter_id=encounter_id, name="Attumen",
+            encounter_id=encounter_id, name=encounter_name,
             start_time=12000, end_time=180000, duration_ms=168000,
             players=[
                 EncounterPerformance(
@@ -459,11 +459,22 @@ class TestHeadToHeadHelpers:
     def test_match_encounters_no_overlap(self):
         from warcraftlogs_client.gui.reference_view import _match_encounters
 
+        guild = _make_analysis("g1", encounter_id=658, encounter_name="Attumen")
+        ref = _make_analysis("r1", encounter_id=999, encounter_name="Curator")
+
+        rows = _match_encounters(guild, ref)
+        assert len(rows) == 0
+
+    def test_match_encounters_name_fallback(self):
+        """Same boss name but different encounter_id still matches via fallback."""
+        from warcraftlogs_client.gui.reference_view import _match_encounters
+
         guild = _make_analysis("g1", encounter_id=658)
         ref = _make_analysis("r1", encounter_id=999)
 
         rows = _match_encounters(guild, ref)
-        assert len(rows) == 0
+        assert len(rows) == 1
+        assert rows[0]["name"] == "Attumen"
 
     def test_compute_class_performance_multi_role(self):
         """Paladin appearing as both healer and tank gets separate rows."""

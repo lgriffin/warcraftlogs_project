@@ -10,10 +10,10 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableView, QHeaderView, QTabWidget, QComboBox,
-    QMessageBox, QGridLayout, QFrame, QScrollArea,
+    QMessageBox, QGridLayout, QFrame, QScrollArea, QFileDialog,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF
+from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
 
 from .styles import COMMON_STYLES, COLORS
 from .worker import ReferenceAnalysisWorker
@@ -824,37 +824,47 @@ def _compute_consumable_summary(analysis):
 
 
 def _match_encounters(guild_analysis, ref_analysis):
-    """Match encounters by encounter_id and compute comparison rows."""
-    guild_enc = {}
-    for e in (guild_analysis.encounters or []):
-        total_dmg = sum(p.total_damage for p in e.players) if e.players else 0
-        total_heal = sum(p.total_healing for p in e.players) if e.players else 0
-        guild_enc[e.encounter_id] = {
-            "name": e.name,
-            "duration_ms": e.duration_ms,
-            "total_damage": total_dmg,
-            "total_healing": total_heal,
-        }
+    """Match encounters by encounter_id, falling back to boss name."""
 
-    ref_enc = {}
-    for e in (ref_analysis.encounters or []):
-        total_dmg = sum(p.total_damage for p in e.players) if e.players else 0
-        total_heal = sum(p.total_healing for p in e.players) if e.players else 0
-        ref_enc[e.encounter_id] = {
-            "name": e.name,
-            "duration_ms": e.duration_ms,
-            "total_damage": total_dmg,
-            "total_healing": total_heal,
-        }
+    def _build_enc_data(encounters):
+        by_id = {}
+        by_name = {}
+        for e in (encounters or []):
+            total_dmg = sum(p.total_damage for p in e.players) if e.players else 0
+            total_heal = sum(p.total_healing for p in e.players) if e.players else 0
+            data = {
+                "name": e.name,
+                "duration_ms": e.duration_ms,
+                "total_damage": total_dmg,
+                "total_healing": total_heal,
+            }
+            by_id[e.encounter_id] = data
+            by_name[e.name] = data
+        return by_id, by_name
 
-    shared_ids = set(guild_enc.keys()) & set(ref_enc.keys())
+    guild_by_id, guild_by_name = _build_enc_data(guild_analysis.encounters)
+    ref_by_id, ref_by_name = _build_enc_data(ref_analysis.encounters)
+
+    shared_ids = set(guild_by_id.keys()) & set(ref_by_id.keys())
     rows = []
+    matched_names = set()
     for eid in sorted(shared_ids):
         rows.append({
-            "name": guild_enc[eid]["name"],
-            "guild": guild_enc[eid],
-            "ref": ref_enc[eid],
+            "name": guild_by_id[eid]["name"],
+            "guild": guild_by_id[eid],
+            "ref": ref_by_id[eid],
         })
+        matched_names.add(guild_by_id[eid]["name"])
+
+    # Fallback: match remaining encounters by boss name
+    for name in sorted(set(guild_by_name.keys()) & set(ref_by_name.keys())):
+        if name not in matched_names:
+            rows.append({
+                "name": name,
+                "guild": guild_by_name[name],
+                "ref": ref_by_name[name],
+            })
+
     return rows
 
 
@@ -1057,6 +1067,110 @@ class _H2HEncounterModel(QAbstractTableModel):
         if val is None:
             return "—"
         return f"{val:,.0f}"
+
+
+class _ConsumableComparisonChart(QWidget):
+    """Grouped horizontal bar chart comparing guild vs reference consumable usage."""
+
+    GUILD_COLOR = QColor(COLORS["accent"])
+    REF_COLOR = QColor("#5dade2")
+    BAR_HEIGHT = 14
+    ROW_HEIGHT = 36
+    NAME_COL_WIDTH = 180
+    RIGHT_MARGIN = 60
+
+    def __init__(self, rows: list[dict], parent=None):
+        super().__init__(parent)
+        self._rows = rows
+        title_h = 50
+        legend_h = 30
+        body_h = len(rows) * self.ROW_HEIGHT + 10
+        self.setMinimumHeight(title_h + legend_h + body_h)
+        self.setMinimumWidth(600)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        if not self._rows:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 11))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                             "No consumable data")
+            painter.end()
+            return
+
+        w = self.width()
+        title_font = QFont("Segoe UI", 12, QFont.Weight.Bold)
+        label_font = QFont("Segoe UI", 9)
+        value_font = QFont("Segoe UI", 8)
+
+        # Title
+        painter.setFont(title_font)
+        painter.setPen(QColor(COLORS["text_header"]))
+        painter.drawText(10, 28, "Consumable Usage — Guild vs Reference")
+
+        # Legend
+        legend_y = 42
+        painter.setFont(label_font)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(self.GUILD_COLOR))
+        painter.drawRect(QRectF(10, legend_y, 12, 12))
+        painter.setPen(QColor(COLORS["text"]))
+        painter.drawText(26, legend_y + 11, "Guild")
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(self.REF_COLOR))
+        painter.drawRect(QRectF(80, legend_y, 12, 12))
+        painter.setPen(QColor(COLORS["text"]))
+        painter.drawText(96, legend_y + 11, "Reference")
+
+        # Bars
+        top_y = legend_y + 22
+        bar_area_w = w - self.NAME_COL_WIDTH - self.RIGHT_MARGIN
+        max_val = max(
+            (max(r.get("guild_uses", 0), r.get("ref_uses", 0))
+             for r in self._rows), default=1) or 1
+
+        for i, row in enumerate(self._rows):
+            y = top_y + i * self.ROW_HEIGHT
+
+            # Consumable name
+            painter.setFont(label_font)
+            painter.setPen(QColor(COLORS["text"]))
+            name = row.get("name", "")
+            if len(name) > 28:
+                name = name[:26] + "…"
+            painter.drawText(8, int(y + self.ROW_HEIGHT // 2 + 4), name)
+
+            # Guild bar
+            g_val = row.get("guild_uses", 0)
+            g_w = (g_val / max_val) * bar_area_w if max_val > 0 else 0
+            bar_x = self.NAME_COL_WIDTH
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(self.GUILD_COLOR))
+            painter.drawRoundedRect(
+                QRectF(bar_x, y + 2, max(g_w, 1), self.BAR_HEIGHT), 2, 2)
+
+            # Ref bar
+            r_val = row.get("ref_uses", 0)
+            r_w = (r_val / max_val) * bar_area_w if max_val > 0 else 0
+            painter.setBrush(QBrush(self.REF_COLOR))
+            painter.drawRoundedRect(
+                QRectF(bar_x, y + 2 + self.BAR_HEIGHT + 2,
+                       max(r_w, 1), self.BAR_HEIGHT), 2, 2)
+
+            # Value labels
+            painter.setFont(value_font)
+            painter.setPen(QColor(COLORS["text"]))
+            painter.drawText(int(bar_x + g_w + 4), int(y + 2 + self.BAR_HEIGHT - 2),
+                             str(g_val))
+            painter.drawText(int(bar_x + r_w + 4),
+                             int(y + 2 + self.BAR_HEIGHT + 2 + self.BAR_HEIGHT - 2),
+                             str(r_val))
+
+        painter.end()
 
 
 # ── Head-to-Head panel ──
@@ -1366,7 +1480,16 @@ class _HeadToHeadPanel(QWidget):
         layout.addWidget(class_table)
 
         # ── Section: Consumables ──
-        self._add_section_header(layout, "Consumable Usage")
+        cons_header_row = QHBoxLayout()
+        self._add_section_header(cons_header_row, "Consumable Usage")
+        cons_header_row.addStretch()
+        self._export_cons_btn = QPushButton("Export")
+        self._export_cons_btn.setProperty("secondary", True)
+        self._export_cons_btn.setFixedHeight(28)
+        self._export_cons_btn.setFixedWidth(80)
+        self._export_cons_btn.clicked.connect(self._export_consumable_chart)
+        cons_header_row.addWidget(self._export_cons_btn)
+        layout.addLayout(cons_header_row)
 
         guild_cons = _compute_consumable_summary(guild)
         ref_cons = _compute_consumable_summary(ref)
@@ -1390,7 +1513,13 @@ class _HeadToHeadPanel(QWidget):
             self._cons_model.set_data(cons_rows)
             cons_table = self._make_table(self._cons_model)
             layout.addWidget(cons_table)
+
+            self._cons_chart = _ConsumableComparisonChart(cons_rows)
+            layout.addWidget(self._cons_chart)
+            self._export_cons_btn.setEnabled(True)
         else:
+            self._cons_chart = None
+            self._export_cons_btn.setEnabled(False)
             no_cons = QLabel("No consumable data in either raid.")
             no_cons.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_cons)
@@ -1405,7 +1534,28 @@ class _HeadToHeadPanel(QWidget):
             enc_table = self._make_table(self._enc_model)
             layout.addWidget(enc_table)
         else:
-            no_enc = QLabel("No common encounters between these raids.")
+            guild_encs = guild.encounters or []
+            ref_encs = ref.encounters or []
+            if not guild_encs and not ref_encs:
+                msg = ("Neither raid has encounter data. "
+                       "Try re-importing both raids to fetch boss kill data.")
+            elif not guild_encs:
+                ref_names = ", ".join(e.name for e in ref_encs)
+                msg = (f"Guild raid has no encounter data. "
+                       f"Reference raid has: {ref_names}. "
+                       "Try re-importing the guild raid.")
+            elif not ref_encs:
+                guild_names = ", ".join(e.name for e in guild_encs)
+                msg = (f"Reference raid has no encounter data. "
+                       f"Guild raid has: {guild_names}. "
+                       "Try re-importing the reference raid.")
+            else:
+                guild_names = ", ".join(e.name for e in guild_encs)
+                ref_names = ", ".join(e.name for e in ref_encs)
+                msg = (f"No shared bosses. Guild: {guild_names}. "
+                       f"Reference: {ref_names}.")
+            no_enc = QLabel(msg)
+            no_enc.setWordWrap(True)
             no_enc.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_enc)
 
@@ -1417,6 +1567,25 @@ class _HeadToHeadPanel(QWidget):
         lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(lbl)
+
+    def _export_consumable_chart(self):
+        chart = getattr(self, "_cons_chart", None)
+        if not chart:
+            self.status_message.emit("No consumable chart to export")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Consumable Chart",
+            "consumable_comparison.png",
+            "PNG Image (*.png);;JPEG Image (*.jpg)")
+        if not path:
+            return
+
+        pixmap = chart.grab()
+        if pixmap.save(path):
+            self.status_message.emit(f"Chart exported to {path}")
+        else:
+            self.status_message.emit("Failed to export chart")
 
     @staticmethod
     def _make_table(model):
