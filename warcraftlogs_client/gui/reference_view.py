@@ -1126,7 +1126,7 @@ class _HeadToHeadPanel(QWidget):
         self._content = QWidget()
         self._content.setStyleSheet(f"background-color: {COLORS['bg_dark']};")
         self._content_layout = QVBoxLayout(self._content)
-        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setContentsMargins(8, 8, 8, 8)
         self._content_layout.setSpacing(16)
 
         self._placeholder = QLabel("Select two raids and click Compare.")
@@ -1225,7 +1225,7 @@ class _HeadToHeadPanel(QWidget):
         self._content = QWidget()
         self._content.setStyleSheet(f"background-color: {COLORS['bg_dark']};")
         self._content_layout = QVBoxLayout(self._content)
-        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setContentsMargins(8, 8, 8, 8)
         self._content_layout.setSpacing(16)
 
     def _display_comparison(self, guild, ref, guild_stats, ref_stats):
@@ -1409,7 +1409,6 @@ class _HeadToHeadPanel(QWidget):
             no_enc.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_enc)
 
-        layout.addStretch()
         self._scroll.setWidget(self._content)
 
     @staticmethod
@@ -1429,5 +1428,10 @@ class _HeadToHeadPanel(QWidget):
         table.horizontalHeader().setStretchLastSection(True)
         table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.ResizeToContents)
-        table.setMaximumHeight(250)
+        row_count = model.rowCount()
+        row_height = 30
+        header_height = 32
+        height = header_height + row_count * row_height + 4
+        table.setMinimumHeight(min(height, 400))
+        table.setMaximumHeight(max(height, 120))
         return table
