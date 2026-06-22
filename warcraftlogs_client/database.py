@@ -12,6 +12,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
+from .cache import clear_response_cache, _cache_file
 from .spell_manager import get_spell_manager
 from .models import (
     CharacterHistory,
@@ -1242,6 +1243,14 @@ class PerformanceDB:
         conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM raids WHERE id = ?", (raid_id,))
         conn.commit()
+
+        cache_file = _cache_file(report_id)
+        if os.path.exists(cache_file):
+            try:
+                os.remove(cache_file)
+            except OSError:
+                pass
+        clear_response_cache()
 
     def is_raid_imported(self, report_id: str) -> bool:
         """Check if a raid has already been imported."""

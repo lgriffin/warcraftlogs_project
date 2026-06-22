@@ -501,7 +501,7 @@ class TestHeadToHeadHelpers:
 
 class TestBuildTimelineData:
     def test_returns_per_player_timestamps(self):
-        from warcraftlogs_client.gui.reference_view import _build_timeline_data
+        from warcraftlogs_client.gui.analysis_helpers import build_timeline_data
 
         analysis = _make_analysis("t1")
         analysis.consumables = [
@@ -512,7 +512,7 @@ class TestBuildTimelineData:
                             report_id="t1", consumable_name="Flask",
                             count=1, timestamps=[3000]),
         ]
-        rows = _build_timeline_data(analysis, "Flask")
+        rows = build_timeline_data(analysis, "Flask")
         assert len(rows) == 2
         assert rows[0]["player"] == "P2"
         assert rows[0]["timestamps"] == "00:03"
@@ -520,16 +520,16 @@ class TestBuildTimelineData:
         assert rows[1]["timestamps"] == "00:05, 02:00"
 
     def test_returns_empty_for_missing_consumable(self):
-        from warcraftlogs_client.gui.reference_view import _build_timeline_data
+        from warcraftlogs_client.gui.analysis_helpers import build_timeline_data
 
         analysis = _make_analysis("t1")
         analysis.consumables = []
-        assert _build_timeline_data(analysis, "Flask") == []
+        assert build_timeline_data(analysis, "Flask") == []
 
 
 class TestComputeEngineeringStats:
     def test_computes_min_median_max(self):
-        from warcraftlogs_client.gui.reference_view import _compute_engineering_stats
+        from warcraftlogs_client.gui.analysis_helpers import compute_engineering_stats
 
         analysis = _make_analysis("e1")
         analysis.dps[0].abilities = [
@@ -543,7 +543,7 @@ class TestComputeEngineeringStats:
                            casts=4, total_amount=8000),
             ],
         ))
-        result = _compute_engineering_stats(analysis)
+        result = compute_engineering_stats(analysis)
         assert "Super Sapper Charge" in result
         stats = result["Super Sapper Charge"]
         assert stats["total_casts"] == 8
@@ -554,19 +554,19 @@ class TestComputeEngineeringStats:
         assert stats["median_avg"] == 2500
 
     def test_no_engineering_returns_empty(self):
-        from warcraftlogs_client.gui.reference_view import _compute_engineering_stats
+        from warcraftlogs_client.gui.analysis_helpers import compute_engineering_stats
 
         analysis = _make_analysis("e1")
         analysis.dps[0].abilities = [
             SpellUsage(spell_id=1, spell_name="Sinister Strike",
                        casts=50, total_amount=100000),
         ]
-        assert _compute_engineering_stats(analysis) == {}
+        assert compute_engineering_stats(analysis) == {}
 
 
 class TestClassifyConsumableUsage:
     def test_boss_vs_trash_classification(self):
-        from warcraftlogs_client.gui.reference_view import _classify_consumable_usage
+        from warcraftlogs_client.gui.analysis_helpers import classify_consumable_usage
 
         analysis = _make_analysis("c1", encounter_id=658)
         analysis.consumables = [
@@ -574,13 +574,13 @@ class TestClassifyConsumableUsage:
                             report_id="c1", consumable_name="Destruction Potion",
                             count=3, timestamps=[15000, 50000, 200000]),
         ]
-        result = _classify_consumable_usage(analysis)
+        result = classify_consumable_usage(analysis)
         assert "Destruction Potion" in result
         assert result["Destruction Potion"]["boss"] == 2
         assert result["Destruction Potion"]["trash"] == 1
 
     def test_no_encounters_all_trash(self):
-        from warcraftlogs_client.gui.reference_view import _classify_consumable_usage
+        from warcraftlogs_client.gui.analysis_helpers import classify_consumable_usage
 
         analysis = _make_analysis("c1")
         analysis.consumables = [
@@ -588,7 +588,7 @@ class TestClassifyConsumableUsage:
                             report_id="c1", consumable_name="Flask",
                             count=1, timestamps=[5000]),
         ]
-        result = _classify_consumable_usage(analysis)
+        result = classify_consumable_usage(analysis)
         assert result["Flask"]["boss"] == 0
         assert result["Flask"]["trash"] == 1
 
@@ -596,8 +596,8 @@ class TestClassifyConsumableUsage:
 class TestSharedEncounterScoping:
     def _guild_with_extra_encounters(self):
         """Guild with 3 encounters (2 shared + 1 extra), ref with 2."""
-        from warcraftlogs_client.gui.reference_view import (
-            _compute_shared_encounter_window, _scope_analysis_to_window,
+        from warcraftlogs_client.gui.analysis_helpers import (
+            compute_shared_encounter_window, scope_analysis_to_window,
         )
         guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
         guild.encounters = [
@@ -620,14 +620,14 @@ class TestSharedEncounterScoping:
             EncounterSummary(encounter_id=659, name="Lurker",
                              start_time=60000, end_time=130000, duration_ms=70000),
         ]
-        return guild, ref, _compute_shared_encounter_window, _scope_analysis_to_window
+        return guild, ref, compute_shared_encounter_window, scope_analysis_to_window
 
     def test_no_extra_encounters_returns_no_scoping(self):
-        from warcraftlogs_client.gui.reference_view import _compute_shared_encounter_window
+        from warcraftlogs_client.gui.analysis_helpers import compute_shared_encounter_window
 
         guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
         ref = _make_analysis("r1", encounter_id=658, encounter_name="Hydross")
-        result = _compute_shared_encounter_window(guild, ref)
+        result = compute_shared_encounter_window(guild, ref)
         assert result is not None
         assert result["has_extra_encounters"] is False
 
@@ -660,8 +660,8 @@ class TestSharedEncounterScoping:
         assert guild.consumables[0].timestamps == original_ts
 
     def test_no_encounters_returns_none(self):
-        from warcraftlogs_client.gui.reference_view import _compute_shared_encounter_window
+        from warcraftlogs_client.gui.analysis_helpers import compute_shared_encounter_window
 
         guild = _make_analysis("g1")
         ref = _make_analysis("r1")
-        assert _compute_shared_encounter_window(guild, ref) is None
+        assert compute_shared_encounter_window(guild, ref) is None
