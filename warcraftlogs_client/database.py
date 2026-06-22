@@ -1199,6 +1199,17 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_guild_raids_for_comparison(self, limit: int = 50) -> list[dict]:
+        """Get guild raids with zone and size for comparison dropdowns."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT report_id, title, raid_date, zone, raid_size
+               FROM raids WHERE source = 'guild'
+               ORDER BY raid_date DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def delete_raid(self, report_id: str) -> None:
         """Delete a raid and all associated performance data."""
         conn = self._get_conn()

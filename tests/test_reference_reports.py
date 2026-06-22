@@ -379,3 +379,110 @@ class TestReimportProtection:
         guild_raids = db.get_raid_list()
         assert len(guild_raids) == 1
         assert guild_raids[0]["title"] == "Updated"
+
+
+class TestGuildRaidsForComparison:
+    def test_returns_zone_and_size(self, db):
+        a = _make_analysis("g1", title="Guild Raid")
+        a.metadata.zone = "Karazhan"
+        db.import_raid(a, source="guild")
+
+        raids = db.get_guild_raids_for_comparison()
+        assert len(raids) == 1
+        assert raids[0]["report_id"] == "g1"
+        assert raids[0]["zone"] == "Karazhan"
+        assert "raid_size" in raids[0]
+
+    def test_excludes_reference(self, db):
+        db.import_raid(_make_analysis("g1"), source="guild")
+        db.import_raid(_make_analysis("r1"), source="reference")
+
+        raids = db.get_guild_raids_for_comparison()
+        assert len(raids) == 1
+        assert raids[0]["report_id"] == "g1"
+
+
+class TestHeadToHeadHelpers:
+    def test_compute_class_performance_groups_by_class_role(self):
+        from warcraftlogs_client.gui.reference_view import _compute_class_performance
+
+        analysis = _make_analysis("test1")
+        analysis.dps.append(DPSPerformance(
+            name="DPS2", player_class="Rogue", source_id=4,
+            role="melee", total_damage=600_000, abilities=[],
+        ))
+        result = _compute_class_performance(analysis)
+
+        rogue_melee = [r for r in result if r["class"] == "Rogue" and r["role"] == "melee"]
+        assert len(rogue_melee) == 1
+        assert rogue_melee[0]["count"] == 2
+        assert rogue_melee[0]["avg_metric"] == 500_000
+
+        priest_healer = [r for r in result if r["class"] == "Priest" and r["role"] == "healer"]
+        assert len(priest_healer) == 1
+        assert priest_healer[0]["count"] == 1
+
+    def test_compute_consumable_summary(self):
+        from warcraftlogs_client.gui.reference_view import _compute_consumable_summary
+
+        analysis = _make_analysis("test1")
+        analysis.consumables = [
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="test1", consumable_name="Flask of the Titans",
+                            count=2, timestamps=[]),
+            ConsumableUsage(player_name="P2", player_role="melee",
+                            report_id="test1", consumable_name="Flask of the Titans",
+                            count=1, timestamps=[]),
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="test1", consumable_name="Mana Potion",
+                            count=3, timestamps=[]),
+        ]
+        result = _compute_consumable_summary(analysis)
+
+        assert result["Flask of the Titans"]["total_uses"] == 3
+        assert result["Flask of the Titans"]["unique_users"] == 2
+        assert result["Mana Potion"]["total_uses"] == 3
+        assert result["Mana Potion"]["unique_users"] == 1
+
+    def test_match_encounters_finds_shared(self):
+        from warcraftlogs_client.gui.reference_view import _match_encounters
+
+        guild = _make_analysis("g1", encounter_id=658)
+        ref = _make_analysis("r1", encounter_id=658)
+
+        rows = _match_encounters(guild, ref)
+        assert len(rows) == 1
+        assert rows[0]["name"] == "Attumen"
+        assert rows[0]["guild"]["total_damage"] > 0
+        assert rows[0]["ref"]["total_damage"] > 0
+
+    def test_match_encounters_no_overlap(self):
+        from warcraftlogs_client.gui.reference_view import _match_encounters
+
+        guild = _make_analysis("g1", encounter_id=658)
+        ref = _make_analysis("r1", encounter_id=999)
+
+        rows = _match_encounters(guild, ref)
+        assert len(rows) == 0
+
+    def test_compute_class_performance_multi_role(self):
+        """Paladin appearing as both healer and tank gets separate rows."""
+        from warcraftlogs_client.gui.reference_view import _compute_class_performance
+
+        analysis = _make_analysis("test1")
+        analysis.healers.append(HealerPerformance(
+            name="PalaH", player_class="Paladin", source_id=10,
+            total_healing=300_000, total_overhealing=50_000,
+            spells=[], dispels=[], resources=[], fear_ward_casts=0,
+        ))
+        analysis.tanks.append(TankPerformance(
+            name="PalaT", player_class="Paladin", source_id=11,
+            total_damage_taken=500_000, total_mitigated=350_000,
+            damage_taken_breakdown=[], abilities_used=[],
+        ))
+        result = _compute_class_performance(analysis)
+
+        paladin_rows = [r for r in result if r["class"] == "Paladin"]
+        roles = {r["role"] for r in paladin_rows}
+        assert "healer" in roles
+        assert "tank" in roles
