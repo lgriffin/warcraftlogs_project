@@ -3,6 +3,7 @@ Reference Reports view — import non-guild reports, manage them,
 and compare guild vs reference performance.
 """
 
+import dataclasses
 import sqlite3
 from collections import defaultdict
 from datetime import datetime
@@ -969,6 +970,68 @@ def _classify_consumable_usage(analysis):
     return dict(by_name)
 
 
+def _compute_shared_encounter_window(guild_analysis, ref_analysis):
+    """Detect extra guild encounters and compute the shared encounter time window.
+
+    Returns a dict with scoping metadata, or None if either side has no encounters.
+    """
+    guild_encs = guild_analysis.encounters or []
+    ref_encs = ref_analysis.encounters or []
+    if not guild_encs or not ref_encs:
+        return None
+
+    ref_ids = {e.encounter_id for e in ref_encs}
+    ref_names = {e.name for e in ref_encs}
+
+    shared = []
+    extra = []
+    for e in guild_encs:
+        if e.encounter_id in ref_ids or e.name in ref_names:
+            shared.append(e)
+        else:
+            extra.append(e)
+
+    if not extra:
+        return {"has_extra_encounters": False, "guild_extra_names": [],
+                "window_start": None, "window_end": None,
+                "shared_count": len(shared)}
+
+    if not shared:
+        return {"has_extra_encounters": True,
+                "guild_extra_names": sorted(e.name for e in extra),
+                "window_start": None, "window_end": None,
+                "shared_count": 0}
+
+    return {
+        "has_extra_encounters": True,
+        "guild_extra_names": sorted(e.name for e in extra),
+        "window_start": min(e.start_time for e in shared),
+        "window_end": max(e.end_time for e in shared),
+        "shared_count": len(shared),
+    }
+
+
+def _scope_analysis_to_window(analysis, window_start, window_end):
+    """Return a copy of the analysis with consumables and encounters filtered to a time window."""
+    filtered_consumables = []
+    for cu in (analysis.consumables or []):
+        ts = [t for t in cu.timestamps if window_start <= t <= window_end]
+        if ts:
+            filtered_consumables.append(
+                dataclasses.replace(cu, timestamps=ts, count=len(ts)))
+
+    filtered_encounters = [
+        e for e in (analysis.encounters or [])
+        if e.start_time >= window_start and e.end_time <= window_end
+    ]
+
+    return dataclasses.replace(
+        analysis,
+        consumables=filtered_consumables,
+        encounters=filtered_encounters,
+    )
+
+
 # ── Head-to-Head table models ──
 
 class _ClassComparisonModel(QAbstractTableModel):
@@ -1687,6 +1750,45 @@ class _HeadToHeadPanel(QWidget):
         self._clear_content()
         layout = self._content_layout
 
+        # ── Detect and apply shared-encounter scoping ──
+        scope_info = _compute_shared_encounter_window(guild, ref)
+        scoped_guild = guild
+        is_scoped = False
+
+        if (scope_info and scope_info["has_extra_encounters"]
+                and scope_info["window_start"] is not None):
+            is_scoped = True
+            scoped_guild = _scope_analysis_to_window(
+                guild, scope_info["window_start"], scope_info["window_end"])
+
+            extra_names = ", ".join(scope_info["guild_extra_names"])
+            banner = QFrame()
+            banner.setStyleSheet(
+                f"QFrame {{ background-color: {COLORS['bg_card']};"
+                f" border: 1px solid {COLORS['warning']};"
+                f" border-left: 4px solid {COLORS['warning']};"
+                f" border-radius: 4px; }}")
+            banner_layout = QVBoxLayout(banner)
+            banner_layout.setContentsMargins(12, 8, 12, 8)
+            banner_layout.setSpacing(4)
+
+            title_lbl = QLabel("Comparison Scoped to Shared Encounters")
+            title_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            title_lbl.setStyleSheet(
+                f"color: {COLORS['warning']}; border: none;")
+            banner_layout.addWidget(title_lbl)
+
+            detail_lbl = QLabel(
+                f"Guild raid has encounters not in the reference: {extra_names}. "
+                f"Consumable data is scoped to the shared encounter window. "
+                f"Class Performance, Engineering, and aggregate stats cover "
+                f"the full raid.")
+            detail_lbl.setWordWrap(True)
+            detail_lbl.setStyleSheet(
+                f"color: {COLORS['text']}; font-size: 12px; border: none;")
+            banner_layout.addWidget(detail_lbl)
+            layout.addWidget(banner)
+
         # ── Section: Metadata cards ──
         self._add_section_header(layout, "Raid Overview")
 
@@ -1747,6 +1849,10 @@ class _HeadToHeadPanel(QWidget):
         cards_grid.addWidget(taken_card, 1, 1)
         cards_grid.addWidget(avg_dps_card, 1, 2)
         layout.addLayout(cards_grid)
+        if is_scoped:
+            note = QLabel("Note: Aggregate stats cover the full raid duration")
+            note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-style: italic;")
+            layout.addWidget(note)
 
         # ── Section: Composition ──
         self._add_section_header(layout, "Raid Composition")
@@ -1794,6 +1900,10 @@ class _HeadToHeadPanel(QWidget):
 
         # ── Section: Class performance ──
         self._add_section_header(layout, "Class Performance")
+        if is_scoped:
+            note = QLabel("Note: Class performance uses full-raid data")
+            note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-style: italic;")
+            layout.addWidget(note)
 
         guild_perf = _compute_class_performance(guild)
         ref_perf = _compute_class_performance(ref)
@@ -1821,7 +1931,7 @@ class _HeadToHeadPanel(QWidget):
         layout.addWidget(class_table)
 
         # ── Section: Consumables ──
-        self._h2h_guild = guild
+        self._h2h_guild = scoped_guild
         self._h2h_ref = ref
 
         cons_header_row = QHBoxLayout()
@@ -1843,7 +1953,7 @@ class _HeadToHeadPanel(QWidget):
         cons_header_row.addWidget(self._export_cons_btn)
         layout.addLayout(cons_header_row)
 
-        guild_cons = _compute_consumable_summary(guild)
+        guild_cons = _compute_consumable_summary(scoped_guild)
         ref_cons = _compute_consumable_summary(ref)
         all_consumables = sorted(set(guild_cons.keys()) | set(ref_cons.keys()))
 
@@ -1889,7 +1999,7 @@ class _HeadToHeadPanel(QWidget):
         bt_header_row.addWidget(bt_export_btn)
         layout.addLayout(bt_header_row)
 
-        guild_bt = _classify_consumable_usage(guild)
+        guild_bt = _classify_consumable_usage(scoped_guild)
         ref_bt = _classify_consumable_usage(ref)
 
         if (guild.encounters or ref.encounters) and (guild_bt or ref_bt):
@@ -1924,6 +2034,10 @@ class _HeadToHeadPanel(QWidget):
         # ── Section: Engineering Effectiveness ──
         eng_header_row = QHBoxLayout()
         self._add_section_header(eng_header_row, "Engineering Item Effectiveness")
+        if is_scoped:
+            note = QLabel("Note: Engineering stats use full-raid data")
+            note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-style: italic;")
+            layout.addWidget(note)
         eng_header_row.addStretch()
         eng_export_btn = QPushButton("Export")
         eng_export_btn.setProperty("secondary", True)

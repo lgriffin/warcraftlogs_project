@@ -591,3 +591,77 @@ class TestClassifyConsumableUsage:
         result = _classify_consumable_usage(analysis)
         assert result["Flask"]["boss"] == 0
         assert result["Flask"]["trash"] == 1
+
+
+class TestSharedEncounterScoping:
+    def _guild_with_extra_encounters(self):
+        """Guild with 3 encounters (2 shared + 1 extra), ref with 2."""
+        from warcraftlogs_client.gui.reference_view import (
+            _compute_shared_encounter_window, _scope_analysis_to_window,
+        )
+        guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
+        guild.encounters = [
+            EncounterSummary(encounter_id=658, name="Hydross",
+                             start_time=10000, end_time=50000, duration_ms=40000),
+            EncounterSummary(encounter_id=659, name="Lurker",
+                             start_time=80000, end_time=150000, duration_ms=70000),
+            EncounterSummary(encounter_id=730, name="Void Reaver",
+                             start_time=300000, end_time=400000, duration_ms=100000),
+        ]
+        guild.consumables = [
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="g1", consumable_name="Destruction Potion",
+                            count=4, timestamps=[9000, 15000, 90000, 350000]),
+        ]
+        ref = _make_analysis("r1", encounter_id=658, encounter_name="Hydross")
+        ref.encounters = [
+            EncounterSummary(encounter_id=658, name="Hydross",
+                             start_time=5000, end_time=45000, duration_ms=40000),
+            EncounterSummary(encounter_id=659, name="Lurker",
+                             start_time=60000, end_time=130000, duration_ms=70000),
+        ]
+        return guild, ref, _compute_shared_encounter_window, _scope_analysis_to_window
+
+    def test_no_extra_encounters_returns_no_scoping(self):
+        from warcraftlogs_client.gui.reference_view import _compute_shared_encounter_window
+
+        guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
+        ref = _make_analysis("r1", encounter_id=658, encounter_name="Hydross")
+        result = _compute_shared_encounter_window(guild, ref)
+        assert result is not None
+        assert result["has_extra_encounters"] is False
+
+    def test_detects_extra_guild_encounters(self):
+        guild, ref, compute, _ = self._guild_with_extra_encounters()
+        result = compute(guild, ref)
+        assert result["has_extra_encounters"] is True
+        assert "Void Reaver" in result["guild_extra_names"]
+        assert result["shared_count"] == 2
+        assert result["window_start"] == 10000
+        assert result["window_end"] == 150000
+
+    def test_consumable_timestamps_filtered(self):
+        guild, ref, compute, scope = self._guild_with_extra_encounters()
+        info = compute(guild, ref)
+        scoped = scope(guild, info["window_start"], info["window_end"])
+        ts = scoped.consumables[0].timestamps
+        assert 15000 in ts
+        assert 90000 in ts
+        assert 350000 not in ts
+        assert scoped.consumables[0].count == len(ts)
+
+    def test_scoping_does_not_mutate_original(self):
+        guild, ref, compute, scope = self._guild_with_extra_encounters()
+        original_count = guild.consumables[0].count
+        original_ts = list(guild.consumables[0].timestamps)
+        info = compute(guild, ref)
+        scope(guild, info["window_start"], info["window_end"])
+        assert guild.consumables[0].count == original_count
+        assert guild.consumables[0].timestamps == original_ts
+
+    def test_no_encounters_returns_none(self):
+        from warcraftlogs_client.gui.reference_view import _compute_shared_encounter_window
+
+        guild = _make_analysis("g1")
+        ref = _make_analysis("r1")
+        assert _compute_shared_encounter_window(guild, ref) is None
