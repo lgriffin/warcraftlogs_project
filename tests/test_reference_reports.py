@@ -497,3 +497,171 @@ class TestHeadToHeadHelpers:
         roles = {r["role"] for r in paladin_rows}
         assert "healer" in roles
         assert "tank" in roles
+
+
+class TestBuildTimelineData:
+    def test_returns_per_player_timestamps(self):
+        from warcraftlogs_client.gui.analysis_helpers import build_timeline_data
+
+        analysis = _make_analysis("t1")
+        analysis.consumables = [
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="t1", consumable_name="Flask",
+                            count=2, timestamps=[5000, 120000]),
+            ConsumableUsage(player_name="P2", player_role="healer",
+                            report_id="t1", consumable_name="Flask",
+                            count=1, timestamps=[3000]),
+        ]
+        rows = build_timeline_data(analysis, "Flask")
+        assert len(rows) == 2
+        assert rows[0]["player"] == "P2"
+        assert rows[0]["timestamps"] == "00:03"
+        assert rows[1]["player"] == "P1"
+        assert rows[1]["timestamps"] == "00:05, 02:00"
+
+    def test_returns_empty_for_missing_consumable(self):
+        from warcraftlogs_client.gui.analysis_helpers import build_timeline_data
+
+        analysis = _make_analysis("t1")
+        analysis.consumables = []
+        assert build_timeline_data(analysis, "Flask") == []
+
+
+class TestComputeEngineeringStats:
+    def test_computes_min_median_max(self):
+        from warcraftlogs_client.gui.analysis_helpers import compute_engineering_stats
+
+        analysis = _make_analysis("e1")
+        analysis.dps[0].abilities = [
+            SpellUsage(spell_id=1, spell_name="Super Sapper Charge",
+                       casts=4, total_amount=12000),
+        ]
+        analysis.dps.append(DPSPerformance(
+            name="DPS2", player_class="Rogue", source_id=4,
+            role="melee", total_damage=500_000, abilities=[
+                SpellUsage(spell_id=1, spell_name="Super Sapper Charge",
+                           casts=4, total_amount=8000),
+            ],
+        ))
+        result = compute_engineering_stats(analysis)
+        assert "Super Sapper Charge" in result
+        stats = result["Super Sapper Charge"]
+        assert stats["total_casts"] == 8
+        assert stats["total_damage"] == 20000
+        assert stats["users"] == 2
+        assert stats["min_avg"] == 2000
+        assert stats["max_avg"] == 3000
+        assert stats["median_avg"] == 2500
+
+    def test_no_engineering_returns_empty(self):
+        from warcraftlogs_client.gui.analysis_helpers import compute_engineering_stats
+
+        analysis = _make_analysis("e1")
+        analysis.dps[0].abilities = [
+            SpellUsage(spell_id=1, spell_name="Sinister Strike",
+                       casts=50, total_amount=100000),
+        ]
+        assert compute_engineering_stats(analysis) == {}
+
+
+class TestClassifyConsumableUsage:
+    def test_boss_vs_trash_classification(self):
+        from warcraftlogs_client.gui.analysis_helpers import classify_consumable_usage
+
+        analysis = _make_analysis("c1", encounter_id=658)
+        analysis.consumables = [
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="c1", consumable_name="Destruction Potion",
+                            count=3, timestamps=[15000, 50000, 200000]),
+        ]
+        result = classify_consumable_usage(analysis)
+        assert "Destruction Potion" in result
+        assert result["Destruction Potion"]["boss"] == 2
+        assert result["Destruction Potion"]["trash"] == 1
+
+    def test_no_encounters_all_trash(self):
+        from warcraftlogs_client.gui.analysis_helpers import classify_consumable_usage
+
+        analysis = _make_analysis("c1")
+        analysis.consumables = [
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="c1", consumable_name="Flask",
+                            count=1, timestamps=[5000]),
+        ]
+        result = classify_consumable_usage(analysis)
+        assert result["Flask"]["boss"] == 0
+        assert result["Flask"]["trash"] == 1
+
+
+class TestSharedEncounterScoping:
+    def _guild_with_extra_encounters(self):
+        """Guild with 3 encounters (2 shared + 1 extra), ref with 2."""
+        from warcraftlogs_client.gui.analysis_helpers import (
+            compute_shared_encounter_window, scope_analysis_to_window,
+        )
+        guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
+        guild.encounters = [
+            EncounterSummary(encounter_id=658, name="Hydross",
+                             start_time=10000, end_time=50000, duration_ms=40000),
+            EncounterSummary(encounter_id=659, name="Lurker",
+                             start_time=80000, end_time=150000, duration_ms=70000),
+            EncounterSummary(encounter_id=730, name="Void Reaver",
+                             start_time=300000, end_time=400000, duration_ms=100000),
+        ]
+        guild.consumables = [
+            ConsumableUsage(player_name="P1", player_role="melee",
+                            report_id="g1", consumable_name="Destruction Potion",
+                            count=4, timestamps=[9000, 15000, 90000, 350000]),
+        ]
+        ref = _make_analysis("r1", encounter_id=658, encounter_name="Hydross")
+        ref.encounters = [
+            EncounterSummary(encounter_id=658, name="Hydross",
+                             start_time=5000, end_time=45000, duration_ms=40000),
+            EncounterSummary(encounter_id=659, name="Lurker",
+                             start_time=60000, end_time=130000, duration_ms=70000),
+        ]
+        return guild, ref, compute_shared_encounter_window, scope_analysis_to_window
+
+    def test_no_extra_encounters_returns_no_scoping(self):
+        from warcraftlogs_client.gui.analysis_helpers import compute_shared_encounter_window
+
+        guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
+        ref = _make_analysis("r1", encounter_id=658, encounter_name="Hydross")
+        result = compute_shared_encounter_window(guild, ref)
+        assert result is not None
+        assert result["has_extra_encounters"] is False
+
+    def test_detects_extra_guild_encounters(self):
+        guild, ref, compute, _ = self._guild_with_extra_encounters()
+        result = compute(guild, ref)
+        assert result["has_extra_encounters"] is True
+        assert "Void Reaver" in result["guild_extra_names"]
+        assert result["shared_count"] == 2
+        assert result["window_start"] == 10000
+        assert result["window_end"] == 150000
+
+    def test_consumable_timestamps_filtered(self):
+        guild, ref, compute, scope = self._guild_with_extra_encounters()
+        info = compute(guild, ref)
+        scoped = scope(guild, info["window_start"], info["window_end"])
+        ts = scoped.consumables[0].timestamps
+        assert 15000 in ts
+        assert 90000 in ts
+        assert 350000 not in ts
+        assert scoped.consumables[0].count == len(ts)
+
+    def test_scoping_does_not_mutate_original(self):
+        guild, ref, compute, scope = self._guild_with_extra_encounters()
+        original_count = guild.consumables[0].count
+        original_ts = list(guild.consumables[0].timestamps)
+        info = compute(guild, ref)
+        scope(guild, info["window_start"], info["window_end"])
+        assert guild.consumables[0].count == original_count
+        assert guild.consumables[0].timestamps == original_ts
+
+    def test_no_encounters_returns_none(self):
+        from warcraftlogs_client.gui.analysis_helpers import compute_shared_encounter_window
+
+        guild = _make_analysis("g1")
+        ref = _make_analysis("r1")
+        assert compute_shared_encounter_window(guild, ref) is None

@@ -16,6 +16,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QCursor
 
+from .analysis_helpers import (
+    NumericSortProxy, TimelineTableModel, SingleBossTrashModel,
+    SingleEngineeringModel, build_timeline_data,
+    compute_engineering_stats, classify_consumable_usage,
+)
 from .styles import COMMON_STYLES, COLORS
 from .table_models import HealerTableModel, TankTableModel, DPSTableModel, HistoryTableModel
 from .detail_panel import CharacterDetailPanel
@@ -167,6 +172,36 @@ class RaidAnalysisWidget(QWidget):
         consumes_layout.addWidget(consumes_table)
         self._tabs.addTab(consumes_widget, "Consumables")
 
+        # ── Boss vs Trash tab ──
+        bt_widget = QWidget()
+        bt_layout = QVBoxLayout(bt_widget)
+        bt_layout.setContentsMargins(0, 8, 0, 0)
+        self._bt_model = SingleBossTrashModel()
+        self._bt_table = self._make_sortable_table(self._bt_model)
+        bt_layout.addWidget(self._bt_table)
+        self._bt_tab_index = self._tabs.addTab(bt_widget, "Boss vs Trash")
+
+        # ── Engineering tab ──
+        eng_widget = QWidget()
+        eng_layout = QVBoxLayout(eng_widget)
+        eng_layout.setContentsMargins(0, 8, 0, 0)
+        self._eng_model = SingleEngineeringModel()
+        self._eng_table = self._make_sortable_table(self._eng_model)
+        eng_layout.addWidget(self._eng_table)
+        self._eng_tab_index = self._tabs.addTab(eng_widget, "Engineering")
+
+        # ── Consumable Timeline tab ──
+        tl_widget = QWidget()
+        tl_layout = QVBoxLayout(tl_widget)
+        tl_layout.setContentsMargins(0, 8, 0, 0)
+        self._tl_combo = QComboBox()
+        self._tl_combo.currentIndexChanged.connect(self._on_timeline_consumable_changed)
+        tl_layout.addWidget(self._tl_combo)
+        self._tl_model = TimelineTableModel()
+        self._tl_table = self._make_sortable_table(self._tl_model)
+        tl_layout.addWidget(self._tl_table)
+        self._tl_tab_index = self._tabs.addTab(tl_widget, "Timeline")
+
         encounters_widget = QWidget()
         enc_layout = QVBoxLayout(encounters_widget)
         enc_layout.setContentsMargins(0, 8, 0, 0)
@@ -238,6 +273,23 @@ class RaidAnalysisWidget(QWidget):
         table.name_clicked.connect(self._on_name_clicked)
         return table
 
+    @staticmethod
+    def _make_sortable_table(model) -> QTableView:
+        proxy = NumericSortProxy()
+        proxy.setSourceModel(model)
+        table = QTableView()
+        table.setModel(proxy)
+        table.setSortingEnabled(True)
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        table.verticalHeader().setVisible(False)
+        header = table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        return table
+
     def _populate(self, analysis: RaidAnalysis):
         m = analysis.metadata
         comp = analysis.composition
@@ -254,6 +306,9 @@ class RaidAnalysisWidget(QWidget):
 
         self._all_consumables = analysis.consumables
         self._filter_consumables()
+        self._populate_boss_vs_trash(analysis)
+        self._populate_engineering(analysis)
+        self._populate_timeline(analysis)
         self._render_composition(analysis)
         self._populate_encounters(analysis)
 
@@ -288,6 +343,56 @@ class RaidAnalysisWidget(QWidget):
 
         cols = ["Player"] + sorted_names
         self._consumes_model.set_data(rows, cols)
+
+    def _populate_boss_vs_trash(self, analysis: RaidAnalysis):
+        if not analysis.encounters or not analysis.consumables:
+            self._tabs.setTabVisible(self._bt_tab_index, False)
+            return
+        self._tabs.setTabVisible(self._bt_tab_index, True)
+        bt = classify_consumable_usage(analysis)
+        rows = []
+        for name in sorted(bt.keys()):
+            rows.append({
+                "name": name,
+                "boss": bt[name]["boss"],
+                "trash": bt[name]["trash"],
+            })
+        rows.sort(key=lambda r: r["boss"], reverse=True)
+        self._bt_model.set_data(rows)
+
+    def _populate_engineering(self, analysis: RaidAnalysis):
+        eng = compute_engineering_stats(analysis)
+        if not eng:
+            self._tabs.setTabVisible(self._eng_tab_index, False)
+            return
+        self._tabs.setTabVisible(self._eng_tab_index, True)
+        rows = []
+        for name in sorted(eng.keys()):
+            rows.append({"name": name, **eng[name]})
+        self._eng_model.set_data(rows)
+
+    def _populate_timeline(self, analysis: RaidAnalysis):
+        if not analysis.consumables:
+            self._tabs.setTabVisible(self._tl_tab_index, False)
+            return
+        self._tabs.setTabVisible(self._tl_tab_index, True)
+        self._tl_analysis = analysis
+        names = sorted({c.consumable_name for c in analysis.consumables})
+        self._tl_combo.blockSignals(True)
+        self._tl_combo.clear()
+        for n in names:
+            self._tl_combo.addItem(n)
+        self._tl_combo.blockSignals(False)
+        if names:
+            self._tl_combo.setCurrentIndex(0)
+            self._on_timeline_consumable_changed(0)
+
+    def _on_timeline_consumable_changed(self, index: int):
+        name = self._tl_combo.currentText()
+        if not name or not hasattr(self, "_tl_analysis"):
+            return
+        rows = build_timeline_data(self._tl_analysis, name)
+        self._tl_model.set_data(rows)
 
     def _render_composition(self, analysis: RaidAnalysis):
         comp = analysis.composition

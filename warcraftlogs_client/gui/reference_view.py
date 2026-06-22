@@ -11,10 +11,17 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableView, QHeaderView, QTabWidget, QComboBox,
     QMessageBox, QGridLayout, QFrame, QScrollArea, QFileDialog,
+    QDialog, QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF
 from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
 
+from .analysis_helpers import (
+    NumericSortProxy, TimelineTableModel,
+    build_timeline_data, compute_engineering_stats, classify_consumable_usage,
+    compute_shared_encounter_window, scope_analysis_to_window,
+    ENGINEERING_ITEMS,
+)
 from .styles import COMMON_STYLES, COLORS
 from .worker import ReferenceAnalysisWorker
 from ..database import PerformanceDB
@@ -1173,6 +1180,203 @@ class _ConsumableComparisonChart(QWidget):
         painter.end()
 
 
+class _EngineeringComparisonModel(QAbstractTableModel):
+    HEADERS = [
+        "Item", "Guild Casts", "Ref Casts",
+        "Guild Min", "Guild Med", "Guild Max",
+        "Ref Min", "Ref Med", "Ref Max",
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+
+    def set_data(self, rows: list[dict]):
+        self.beginResetModel()
+        self._rows = list(rows)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        row = self._rows[index.row()]
+        col = index.column()
+        g = row.get("guild", {})
+        r = row.get("ref", {})
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return row.get("name", "")
+            elif col == 1:
+                return str(g.get("total_casts", 0))
+            elif col == 2:
+                return str(r.get("total_casts", 0))
+            elif col == 3:
+                return f"{g.get('min_avg', 0):,.0f}" if g.get("total_casts") else "—"
+            elif col == 4:
+                return f"{g.get('median_avg', 0):,.0f}" if g.get("total_casts") else "—"
+            elif col == 5:
+                return f"{g.get('max_avg', 0):,.0f}" if g.get("total_casts") else "—"
+            elif col == 6:
+                return f"{r.get('min_avg', 0):,.0f}" if r.get("total_casts") else "—"
+            elif col == 7:
+                return f"{r.get('median_avg', 0):,.0f}" if r.get("total_casts") else "—"
+            elif col == 8:
+                return f"{r.get('max_avg', 0):,.0f}" if r.get("total_casts") else "—"
+        elif role == Qt.ItemDataRole.ForegroundRole:
+            if col in (4, 7):
+                g_med = g.get("median_avg", 0)
+                r_med = r.get("median_avg", 0)
+                if col == 4 and g_med and r_med:
+                    return QColor(COLORS["success"] if g_med >= r_med else COLORS["error"])
+                if col == 7 and g_med and r_med:
+                    return QColor(COLORS["success"] if r_med >= g_med else COLORS["error"])
+            return QColor(COLORS["text"])
+        return None
+
+
+class _BossTrashModel(QAbstractTableModel):
+    HEADERS = ["Consumable", "Guild Boss", "Guild Trash", "Ref Boss", "Ref Trash"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+
+    def set_data(self, rows: list[dict]):
+        self.beginResetModel()
+        self._rows = list(rows)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.HEADERS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        row = self._rows[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return row.get("name", "")
+            elif col == 1:
+                return str(row.get("guild_boss", 0))
+            elif col == 2:
+                return str(row.get("guild_trash", 0))
+            elif col == 3:
+                return str(row.get("ref_boss", 0))
+            elif col == 4:
+                return str(row.get("ref_trash", 0))
+        elif role == Qt.ItemDataRole.ForegroundRole:
+            return QColor(COLORS["text"])
+        return None
+
+
+class _ConsumableTimelineDialog(QDialog):
+    """Modal dialog showing per-player consumable usage timestamps."""
+
+    def __init__(self, guild_analysis, ref_analysis, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Consumable Timeline")
+        self.setMinimumSize(700, 500)
+        self.setStyleSheet(COMMON_STYLES)
+        self._guild = guild_analysis
+        self._ref = ref_analysis
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        g_dur_ms = (self._guild.metadata.end_time or 0) - self._guild.metadata.start_time
+        r_dur_ms = (self._ref.metadata.end_time or 0) - self._ref.metadata.start_time
+        g_dur_s = max(g_dur_ms, 0) // 1000
+        r_dur_s = max(r_dur_ms, 0) // 1000
+        dur_label = QLabel(
+            f"Guild duration: {g_dur_s // 60}:{g_dur_s % 60:02d}  |  "
+            f"Reference duration: {r_dur_s // 60}:{r_dur_s % 60:02d}")
+        dur_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        layout.addWidget(dur_label)
+
+        combo_row = QHBoxLayout()
+        combo_row.addWidget(QLabel("Consumable:"))
+        self._combo = QComboBox()
+        self._combo.setMinimumWidth(300)
+
+        guild_names = {cu.consumable_name for cu in (self._guild.consumables or [])}
+        ref_names = {cu.consumable_name for cu in (self._ref.consumables or [])}
+        all_names = sorted(guild_names | ref_names)
+        for name in all_names:
+            self._combo.addItem(name)
+        self._combo.currentIndexChanged.connect(self._refresh)
+        combo_row.addWidget(self._combo, 1)
+        combo_row.addStretch()
+        layout.addLayout(combo_row)
+
+        guild_header = QLabel("Guild Players")
+        guild_header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        guild_header.setStyleSheet(f"color: {COLORS['accent']};")
+        layout.addWidget(guild_header)
+
+        self._guild_model = TimelineTableModel()
+        self._guild_table = QTableView()
+        self._guild_table.setModel(self._guild_model)
+        self._guild_table.setAlternatingRowColors(True)
+        self._guild_table.verticalHeader().setVisible(False)
+        self._guild_table.horizontalHeader().setStretchLastSection(True)
+        self._guild_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self._guild_table, 1)
+
+        ref_header = QLabel("Reference Players")
+        ref_header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        ref_header.setStyleSheet(f"color: {COLORS['text_header']};")
+        layout.addWidget(ref_header)
+
+        self._ref_model = TimelineTableModel()
+        self._ref_table = QTableView()
+        self._ref_table.setModel(self._ref_model)
+        self._ref_table.setAlternatingRowColors(True)
+        self._ref_table.verticalHeader().setVisible(False)
+        self._ref_table.horizontalHeader().setStretchLastSection(True)
+        self._ref_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self._ref_table, 1)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+        if all_names:
+            self._refresh()
+
+    def _refresh(self):
+        name = self._combo.currentText()
+        if not name:
+            return
+        self._guild_model.set_data(build_timeline_data(self._guild, name))
+        self._ref_model.set_data(build_timeline_data(self._ref, name))
+
+
 # ── Head-to-Head panel ──
 
 class _HeadToHeadPanel(QWidget):
@@ -1346,6 +1550,45 @@ class _HeadToHeadPanel(QWidget):
         self._clear_content()
         layout = self._content_layout
 
+        # ── Detect and apply shared-encounter scoping ──
+        scope_info = compute_shared_encounter_window(guild, ref)
+        scoped_guild = guild
+        is_scoped = False
+
+        if (scope_info and scope_info["has_extra_encounters"]
+                and scope_info["window_start"] is not None):
+            is_scoped = True
+            scoped_guild = scope_analysis_to_window(
+                guild, scope_info["window_start"], scope_info["window_end"])
+
+            extra_names = ", ".join(scope_info["guild_extra_names"])
+            banner = QFrame()
+            banner.setStyleSheet(
+                f"QFrame {{ background-color: {COLORS['bg_card']};"
+                f" border: 1px solid {COLORS['warning']};"
+                f" border-left: 4px solid {COLORS['warning']};"
+                f" border-radius: 4px; }}")
+            banner_layout = QVBoxLayout(banner)
+            banner_layout.setContentsMargins(12, 8, 12, 8)
+            banner_layout.setSpacing(4)
+
+            title_lbl = QLabel("Comparison Scoped to Shared Encounters")
+            title_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            title_lbl.setStyleSheet(
+                f"color: {COLORS['warning']}; border: none;")
+            banner_layout.addWidget(title_lbl)
+
+            detail_lbl = QLabel(
+                f"Guild raid has encounters not in the reference: {extra_names}. "
+                f"Consumable data is scoped to the shared encounter window. "
+                f"Class Performance, Engineering, and aggregate stats cover "
+                f"the full raid.")
+            detail_lbl.setWordWrap(True)
+            detail_lbl.setStyleSheet(
+                f"color: {COLORS['text']}; font-size: 12px; border: none;")
+            banner_layout.addWidget(detail_lbl)
+            layout.addWidget(banner)
+
         # ── Section: Metadata cards ──
         self._add_section_header(layout, "Raid Overview")
 
@@ -1406,6 +1649,10 @@ class _HeadToHeadPanel(QWidget):
         cards_grid.addWidget(taken_card, 1, 1)
         cards_grid.addWidget(avg_dps_card, 1, 2)
         layout.addLayout(cards_grid)
+        if is_scoped:
+            note = QLabel("Note: Aggregate stats cover the full raid duration")
+            note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-style: italic;")
+            layout.addWidget(note)
 
         # ── Section: Composition ──
         self._add_section_header(layout, "Raid Composition")
@@ -1453,6 +1700,10 @@ class _HeadToHeadPanel(QWidget):
 
         # ── Section: Class performance ──
         self._add_section_header(layout, "Class Performance")
+        if is_scoped:
+            note = QLabel("Note: Class performance uses full-raid data")
+            note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-style: italic;")
+            layout.addWidget(note)
 
         guild_perf = _compute_class_performance(guild)
         ref_perf = _compute_class_performance(ref)
@@ -1480,9 +1731,20 @@ class _HeadToHeadPanel(QWidget):
         layout.addWidget(class_table)
 
         # ── Section: Consumables ──
+        self._h2h_guild = scoped_guild
+        self._h2h_ref = ref
+
         cons_header_row = QHBoxLayout()
         self._add_section_header(cons_header_row, "Consumable Usage")
         cons_header_row.addStretch()
+
+        timeline_btn = QPushButton("Timeline")
+        timeline_btn.setProperty("secondary", True)
+        timeline_btn.setFixedHeight(28)
+        timeline_btn.setFixedWidth(80)
+        timeline_btn.clicked.connect(self._show_consumable_timeline)
+        cons_header_row.addWidget(timeline_btn)
+
         self._export_cons_btn = QPushButton("Export")
         self._export_cons_btn.setProperty("secondary", True)
         self._export_cons_btn.setFixedHeight(28)
@@ -1491,7 +1753,7 @@ class _HeadToHeadPanel(QWidget):
         cons_header_row.addWidget(self._export_cons_btn)
         layout.addLayout(cons_header_row)
 
-        guild_cons = _compute_consumable_summary(guild)
+        guild_cons = _compute_consumable_summary(scoped_guild)
         ref_cons = _compute_consumable_summary(ref)
         all_consumables = sorted(set(guild_cons.keys()) | set(ref_cons.keys()))
 
@@ -1523,6 +1785,92 @@ class _HeadToHeadPanel(QWidget):
             no_cons = QLabel("No consumable data in either raid.")
             no_cons.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_cons)
+
+        # ── Section: Boss vs Trash ──
+        bt_header_row = QHBoxLayout()
+        self._add_section_header(bt_header_row, "Consumable Usage: Boss vs Trash")
+        bt_header_row.addStretch()
+        bt_export_btn = QPushButton("Export")
+        bt_export_btn.setProperty("secondary", True)
+        bt_export_btn.setFixedHeight(28)
+        bt_export_btn.setFixedWidth(80)
+        bt_export_btn.clicked.connect(
+            lambda: self._export_table("_bt_table", "boss_vs_trash.png"))
+        bt_header_row.addWidget(bt_export_btn)
+        layout.addLayout(bt_header_row)
+
+        guild_bt = classify_consumable_usage(scoped_guild)
+        ref_bt = classify_consumable_usage(ref)
+
+        if (guild.encounters or ref.encounters) and (guild_bt or ref_bt):
+            all_bt_names = sorted(set(guild_bt.keys()) | set(ref_bt.keys()))
+            bt_rows = []
+            for name in all_bt_names:
+                gb = guild_bt.get(name, {})
+                rb = ref_bt.get(name, {})
+                bt_rows.append({
+                    "name": name,
+                    "guild_boss": gb.get("boss", 0),
+                    "guild_trash": gb.get("trash", 0),
+                    "ref_boss": rb.get("boss", 0),
+                    "ref_trash": rb.get("trash", 0),
+                })
+            bt_rows.sort(key=lambda r: r["guild_boss"] + r["ref_boss"], reverse=True)
+            self._bt_model = _BossTrashModel()
+            self._bt_model.set_data(bt_rows)
+            self._bt_table = self._make_table(self._bt_model)
+            layout.addWidget(self._bt_table)
+            bt_export_btn.setEnabled(True)
+        else:
+            self._bt_table = None
+            bt_export_btn.setEnabled(False)
+            no_bt = QLabel(
+                "No encounter data available — cannot classify boss vs trash usage. "
+                "Re-import raids to capture encounter data.")
+            no_bt.setWordWrap(True)
+            no_bt.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            layout.addWidget(no_bt)
+
+        # ── Section: Engineering Effectiveness ──
+        eng_header_row = QHBoxLayout()
+        self._add_section_header(eng_header_row, "Engineering Item Effectiveness")
+        if is_scoped:
+            note = QLabel("Note: Engineering stats use full-raid data")
+            note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-style: italic;")
+            layout.addWidget(note)
+        eng_header_row.addStretch()
+        eng_export_btn = QPushButton("Export")
+        eng_export_btn.setProperty("secondary", True)
+        eng_export_btn.setFixedHeight(28)
+        eng_export_btn.setFixedWidth(80)
+        eng_export_btn.clicked.connect(
+            lambda: self._export_table("_eng_table", "engineering_effectiveness.png"))
+        eng_header_row.addWidget(eng_export_btn)
+        layout.addLayout(eng_header_row)
+
+        guild_eng = compute_engineering_stats(guild)
+        ref_eng = compute_engineering_stats(ref)
+        all_eng_names = sorted(set(guild_eng.keys()) | set(ref_eng.keys()))
+
+        if all_eng_names:
+            eng_rows = []
+            for name in all_eng_names:
+                eng_rows.append({
+                    "name": name,
+                    "guild": guild_eng.get(name, {}),
+                    "ref": ref_eng.get(name, {}),
+                })
+            self._eng_model = _EngineeringComparisonModel()
+            self._eng_model.set_data(eng_rows)
+            self._eng_table = self._make_table(self._eng_model)
+            layout.addWidget(self._eng_table)
+            eng_export_btn.setEnabled(True)
+        else:
+            self._eng_table = None
+            eng_export_btn.setEnabled(False)
+            no_eng = QLabel("No engineering item usage found in either raid.")
+            no_eng.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            layout.addWidget(no_eng)
 
         # ── Section: Encounters ──
         self._add_section_header(layout, "Encounter Comparison (shared bosses)")
@@ -1568,6 +1916,30 @@ class _HeadToHeadPanel(QWidget):
         lbl.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(lbl)
 
+    def _show_consumable_timeline(self):
+        guild = getattr(self, "_h2h_guild", None)
+        ref = getattr(self, "_h2h_ref", None)
+        if not guild or not ref:
+            return
+        dlg = _ConsumableTimelineDialog(guild, ref, parent=self)
+        dlg.exec()
+
+    def _export_table(self, attr_name, default_filename):
+        widget = getattr(self, attr_name, None)
+        if not widget:
+            self.status_message.emit("No data to export")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Table", default_filename,
+            "PNG Image (*.png);;JPEG Image (*.jpg)")
+        if not path:
+            return
+        pixmap = widget.grab()
+        if pixmap.save(path):
+            self.status_message.emit(f"Exported to {path}")
+        else:
+            self.status_message.emit("Failed to export")
+
     def _export_consumable_chart(self):
         chart = getattr(self, "_cons_chart", None)
         if not chart:
@@ -1589,14 +1961,19 @@ class _HeadToHeadPanel(QWidget):
 
     @staticmethod
     def _make_table(model):
+        proxy = NumericSortProxy()
+        proxy.setSourceModel(model)
         table = QTableView()
-        table.setModel(model)
+        table.setModel(proxy)
+        table.setSortingEnabled(True)
         table.setAlternatingRowColors(True)
         table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setStretchLastSection(True)
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
+        header = table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         row_count = model.rowCount()
         row_height = 30
         header_height = 32
