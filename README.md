@@ -1,4 +1,4 @@
-# WCL Analyzer v4.1.0 — TBC Edition
+# WCL Analyzer v4.2.0 — TBC Edition
 
 A desktop application for analyzing **Warcraft Logs** reports with a focus on **spell casts, utility usage, and consumable tracking** for The Burning Crusade Classic.
 
@@ -24,7 +24,7 @@ graph LR
 
 A standalone Windows installer is available that bundles everything — no Python installation required.
 
-1. Download `WarcraftLogsAnalyzer-4.1.0-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
+1. Download `WarcraftLogsAnalyzer-4.2.0-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
 2. Run the installer and follow the prompts
 3. Launch **WarcraftLogs Analyzer** from the Start Menu or desktop shortcut
 
