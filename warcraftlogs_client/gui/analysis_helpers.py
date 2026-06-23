@@ -58,6 +58,35 @@ def build_timeline_data(analysis, consumable_name):
     return rows
 
 
+def build_heatmap_data(analysis, consumable_name):
+    """Return per-player per-minute usage grid for a consumable.
+
+    Returns dict with:
+      - players: list of player names sorted by first use
+      - minutes: int (total minute buckets)
+      - grid: dict[player_name] -> list[int] (count per minute bucket)
+    """
+    duration_ms = (analysis.metadata.end_time or 0) - analysis.metadata.start_time
+    total_minutes = max(duration_ms // 60000, 1)
+
+    player_data = {}
+    for cu in (analysis.consumables or []):
+        if cu.consumable_name != consumable_name:
+            continue
+        buckets = [0] * total_minutes
+        first_ts = float("inf")
+        for ms in cu.timestamps:
+            minute = min(ms // 60000, total_minutes - 1)
+            buckets[minute] += 1
+            first_ts = min(first_ts, ms)
+        player_data[cu.player_name] = {"buckets": buckets, "first_ts": first_ts}
+
+    sorted_players = sorted(player_data.keys(), key=lambda n: player_data[n]["first_ts"])
+    grid = {name: player_data[name]["buckets"] for name in sorted_players}
+
+    return {"players": sorted_players, "minutes": total_minutes, "grid": grid}
+
+
 def compute_engineering_stats(analysis):
     """Compute min/median/max avg-damage-per-cast for engineering items."""
     from statistics import median as stat_median

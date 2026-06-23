@@ -11,14 +11,14 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableView, QHeaderView, QTabWidget, QComboBox,
     QMessageBox, QGridLayout, QFrame, QScrollArea, QFileDialog,
-    QDialog, QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF
 from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
 
 from .analysis_helpers import (
     NumericSortProxy, TimelineTableModel,
-    build_timeline_data, compute_engineering_stats, classify_consumable_usage,
+    build_timeline_data, build_heatmap_data,
+    compute_engineering_stats, classify_consumable_usage,
     compute_shared_encounter_window, scope_analysis_to_window,
     ENGINEERING_ITEMS,
 )
@@ -1291,92 +1291,6 @@ class _BossTrashModel(QAbstractTableModel):
         return None
 
 
-class _ConsumableTimelineDialog(QDialog):
-    """Modal dialog showing per-player consumable usage timestamps."""
-
-    def __init__(self, guild_analysis, ref_analysis, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Consumable Timeline")
-        self.setMinimumSize(700, 500)
-        self.setStyleSheet(COMMON_STYLES)
-        self._guild = guild_analysis
-        self._ref = ref_analysis
-        self._build_ui()
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-
-        g_dur_ms = (self._guild.metadata.end_time or 0) - self._guild.metadata.start_time
-        r_dur_ms = (self._ref.metadata.end_time or 0) - self._ref.metadata.start_time
-        g_dur_s = max(g_dur_ms, 0) // 1000
-        r_dur_s = max(r_dur_ms, 0) // 1000
-        dur_label = QLabel(
-            f"Guild duration: {g_dur_s // 60}:{g_dur_s % 60:02d}  |  "
-            f"Reference duration: {r_dur_s // 60}:{r_dur_s % 60:02d}")
-        dur_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
-        layout.addWidget(dur_label)
-
-        combo_row = QHBoxLayout()
-        combo_row.addWidget(QLabel("Consumable:"))
-        self._combo = QComboBox()
-        self._combo.setMinimumWidth(300)
-
-        guild_names = {cu.consumable_name for cu in (self._guild.consumables or [])}
-        ref_names = {cu.consumable_name for cu in (self._ref.consumables or [])}
-        all_names = sorted(guild_names | ref_names)
-        for name in all_names:
-            self._combo.addItem(name)
-        self._combo.currentIndexChanged.connect(self._refresh)
-        combo_row.addWidget(self._combo, 1)
-        combo_row.addStretch()
-        layout.addLayout(combo_row)
-
-        guild_header = QLabel("Guild Players")
-        guild_header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        guild_header.setStyleSheet(f"color: {COLORS['accent']};")
-        layout.addWidget(guild_header)
-
-        self._guild_model = TimelineTableModel()
-        self._guild_table = QTableView()
-        self._guild_table.setModel(self._guild_model)
-        self._guild_table.setAlternatingRowColors(True)
-        self._guild_table.verticalHeader().setVisible(False)
-        self._guild_table.horizontalHeader().setStretchLastSection(True)
-        self._guild_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(self._guild_table, 1)
-
-        ref_header = QLabel("Reference Players")
-        ref_header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        ref_header.setStyleSheet(f"color: {COLORS['text_header']};")
-        layout.addWidget(ref_header)
-
-        self._ref_model = TimelineTableModel()
-        self._ref_table = QTableView()
-        self._ref_table.setModel(self._ref_model)
-        self._ref_table.setAlternatingRowColors(True)
-        self._ref_table.verticalHeader().setVisible(False)
-        self._ref_table.horizontalHeader().setStretchLastSection(True)
-        self._ref_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(self._ref_table, 1)
-
-        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
-
-        if all_names:
-            self._refresh()
-
-    def _refresh(self):
-        name = self._combo.currentText()
-        if not name:
-            return
-        self._guild_model.set_data(build_timeline_data(self._guild, name))
-        self._ref_model.set_data(build_timeline_data(self._ref, name))
-
-
 # ── Head-to-Head panel ──
 
 class _HeadToHeadPanel(QWidget):
@@ -1738,13 +1652,6 @@ class _HeadToHeadPanel(QWidget):
         self._add_section_header(cons_header_row, "Consumable Usage")
         cons_header_row.addStretch()
 
-        timeline_btn = QPushButton("Timeline")
-        timeline_btn.setProperty("secondary", True)
-        timeline_btn.setFixedHeight(28)
-        timeline_btn.setFixedWidth(80)
-        timeline_btn.clicked.connect(self._show_consumable_timeline)
-        cons_header_row.addWidget(timeline_btn)
-
         self._export_cons_btn = QPushButton("Export")
         self._export_cons_btn.setProperty("secondary", True)
         self._export_cons_btn.setFixedHeight(28)
@@ -1872,6 +1779,32 @@ class _HeadToHeadPanel(QWidget):
             no_eng.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_eng)
 
+        # ── Section: Consumable Timeline Heatmap ──
+        guild_names = {cu.consumable_name for cu in (scoped_guild.consumables or [])}
+        ref_names_tl = {cu.consumable_name for cu in (ref.consumables or [])}
+        all_tl_names = sorted(guild_names | ref_names_tl)
+
+        if all_tl_names:
+            tl_header_row = QHBoxLayout()
+            self._add_section_header(tl_header_row, "Consumable Timeline")
+            tl_header_row.addStretch()
+            tl_combo_label = QLabel("Consumable:")
+            tl_combo_label.setStyleSheet(f"color: {COLORS['text']}; font-size: 12px;")
+            tl_header_row.addWidget(tl_combo_label)
+            self._h2h_tl_combo = QComboBox()
+            self._h2h_tl_combo.setMinimumWidth(250)
+            for n in all_tl_names:
+                self._h2h_tl_combo.addItem(n)
+            tl_header_row.addWidget(self._h2h_tl_combo)
+            layout.addLayout(tl_header_row)
+
+            self._h2h_tl_container = QVBoxLayout()
+            layout.addLayout(self._h2h_tl_container)
+
+            self._h2h_tl_combo.currentIndexChanged.connect(
+                lambda: self._refresh_h2h_timeline())
+            self._refresh_h2h_timeline()
+
         # ── Section: Encounters ──
         self._add_section_header(layout, "Encounter Comparison (shared bosses)")
 
@@ -1916,13 +1849,61 @@ class _HeadToHeadPanel(QWidget):
         lbl.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(lbl)
 
-    def _show_consumable_timeline(self):
+    def _refresh_h2h_timeline(self):
         guild = getattr(self, "_h2h_guild", None)
         ref = getattr(self, "_h2h_ref", None)
-        if not guild or not ref:
+        combo = getattr(self, "_h2h_tl_combo", None)
+        container = getattr(self, "_h2h_tl_container", None)
+        if not guild or not ref or not combo or not container:
             return
-        dlg = _ConsumableTimelineDialog(guild, ref, parent=self)
-        dlg.exec()
+
+        while container.count():
+            item = container.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+            sub = item.layout()
+            if sub:
+                while sub.count():
+                    si = sub.takeAt(0)
+                    sw = si.widget()
+                    if sw:
+                        sw.deleteLater()
+
+        name = combo.currentText()
+        if not name:
+            return
+
+        from .charts import ConsumableTimelineHeatmap
+
+        for label_text, analysis in [("Guild", guild), ("Reference", ref)]:
+            lbl = QLabel(label_text)
+            lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            color = COLORS['accent'] if label_text == "Guild" else COLORS['text_header']
+            lbl.setStyleSheet(f"color: {color};")
+            container.addWidget(lbl)
+
+            heatmap_data = build_heatmap_data(analysis, name)
+            if heatmap_data.get("players"):
+                scroll = QScrollArea()
+                scroll.setWidgetResizable(True)
+                player_count = len(heatmap_data["players"])
+                scroll.setFixedHeight(min(max(28 + player_count * 21 + 10, 80), 500))
+                scroll.setStyleSheet(
+                    f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
+                heatmap = ConsumableTimelineHeatmap(heatmap_data)
+                scroll.setWidget(heatmap)
+                container.addWidget(scroll)
+            else:
+                no_data = QLabel(f"No {name} usage in {label_text.lower()} raid")
+                no_data.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+                container.addWidget(no_data)
+
+            model = TimelineTableModel()
+            model.set_data(build_timeline_data(analysis, name))
+            table = self._make_table(model)
+            table.setMaximumHeight(200)
+            container.addWidget(table)
 
     def _export_table(self, attr_name, default_filename):
         widget = getattr(self, attr_name, None)

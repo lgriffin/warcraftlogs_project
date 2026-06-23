@@ -11,14 +11,14 @@ import sqlite3
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTabWidget, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
-    QSplitter, QTextEdit, QComboBox, QMessageBox, QFileDialog,
+    QSplitter, QTextEdit, QComboBox, QMessageBox, QFileDialog, QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QCursor
 
 from .analysis_helpers import (
     NumericSortProxy, TimelineTableModel, SingleBossTrashModel,
-    SingleEngineeringModel, build_timeline_data,
+    SingleEngineeringModel, build_timeline_data, build_heatmap_data,
     compute_engineering_stats, classify_consumable_usage,
 )
 from .styles import COMMON_STYLES, COLORS
@@ -197,6 +197,14 @@ class RaidAnalysisWidget(QWidget):
         self._tl_combo = QComboBox()
         self._tl_combo.currentIndexChanged.connect(self._on_timeline_consumable_changed)
         tl_layout.addWidget(self._tl_combo)
+
+        self._tl_heatmap_scroll = QScrollArea()
+        self._tl_heatmap_scroll.setWidgetResizable(True)
+        self._tl_heatmap_scroll.setFixedHeight(200)
+        self._tl_heatmap_scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
+        tl_layout.addWidget(self._tl_heatmap_scroll)
+
         self._tl_model = TimelineTableModel()
         self._tl_table = self._make_sortable_table(self._tl_model)
         tl_layout.addWidget(self._tl_table)
@@ -393,6 +401,14 @@ class RaidAnalysisWidget(QWidget):
             return
         rows = build_timeline_data(self._tl_analysis, name)
         self._tl_model.set_data(rows)
+
+        from .charts import ConsumableTimelineHeatmap
+        heatmap_data = build_heatmap_data(self._tl_analysis, name)
+        heatmap = ConsumableTimelineHeatmap(heatmap_data)
+        self._tl_heatmap_scroll.setWidget(heatmap)
+        player_count = len(heatmap_data.get("players", []))
+        self._tl_heatmap_scroll.setFixedHeight(
+            min(max(28 + player_count * 21 + 10, 80), 500))
 
     def _render_composition(self, analysis: RaidAnalysis):
         comp = analysis.composition

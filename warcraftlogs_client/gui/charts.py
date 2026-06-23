@@ -1249,3 +1249,104 @@ class ConsumableHeatmapWidget(QWidget):
                 return
         QToolTip.hideText()
         super().mouseMoveEvent(event)
+
+
+class ConsumableTimelineHeatmap(QWidget):
+    """Player x minute heatmap showing when a consumable was used during a raid."""
+
+    def __init__(self, heatmap_data: dict, parent=None):
+        super().__init__(parent)
+        self._data = heatmap_data
+        self._cells: list[tuple[QRectF, str, int, int]] = []
+        self.setMouseTracking(True)
+        players = heatmap_data.get("players", [])
+        cell_h, gap, top_margin = 20, 1, 28
+        self.setMinimumHeight(top_margin + max(len(players), 1) * (cell_h + gap) + 10)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        players = self._data.get("players", [])
+        total_minutes = self._data.get("minutes", 0)
+        grid = self._data.get("grid", {})
+
+        if not players or total_minutes == 0:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 11))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                             "No usage data for this consumable")
+            painter.end()
+            return
+
+        name_col_w = 120
+        top_margin = 28
+        cell_h = 20
+        gap = 1
+        label_font = QFont("Segoe UI", 7)
+        name_font = QFont("Segoe UI", 8)
+
+        avail_w = self.width() - name_col_w - 8
+        cell_w = max(avail_w // total_minutes, 12)
+        total_w = name_col_w + cell_w * total_minutes
+        self.setMinimumWidth(total_w + 8)
+
+        max_val = 0
+        for buckets in grid.values():
+            for v in buckets:
+                max_val = max(max_val, v)
+        if max_val == 0:
+            max_val = 1
+
+        painter.setPen(QColor(COLORS["text_dim"]))
+        painter.setFont(label_font)
+        for m in range(total_minutes):
+            if m % 5 == 0 or m == total_minutes - 1:
+                x = name_col_w + m * cell_w
+                painter.drawText(int(x), top_margin - 8, f"{m}")
+
+        self._cells = []
+        painter.setFont(name_font)
+        for i, player in enumerate(players):
+            y = top_margin + i * (cell_h + gap)
+            painter.setPen(QColor(COLORS["text"]))
+            painter.drawText(4, int(y + cell_h - 4), player[:14])
+
+            buckets = grid.get(player, [])
+            for m in range(total_minutes):
+                x = name_col_w + m * cell_w
+                val = buckets[m] if m < len(buckets) else 0
+                rect = QRectF(x, y, cell_w - 1, cell_h)
+                self._cells.append((rect, player, m, val))
+
+                if val == 0:
+                    color = QColor(COLORS["bg_dark"])
+                else:
+                    intensity = min(val / max_val, 1.0)
+                    g = int(80 + intensity * 175)
+                    color = QColor(20, g, 40)
+
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(color))
+                painter.drawRect(rect)
+
+                if val > 0:
+                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setFont(label_font)
+                    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(val))
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, 'position') else event.pos()
+        for rect, player, minute, val in self._cells:
+            if rect.contains(pos):
+                tip = f"{player}\n{minute}:00–{minute + 1}:00 — {val} use{'s' if val != 1 else ''}"
+                tip_pos = (event.globalPosition().toPoint()
+                           if hasattr(event, 'globalPosition')
+                           else event.globalPos())
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
