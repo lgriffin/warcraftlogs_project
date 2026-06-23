@@ -58,6 +58,47 @@ def build_timeline_data(analysis, consumable_name):
     return rows
 
 
+def build_heatmap_data(analysis, consumable_name):
+    """Return per-player per-minute usage grid for a consumable.
+
+    Timestamps are normalised so the first usage maps to minute 0,
+    which keeps guild (scoped) and reference data aligned in overlays.
+
+    Returns dict with:
+      - players: list of player names sorted by first use
+      - minutes: int (total minute buckets)
+      - grid: dict[player_name] -> list[int] (count per minute bucket)
+    """
+    all_ts = []
+    for cu in (analysis.consumables or []):
+        if cu.consumable_name == consumable_name:
+            all_ts.extend(cu.timestamps)
+
+    if not all_ts:
+        return {"players": [], "minutes": 0, "grid": {}}
+
+    base_ts = min(all_ts)
+    max_ts = max(all_ts)
+    total_minutes = max((max_ts - base_ts) // 60000 + 1, 1)
+
+    player_data = {}
+    for cu in (analysis.consumables or []):
+        if cu.consumable_name != consumable_name:
+            continue
+        buckets = [0] * total_minutes
+        first_ts = float("inf")
+        for ms in cu.timestamps:
+            minute = min((ms - base_ts) // 60000, total_minutes - 1)
+            buckets[minute] += 1
+            first_ts = min(first_ts, ms)
+        player_data[cu.player_name] = {"buckets": buckets, "first_ts": first_ts}
+
+    sorted_players = sorted(player_data.keys(), key=lambda n: player_data[n]["first_ts"])
+    grid = {name: player_data[name]["buckets"] for name in sorted_players}
+
+    return {"players": sorted_players, "minutes": total_minutes, "grid": grid}
+
+
 def compute_engineering_stats(analysis):
     """Compute min/median/max avg-damage-per-cast for engineering items."""
     from statistics import median as stat_median
