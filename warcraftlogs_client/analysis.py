@@ -269,6 +269,8 @@ def _get_resources_from_events(
         cast_events = client.get_cast_events_paginated(report_id, source_id)
         resources: dict[str, int] = defaultdict(int)
         for e in cast_events:
+            if e.get("type") == "begincast":
+                continue
             aid = e.get("abilityGameID")
             if aid in _RESOURCE_SPELL_IDS:
                 resources[_RESOURCE_SPELL_IDS[aid]] += 1
@@ -536,6 +538,8 @@ def _analyze_consumables(
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
             cast_data: dict[int, list[int]] = defaultdict(list)
             for e in cast_events:
+                if e.get("type") == "begincast":
+                    continue
                 aid = e.get("abilityGameID")
                 if aid in cast_ids:
                     ts = e.get("timestamp", 0)
