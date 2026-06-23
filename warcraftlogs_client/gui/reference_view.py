@@ -16,8 +16,7 @@ from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread
 from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
 
 from .analysis_helpers import (
-    NumericSortProxy, TimelineTableModel,
-    build_timeline_data, build_heatmap_data,
+    NumericSortProxy, build_heatmap_data,
     compute_engineering_stats, classify_consumable_usage,
     compute_shared_encounter_window, scope_analysis_to_window,
     ENGINEERING_ITEMS,
@@ -1874,36 +1873,27 @@ class _HeadToHeadPanel(QWidget):
         if not name:
             return
 
-        from .charts import ConsumableTimelineHeatmap
+        from .charts import OverlayTimelineHeatmap
 
-        for label_text, analysis in [("Guild", guild), ("Reference", ref)]:
-            lbl = QLabel(label_text)
-            lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-            color = COLORS['accent'] if label_text == "Guild" else COLORS['text_header']
-            lbl.setStyleSheet(f"color: {color};")
-            container.addWidget(lbl)
+        guild_heatmap = build_heatmap_data(guild, name)
+        ref_heatmap = build_heatmap_data(ref, name)
 
-            heatmap_data = build_heatmap_data(analysis, name)
-            if heatmap_data.get("players"):
-                scroll = QScrollArea()
-                scroll.setWidgetResizable(True)
-                player_count = len(heatmap_data["players"])
-                scroll.setFixedHeight(min(max(28 + player_count * 21 + 10, 80), 500))
-                scroll.setStyleSheet(
-                    f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
-                heatmap = ConsumableTimelineHeatmap(heatmap_data)
-                scroll.setWidget(heatmap)
-                container.addWidget(scroll)
-            else:
-                no_data = QLabel(f"No {name} usage in {label_text.lower()} raid")
-                no_data.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
-                container.addWidget(no_data)
-
-            model = TimelineTableModel()
-            model.set_data(build_timeline_data(analysis, name))
-            table = self._make_table(model)
-            table.setMaximumHeight(200)
-            container.addWidget(table)
+        if guild_heatmap.get("players") or ref_heatmap.get("players"):
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            g_count = len(guild_heatmap.get("players", []))
+            r_count = len(ref_heatmap.get("players", []))
+            total_rows = g_count + r_count + (1 if g_count and r_count else 0)
+            scroll.setFixedHeight(min(max(28 + total_rows * 21 + 30, 80), 600))
+            scroll.setStyleSheet(
+                f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
+            heatmap = OverlayTimelineHeatmap(guild_heatmap, ref_heatmap)
+            scroll.setWidget(heatmap)
+            container.addWidget(scroll)
+        else:
+            no_data = QLabel(f"No {name} usage in either raid")
+            no_data.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            container.addWidget(no_data)
 
     def _export_table(self, attr_name, default_filename):
         widget = getattr(self, attr_name, None)

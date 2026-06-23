@@ -1350,3 +1350,161 @@ class ConsumableTimelineHeatmap(QWidget):
                 return
         QToolTip.hideText()
         super().mouseMoveEvent(event)
+
+
+class OverlayTimelineHeatmap(QWidget):
+    """Combined heatmap overlaying guild (green) and reference (blue) players."""
+
+    def __init__(self, guild_data: dict, ref_data: dict, parent=None):
+        super().__init__(parent)
+        self._guild = guild_data
+        self._ref = ref_data
+        self._cells: list[tuple[QRectF, str, str, int, int]] = []
+        self.setMouseTracking(True)
+
+        g_players = guild_data.get("players", [])
+        r_players = ref_data.get("players", [])
+        total_rows = len(g_players) + len(r_players)
+        if g_players and r_players:
+            total_rows += 1
+        cell_h, gap, top_margin = 20, 1, 28
+        legend_h = 20
+        self.setMinimumHeight(
+            top_margin + max(total_rows, 1) * (cell_h + gap) + legend_h + 10)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        g_players = self._guild.get("players", [])
+        r_players = self._ref.get("players", [])
+        g_grid = self._guild.get("grid", {})
+        r_grid = self._ref.get("grid", {})
+        g_minutes = self._guild.get("minutes", 0)
+        r_minutes = self._ref.get("minutes", 0)
+        total_minutes = max(g_minutes, r_minutes)
+
+        if not g_players and not r_players or total_minutes == 0:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 11))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                             "No usage data for this consumable")
+            painter.end()
+            return
+
+        name_col_w = 120
+        top_margin = 28
+        cell_h = 20
+        gap = 1
+        label_font = QFont("Segoe UI", 7)
+        name_font = QFont("Segoe UI", 8)
+
+        avail_w = self.width() - name_col_w - 8
+        cell_w = max(avail_w // total_minutes, 12)
+        total_w = name_col_w + cell_w * total_minutes
+        self.setMinimumWidth(total_w + 8)
+
+        max_val = 0
+        for buckets in list(g_grid.values()) + list(r_grid.values()):
+            for v in buckets:
+                max_val = max(max_val, v)
+        if max_val == 0:
+            max_val = 1
+
+        painter.setPen(QColor(COLORS["text_dim"]))
+        painter.setFont(label_font)
+        for m in range(total_minutes):
+            if m % 5 == 0 or m == total_minutes - 1:
+                x = name_col_w + m * cell_w
+                painter.drawText(int(x), top_margin - 8, f"{m}")
+
+        self._cells = []
+        painter.setFont(name_font)
+        row_i = 0
+
+        for player in g_players:
+            y = top_margin + row_i * (cell_h + gap)
+            painter.setPen(QColor("#2ecc71"))
+            painter.drawText(4, int(y + cell_h - 4), player[:14])
+            buckets = g_grid.get(player, [])
+            for m in range(total_minutes):
+                x = name_col_w + m * cell_w
+                val = buckets[m] if m < len(buckets) else 0
+                rect = QRectF(x, y, cell_w - 1, cell_h)
+                self._cells.append((rect, player, "Guild", m, val))
+                if val == 0:
+                    color = QColor(COLORS["bg_dark"])
+                else:
+                    intensity = min(val / max_val, 1.0)
+                    g = int(80 + intensity * 175)
+                    color = QColor(20, g, 40)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(color))
+                painter.drawRect(rect)
+                if val > 0:
+                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setFont(label_font)
+                    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(val))
+            row_i += 1
+
+        if g_players and r_players:
+            y = top_margin + row_i * (cell_h + gap) + cell_h // 2
+            painter.setPen(QPen(QColor(COLORS["text_dim"]), 1, Qt.PenStyle.DashLine))
+            painter.drawLine(4, int(y), int(name_col_w + total_minutes * cell_w), int(y))
+            row_i += 1
+
+        for player in r_players:
+            y = top_margin + row_i * (cell_h + gap)
+            painter.setPen(QColor("#69CCF0"))
+            painter.drawText(4, int(y + cell_h - 4), player[:14])
+            buckets = r_grid.get(player, [])
+            for m in range(total_minutes):
+                x = name_col_w + m * cell_w
+                val = buckets[m] if m < len(buckets) else 0
+                rect = QRectF(x, y, cell_w - 1, cell_h)
+                self._cells.append((rect, player, "Reference", m, val))
+                if val == 0:
+                    color = QColor(COLORS["bg_dark"])
+                else:
+                    intensity = min(val / max_val, 1.0)
+                    b = int(80 + intensity * 175)
+                    color = QColor(20, 60, b)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(color))
+                painter.drawRect(rect)
+                if val > 0:
+                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setFont(label_font)
+                    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(val))
+            row_i += 1
+
+        legend_y = top_margin + row_i * (cell_h + gap) + 4
+        painter.setFont(name_font)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(20, 200, 40)))
+        painter.drawRect(QRectF(name_col_w, legend_y, 12, 12))
+        painter.setPen(QColor(COLORS["text"]))
+        painter.drawText(int(name_col_w + 16), int(legend_y + 10), "Guild")
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(20, 60, 200)))
+        painter.drawRect(QRectF(name_col_w + 70, legend_y, 12, 12))
+        painter.setPen(QColor(COLORS["text"]))
+        painter.drawText(int(name_col_w + 86), int(legend_y + 10), "Reference")
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, 'position') else event.pos()
+        for rect, player, source, minute, val in self._cells:
+            if rect.contains(pos):
+                tip = (f"{player} ({source})\n"
+                       f"{minute}:00–{minute + 1}:00 — "
+                       f"{val} use{'s' if val != 1 else ''}")
+                tip_pos = (event.globalPosition().toPoint()
+                           if hasattr(event, 'globalPosition')
+                           else event.globalPos())
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
