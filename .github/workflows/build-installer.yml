@@ -36,7 +36,7 @@ jobs:
       - name: Build installer with Inno Setup
         id: inno
         continue-on-error: true
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.4
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.8
         with:
           path: installer.iss
 
