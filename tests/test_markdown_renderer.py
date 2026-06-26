@@ -26,7 +26,11 @@ class TestRenderMetadata:
         md = render_raid_analysis(sample_raid_analysis)
         assert "**Owner:** TestGuild" in md
 
-    def test_log_link(self, sample_raid_analysis):
+    def test_log_link(self, sample_raid_analysis, monkeypatch):
+        monkeypatch.setattr(
+            "warcraftlogs_client.config.load_config",
+            lambda config_file=None: {"wcl_api_url": ""},
+        )
         md = render_raid_analysis(sample_raid_analysis)
         assert "[abc123](https://www.warcraftlogs.com/reports/abc123)" in md
 

@@ -141,7 +141,11 @@ class TestRaidMetadata:
         assert isinstance(formatted, str)
         assert len(formatted) > 10
 
-    def test_url(self, sample_raid_metadata):
+    def test_url(self, sample_raid_metadata, monkeypatch):
+        monkeypatch.setattr(
+            "warcraftlogs_client.config.load_config",
+            lambda config_file=None: {"wcl_api_url": ""},
+        )
         assert sample_raid_metadata.url == "https://www.warcraftlogs.com/reports/abc123"
 
 
