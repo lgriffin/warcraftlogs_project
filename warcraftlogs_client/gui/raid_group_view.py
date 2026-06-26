@@ -3,28 +3,45 @@ Raid Groups view — create and manage raid groups, assign characters,
 view raids matching the group's scheduled days, and compare class performance.
 """
 
-import json
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QListWidget, QListWidgetItem, QSplitter, QScrollArea,
-    QCheckBox, QGroupBox, QMessageBox, QTableView, QHeaderView,
-    QInputDialog, QTabWidget, QComboBox,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
-from .table_models import HistoryTableModel
-from .charts import build_group_performance_chart, build_class_comparison_chart
-from .raid_list_widget import RaidListWidget
 from ..database import PerformanceDB
-
+from .charts import build_class_comparison_chart, build_group_performance_chart
+from .raid_list_widget import RaidListWidget
+from .styles import COLORS, COMMON_STYLES
+from .table_models import HistoryTableModel
 
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-DAY_ABBREV = {"Monday": "Mon", "Tuesday": "Tue", "Wednesday": "Wed",
-              "Thursday": "Thu", "Friday": "Fri", "Saturday": "Sat", "Sunday": "Sun"}
+DAY_ABBREV = {
+    "Monday": "Mon",
+    "Tuesday": "Tue",
+    "Wednesday": "Wed",
+    "Thursday": "Thu",
+    "Friday": "Fri",
+    "Saturday": "Sat",
+    "Sunday": "Sun",
+}
 DAY_INDEX = {name: i for i, name in enumerate(DAYS_OF_WEEK)}
 
 
@@ -41,14 +58,17 @@ class RaidGroupView(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setStyleSheet(COMMON_STYLES + f"""
+        self.setStyleSheet(
+            COMMON_STYLES
+            + f"""
             RaidGroupView, RaidGroupView QWidget {{
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
             RaidGroupView QGroupBox {{
-                background-color: {COLORS['bg_card']};
+                background-color: {COLORS["bg_card"]};
             }}
-        """)
+        """
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -74,7 +94,7 @@ class RaidGroupView(QWidget):
         self._delete_btn = QPushButton("  Delete  ")
         self._delete_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['error']};
+                background-color: {COLORS["error"]};
                 color: white; border: none; border-radius: 4px;
                 padding: 8px 20px; font-size: 13px; font-weight: bold;
             }}
@@ -88,18 +108,18 @@ class RaidGroupView(QWidget):
         self._group_list = QListWidget()
         self._group_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 10px 14px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
         """)
         self._group_list.currentItemChanged.connect(self._on_group_selected)
@@ -114,8 +134,7 @@ class RaidGroupView(QWidget):
 
         self._no_selection_label = QLabel("Select or create a raid group to get started.")
         self._no_selection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._no_selection_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
+        self._no_selection_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
         right_layout.addWidget(self._no_selection_label)
 
         # ── Fixed header: name + raid days ──
@@ -146,17 +165,17 @@ class RaidGroupView(QWidget):
         self._raid_size_combo.addItems(["All Raids", "10-man", "25-man"])
         self._raid_size_combo.setStyleSheet(f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; padding: 4px 8px;
                 font-size: 12px; min-width: 120px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._raid_size_combo.currentIndexChanged.connect(self._on_raid_size_changed)
@@ -175,7 +194,7 @@ class RaidGroupView(QWidget):
             cb = QCheckBox(DAY_ABBREV[day])
             cb.setStyleSheet(f"""
                 QCheckBox {{
-                    font-size: 13px; color: {COLORS['text']}; spacing: 6px;
+                    font-size: 13px; color: {COLORS["text"]}; spacing: 6px;
                 }}
                 QCheckBox::indicator {{ width: 18px; height: 18px; }}
             """)
@@ -235,14 +254,14 @@ class RaidGroupView(QWidget):
         self._available_list.setMinimumHeight(150)
         self._available_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; font-size: 12px;
             }}
             QListWidget::item {{ padding: 4px 8px; }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._available_list.doubleClicked.connect(self._add_member)
@@ -264,13 +283,13 @@ class RaidGroupView(QWidget):
         remove_btn = QPushButton("Remove Selected")
         remove_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; padding: 6px 12px;
                 font-size: 12px; font-weight: bold;
             }}
-            QPushButton:hover {{ background-color: {COLORS['border']}; }}
+            QPushButton:hover {{ background-color: {COLORS["border"]}; }}
         """)
         remove_btn.clicked.connect(self._remove_member)
         current_layout.addWidget(remove_btn)
@@ -306,8 +325,7 @@ class RaidGroupView(QWidget):
         attend_layout = QVBoxLayout(attend_panel)
         attend_layout.setContentsMargins(0, 0, 4, 0)
         attend_title = QLabel("Attendance")
-        attend_title.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 11px; font-weight: bold;")
+        attend_title.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-weight: bold;")
         attend_layout.addWidget(attend_title)
         self._attendance_model = HistoryTableModel()
         attend_table = QTableView()
@@ -317,10 +335,8 @@ class RaidGroupView(QWidget):
         attend_table.setSortingEnabled(True)
         attend_table.verticalHeader().setVisible(False)
         attend_table.horizontalHeader().setStretchLastSection(True)
-        attend_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        attend_table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        attend_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        attend_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         attend_table.setMinimumHeight(180)
         attend_layout.addWidget(attend_table, 1)
         dash_tables.addWidget(attend_panel)
@@ -329,8 +345,7 @@ class RaidGroupView(QWidget):
         role_layout = QVBoxLayout(role_panel)
         role_layout.setContentsMargins(4, 0, 0, 0)
         role_title = QLabel("Role Coverage")
-        role_title.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 11px; font-weight: bold;")
+        role_title.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; font-weight: bold;")
         role_layout.addWidget(role_title)
         self._role_model = HistoryTableModel()
         role_table = QTableView()
@@ -340,10 +355,8 @@ class RaidGroupView(QWidget):
         role_table.setSortingEnabled(True)
         role_table.verticalHeader().setVisible(False)
         role_table.horizontalHeader().setStretchLastSection(True)
-        role_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        role_table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        role_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        role_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         role_table.setMinimumHeight(180)
         role_layout.addWidget(role_table, 1)
         dash_tables.addWidget(role_panel)
@@ -360,17 +373,17 @@ class RaidGroupView(QWidget):
 
         combo_style = f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; padding: 4px 8px;
                 font-size: 12px; min-width: 160px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """
 
@@ -414,10 +427,8 @@ class RaidGroupView(QWidget):
         comparison_table.setSortingEnabled(True)
         comparison_table.verticalHeader().setVisible(False)
         comparison_table.horizontalHeader().setStretchLastSection(True)
-        comparison_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        comparison_table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        comparison_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        comparison_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         breakdown_layout.addWidget(comparison_table, 1)
         self._comparison_tabs.addTab(breakdown_widget, "Breakdown")
 
@@ -431,8 +442,7 @@ class RaidGroupView(QWidget):
         try:
             with PerformanceDB() as db:
                 groups = db.get_all_raid_groups()
-                self._all_character_names = [
-                    c.name for c in db.get_all_characters()]
+                self._all_character_names = [c.name for c in db.get_all_characters()]
             for g in groups:
                 days_str = ", ".join(DAY_ABBREV.get(d, d) for d in g.raid_days)
                 label = f"{g.name}  ({len(g.members)} members)"
@@ -445,8 +455,7 @@ class RaidGroupView(QWidget):
             self.status_message.emit(f"Error loading groups: {e}")
 
     def _create_group(self):
-        name, ok = QInputDialog.getText(
-            self, "New Raid Group", "Group name:")
+        name, ok = QInputDialog.getText(self, "New Raid Group", "Group name:")
         if not ok or not name.strip():
             return
         try:
@@ -470,8 +479,9 @@ class RaidGroupView(QWidget):
         name = current.text().split("  (")[0]
 
         reply = QMessageBox.question(
-            self, "Delete Raid Group",
-            f"Delete raid group \"{name}\"?\n\nThis will not delete any character data.",
+            self,
+            "Delete Raid Group",
+            f'Delete raid group "{name}"?\n\nThis will not delete any character data.',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -492,9 +502,7 @@ class RaidGroupView(QWidget):
     def _rename_group(self):
         if not self._current_group_id:
             return
-        name, ok = QInputDialog.getText(
-            self, "Rename Raid Group", "New name:",
-            text=self._group_name_label.text())
+        name, ok = QInputDialog.getText(self, "Rename Raid Group", "New name:", text=self._group_name_label.text())
         if not ok or not name.strip():
             return
         try:
@@ -523,8 +531,7 @@ class RaidGroupView(QWidget):
         try:
             with PerformanceDB() as db:
                 group = db.get_raid_group(group_id)
-                self._all_character_names = [
-                    c.name for c in db.get_all_characters()]
+                self._all_character_names = [c.name for c in db.get_all_characters()]
             if not group:
                 return
 
@@ -561,10 +568,7 @@ class RaidGroupView(QWidget):
                     self._available_list.addItem(name)
 
     def _filter_add_list(self, text: str):
-        current_members = [
-            self._members_list.item(i).text()
-            for i in range(self._members_list.count())
-        ]
+        current_members = [self._members_list.item(i).text() for i in range(self._members_list.count())]
         self._refresh_available_list(current_members)
 
     # ── Member management ──
@@ -649,15 +653,13 @@ class RaidGroupView(QWidget):
 
             if attendance:
                 self._attendance_model.set_data(
-                    attendance,
-                    ["name", "player_class", "attended", "total_raids", "attendance_pct"])
+                    attendance, ["name", "player_class", "attended", "total_raids", "attendance_pct"]
+                )
             else:
                 self._attendance_model.set_data([], [])
 
             if role_coverage:
-                self._role_model.set_data(
-                    role_coverage,
-                    ["name", "player_class", "healer", "tank", "dps"])
+                self._role_model.set_data(role_coverage, ["name", "player_class", "healer", "tank", "dps"])
             else:
                 self._role_model.set_data([], [])
 
@@ -721,10 +723,8 @@ class RaidGroupView(QWidget):
 
         try:
             with PerformanceDB() as db:
-                trend_data = db.get_class_comparison_trend(
-                    self._current_group_id, class_name, role=role)
-                summary = db.get_class_comparison_summary(
-                    self._current_group_id, class_name)
+                trend_data = db.get_class_comparison_trend(self._current_group_id, class_name, role=role)
+                summary = db.get_class_comparison_summary(self._current_group_id, class_name)
 
             mode = self._raid_size_combo.currentIndex()
             trend_data = self._filter_by_raid_size(trend_data, mode)
@@ -747,30 +747,23 @@ class RaidGroupView(QWidget):
 
                 rows = []
                 for s in summary:
-                    rows.append({
-                        "Name": s["name"],
-                        "Class": s["player_class"],
-                        "Raids": s["raids"],
-                        metric_label: (
-                            f"{s['avg_performance']:,.0f}"
-                            if metric_key != "mitigation"
-                            else f"{s['avg_performance']:.1f}%"
-                        ),
-                        "Best": (
-                            f"{s['best']:,.0f}"
-                            if metric_key != "mitigation"
-                            else f"{s['best']:.1f}%"
-                        ),
-                        "Worst": (
-                            f"{s['worst']:,.0f}"
-                            if metric_key != "mitigation"
-                            else f"{s['worst']:.1f}%"
-                        ),
-                        "Consistency": f"{s['consistency']:.1f}%",
-                        "Consumes/Raid": s["consumable_compliance"],
-                    })
-                cols = ["Name", "Class", "Raids", metric_label,
-                        "Best", "Worst", "Consistency", "Consumes/Raid"]
+                    rows.append(
+                        {
+                            "Name": s["name"],
+                            "Class": s["player_class"],
+                            "Raids": s["raids"],
+                            metric_label: (
+                                f"{s['avg_performance']:,.0f}"
+                                if metric_key != "mitigation"
+                                else f"{s['avg_performance']:.1f}%"
+                            ),
+                            "Best": (f"{s['best']:,.0f}" if metric_key != "mitigation" else f"{s['best']:.1f}%"),
+                            "Worst": (f"{s['worst']:,.0f}" if metric_key != "mitigation" else f"{s['worst']:.1f}%"),
+                            "Consistency": f"{s['consistency']:.1f}%",
+                            "Consumes/Raid": s["consumable_compliance"],
+                        }
+                    )
+                cols = ["Name", "Class", "Raids", metric_label, "Best", "Worst", "Consistency", "Consumes/Raid"]
                 self._comparison_model.set_data(rows, cols)
             else:
                 self._comparison_model.set_data([], [])

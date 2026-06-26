@@ -5,14 +5,14 @@ import os
 import requests
 from jinja2 import Environment, FileSystemLoader
 
-from .auth import TokenManager
-from .client import WarcraftLogsClient, get_healing_data
-from .characters import Characters
-from .config import load_config
-from .spell_manager import SpellBreakdown
-from .healing import OverallHealing
 from . import dynamic_role_parser
+from .auth import TokenManager
+from .characters import Characters
+from .client import WarcraftLogsClient, get_healing_data
 from .common.data import get_master_data, get_report_metadata
+from .config import load_config
+from .healing import OverallHealing
+from .spell_manager import SpellBreakdown
 
 
 def print_report_metadata(metadata, present, all_characters):
@@ -21,7 +21,7 @@ def print_report_metadata(metadata, present, all_characters):
     print("========================")
     print(f"📄 Title: {metadata['title']}")
     print(f"👤 Owner: {metadata['owner']}")
-    dt = datetime.datetime.fromtimestamp(metadata['start'] / 1000)
+    dt = datetime.datetime.fromtimestamp(metadata["start"] / 1000)
     print(f"📆 Date: {dt.strftime('%A, %d %B %Y %H:%M:%S')}")
     print(f"\n👥 Characters Present: {', '.join(present)}")
     absent = [char["name"] for char in all_characters if char["name"] not in present]
@@ -38,9 +38,9 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
 
     dispel_headers = "".join(f"{dispel[:16]:>16}" for dispel in sorted(all_dispels))
     header = (
-        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
-        "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-        f"{dispel_headers}{'Restore Mana':>16} {'Dark Rune':>12}"
+        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} "
+        + "".join(f"{spell[:14]:>16}" for spell in spell_names)
+        + f"{dispel_headers}{'Restore Mana':>16} {'Dark Rune':>12}"
     )
     output.append(header)
     output.append("-" * len(header))
@@ -52,15 +52,10 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
                 healing = row.get("healing_spells", {}).get("Fire Protection", 0)
                 spell_counts += f"{healing:>16,}"
             else:
-                cast_total = sum(
-                    count for name, count in row["spells"].items()
-                    if name == spell
-                )
+                cast_total = sum(count for name, count in row["spells"].items() if name == spell)
                 spell_counts += f"{cast_total:>16}"
 
-        dispel_counts = "".join(
-            f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels)
-        )
+        dispel_counts = "".join(f"{row['dispels'].get(d, 0):>16}" for d in sorted(all_dispels))
 
         restore_mana = row["resources"].get("Super Mana Potion", 0)
         dark_rune = row["resources"].get("Dark Rune", 0)
@@ -74,9 +69,11 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
         output_lines.extend(output)
     else:
         print("\n".join(output))
+
+
 def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, output_path="report.md"):
     lines = [
-        f"# 📝 Report Metadata",
+        "# 📝 Report Metadata",
         f"- **Title**: {metadata['title']}",
         f"- **Owner**: {metadata['owner']}",
         f"- **Date**: {datetime.datetime.fromtimestamp(metadata['start'] / 1000).strftime('%A, %d %B %Y %H:%M:%S')}",
@@ -92,11 +89,14 @@ def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, 
     print(f"\n✅ Markdown report saved to: {output_path}")
 
 
-def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_class, output_path="reports/healing_report.md"):
+def export_markdown_report_v2(
+    metadata, grouped_summary, all_spell_names_by_class, output_path="reports/healing_report.md"
+):
     from . import paths
+
     template_dir = str(paths.get_template_dir())
 
-    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)  # nosec B701
     template = env.get_template("healing_report.md.j2")
 
     context = {
@@ -107,7 +107,7 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
         "dispels_all": {},
         "priests": [],
         "paladins": [],
-        "druids": []
+        "druids": [],
     }
 
     for class_type in ["Priest", "Paladin", "Druid"]:
@@ -124,16 +124,10 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
     for class_type in ["Priest", "Paladin", "Druid"]:
         for row in grouped_summary.get(class_type, []):
             # Prepare spells
-            spells = {
-                spell: row["spells"].get(spell, "-")
-                for spell in sorted(all_spell_names_by_class[class_type])
-            }
+            spells = {spell: row["spells"].get(spell, "-") for spell in sorted(all_spell_names_by_class[class_type])}
 
             # Prepare dispels for all known types
-            dispels = {
-                dispel: row["dispels"].get(dispel, "-")
-                for dispel in context["dispels_all"][class_type]
-            }
+            dispels = {dispel: row["dispels"].get(dispel, "-") for dispel in context["dispels_all"][class_type]}
 
             summary_row = {
                 "name": row["name"],
@@ -177,10 +171,10 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
     print(f"\n✅ Markdown report exported to: {output_path}")
 
 
-
 # new_main.py
 
 # ... (imports remain unchanged)
+
 
 def run_full_report(markdown=False, use_dynamic_roles=False):
     config = load_config()
@@ -195,9 +189,7 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
     if not use_dynamic_roles:
         characters = Characters("characters.json")
         name_to_id = {
-            actor["name"]: actor["id"]
-            for actor in master_actors
-            if actor["name"] in characters.get_all_names()
+            actor["name"]: actor["id"] for actor in master_actors if actor["name"] in characters.get_all_names()
         }
         all_characters = characters.get_all()
         print("📦 Using pre-defined characters in characters.json.")
@@ -205,7 +197,7 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
     else:
         characters = None
         name_to_id = {actor["name"]: actor["id"] for actor in master_actors}
-        all_characters = [{"name": name} for name in name_to_id.keys()]
+        all_characters = [{"name": name} for name in name_to_id]
 
     print_report_metadata(metadata, name_to_id.keys(), all_characters)
 
@@ -219,9 +211,9 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
         if char_class not in {"Priest", "Paladin", "Druid", "Shaman"}:
             continue
 
-        print(f"\n============================")
+        print("\n============================")
         print(f"📊 Spell Breakdown for {name}")
-        print(f"============================")
+        print("============================")
 
         try:
             healing_data = get_healing_data(client, report_id, source_id)
@@ -256,19 +248,18 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
 
             dispels = SpellBreakdown.calculate_dispels(cast_entries, char_class)
             if any(dispels.values()):
-                print(f"\n🧹 Dispels:")
+                print("\n🧹 Dispels:")
                 for spell_name, count in dispels.items():
                     print(f"  - {spell_name}: {count} casts")
 
             resources = SpellBreakdown.get_resources_used(cast_entries)
             if resources:
-                print(f"\n🔋 Resources Used:")
+                print("\n🔋 Resources Used:")
                 for r_name, count in resources.items():
                     print(f"  - {r_name}: {count}")
 
             healing_by_name = {
-                str(spell_map.get(spell_id, f"(ID {spell_id})")): amount
-                for spell_id, amount in spell_totals.items()
+                str(spell_map.get(spell_id, f"(ID {spell_id})")): amount for spell_id, amount in spell_totals.items()
             }
 
             character_summary = {
@@ -290,9 +281,7 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
 
     if use_dynamic_roles:
         healing_totals = {
-            summary["name"]: summary["healing"]
-            for group in grouped_summary.values()
-            for summary in group
+            summary["name"]: summary["healing"] for group in grouped_summary.values() for summary in group
         }
         healers = dynamic_role_parser.identify_healers(master_actors, healing_totals)
 
@@ -316,6 +305,8 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--md", action="store_true", help="Export the report as Markdown to report.md")
-    parser.add_argument("--use-dynamic-roles", action="store_true", help="Use dynamic healer classification (ignore characters.json)")
+    parser.add_argument(
+        "--use-dynamic-roles", action="store_true", help="Use dynamic healer classification (ignore characters.json)"
+    )
     args = parser.parse_args()
     run_full_report(markdown=args.md, use_dynamic_roles=args.use_dynamic_roles)

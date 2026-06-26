@@ -1,17 +1,12 @@
 """Tests for console renderer — output correctness via capsys."""
 
-import pytest
-
-from warcraftlogs_client.renderers.console import render_raid_analysis
 from warcraftlogs_client.models import (
-    DPSPerformance,
     HealerPerformance,
     RaidAnalysis,
     RaidComposition,
     RaidMetadata,
-    SpellUsage,
-    TankPerformance,
 )
+from warcraftlogs_client.renderers.console import render_raid_analysis
 
 
 class TestRenderRaidAnalysis:
@@ -54,7 +49,9 @@ class TestEmptyAnalysis:
     def test_no_crash(self):
         analysis = RaidAnalysis(
             metadata=RaidMetadata(
-                report_id="empty", title="Empty", owner="Nobody",
+                report_id="empty",
+                title="Empty",
+                owner="Nobody",
                 start_time=1_700_000_000_000,
             ),
             composition=RaidComposition(),

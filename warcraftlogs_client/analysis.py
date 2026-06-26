@@ -9,7 +9,6 @@ import json
 import logging
 import os
 from collections import defaultdict
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,31 +17,32 @@ import requests
 from .client import WarcraftLogsClient
 from .models import (
     ConsumableUsage,
-    DPSPerformance,
     DispelUsage,
+    DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
-    RaidMetadata,
     ResourceUsage,
     SpellUsage,
     TankPerformance,
 )
 from .spell_manager import SpellBreakdown, get_spell_manager
 
-
 _TEN_MAN_ZONES = {"Karazhan", "Zul'Aman"}
 
 
-def analyze_raid(client: WarcraftLogsClient, report_id: str,
-                 healer_threshold: int = 40000,
-                 tank_min_taken: int = 150000,
-                 tank_min_mitigation: int = 40,
-                 healer_threshold_10: int = 400000,
-                 tank_min_taken_10: int = 300000) -> RaidAnalysis:
+def analyze_raid(
+    client: WarcraftLogsClient,
+    report_id: str,
+    healer_threshold: int = 40000,
+    tank_min_taken: int = 150000,
+    tank_min_mitigation: int = 40,
+    healer_threshold_10: int = 400000,
+    tank_min_taken_10: int = 300000,
+) -> RaidAnalysis:
     """Run a full raid analysis and return structured results."""
     logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.API_URL)
 
@@ -57,12 +57,20 @@ def analyze_raid(client: WarcraftLogsClient, report_id: str,
         tank_min_taken = tank_min_taken_10
 
     composition = _identify_composition(
-        client, report_id, master_actors,
-        healer_threshold, tank_min_taken, tank_min_mitigation,
+        client,
+        report_id,
+        master_actors,
+        healer_threshold,
+        tank_min_taken,
+        tank_min_mitigation,
     )
-    logger.info("  composition: %d healers, %d tanks, %d melee, %d ranged",
-                len(composition.healers), len(composition.tanks),
-                len(composition.melee), len(composition.ranged))
+    logger.info(
+        "  composition: %d healers, %d tanks, %d melee, %d ranged",
+        len(composition.healers),
+        len(composition.tanks),
+        len(composition.melee),
+        len(composition.ranged),
+    )
 
     healers = _analyze_healers(client, report_id, composition.healers)
     logger.info("  healers analyzed: %d", len(healers))
@@ -147,14 +155,28 @@ _MELEE_ABILITY_IDS = {1, -4, -32}
 # Spells that are strong indicators of a ranged spec
 _RANGED_SPEC_SPELLS = {
     # Shadow Priest
-    "Shadow Bolt", "Mind Blast", "Mind Flay", "Shadow Word: Pain", "Vampiric Embrace",
-    "Devouring Plague", "Shadow Word: Death",
+    "Shadow Bolt",
+    "Mind Blast",
+    "Mind Flay",
+    "Shadow Word: Pain",
+    "Vampiric Embrace",
+    "Devouring Plague",
+    "Shadow Word: Death",
     # Balance Druid
-    "Wrath", "Starfire", "Moonfire", "Insect Swarm", "Hurricane",
+    "Wrath",
+    "Starfire",
+    "Moonfire",
+    "Insect Swarm",
+    "Hurricane",
     # Elemental Shaman
-    "Lightning Bolt", "Chain Lightning", "Earth Shock", "Flame Shock", "Frost Shock",
+    "Lightning Bolt",
+    "Chain Lightning",
+    "Earth Shock",
+    "Flame Shock",
+    "Frost Shock",
     # Holy/Disc Priest doing damage (Smite)
-    "Smite", "Holy Fire",
+    "Smite",
+    "Holy Fire",
 }
 
 
@@ -221,10 +243,14 @@ def _identify_tanks(
                 continue
             percent = total_mitigated / total_unmitigated * 100
             if total_taken > min_taken and percent > min_mitigation:
-                tanks.append(PlayerIdentity(
-                    name=actor["name"], player_class=actor["subType"],
-                    source_id=actor["id"], role="tank",
-                ))
+                tanks.append(
+                    PlayerIdentity(
+                        name=actor["name"],
+                        player_class=actor["subType"],
+                        source_id=actor["id"],
+                        role="tank",
+                    )
+                )
         except (requests.RequestException, KeyError, TypeError):
             pass
     return tanks
@@ -245,10 +271,14 @@ def _identify_healers(
             events = client.get_healing_data(report_id, actor["id"])
             total = sum(e.get("amount", 0) for e in events if e.get("type") == "heal")
             if total > threshold:
-                healers.append(PlayerIdentity(
-                    name=actor["name"], player_class=actor["subType"],
-                    source_id=actor["id"], role="healer",
-                ))
+                healers.append(
+                    PlayerIdentity(
+                        name=actor["name"],
+                        player_class=actor["subType"],
+                        source_id=actor["id"],
+                        role="healer",
+                    )
+                )
         except (requests.RequestException, KeyError, TypeError):
             pass
     return healers
@@ -262,7 +292,9 @@ _RESOURCE_SPELL_IDS = {
 
 
 def _get_resources_from_events(
-    client: WarcraftLogsClient, report_id: str, source_id: int,
+    client: WarcraftLogsClient,
+    report_id: str,
+    source_id: int,
 ) -> dict[str, int]:
     """Count consumable usage from cast events."""
     try:
@@ -324,13 +356,21 @@ def _analyze_healers(
             fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
             fw_casts = fear_ward["casts"] if fear_ward else 0
 
-            results.append(HealerPerformance(
-                name=player.name, player_class=player.player_class, source_id=player.source_id,
-                total_healing=total_healing, total_overhealing=total_overhealing,
-                spells=spells, dispels=dispels, resources=resources, fear_ward_casts=fw_casts,
-            ))
+            results.append(
+                HealerPerformance(
+                    name=player.name,
+                    player_class=player.player_class,
+                    source_id=player.source_id,
+                    total_healing=total_healing,
+                    total_overhealing=total_overhealing,
+                    spells=spells,
+                    dispels=dispels,
+                    resources=resources,
+                    fear_ward_casts=fw_casts,
+                )
+            )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error processing healer {player.name}: {e}")
+            logger.error("Error processing healer %s: %s", player.name, e)
 
     return results
 
@@ -401,13 +441,19 @@ def _analyze_tanks(
                 for sid, count in sorted(done_counts.items(), key=lambda x: -x[1])
             ]
 
-            results.append(TankPerformance(
-                name=player.name, player_class=player.player_class, source_id=player.source_id,
-                total_damage_taken=total_taken, total_mitigated=total_mitigated,
-                damage_taken_breakdown=taken_breakdown, abilities_used=abilities_used,
-            ))
+            results.append(
+                TankPerformance(
+                    name=player.name,
+                    player_class=player.player_class,
+                    source_id=player.source_id,
+                    total_damage_taken=total_taken,
+                    total_mitigated=total_mitigated,
+                    damage_taken_breakdown=taken_breakdown,
+                    abilities_used=abilities_used,
+                )
+            )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error processing tank {player.name}: {e}")
+            logger.error("Error processing tank %s: %s", player.name, e)
 
     return results
 
@@ -426,9 +472,7 @@ def _analyze_dps(
     for player in player_ids:
         try:
             events = client.get_damage_done_data(report_id, player.source_id)
-            spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(
-                client, report_id, player.source_id
-            )
+            spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, player.source_id)
 
             done_table = client.get_damage_done_table(report_id, player.source_id)
             table_hits: dict[int, int] = {}
@@ -471,23 +515,29 @@ def _analyze_dps(
                 for sid, dmg in sorted(damage_by_ability.items(), key=lambda x: -x[1])
             ]
 
-            results.append(DPSPerformance(
-                name=player.name, player_class=player.player_class,
-                source_id=player.source_id, role=role,
-                total_damage=total_damage, abilities=abilities,
-            ))
+            results.append(
+                DPSPerformance(
+                    name=player.name,
+                    player_class=player.player_class,
+                    source_id=player.source_id,
+                    role=role,
+                    total_damage=total_damage,
+                    abilities=abilities,
+                )
+            )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error processing {role} {player.name}: {e}")
+            logger.error("Error processing %s %s: %s", role, player.name, e)
 
     return results
 
 
 def _load_consumes_config() -> dict:
     from . import paths
+
     config_path = str(paths.get_consumes_config_path())
     if not os.path.exists(config_path):
         return {"buff_consumables": {}, "cast_consumables": {}}
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -498,12 +548,8 @@ def _analyze_consumables(
 ) -> list[ConsumableUsage]:
     config = _load_consumes_config()
 
-    buff_ids: dict[int, str] = {
-        int(sid): name for sid, name in config.get("buff_consumables", {}).items()
-    }
-    cast_ids: dict[int, str] = {
-        int(sid): name for sid, name in config.get("cast_consumables", {}).items()
-    }
+    buff_ids: dict[int, str] = {int(sid): name for sid, name in config.get("buff_consumables", {}).items()}
+    cast_ids: dict[int, str] = {int(sid): name for sid, name in config.get("cast_consumables", {}).items()}
 
     results: list[ConsumableUsage] = []
 
@@ -523,16 +569,18 @@ def _analyze_consumables(
                     if count > 0:
                         bands = aura.get("bands", [])
                         timestamps = sorted(b.get("startTime", 0) for b in bands)
-                        results.append(ConsumableUsage(
-                            player_name=player.name,
-                            player_role=player.role,
-                            report_id=report_id,
-                            consumable_name=buff_ids[ability_id],
-                            count=count,
-                            timestamps=timestamps,
-                        ))
+                        results.append(
+                            ConsumableUsage(
+                                player_name=player.name,
+                                player_role=player.role,
+                                report_id=report_id,
+                                consumable_name=buff_ids[ability_id],
+                                count=count,
+                                timestamps=timestamps,
+                            )
+                        )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error analyzing buff consumables for {player.name}: {e}")
+            logger.error("Error analyzing buff consumables for %s: %s", player.name, e)
 
         try:
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
@@ -546,16 +594,18 @@ def _analyze_consumables(
                     cast_data[aid].append(ts)
 
             for spell_id, timestamps in cast_data.items():
-                results.append(ConsumableUsage(
-                    player_name=player.name,
-                    player_role=player.role,
-                    report_id=report_id,
-                    consumable_name=cast_ids[spell_id],
-                    count=len(timestamps),
-                    timestamps=sorted(timestamps),
-                ))
+                results.append(
+                    ConsumableUsage(
+                        player_name=player.name,
+                        player_role=player.role,
+                        report_id=report_id,
+                        consumable_name=cast_ids[spell_id],
+                        count=len(timestamps),
+                        timestamps=sorted(timestamps),
+                    )
+                )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error analyzing cast consumables for {player.name}: {e}")
+            logger.error("Error analyzing cast consumables for %s: %s", player.name, e)
 
     return results
 
@@ -567,10 +617,7 @@ def _analyze_encounters(
 ) -> list[EncounterSummary]:
     """Analyze per-boss-kill performance using time-windowed table queries."""
     fights = client.get_fights(report_id)
-    boss_kills = [
-        f for f in fights
-        if f.get("encounterID", 0) > 0 and f.get("kill")
-    ]
+    boss_kills = [f for f in fights if f.get("encounterID", 0) > 0 and f.get("kill")]
     if not boss_kills:
         return []
 
@@ -586,7 +633,7 @@ def _analyze_encounters(
             healing_entries = client.get_encounter_table(report_id, start, end, "Healing")
             taken_entries = client.get_encounter_table(report_id, start, end, "DamageTaken")
         except (requests.RequestException, KeyError, TypeError) as e:
-            print(f"Error fetching encounter data for {fight['name']}: {e}")
+            logger.error("Error fetching encounter data for %s: %s", fight["name"], e)
             continue
 
         fight_duration = end - start
@@ -595,8 +642,7 @@ def _analyze_encounters(
             name = entry.get("name", "")
             if not name or entry.get("type") == "Pet":
                 continue
-            players_map.setdefault(
-                name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
+            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
             players_map[name]["damage"] += entry.get("total", 0)
             active = entry.get("activeTime", 0)
             if active > players_map[name]["active_time"]:
@@ -606,8 +652,7 @@ def _analyze_encounters(
             name = entry.get("name", "")
             if not name or entry.get("type") == "Pet":
                 continue
-            players_map.setdefault(
-                name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
+            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
             players_map[name]["healing"] += entry.get("total", 0)
             active = entry.get("activeTime", 0)
             if active > players_map[name]["active_time"]:
@@ -617,8 +662,7 @@ def _analyze_encounters(
             name = entry.get("name", "")
             if not name or entry.get("type") == "Pet":
                 continue
-            players_map.setdefault(
-                name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
+            players_map.setdefault(name, {"damage": 0, "healing": 0, "taken": 0, "active_time": 0})
             players_map[name]["taken"] += entry.get("total", 0)
 
         encounter_players = []
@@ -626,29 +670,32 @@ def _analyze_encounters(
             player = role_lookup.get(name)
             at_pct = 0.0
             if fight_duration > 0 and totals["active_time"] > 0:
-                at_pct = min(100.0, round(
-                    totals["active_time"] / fight_duration * 100, 1))
-            encounter_players.append(EncounterPerformance(
-                name=name,
-                player_class=player.player_class if player else "Unknown",
-                source_id=player.source_id if player else 0,
-                role=player.role if player else "unknown",
-                total_damage=totals["damage"],
-                total_healing=totals["healing"],
-                total_damage_taken=totals["taken"],
-                active_time_percent=at_pct,
-            ))
+                at_pct = min(100.0, round(totals["active_time"] / fight_duration * 100, 1))
+            encounter_players.append(
+                EncounterPerformance(
+                    name=name,
+                    player_class=player.player_class if player else "Unknown",
+                    source_id=player.source_id if player else 0,
+                    role=player.role if player else "unknown",
+                    total_damage=totals["damage"],
+                    total_healing=totals["healing"],
+                    total_damage_taken=totals["taken"],
+                    active_time_percent=at_pct,
+                )
+            )
 
         encounter_players.sort(key=lambda p: p.total_damage, reverse=True)
 
-        results.append(EncounterSummary(
-            encounter_id=fight["encounterID"],
-            name=fight["name"],
-            start_time=start,
-            end_time=end,
-            duration_ms=end - start,
-            players=encounter_players,
-        ))
+        results.append(
+            EncounterSummary(
+                encounter_id=fight["encounterID"],
+                name=fight["name"],
+                start_time=start,
+                end_time=end,
+                duration_ms=end - start,
+                players=encounter_players,
+            )
+        )
 
     return results
 

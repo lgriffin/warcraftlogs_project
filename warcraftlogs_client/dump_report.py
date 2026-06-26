@@ -1,7 +1,9 @@
 import json
+
 from .auth import TokenManager
 from .client import WarcraftLogsClient
 from .loader import load_config
+
 
 def get_report_time_range(client, report_id):
     query = f"""
@@ -17,6 +19,7 @@ def get_report_time_range(client, report_id):
     result = client.run_query(query)
     report = result["data"]["reportData"]["report"]
     return report["startTime"], report["endTime"]
+
 
 def get_all_healing_events_paginated(client, report_id, start, end):
     print("📡 Beginning paginated healing event fetch...")
@@ -52,6 +55,7 @@ def get_all_healing_events_paginated(client, report_id, start, end):
 
     return all_events
 
+
 def run():
     config = load_config()
     report_id = config["report_id"]
@@ -69,6 +73,7 @@ def run():
         json.dump(events, f, indent=2)
 
     print(f"✅ Dumped {len(events)} healing events to healing_events_full.json")
+
 
 if __name__ == "__main__":
     run()

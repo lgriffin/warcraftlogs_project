@@ -4,18 +4,25 @@ Find Character view — search and browse all characters in the local database.
 
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QListWidget, QListWidgetItem, QGroupBox,
-    QSplitter, QScrollArea,
-)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
 from ..database import PerformanceDB
 from ..models import CharacterHistory
-
+from .styles import COLORS, COMMON_STYLES
 
 CLASS_COLORS = {
     "Warrior": "#C79C6E",
@@ -77,19 +84,19 @@ class FindCharacterView(QWidget):
         self._list = QListWidget()
         self._list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 8px 12px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
         """)
         self._list.currentItemChanged.connect(self._on_selected)
@@ -104,7 +111,7 @@ class FindCharacterView(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}
+            QScrollArea {{ border: none; background-color: {COLORS["bg_dark"]}; }}
         """)
 
         self._detail = QWidget()
@@ -115,8 +122,7 @@ class FindCharacterView(QWidget):
 
         self._no_selection = QLabel("Select a character from the list to see details.")
         self._no_selection.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._no_selection.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
+        self._no_selection.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
         detail_layout.addWidget(self._no_selection)
 
         self._detail_group = QGroupBox("Character Summary")
@@ -124,9 +130,16 @@ class FindCharacterView(QWidget):
         summary_layout.setSpacing(8)
 
         self._detail_labels: dict[str, QLabel] = {}
-        for key in ["Name", "Class", "Raids Tracked", "Active Period",
-                     "Avg Healing", "Avg Damage", "Avg Mitigation",
-                     "Consumables Used"]:
+        for key in [
+            "Name",
+            "Class",
+            "Raids Tracked",
+            "Active Period",
+            "Avg Healing",
+            "Avg Damage",
+            "Avg Mitigation",
+            "Consumables Used",
+        ]:
             row = QHBoxLayout()
             label = QLabel(f"{key}:")
             label.setFixedWidth(140)
@@ -210,27 +223,22 @@ class FindCharacterView(QWidget):
 
         class_color = CLASS_COLORS.get(ch.player_class, "#eee")
         self._detail_labels["Name"].setText(ch.name)
-        self._detail_labels["Name"].setStyleSheet(
-            f"color: {class_color}; font-size: 15px; font-weight: bold;")
+        self._detail_labels["Name"].setStyleSheet(f"color: {class_color}; font-size: 15px; font-weight: bold;")
         self._detail_labels["Class"].setText(ch.player_class)
-        self._detail_labels["Class"].setStyleSheet(
-            f"color: {class_color}; font-size: 13px; font-weight: bold;")
+        self._detail_labels["Class"].setStyleSheet(f"color: {class_color}; font-size: 13px; font-weight: bold;")
         self._detail_labels["Raids Tracked"].setText(str(ch.total_raids))
 
         if ch.first_seen and ch.last_seen:
-            period = (f"{ch.first_seen.strftime('%Y-%m-%d')} to "
-                      f"{ch.last_seen.strftime('%Y-%m-%d')}")
+            period = f"{ch.first_seen.strftime('%Y-%m-%d')} to {ch.last_seen.strftime('%Y-%m-%d')}"
         else:
             period = "-"
         self._detail_labels["Active Period"].setText(period)
-        self._detail_labels["Avg Healing"].setText(
-            f"{ch.avg_healing:,.0f}" if ch.avg_healing else "-")
-        self._detail_labels["Avg Damage"].setText(
-            f"{ch.avg_damage:,.0f}" if ch.avg_damage else "-")
+        self._detail_labels["Avg Healing"].setText(f"{ch.avg_healing:,.0f}" if ch.avg_healing else "-")
+        self._detail_labels["Avg Damage"].setText(f"{ch.avg_damage:,.0f}" if ch.avg_damage else "-")
         self._detail_labels["Avg Mitigation"].setText(
-            f"{ch.avg_mitigation_percent:.1f}%" if ch.avg_mitigation_percent else "-")
-        self._detail_labels["Consumables Used"].setText(
-            str(ch.total_consumables_used))
+            f"{ch.avg_mitigation_percent:.1f}%" if ch.avg_mitigation_percent else "-"
+        )
+        self._detail_labels["Consumables Used"].setText(str(ch.total_consumables_used))
 
     def _open_history(self):
         if self._selected:

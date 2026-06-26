@@ -165,9 +165,7 @@ def _render_healer_summary_tables(healers: list[HealerPerformance]) -> None:
             dispel_lookup = {d.spell_name: d.casts for d in h.dispels}
             resource_lookup = {r.name: r.count for r in h.resources}
 
-            spell_cols = "".join(
-                f"{spell_lookup[s].casts if s in spell_lookup else 0:>16}" for s in spell_names
-            )
+            spell_cols = "".join(f"{spell_lookup[s].casts if s in spell_lookup else 0:>16}" for s in spell_names)
             dispel_cols = "".join(f"{dispel_lookup.get(d, 0):>16}" for d in dispel_names)
             mana = resource_lookup.get("Super Mana Potion", 0)
             rune = resource_lookup.get("Dark Rune", 0)

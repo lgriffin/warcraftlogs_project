@@ -1,22 +1,19 @@
 """Tests for the analysis pipeline — role detection and data processing."""
 
 import json
-import os
-from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 
 from warcraftlogs_client.analysis import (
+    _analyze_consumables,
     _classify_hybrid_role,
     _identify_composition,
     _identify_healers,
     _identify_tanks,
     _load_consumes_config,
-    _analyze_consumables,
     analyze_raid,
 )
-from warcraftlogs_client.models import PlayerIdentity, RaidComposition, RaidMetadata
+from warcraftlogs_client.models import RaidComposition, RaidMetadata
 
 
 class TestClassifyHybridRole:
@@ -154,11 +151,18 @@ class TestAnalyzeConsumables:
         )
 
         mock_client.get_buffs_table.return_value = {
-            "data": {"auras": [
-                {"guid": 28507, "totalUses": 2, "bands": [
-                    {"startTime": 10_000}, {"startTime": 20_000},
-                ]},
-            ]},
+            "data": {
+                "auras": [
+                    {
+                        "guid": 28507,
+                        "totalUses": 2,
+                        "bands": [
+                            {"startTime": 10_000},
+                            {"startTime": 20_000},
+                        ],
+                    },
+                ]
+            },
         }
         mock_client.get_cast_events_paginated.return_value = []
 
@@ -193,7 +197,9 @@ class TestAnalyzeConsumables:
 class TestAnalyzeRaid:
     def test_end_to_end(self, mock_client, monkeypatch):
         mock_client.get_report_metadata.return_value = RaidMetadata(
-            report_id="r1", title="Test", owner="Owner",
+            report_id="r1",
+            title="Test",
+            owner="Owner",
             start_time=1_700_000_000_000,
         )
         mock_client.get_master_data.return_value = [
@@ -210,9 +216,7 @@ class TestAnalyzeRaid:
         mock_client.get_damage_done_data.return_value = [
             {"type": "damage", "amount": 150_000, "abilityGameID": 1},
         ]
-        mock_client.run_query.return_value = {
-            "data": {"reportData": {"report": {"table": {"data": {"entries": []}}}}}
-        }
+        mock_client.run_query.return_value = {"data": {"reportData": {"report": {"table": {"data": {"entries": []}}}}}}
         mock_client.get_buffs_table.return_value = {"data": {"auras": []}}
         mock_client.get_cast_events_paginated.return_value = []
         mock_client.get_damage_taken_table.return_value = []

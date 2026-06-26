@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "warcraftlogs-analyzer"
@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.6.0"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff", "mypy", "bandit[toml]", "pre-commit"]
 
 [project.scripts]
 warcraftlogs = "warcraftlogs_client.cli:main"
@@ -31,7 +31,24 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+select = ["E", "F", "I", "W", "B", "UP", "SIM", "C4", "RUF"]
+ignore = ["E402", "E501", "E701", "SIM102", "SIM108", "SIM116"]
+
+[tool.ruff.lint.per-file-ignores]
+"warcraftlogs_client/gui/*" = ["B008", "RUF012"]
+"tests/*" = ["B008", "RUF012", "SIM105", "SIM115"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B105", "B110", "B404", "B603", "B607", "B608"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

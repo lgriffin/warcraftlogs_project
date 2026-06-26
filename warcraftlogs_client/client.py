@@ -9,15 +9,20 @@ import logging
 import time
 
 import requests
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 from .cache import get_cached_response, save_response_cache
 from .models import (
-    RaidMetadata, CharacterProfile, ZoneRankingResult,
-    EncounterRanking, AllStarRanking, CharacterReportEntry,
-    GearItem, GEAR_SLOT_ORDER, GEAR_SLOTS_HIDDEN,
+    GEAR_SLOT_ORDER,
+    GEAR_SLOTS_HIDDEN,
+    AllStarRanking,
+    CharacterProfile,
+    CharacterReportEntry,
+    EncounterRanking,
+    GearItem,
+    RaidMetadata,
+    ZoneRankingResult,
 )
 
 
@@ -62,18 +67,20 @@ class WarcraftLogsClient:
             self._throttle()
             self._last_request_time = time.monotonic()
 
-            response = requests.post(self.API_URL, headers=headers, json={"query": query})
+            response = requests.post(self.API_URL, headers=headers, json={"query": query}, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
             if response.status_code == 429 or response.status_code >= 500:
                 if attempt < self.MAX_RETRIES - 1:
-                    backoff = 2 ** attempt
+                    backoff = 2**attempt
                     time.sleep(backoff)
                     continue
             response.raise_for_status()
             result = response.json()
-            logger.debug("Response data keys: %s", list(result.get("data", {}).keys()) if "data" in result else "no data key")
+            logger.debug(
+                "Response data keys: %s", list(result.get("data", {}).keys()) if "data" in result else "no data key"
+            )
             if result.get("errors"):
                 logger.warning("GraphQL errors: %s", result["errors"])
             if use_cache:
@@ -168,14 +175,16 @@ class WarcraftLogsClient:
             result = self.run_query(query, use_cache=False)
             page_data = result["data"]["reportData"]["reports"]
             for r in page_data["data"]:
-                all_reports.append({
-                    "code": r["code"],
-                    "title": r["title"],
-                    "owner": r["owner"]["name"] if r.get("owner") else "",
-                    "start_time": r["startTime"],
-                    "end_time": r.get("endTime"),
-                    "zone": r["zone"]["name"] if r.get("zone") else "",
-                })
+                all_reports.append(
+                    {
+                        "code": r["code"],
+                        "title": r["title"],
+                        "owner": r["owner"]["name"] if r.get("owner") else "",
+                        "start_time": r["startTime"],
+                        "end_time": r.get("endTime"),
+                        "zone": r["zone"]["name"] if r.get("zone") else "",
+                    }
+                )
             if not page_data.get("has_more_pages"):
                 break
             page += 1
@@ -225,8 +234,7 @@ class WarcraftLogsClient:
         report = _extract_report(result)
         return report.get("fights") or []
 
-    def get_encounter_table(self, report_id: str, start_time: int,
-                             end_time: int, data_type: str) -> list[dict]:
+    def get_encounter_table(self, report_id: str, start_time: int, end_time: int, data_type: str) -> list[dict]:
         """Query the table endpoint for a time window without sourceID.
 
         Returns per-player aggregate totals for the given data_type
@@ -515,9 +523,9 @@ class WarcraftLogsClient:
 
     # ── Character profile queries ──
 
-    def get_character_profile(self, name: str, server_slug: str,
-                              server_region: str,
-                              api_url: str = None) -> CharacterProfile:
+    def get_character_profile(
+        self, name: str, server_slug: str, server_region: str, api_url: str | None = None
+    ) -> CharacterProfile:
         """Fetch a full character profile from the WCL API."""
         original_url = self.API_URL
         if api_url:
@@ -580,8 +588,7 @@ class WarcraftLogsClient:
 
             # Fetch gear from CombatantInfo in the most recent report
             if profile.recent_reports:
-                profile.gear_items = self._fetch_gear_from_report(
-                    profile.recent_reports[0].code, profile.name)
+                profile.gear_items = self._fetch_gear_from_report(profile.recent_reports[0].code, profile.name)
 
             return profile
         finally:
@@ -644,22 +651,29 @@ class WarcraftLogsClient:
                 if slot_name in GEAR_SLOTS_HIDDEN:
                     continue
                 gems = [gem["id"] for gem in g.get("gems", []) if gem.get("id")]
-                items.append(GearItem(
-                    slot=slot_name,
-                    item_id=g["id"],
-                    item_level=g.get("itemLevel", 0),
-                    quality=g.get("quality", 0),
-                    enchant_id=g.get("permanentEnchant", 0),
-                    gems=gems,
-                ))
+                items.append(
+                    GearItem(
+                        slot=slot_name,
+                        item_id=g["id"],
+                        item_level=g.get("itemLevel", 0),
+                        quality=g.get("quality", 0),
+                        enchant_id=g.get("permanentEnchant", 0),
+                        gems=gems,
+                    )
+                )
             return items
         except (KeyError, TypeError, IndexError):
             return []
 
-    def get_character_zone_rankings(self, name: str, server_slug: str,
-                                     server_region: str, zone_id: int,
-                                     metric: str = "dps",
-                                     api_url: str = None) -> Optional[ZoneRankingResult]:
+    def get_character_zone_rankings(
+        self,
+        name: str,
+        server_slug: str,
+        server_region: str,
+        zone_id: int,
+        metric: str = "dps",
+        api_url: str | None = None,
+    ) -> ZoneRankingResult | None:
         """Fetch zone rankings for a specific zone."""
         original_url = self.API_URL
         if api_url:
@@ -690,30 +704,34 @@ class WarcraftLogsClient:
     def _parse_zone_rankings(self, zr: dict) -> ZoneRankingResult:
         all_stars = []
         for s in zr.get("allStars", []):
-            all_stars.append(AllStarRanking(
-                spec=s.get("spec", ""),
-                points=s.get("points", 0),
-                possible_points=s.get("possiblePoints", 0),
-                rank=s.get("rank", 0),
-                region_rank=s.get("regionRank", 0),
-                server_rank=s.get("serverRank", 0),
-                rank_percent=s.get("rankPercent", 0),
-                total=s.get("total", 0),
-            ))
+            all_stars.append(
+                AllStarRanking(
+                    spec=s.get("spec", ""),
+                    points=s.get("points", 0),
+                    possible_points=s.get("possiblePoints", 0),
+                    rank=s.get("rank", 0),
+                    region_rank=s.get("regionRank", 0),
+                    server_rank=s.get("serverRank", 0),
+                    rank_percent=s.get("rankPercent", 0),
+                    total=s.get("total", 0),
+                )
+            )
 
         rankings = []
         for r in zr.get("rankings", []):
             enc = r.get("encounter", {})
-            rankings.append(EncounterRanking(
-                encounter_id=enc.get("id", 0),
-                encounter_name=enc.get("name", ""),
-                spec=r.get("spec", ""),
-                best_percent=r.get("rankPercent", 0),
-                median_percent=r.get("medianPercent", 0),
-                total_kills=r.get("totalKills", 0),
-                fastest_kill_ms=r.get("fastestKill", 0),
-                locked_in=r.get("lockedIn", False),
-            ))
+            rankings.append(
+                EncounterRanking(
+                    encounter_id=enc.get("id", 0),
+                    encounter_name=enc.get("name", ""),
+                    spec=r.get("spec", ""),
+                    best_percent=r.get("rankPercent", 0),
+                    median_percent=r.get("medianPercent", 0),
+                    total_kills=r.get("totalKills", 0),
+                    fastest_kill_ms=r.get("fastestKill", 0),
+                    locked_in=r.get("lockedIn", False),
+                )
+            )
 
         return ZoneRankingResult(
             zone_id=zr.get("zone", 0),
@@ -730,6 +748,7 @@ class WarcraftLogsClient:
 # ── Legacy compatibility shims ──
 # These free functions are used by existing code. They delegate to client methods
 # but accept the old (client, report_id, source_id) signature.
+
 
 def get_healing_data(client: WarcraftLogsClient, report_id: str, source_id: int):
     data = client.get_healing_data(report_id, source_id)

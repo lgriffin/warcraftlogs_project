@@ -1,16 +1,13 @@
 """Tests for the JSON cache module."""
 
 import json
-import os
-
-import pytest
 
 from warcraftlogs_client.cache import (
-    _safe_filename,
     _cache_file,
+    _safe_filename,
+    get_cached_actor_data,
     load_cached_data,
     save_cache,
-    get_cached_actor_data,
     set_cached_actor_data,
 )
 

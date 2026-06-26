@@ -5,34 +5,63 @@ History view — browse historical character performance and past raid analyses.
 import sqlite3
 from datetime import datetime
 
+from PySide6.QtCore import QModelIndex, QRect, QSize, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QCursor, QFont, QPainter
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QCheckBox, QComboBox, QTableView, QHeaderView, QGroupBox,
-    QSplitter, QListWidget, QListWidgetItem, QTabWidget,
-    QTextEdit, QMessageBox, QFileDialog, QStyledItemDelegate, QStyle,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QStyle,
+    QStyledItemDelegate,
+    QTableView,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex, QRect, QSize
-from PySide6.QtGui import QFont, QCursor, QPainter, QColor, QPen, QBrush
 
-from .detail_panel import CharacterDetailPanel
-
-from .styles import COMMON_STYLES, COLORS
-from .charts import (
-    build_healer_chart, build_healer_overheal_chart,
-    build_tank_chart, build_tank_mitigation_chart,
-    build_dps_chart, build_spell_trend_chart,
-    build_consumable_trend_chart,
-    SpiderChartWidget, CalendarHeatmapWidget,
-)
-from .table_models import (
-    HistoryTableModel, HealerTableModel, TankTableModel, DPSTableModel,
-)
 from ..database import PerformanceDB
-
+from .charts import (
+    CalendarHeatmapWidget,
+    SpiderChartWidget,
+    build_consumable_trend_chart,
+    build_dps_chart,
+    build_healer_chart,
+    build_healer_overheal_chart,
+    build_spell_trend_chart,
+    build_tank_chart,
+    build_tank_mitigation_chart,
+)
+from .detail_panel import CharacterDetailPanel
+from .styles import COLORS, COMMON_STYLES
+from .table_models import (
+    DPSTableModel,
+    HealerTableModel,
+    HistoryTableModel,
+    TankTableModel,
+)
 
 TAG_COLORS = [
-    "#e94560", "#2ecc71", "#3498db", "#f39c12", "#9b59b6",
-    "#1abc9c", "#e67e22", "#e74c3c", "#00cec9", "#fd79a8",
+    "#e94560",
+    "#2ecc71",
+    "#3498db",
+    "#f39c12",
+    "#9b59b6",
+    "#1abc9c",
+    "#e67e22",
+    "#e74c3c",
+    "#00cec9",
+    "#fd79a8",
 ]
 
 
@@ -46,14 +75,14 @@ class _TagDelegate(QStyledItemDelegate):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         if option.state & QStyle.StateFlag.State_Selected:
-            painter.fillRect(option.rect, QColor(COLORS['bg_dark']))
+            painter.fillRect(option.rect, QColor(COLORS["bg_dark"]))
         else:
-            painter.fillRect(option.rect, QColor(COLORS['bg_card']))
+            painter.fillRect(option.rect, QColor(COLORS["bg_card"]))
 
         tags = index.data(Qt.ItemDataRole.UserRole + 1) or []
         display = index.data(Qt.ItemDataRole.DisplayRole) or ""
 
-        painter.setPen(QColor(COLORS['text']))
+        painter.setPen(QColor(COLORS["text"]))
         painter.setFont(option.font)
         text_rect = QRect(option.rect)
         text_rect.setLeft(text_rect.left() + 12)
@@ -152,17 +181,17 @@ class HistoryView(QWidget):
         self._group_filter_combo.setMinimumWidth(140)
         self._group_filter_combo.setStyleSheet(f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; padding: 4px 8px;
                 font-size: 11px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._group_filter_combo.currentIndexChanged.connect(self._apply_group_filter)
@@ -174,19 +203,19 @@ class HistoryView(QWidget):
         self.char_list.setItemDelegate(_TagDelegate(self.char_list))
         self.char_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 8px 12px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
         """)
         self.char_list.currentItemChanged.connect(self._on_character_selected)
@@ -201,9 +230,19 @@ class HistoryView(QWidget):
         self.summary_card = QGroupBox("Character Summary")
         summary_layout = QVBoxLayout(self.summary_card)
         self.summary_labels = {}
-        for key in ["Name", "Class", "Raid Groups", "Raids Tracked", "Active Period",
-                     "Avg Healing", "Avg Damage", "Avg Mitigation", "Consumables Used",
-                     "Consistency", "Consumable Compliance"]:
+        for key in [
+            "Name",
+            "Class",
+            "Raid Groups",
+            "Raids Tracked",
+            "Active Period",
+            "Avg Healing",
+            "Avg Damage",
+            "Avg Mitigation",
+            "Consumables Used",
+            "Consistency",
+            "Consumable Compliance",
+        ]:
             row = QHBoxLayout()
             label = QLabel(f"{key}:")
             label.setFixedWidth(130)
@@ -223,9 +262,9 @@ class HistoryView(QWidget):
         raid_size_row.addWidget(raid_size_label)
         combo_style = f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 11px;
@@ -235,9 +274,9 @@ class HistoryView(QWidget):
                 border: none;
             }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """
 
@@ -258,10 +297,14 @@ class HistoryView(QWidget):
         healer_bar = QHBoxLayout()
         healer_bar.addWidget(QLabel("Chart:"))
         self._healer_chart_combo = QComboBox()
-        self._healer_chart_combo.addItems([
-            "Healing & Overhealing", "Overheal %",
-            "Spell Healing", "Spell Casts",
-        ])
+        self._healer_chart_combo.addItems(
+            [
+                "Healing & Overhealing",
+                "Overheal %",
+                "Spell Healing",
+                "Spell Casts",
+            ]
+        )
         self._healer_chart_combo.setStyleSheet(combo_style)
         self._healer_chart_combo.currentIndexChanged.connect(self._rebuild_healer_chart)
         healer_bar.addWidget(self._healer_chart_combo)
@@ -280,9 +323,12 @@ class HistoryView(QWidget):
         tank_bar = QHBoxLayout()
         tank_bar.addWidget(QLabel("Chart:"))
         self._tank_chart_combo = QComboBox()
-        self._tank_chart_combo.addItems([
-            "Damage & Mitigation", "Mitigation %",
-        ])
+        self._tank_chart_combo.addItems(
+            [
+                "Damage & Mitigation",
+                "Mitigation %",
+            ]
+        )
         self._tank_chart_combo.setStyleSheet(combo_style)
         self._tank_chart_combo.currentIndexChanged.connect(self._rebuild_tank_chart)
         tank_bar.addWidget(self._tank_chart_combo)
@@ -301,9 +347,13 @@ class HistoryView(QWidget):
         dps_bar = QHBoxLayout()
         dps_bar.addWidget(QLabel("Chart:"))
         self._dps_chart_combo = QComboBox()
-        self._dps_chart_combo.addItems([
-            "Total Damage", "Ability Damage", "Ability Casts",
-        ])
+        self._dps_chart_combo.addItems(
+            [
+                "Total Damage",
+                "Ability Damage",
+                "Ability Casts",
+            ]
+        )
         self._dps_chart_combo.setStyleSheet(combo_style)
         self._dps_chart_combo.currentIndexChanged.connect(self._rebuild_dps_chart)
         dps_bar.addWidget(self._dps_chart_combo)
@@ -409,8 +459,7 @@ class HistoryView(QWidget):
         day_filter_layout.addWidget(filter_label)
 
         self._raid_day_checkboxes = {}
-        days = [("Mon", 0), ("Tue", 1), ("Wed", 2), ("Thu", 3),
-                ("Fri", 4), ("Sat", 5), ("Sun", 6)]
+        days = [("Mon", 0), ("Tue", 1), ("Wed", 2), ("Thu", 3), ("Fri", 4), ("Sat", 5), ("Sun", 6)]
         defaults_on = {2, 3, 6}
         for label, idx in days:
             day_label = QLabel(label)
@@ -428,19 +477,19 @@ class HistoryView(QWidget):
         self.raid_list = QListWidget()
         self.raid_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 8px 12px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
         """)
         self.raid_list.currentItemChanged.connect(self._on_raid_selected)
@@ -450,7 +499,7 @@ class HistoryView(QWidget):
         self.delete_raid_btn = QPushButton("Delete Selected Raid")
         self.delete_raid_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['error']};
+                background-color: {COLORS["error"]};
                 color: white;
                 border: none;
                 border-radius: 4px;
@@ -478,8 +527,8 @@ class HistoryView(QWidget):
         self.raid_info_label = QLabel("")
         self.raid_info_label.setStyleSheet(f"""
             QLabel {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
                 padding: 10px 16px;
                 border-radius: 6px;
                 font-size: 13px;
@@ -521,18 +570,18 @@ class HistoryView(QWidget):
         self._raid_consumes_filter_combo.setMinimumWidth(180)
         self._raid_consumes_filter_combo.setStyleSheet(f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 11px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._raid_consumes_filter_combo.currentIndexChanged.connect(self._apply_raid_consumes_filter)
@@ -557,8 +606,8 @@ class HistoryView(QWidget):
         self.raid_comp_text.setReadOnly(True)
         self.raid_comp_text.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
                 border: none;
                 font-family: "Cascadia Code", "Consolas", monospace;
                 font-size: 13px;
@@ -606,9 +655,12 @@ class HistoryView(QWidget):
         table.verticalHeader().setVisible(False)
         table.horizontalHeader().setStretchLastSection(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        table.setStyleSheet(table.styleSheet() + f"""
-            QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}
-        """)
+        table.setStyleSheet(
+            table.styleSheet()
+            + f"""
+            QTableView {{ alternate-background-color: {COLORS["bg_dark"]}; }}
+        """
+        )
         table.name_clicked.connect(self._on_raid_character_clicked)
         return table
 
@@ -656,8 +708,7 @@ class HistoryView(QWidget):
             for ch in self._all_characters:
                 item = QListWidgetItem(f"{ch.name}  ({ch.player_class})")
                 item.setData(Qt.ItemDataRole.UserRole, ch.name)
-                item.setData(Qt.ItemDataRole.UserRole + 1,
-                             self._group_map.get(ch.name, []))
+                item.setData(Qt.ItemDataRole.UserRole + 1, self._group_map.get(ch.name, []))
                 self.char_list.addItem(item)
 
             self._apply_group_filter()
@@ -672,8 +723,7 @@ class HistoryView(QWidget):
             item = self.char_list.item(i)
             name = item.data(Qt.ItemDataRole.UserRole)
             text_match = search in item.text().lower()
-            group_match = (group == "All" or
-                           group in self._group_map.get(name, []))
+            group_match = group == "All" or group in self._group_map.get(name, [])
             item.setHidden(not (text_match and group_match))
 
     def _apply_group_filter(self):
@@ -704,8 +754,9 @@ class HistoryView(QWidget):
                         color = TAG_COLORS[i % len(TAG_COLORS)]
                         tag_parts.append(
                             f'<span style="background-color:{color}; color:#fff; '
-                            f'padding:2px 8px; border-radius:4px; font-size:11px; '
-                            f'font-weight:bold;">{g}</span>')
+                            f"padding:2px 8px; border-radius:4px; font-size:11px; "
+                            f'font-weight:bold;">{g}</span>'
+                        )
                     self.summary_labels["Raid Groups"].setText("  ".join(tag_parts))
                     self.summary_labels["Raid Groups"].setTextFormat(Qt.TextFormat.RichText)
                 else:
@@ -723,9 +774,7 @@ class HistoryView(QWidget):
                 self.summary_labels["Avg Healing"].setText(
                     f"{history.avg_healing:,.0f}" if history.avg_healing else "-"
                 )
-                self.summary_labels["Avg Damage"].setText(
-                    f"{history.avg_damage:,.0f}" if history.avg_damage else "-"
-                )
+                self.summary_labels["Avg Damage"].setText(f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
                 self.summary_labels["Avg Mitigation"].setText(
                     f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-"
                 )
@@ -763,9 +812,7 @@ class HistoryView(QWidget):
                 if compliance and compliance.get("total_raids", 0) > 0:
                     pct = compliance["compliance_pct"]
                     avg = compliance["avg_per_raid"]
-                    self.summary_labels["Consumable Compliance"].setText(
-                        f"{pct:.0f}% ({avg:.1f}/raid)"
-                    )
+                    self.summary_labels["Consumable Compliance"].setText(f"{pct:.0f}% ({avg:.1f}/raid)")
                 else:
                     self.summary_labels["Consumable Compliance"].setText("-")
 
@@ -834,7 +881,8 @@ class HistoryView(QWidget):
         if self._cached_healer_trend:
             self.healer_trend_model.set_data(
                 self._cached_healer_trend,
-                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent"])
+                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent"],
+            )
         else:
             self.healer_trend_model.set_data([], [])
         self._rebuild_healer_chart()
@@ -842,27 +890,28 @@ class HistoryView(QWidget):
         if self._cached_tank_trend:
             self.tank_trend_model.set_data(
                 self._cached_tank_trend,
-                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent"])
+                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent"],
+            )
         else:
             self.tank_trend_model.set_data([], [])
         self._rebuild_tank_chart()
 
         if self._cached_dps_trend:
             self.dps_trend_model.set_data(
-                self._cached_dps_trend,
-                ["raid_date", "title", "raid_size", "role", "total_damage"])
+                self._cached_dps_trend, ["raid_date", "title", "raid_size", "role", "total_damage"]
+            )
         else:
             self.dps_trend_model.set_data([], [])
         self._rebuild_dps_chart()
 
-        consumes_summary = getattr(self, '_consumes_summary', [])
+        consumes_summary = getattr(self, "_consumes_summary", [])
         if consumes_summary:
             all_consumable_names = set()
             for row in consumes_summary:
                 for k in row:
                     if k not in ("raid_date", "title", "report_id"):
                         all_consumable_names.add(k)
-            cols = ["raid_date", "title"] + sorted(all_consumable_names)
+            cols = ["raid_date", "title", *sorted(all_consumable_names)]
             self.consumes_trend_model.set_data(consumes_summary, cols)
         else:
             self.consumes_trend_model.set_data([], [])
@@ -888,11 +937,9 @@ class HistoryView(QWidget):
         elif choice == 1:
             view = build_healer_overheal_chart(trend)
         elif choice == 2:
-            view = build_spell_trend_chart(
-                spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
+            view = build_spell_trend_chart(spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
         elif choice == 3:
-            view = build_spell_trend_chart(
-                spell_trend, "casts", "Spell Casts Over Time", "Casts")
+            view = build_spell_trend_chart(spell_trend, "casts", "Spell Casts Over Time", "Casts")
         else:
             return
         self._set_chart(self._healer_chart_container, "healer", view)
@@ -925,11 +972,9 @@ class HistoryView(QWidget):
         if choice == 0:
             view = build_dps_chart(trend)
         elif choice == 1:
-            view = build_spell_trend_chart(
-                ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
+            view = build_spell_trend_chart(ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
         elif choice == 2:
-            view = build_spell_trend_chart(
-                ability_trend, "casts", "Ability Casts Over Time", "Casts")
+            view = build_spell_trend_chart(ability_trend, "casts", "Ability Casts Over Time", "Casts")
         else:
             return
         self._set_chart(self._dps_chart_container, "dps", view)
@@ -956,7 +1001,7 @@ class HistoryView(QWidget):
 
     def _apply_raid_day_filter(self):
         self.raid_list.clear()
-        if not hasattr(self, '_all_raids_raw'):
+        if not hasattr(self, "_all_raids_raw"):
             return
 
         allowed_days = {idx for idx, cb in self._raid_day_checkboxes.items() if cb.isChecked()}
@@ -1090,7 +1135,7 @@ class HistoryView(QWidget):
         self._apply_raid_consumes_filter()
 
     def _apply_raid_consumes_filter(self):
-        if not hasattr(self, '_raid_consumables_raw'):
+        if not hasattr(self, "_raid_consumables_raw"):
             return
 
         consumes = self._raid_consumables_raw
@@ -1116,7 +1161,7 @@ class HistoryView(QWidget):
             rows.sort(key=lambda r: r.get(selected, 0), reverse=True)
         else:
             consumable_names = sorted({c.consumable_name for c in consumes})
-            cols = ["Name", "Role"] + consumable_names
+            cols = ["Name", "Role", *consumable_names]
 
         self._raid_consumes_model.set_data(rows, cols)
 
@@ -1130,7 +1175,8 @@ class HistoryView(QWidget):
         title = current.text()
 
         reply = QMessageBox.question(
-            self, "Delete Raid",
+            self,
+            "Delete Raid",
             f"Are you sure you want to delete this raid?\n\n{title}\n\n"
             "This will remove all performance data associated with this raid.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -1154,12 +1200,11 @@ class HistoryView(QWidget):
             return
 
         title = self._current_raid_analysis.metadata.title
-        safe_title = "".join(
-            c if c.isalnum() or c in " _-" else "_" for c in title
-        ).strip().replace(" ", "_")
+        safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title).strip().replace(" ", "_")
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Markdown Report",
+            self,
+            "Export Markdown Report",
             f"{safe_title}.md",
             "Markdown Files (*.md);;All Files (*)",
         )
@@ -1168,6 +1213,7 @@ class HistoryView(QWidget):
 
         try:
             from ..renderers.markdown import export_raid_analysis
+
             export_raid_analysis(self._current_raid_analysis, output_path=path)
             self.status_message.emit(f"Exported to {path}")
         except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
@@ -1179,8 +1225,12 @@ class HistoryView(QWidget):
         lines.append("RAID COMPOSITION")
         lines.append("=" * 50)
 
-        for label, group in [("Tanks", comp.tanks), ("Healers", comp.healers),
-                             ("Melee DPS", comp.melee), ("Ranged DPS", comp.ranged)]:
+        for label, group in [
+            ("Tanks", comp.tanks),
+            ("Healers", comp.healers),
+            ("Melee DPS", comp.melee),
+            ("Ranged DPS", comp.ranged),
+        ]:
             lines.append(f"\n{label} ({len(group)}):")
             if not group:
                 lines.append("  (none)")

@@ -1,15 +1,13 @@
-import datetime
 import argparse
-import json
 from collections import defaultdict
 
 import requests
 
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
+from .common.data import get_master_data, get_report_metadata
 from .config import load_config
 from .spell_manager import SpellBreakdown
-from .common.data import get_master_data, get_report_metadata
 
 
 def get_damage_taken_data(client, report_id, source_id):
@@ -65,20 +63,20 @@ def run_tank_report():
 
             percent = total_mitigated / total_unmitigated * 100
             if total_taken > 150000 and percent > 40:
-                tank_candidates.append({
-                    "name": name,
-                    "class": char_class,
-                    "id": source_id,
-                    "taken": total_taken,
-                    "mitigated": total_mitigated,
-                    "percent": round(percent, 2)
-                })
+                tank_candidates.append(
+                    {
+                        "name": name,
+                        "class": char_class,
+                        "id": source_id,
+                        "taken": total_taken,
+                        "mitigated": total_mitigated,
+                        "percent": round(percent, 2),
+                    }
+                )
                 per_tank_events[name] = events
 
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"❌ Error evaluating {name}: {e}")
-
-    
 
     print("============================")
     print("📊 Individual Tank Reports")
@@ -90,10 +88,10 @@ def run_tank_report():
 
         # Damage Taken Abilities
         damage_taken_counts = defaultdict(int)
-        spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, tank['id'])
+        spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, tank["id"])
         alias_map = SpellBreakdown.spell_id_aliases
 
-        for e in per_tank_events[tank['name']]:
+        for e in per_tank_events[tank["name"]]:
             if e.get("type") == "damage":
                 spell_id = e.get("abilityGameID")
                 damage_taken_counts[spell_id] += 1
@@ -106,7 +104,7 @@ def run_tank_report():
         # Abilities Used by Tank
         print("⚔️  Abilities Used:")
         try:
-            damage_done_events = get_damage_done_data(client, report_id, tank['id'])
+            damage_done_events = get_damage_done_data(client, report_id, tank["id"])
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"  ⚠️ Error fetching damage done for {tank['name']}: {e}")
             damage_done_events = []
@@ -121,7 +119,6 @@ def run_tank_report():
             canonical_id = alias_map.get(spell_id, spell_id)
             print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} uses")
 
-        
     print("============================")
     print("📊 Tank Comparison Summary")
 
@@ -134,7 +131,7 @@ def run_tank_report():
     all_taken_abilities = set()
 
     for tank in tank_candidates:
-        name = tank['name']
+        name = tank["name"]
         damage_counts = defaultdict(int)
         for e in per_tank_events[name]:
             if e.get("type") == "damage":
@@ -144,12 +141,11 @@ def run_tank_report():
             damage_taken_table[name][ability_id] = count
             all_taken_abilities.add(ability_id)
 
-    sample_id = tank_candidates[0]['id']
+    sample_id = tank_candidates[0]["id"]
     spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, sample_id)
 
     header = f"{'Character':<15}" + "".join(
-        f"{spell_map.get(spell_id, f'(ID {spell_id})')[:14]:>16}"
-        for spell_id in sorted(all_taken_abilities)
+        f"{spell_map.get(spell_id, f'(ID {spell_id})')[:14]:>16}" for spell_id in sorted(all_taken_abilities)
     )
     print(header)
     print("-" * len(header))
@@ -162,11 +158,11 @@ def run_tank_report():
 
     print("============================")
     for tank in sorted(tank_candidates, key=lambda x: (x["class"], -x["percent"])):
-        print(f"- {tank['name']} ({tank['class']}): {tank['percent']}% mitigated ({tank['mitigated']:,} of {tank['taken'] + tank['mitigated']:,})")
-        
+        print(
+            f"- {tank['name']} ({tank['class']}): {tank['percent']}% mitigated ({tank['mitigated']:,} of {tank['taken'] + tank['mitigated']:,})"
+        )
 
-
-# 📊 Class-Based Ability Usage Table
+    # 📊 Class-Based Ability Usage Table
     print("============================")
     print("📊 Class-Based Tank Ability Summary")
     print("============================")
@@ -185,17 +181,14 @@ def run_tank_report():
             for e in damage_done_events:
                 if e.get("type") == "damage":
                     ability_counts[e.get("abilityGameID")] += 1
-            class_tables[class_name].append({
-                "name": name,
-                "casts": ability_counts
-            })
+            class_tables[class_name].append({"name": name, "casts": ability_counts})
             all_abilities_by_class[class_name].update(ability_counts.keys())
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"⚠️ Could not fetch abilities for {name}: {e}")
 
     for class_name in class_tables:
         print(f"======= Team {class_name} =======")
-        sample_id = next((t['id'] for t in tank_candidates if t['class'] == class_name), None)
+        sample_id = next((t["id"] for t in tank_candidates if t["class"] == class_name), None)
         spell_map, _, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, sample_id)
 
         header = f"{'Character':<15}" + "".join(
@@ -213,6 +206,6 @@ def run_tank_report():
 
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser(description="Generate mitigation-based tank summary.")
-  args = parser.parse_args()
-  run_tank_report()
+    parser = argparse.ArgumentParser(description="Generate mitigation-based tank summary.")
+    args = parser.parse_args()
+    run_tank_report()

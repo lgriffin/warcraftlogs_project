@@ -1,9 +1,12 @@
 import hashlib
-import os
 import json
-from typing import Any, Optional
+import logging
+import os
+from typing import Any
 
 from . import paths
+
+logger = logging.getLogger(__name__)
 
 CACHE_DIR = str(paths.get_cache_dir())
 QUERY_CACHE_DIR = os.path.join(CACHE_DIR, "responses")
@@ -17,14 +20,14 @@ def _cache_file(report_id: str) -> str:
     return os.path.join(CACHE_DIR, f"{_safe_filename(report_id)}.json")
 
 
-def load_cached_data(report_id: str) -> Optional[dict]:
+def load_cached_data(report_id: str) -> dict | None:
     path = _cache_file(report_id)
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            print(f"Cache file is corrupted: {path}")
+            logger.warning("Cache file is corrupted: %s", path)
     return None
 
 
@@ -34,10 +37,10 @@ def save_cache(report_id: str, data: dict) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
     except OSError as e:
-        print(f"Failed to save cache: {e}")
+        logger.error("Failed to save cache: %s", e)
 
 
-def get_cached_actor_data(cache: dict, actor_name: str, data_type: str) -> Optional[Any]:
+def get_cached_actor_data(cache: dict, actor_name: str, data_type: str) -> Any | None:
     return cache.get(data_type, {}).get(actor_name)
 
 
@@ -47,13 +50,13 @@ def set_cached_actor_data(cache: dict, actor_name: str, data_type: str, new_data
     cache[data_type][actor_name] = new_data
 
 
-def get_cached_response(query: str) -> Optional[dict]:
+def get_cached_response(query: str) -> dict | None:
     os.makedirs(QUERY_CACHE_DIR, exist_ok=True)
     key = hashlib.sha256(query.encode()).hexdigest()
     path = os.path.join(QUERY_CACHE_DIR, f"{key}.json")
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
@@ -91,7 +94,7 @@ WOWHEAD_CACHE_FILE = os.path.join(CACHE_DIR, "wowhead_names.json")
 def load_wowhead_cache() -> dict:
     if os.path.exists(WOWHEAD_CACHE_FILE):
         try:
-            with open(WOWHEAD_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(WOWHEAD_CACHE_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             pass

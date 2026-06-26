@@ -1,21 +1,30 @@
 """GM/RL Insights: cross-cutting trends, comparisons, and data exploration."""
 
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox,
-    QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton,
+    QComboBox,
     QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .styles import COMMON_STYLES, COLORS
 from .charts import (
+    ConsumableHeatmapWidget,
     build_dps_progression_chart,
     build_heal_damage_ratio_chart,
-    build_raid_duration_chart,
     build_overheal_trend_chart,
-    ConsumableHeatmapWidget,
+    build_raid_duration_chart,
 )
+from .styles import COLORS, COMMON_STYLES
 
 
 def _clear_layout_widgets(layout):
@@ -44,15 +53,18 @@ class InsightsView(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setStyleSheet(COMMON_STYLES + f"""
+        self.setStyleSheet(
+            COMMON_STYLES
+            + f"""
             InsightsView, InsightsView QWidget {{
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
             InsightsView QTabWidget::pane {{
-                background-color: {COLORS['bg_dark']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_dark"]};
+                border: 1px solid {COLORS["border"]};
             }}
-        """)
+        """
+        )
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
@@ -68,8 +80,9 @@ class InsightsView(QWidget):
 
         header_row.addWidget(QLabel("Raid Day:"))
         self._day_combo = QComboBox()
-        self._day_combo.addItems(["All Days", "Wednesday", "Thursday", "Sunday",
-                                  "Monday", "Tuesday", "Friday", "Saturday"])
+        self._day_combo.addItems(
+            ["All Days", "Wednesday", "Thursday", "Sunday", "Monday", "Tuesday", "Friday", "Saturday"]
+        )
         self._day_combo.setCurrentText("Wednesday")
         self._day_combo.currentTextChanged.connect(self._on_filter_changed)
         header_row.addWidget(self._day_combo)
@@ -117,13 +130,10 @@ class InsightsView(QWidget):
 
         self._perf_table = QTableWidget()
         self._perf_table.setColumnCount(6)
-        self._perf_table.setHorizontalHeaderLabels(
-            ["Name", "Class", "Raids", "Avg Damage", "Avg DPM", "Consistency %"])
-        self._perf_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+        self._perf_table.setHorizontalHeaderLabels(["Name", "Class", "Raids", "Avg Damage", "Avg DPM", "Consistency %"])
+        self._perf_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 6):
-            self._perf_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._perf_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._perf_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._perf_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._perf_table.setAlternatingRowColors(True)
@@ -153,12 +163,11 @@ class InsightsView(QWidget):
         self._healer_table = QTableWidget()
         self._healer_table.setColumnCount(6)
         self._healer_table.setHorizontalHeaderLabels(
-            ["Name", "Class", "Raids", "Avg Healing", "Avg Overheal %", "Dispels"])
-        self._healer_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+            ["Name", "Class", "Raids", "Avg Healing", "Avg Overheal %", "Dispels"]
+        )
+        self._healer_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 6):
-            self._healer_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._healer_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._healer_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._healer_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._healer_table.setAlternatingRowColors(True)
@@ -168,13 +177,10 @@ class InsightsView(QWidget):
 
         self._tank_table = QTableWidget()
         self._tank_table.setColumnCount(5)
-        self._tank_table.setHorizontalHeaderLabels(
-            ["Name", "Class", "Raids", "Avg Mitigation %", "Avg Damage Taken"])
-        self._tank_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+        self._tank_table.setHorizontalHeaderLabels(["Name", "Class", "Raids", "Avg Mitigation %", "Avg Damage Taken"])
+        self._tank_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 5):
-            self._tank_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._tank_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._tank_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._tank_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._tank_table.setAlternatingRowColors(True)
@@ -204,13 +210,10 @@ class InsightsView(QWidget):
 
         self._attendance_table = QTableWidget()
         self._attendance_table.setColumnCount(5)
-        self._attendance_table.setHorizontalHeaderLabels(
-            ["Name", "Class", "Raids Attended", "First Seen", "Last Seen"])
-        self._attendance_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+        self._attendance_table.setHorizontalHeaderLabels(["Name", "Class", "Raids Attended", "First Seen", "Last Seen"])
+        self._attendance_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 5):
-            self._attendance_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._attendance_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._attendance_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._attendance_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._attendance_table.setAlternatingRowColors(True)
@@ -276,6 +279,7 @@ class InsightsView(QWidget):
 
     def _populate_zone_combo(self):
         from ..database import PerformanceDB
+
         self._zone_combo.blockSignals(True)
         current = self._zone_combo.currentText()
         self._zone_combo.clear()
@@ -332,15 +336,33 @@ class InsightsView(QWidget):
         try:
             with PerformanceDB() as db:
                 self._db_cache = {
-                    "dps_prog": db.get_dps_progression(top_n=10, raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "dps_cons": db.get_dps_consistency(min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "dps_dpm": db.get_dps_per_minute(min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "raid_overview": db.get_raid_overview_trends(raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "attendance": db.get_attendance_stats(min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "usage_rates": db.get_consumable_usage_rates(raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "healer_insights": db.get_healer_insights(min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "overheal_trend": db.get_healer_overheal_trend(raid_day=day, raid_size=size, last_n=last_n, zone=zone),
-                    "tank_stats": db.get_tank_mitigation_stats(min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone),
+                    "dps_prog": db.get_dps_progression(
+                        top_n=10, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "dps_cons": db.get_dps_consistency(
+                        min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "dps_dpm": db.get_dps_per_minute(
+                        min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "raid_overview": db.get_raid_overview_trends(
+                        raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "attendance": db.get_attendance_stats(
+                        min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "usage_rates": db.get_consumable_usage_rates(
+                        raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "healer_insights": db.get_healer_insights(
+                        min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "overheal_trend": db.get_healer_overheal_trend(
+                        raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
+                    "tank_stats": db.get_tank_mitigation_stats(
+                        min_raids=3, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                    ),
                 }
         except Exception as e:
             self.status_message.emit(f"Error loading insights: {e}")
@@ -359,8 +381,9 @@ class InsightsView(QWidget):
         zone = self._get_zone_filter()
         try:
             with PerformanceDB() as db:
-                compliance = db.get_consumable_compliance(min_raids=2, raid_day=day,
-                                                          raid_size=size, last_n=last_n, zone=zone)
+                compliance = db.get_consumable_compliance(
+                    min_raids=2, raid_day=day, raid_size=size, last_n=last_n, zone=zone
+                )
         except Exception as e:
             self.status_message.emit(f"Error loading heatmap: {e}")
             return
@@ -381,8 +404,8 @@ class InsightsView(QWidget):
             return
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Heatmap", "consumable_heatmap.png",
-            "PNG Image (*.png);;JPEG Image (*.jpg)")
+            self, "Export Heatmap", "consumable_heatmap.png", "PNG Image (*.png);;JPEG Image (*.jpg)"
+        )
         if not path:
             return
 
@@ -397,10 +420,8 @@ class InsightsView(QWidget):
     def _refresh_all(self):
         d = self._db_cache
 
-        self._refresh_performance(d.get("dps_prog", []), d.get("dps_cons", []),
-                                   d.get("dps_dpm", []))
-        self._refresh_healers(d.get("overheal_trend", []), d.get("healer_insights", []),
-                               d.get("tank_stats", []))
+        self._refresh_performance(d.get("dps_prog", []), d.get("dps_cons", []), d.get("dps_dpm", []))
+        self._refresh_healers(d.get("overheal_trend", []), d.get("healer_insights", []), d.get("tank_stats", []))
         self._refresh_overview(d.get("raid_overview", []), d.get("attendance", []))
         self._refresh_usage(d.get("usage_rates", []))
 
@@ -410,29 +431,32 @@ class InsightsView(QWidget):
         dpm_by_name = {row["name"]: row.get("avg_dpm", 0) for row in dps_dpm}
         rows = []
         for row in dps_cons:
-            rows.append({
-                "name": row["name"],
-                "player_class": row.get("player_class", ""),
-                "raids": row.get("raids", 0),
-                "avg_damage": row.get("avg_damage", 0),
-                "avg_dpm": dpm_by_name.get(row["name"], 0),
-                "consistency": row.get("consistency", 0),
-            })
+            rows.append(
+                {
+                    "name": row["name"],
+                    "player_class": row.get("player_class", ""),
+                    "raids": row.get("raids", 0),
+                    "avg_damage": row.get("avg_damage", 0),
+                    "avg_dpm": dpm_by_name.get(row["name"], 0),
+                    "consistency": row.get("consistency", 0),
+                }
+            )
         rows.sort(key=lambda x: x["avg_damage"], reverse=True)
 
         self._perf_table.setRowCount(len(rows))
         for i, row in enumerate(rows):
             self._perf_table.setItem(i, 0, QTableWidgetItem(row["name"]))
             self._perf_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
-            for j, (key, fmt) in enumerate([
-                ("raids", lambda v: str(int(v))),
-                ("avg_damage", lambda v: f"{v:,.0f}"),
-                ("avg_dpm", lambda v: f"{v:,.0f}"),
-                ("consistency", lambda v: f"{v:.1f}"),
-            ]):
+            for j, (key, fmt) in enumerate(
+                [
+                    ("raids", lambda v: str(int(v))),
+                    ("avg_damage", lambda v: f"{v:,.0f}"),
+                    ("avg_dpm", lambda v: f"{v:,.0f}"),
+                    ("consistency", lambda v: f"{v:.1f}"),
+                ]
+            ):
                 item = QTableWidgetItem(fmt(row[key]))
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._perf_table.setItem(i, j + 2, item)
 
         if dps_prog:
@@ -451,29 +475,31 @@ class InsightsView(QWidget):
         for i, row in enumerate(healer_insights):
             self._healer_table.setItem(i, 0, QTableWidgetItem(row["name"]))
             self._healer_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
-            for j, (key, fmt) in enumerate([
-                ("raids", lambda v: str(int(v))),
-                ("avg_healing", lambda v: f"{v:,.0f}"),
-                ("avg_overheal", lambda v: f"{v:.1f}"),
-                ("total_dispels", lambda v: f"{int(v):,}"),
-            ]):
+            for j, (key, fmt) in enumerate(
+                [
+                    ("raids", lambda v: str(int(v))),
+                    ("avg_healing", lambda v: f"{v:,.0f}"),
+                    ("avg_overheal", lambda v: f"{v:.1f}"),
+                    ("total_dispels", lambda v: f"{int(v):,}"),
+                ]
+            ):
                 item = QTableWidgetItem(fmt(row.get(key, 0) or 0))
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._healer_table.setItem(i, j + 2, item)
 
         self._tank_table.setRowCount(len(tank_stats))
         for i, row in enumerate(tank_stats):
             self._tank_table.setItem(i, 0, QTableWidgetItem(row["name"]))
             self._tank_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
-            for j, (key, fmt) in enumerate([
-                ("raids", lambda v: str(int(v))),
-                ("avg_mitigation", lambda v: f"{v:.1f}"),
-                ("avg_damage_taken", lambda v: f"{v:,.0f}"),
-            ]):
+            for j, (key, fmt) in enumerate(
+                [
+                    ("raids", lambda v: str(int(v))),
+                    ("avg_mitigation", lambda v: f"{v:.1f}"),
+                    ("avg_damage_taken", lambda v: f"{v:,.0f}"),
+                ]
+            ):
                 item = QTableWidgetItem(fmt(row.get(key, 0) or 0))
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._tank_table.setItem(i, j + 2, item)
 
     def _refresh_overview(self, raid_overview, attendance):
@@ -489,8 +515,7 @@ class InsightsView(QWidget):
             self._attendance_table.setItem(i, 0, QTableWidgetItem(row["name"]))
             self._attendance_table.setItem(i, 1, QTableWidgetItem(row["player_class"]))
             item = QTableWidgetItem(str(row.get("raid_count", 0)))
-            item.setTextAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._attendance_table.setItem(i, 2, item)
             first = row.get("first_seen", "")
             last = row.get("last_seen", "")

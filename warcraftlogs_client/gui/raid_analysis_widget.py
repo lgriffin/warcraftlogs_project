@@ -5,26 +5,41 @@ Shows full raid breakdown with role tabs, consumables, composition,
 and a slide-out detail panel when a player name is clicked.
 """
 
-import json
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTabWidget, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
-    QSplitter, QTextEdit, QComboBox, QMessageBox, QFileDialog, QScrollArea,
-)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QCursor
-
-from .analysis_helpers import (
-    NumericSortProxy, SingleBossTrashModel,
-    SingleEngineeringModel, build_heatmap_data,
-    compute_engineering_stats, classify_consumable_usage,
+from PySide6.QtGui import QCursor, QFont
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QTableView,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from .styles import COMMON_STYLES, COLORS
-from .table_models import HealerTableModel, TankTableModel, DPSTableModel, HistoryTableModel
+
+from ..models import EncounterSummary, RaidAnalysis
+from .analysis_helpers import (
+    NumericSortProxy,
+    SingleBossTrashModel,
+    SingleEngineeringModel,
+    build_heatmap_data,
+    classify_consumable_usage,
+    compute_engineering_stats,
+)
 from .detail_panel import CharacterDetailPanel
-from ..models import RaidAnalysis, EncounterSummary
+from .styles import COLORS, COMMON_STYLES
+from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, TankTableModel
 
 
 class _ClickableNameTableView(QTableView):
@@ -57,8 +72,7 @@ class RaidAnalysisWidget(QWidget):
     raid_deleted = Signal(str)
     cross_analyze = Signal(str)
 
-    def __init__(self, analysis: RaidAnalysis, show_back: bool = True,
-                 show_delete: bool = True, parent=None):
+    def __init__(self, analysis: RaidAnalysis, show_back: bool = True, show_delete: bool = True, parent=None):
         super().__init__(parent)
         self._analysis = analysis
         self._show_back = show_back
@@ -115,7 +129,7 @@ class RaidAnalysisWidget(QWidget):
             delete_btn.setFixedHeight(32)
             delete_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {COLORS['error']};
+                    background-color: {COLORS["error"]};
                     color: white; border: none; border-radius: 4px;
                     padding: 8px 16px; font-size: 12px; font-weight: bold;
                 }}
@@ -201,8 +215,7 @@ class RaidAnalysisWidget(QWidget):
         self._tl_heatmap_scroll = QScrollArea()
         self._tl_heatmap_scroll.setWidgetResizable(True)
         self._tl_heatmap_scroll.setFixedHeight(200)
-        self._tl_heatmap_scroll.setStyleSheet(
-            f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
+        self._tl_heatmap_scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
         tl_layout.addWidget(self._tl_heatmap_scroll)
         self._tl_tab_index = self._tabs.addTab(tl_widget, "Timeline")
 
@@ -223,13 +236,11 @@ class RaidAnalysisWidget(QWidget):
         self._enc_table = QTableWidget()
         self._enc_table.setColumnCount(7)
         self._enc_table.setHorizontalHeaderLabels(
-            ["Name", "Class", "Role", "Damage Done", "Healing Done",
-             "Damage Taken", "Active Time%"])
-        self._enc_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+            ["Name", "Class", "Role", "Damage Done", "Healing Done", "Damage Taken", "Active Time%"]
+        )
+        self._enc_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 7):
-            self._enc_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._enc_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._enc_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._enc_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._enc_table.setAlternatingRowColors(True)
@@ -243,8 +254,8 @@ class RaidAnalysisWidget(QWidget):
         self._comp_text.setFont(QFont("Consolas", 11))
         self._comp_text.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
                 border: none;
                 padding: 12px;
             }}
@@ -289,8 +300,7 @@ class RaidAnalysisWidget(QWidget):
         table.verticalHeader().setVisible(False)
         header = table.horizontalHeader()
         header.setStretchLastSection(False)
-        header.setDefaultAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         return table
 
@@ -345,7 +355,7 @@ class RaidAnalysisWidget(QWidget):
                 row[name] = usage.get(name, 0)
             rows.append(row)
 
-        cols = ["Player"] + sorted_names
+        cols = ["Player", *sorted_names]
         self._consumes_model.set_data(rows, cols)
 
     def _populate_boss_vs_trash(self, analysis: RaidAnalysis):
@@ -356,11 +366,13 @@ class RaidAnalysisWidget(QWidget):
         bt = classify_consumable_usage(analysis)
         rows = []
         for name in sorted(bt.keys()):
-            rows.append({
-                "name": name,
-                "boss": bt[name]["boss"],
-                "trash": bt[name]["trash"],
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "boss": bt[name]["boss"],
+                    "trash": bt[name]["trash"],
+                }
+            )
         rows.sort(key=lambda r: r["boss"], reverse=True)
         self._bt_model.set_data(rows)
 
@@ -397,19 +409,23 @@ class RaidAnalysisWidget(QWidget):
             return
 
         from .charts import ConsumableTimelineHeatmap
+
         heatmap_data = build_heatmap_data(self._tl_analysis, name)
         heatmap = ConsumableTimelineHeatmap(heatmap_data)
         self._tl_heatmap_scroll.setWidget(heatmap)
         player_count = len(heatmap_data.get("players", []))
-        self._tl_heatmap_scroll.setFixedHeight(
-            min(max(28 + player_count * 21 + 10, 80), 500))
+        self._tl_heatmap_scroll.setFixedHeight(min(max(28 + player_count * 21 + 10, 80), 500))
 
     def _render_composition(self, analysis: RaidAnalysis):
         comp = analysis.composition
         lines = ["RAID COMPOSITION", "=" * 50]
 
-        for label, group in [("Tanks", comp.tanks), ("Healers", comp.healers),
-                             ("Melee DPS", comp.melee), ("Ranged DPS", comp.ranged)]:
+        for label, group in [
+            ("Tanks", comp.tanks),
+            ("Healers", comp.healers),
+            ("Melee DPS", comp.melee),
+            ("Ranged DPS", comp.ranged),
+        ]:
             lines.append(f"\n{label} ({len(group)}):")
             for p in group:
                 lines.append(f"  {p.name} ({p.player_class})")
@@ -441,8 +457,8 @@ class RaidAnalysisWidget(QWidget):
         total_dmg = sum(p.total_damage for p in enc.players)
         total_heal = sum(p.total_healing for p in enc.players)
         self._enc_summary.setText(
-            f"Duration: {duration_s // 60}:{duration_s % 60:02d}  |  "
-            f"Damage: {total_dmg:,}  |  Healing: {total_heal:,}")
+            f"Duration: {duration_s // 60}:{duration_s % 60:02d}  |  Damage: {total_dmg:,}  |  Healing: {total_heal:,}"
+        )
 
         self._enc_table.setRowCount(len(enc.players))
         for i, p in enumerate(enc.players):
@@ -451,12 +467,10 @@ class RaidAnalysisWidget(QWidget):
             self._enc_table.setItem(i, 2, QTableWidgetItem(p.role))
             for j, val in enumerate([p.total_damage, p.total_healing, p.total_damage_taken]):
                 item = QTableWidgetItem(f"{val:,}")
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._enc_table.setItem(i, j + 3, item)
             at_item = QTableWidgetItem(f"{p.active_time_percent:.1f}%")
-            at_item.setTextAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            at_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._enc_table.setItem(i, 6, at_item)
 
     def _on_name_clicked(self, name: str):
@@ -481,16 +495,16 @@ class RaidAnalysisWidget(QWidget):
 
     def _open_wcl_url(self):
         import webbrowser
+
         webbrowser.open(self._analysis.metadata.url)
 
     def _export_markdown(self):
         title = self._analysis.metadata.title
-        safe_title = "".join(
-            c if c.isalnum() or c in " _-" else "_" for c in title
-        ).strip().replace(" ", "_")
+        safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title).strip().replace(" ", "_")
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Markdown Report",
+            self,
+            "Export Markdown Report",
             f"{safe_title}.md",
             "Markdown Files (*.md);;All Files (*)",
         )
@@ -499,6 +513,7 @@ class RaidAnalysisWidget(QWidget):
 
         try:
             from ..renderers.markdown import export_raid_analysis
+
             export_raid_analysis(self._analysis, output_path=path)
             self.status_message.emit(f"Exported to {path}")
         except (OSError, ValueError, KeyError) as e:
@@ -508,8 +523,9 @@ class RaidAnalysisWidget(QWidget):
         report_id = self._analysis.metadata.report_id
         title = self._analysis.metadata.title
         reply = QMessageBox.question(
-            self, "Delete Raid",
-            f"Delete \"{title}\" from the database?\n\nThis cannot be undone.",
+            self,
+            "Delete Raid",
+            f'Delete "{title}" from the database?\n\nThis cannot be undone.',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -518,6 +534,7 @@ class RaidAnalysisWidget(QWidget):
 
         try:
             from ..database import PerformanceDB
+
             with PerformanceDB() as db:
                 db.delete_raid(report_id)
             self.status_message.emit(f"Deleted raid: {title}")

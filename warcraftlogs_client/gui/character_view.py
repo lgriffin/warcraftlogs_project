@@ -8,27 +8,45 @@ import os
 import sqlite3
 import webbrowser
 
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableView, QHeaderView, QGroupBox, QProgressBar,
-    QListWidget, QListWidgetItem, QLineEdit,
-    QFormLayout, QMessageBox, QScrollArea, QTabWidget, QComboBox,
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QFont, QColor
 
-from .styles import COMMON_STYLES, COLORS
-from .charts import SpiderChartWidget, CalendarHeatmapWidget
-from .table_models import HistoryTableModel, GearTableModel
-from .worker import CharacterProfileWorker, WowheadResolverWorker
-from .charts import (
-    build_healer_chart, build_healer_overheal_chart,
-    build_tank_chart, build_tank_mitigation_chart,
-    build_dps_chart, build_spell_trend_chart,
-    build_consumable_trend_chart, build_active_time_chart,
-)
-from ..models import CharacterProfile, ZoneRankingResult, EncounterRanking
 from ..database import PerformanceDB
+from ..models import CharacterProfile, EncounterRanking
+from .charts import (
+    CalendarHeatmapWidget,
+    SpiderChartWidget,
+    build_active_time_chart,
+    build_consumable_trend_chart,
+    build_dps_chart,
+    build_healer_chart,
+    build_healer_overheal_chart,
+    build_spell_trend_chart,
+    build_tank_chart,
+    build_tank_mitigation_chart,
+)
+from .styles import COLORS, COMMON_STYLES
+from .table_models import GearTableModel, HistoryTableModel
+from .worker import CharacterProfileWorker, WowheadResolverWorker
 
 
 class _CollapsibleSection(QWidget):
@@ -45,9 +63,9 @@ class _CollapsibleSection(QWidget):
         self._toggle_btn.setChecked(True)
         self._toggle_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text_header']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text_header"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 8px 12px;
                 font-size: 13px;
@@ -55,7 +73,7 @@ class _CollapsibleSection(QWidget):
                 text-align: left;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['border']};
+                background-color: {COLORS["border"]};
             }}
         """)
         self._toggle_btn.clicked.connect(self._on_toggle)
@@ -158,6 +176,7 @@ def _percent_color(pct: float):
 
 
 from .. import paths as _paths
+
 CONFIG_PATH = str(_paths.get_config_path())
 
 
@@ -194,8 +213,8 @@ class CharacterView(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}
-            QScrollArea > QWidget > QWidget {{ background-color: {COLORS['bg_dark']}; }}
+            QScrollArea {{ border: none; background-color: {COLORS["bg_dark"]}; }}
+            QScrollArea > QWidget > QWidget {{ background-color: {COLORS["bg_dark"]}; }}
         """)
         outer.addWidget(scroll)
 
@@ -273,8 +292,7 @@ class CharacterView(QWidget):
         )
         self._no_config_label.setWordWrap(True)
         self._no_config_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._no_config_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
+        self._no_config_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 14px; padding: 40px;")
         self._no_config_label.setVisible(False)
         layout.addWidget(self._no_config_label)
 
@@ -284,8 +302,7 @@ class CharacterView(QWidget):
         summary_layout.setSpacing(24)
 
         self._summary_labels = {}
-        for key in ["Name", "Class", "Level", "Faction", "Guild",
-                     "Best Avg", "Median Avg", "All Stars"]:
+        for key in ["Name", "Class", "Level", "Faction", "Guild", "Best Avg", "Median Avg", "All Stars"]:
             col_widget = QWidget()
             col_layout = QVBoxLayout(col_widget)
             col_layout.setContentsMargins(0, 0, 0, 0)
@@ -310,8 +327,15 @@ class CharacterView(QWidget):
         db_stats_layout.setSpacing(24)
 
         self._db_stats_labels = {}
-        for key in ["Raids Tracked", "Active Period", "Avg Active Time",
-                     "Avg Healing", "Avg Damage", "Avg Mitigation", "Consumables Used"]:
+        for key in [
+            "Raids Tracked",
+            "Active Period",
+            "Avg Active Time",
+            "Avg Healing",
+            "Avg Damage",
+            "Avg Mitigation",
+            "Consumables Used",
+        ]:
             col_widget = QWidget()
             col_layout = QVBoxLayout(col_widget)
             col_layout.setContentsMargins(0, 0, 0, 0)
@@ -341,10 +365,8 @@ class CharacterView(QWidget):
         self._rankings_table.setSortingEnabled(True)
         self._rankings_table.verticalHeader().setVisible(False)
         self._rankings_table.horizontalHeader().setStretchLastSection(True)
-        self._rankings_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        self._rankings_table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        self._rankings_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._rankings_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         self._rankings_table.setMaximumHeight(250)
 
         self._rankings_section.content_layout().addWidget(self._rankings_table)
@@ -357,19 +379,19 @@ class CharacterView(QWidget):
         self._reports_list.setMaximumHeight(200)
         self._reports_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 6px 12px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
         """)
         self._reports_list.doubleClicked.connect(self._on_report_double_clicked)
@@ -387,10 +409,8 @@ class CharacterView(QWidget):
         self._gear_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self._gear_table.verticalHeader().setVisible(False)
         self._gear_table.horizontalHeader().setStretchLastSection(True)
-        self._gear_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        self._gear_table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        self._gear_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._gear_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         self._gear_table.setMaximumHeight(400)
         self._gear_table.setMouseTracking(True)
         self._gear_table.clicked.connect(self._on_gear_clicked)
@@ -410,16 +430,15 @@ class CharacterView(QWidget):
         )
         self._no_trends_label.setWordWrap(True)
         self._no_trends_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._no_trends_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 13px; padding: 20px;")
+        self._no_trends_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 13px; padding: 20px;")
         self._no_trends_label.setVisible(False)
         layout.addWidget(self._no_trends_label)
 
         combo_style = f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 11px;
@@ -427,9 +446,9 @@ class CharacterView(QWidget):
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """
 
@@ -454,10 +473,15 @@ class CharacterView(QWidget):
         healer_bar = QHBoxLayout()
         healer_bar.addWidget(QLabel("Chart:"))
         self._healer_chart_combo = QComboBox()
-        self._healer_chart_combo.addItems([
-            "Healing & Overhealing", "Overheal %",
-            "Spell Healing", "Spell Casts", "Active Time %",
-        ])
+        self._healer_chart_combo.addItems(
+            [
+                "Healing & Overhealing",
+                "Overheal %",
+                "Spell Healing",
+                "Spell Casts",
+                "Active Time %",
+            ]
+        )
         self._healer_chart_combo.setStyleSheet(combo_style)
         self._healer_chart_combo.currentIndexChanged.connect(self._rebuild_healer_chart)
         healer_bar.addWidget(self._healer_chart_combo)
@@ -514,8 +538,7 @@ class CharacterView(QWidget):
         self._consumes_chart_container = QVBoxLayout()
         consumes_layout.addLayout(self._consumes_chart_container)
         consumes_table_label = QLabel("Last 5 Raids")
-        consumes_table_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 11px; margin-top: 4px;")
+        consumes_table_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px; margin-top: 4px;")
         consumes_layout.addWidget(consumes_table_label)
         self._consumes_trend_model = HistoryTableModel()
         consumes_layout.addWidget(self._make_trend_table(self._consumes_trend_model), 1)
@@ -553,10 +576,8 @@ class CharacterView(QWidget):
         bests_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         bests_table.verticalHeader().setVisible(False)
         bests_table.horizontalHeader().setStretchLastSection(True)
-        bests_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
-        bests_table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        bests_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        bests_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         self._local_tabs.addTab(bests_table, "Personal Bests")
 
         self._local_spider_tab = QWidget()
@@ -582,8 +603,7 @@ class CharacterView(QWidget):
         table.verticalHeader().setVisible(False)
         table.horizontalHeader().setStretchLastSection(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        table.setStyleSheet(
-            f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         return table
 
     # ── Config persistence ──
@@ -592,13 +612,12 @@ class CharacterView(QWidget):
         if not os.path.exists(CONFIG_PATH):
             return
         try:
-            with open(CONFIG_PATH, "r") as f:
+            with open(CONFIG_PATH) as f:
                 config = json.load(f)
             self._char_name_input.setText(config.get("character_name", ""))
             self._char_server_input.setText(config.get("character_server", ""))
             self._char_region_input.setText(config.get("character_region", "eu"))
-            self._wcl_api_url_input.setText(
-                config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"))
+            self._wcl_api_url_input.setText(config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"))
             if config.get("character_name") and config.get("character_server"):
                 self._config_section.set_collapsed(True)
         except (json.JSONDecodeError, KeyError, OSError):
@@ -608,7 +627,7 @@ class CharacterView(QWidget):
         config = {}
         if os.path.exists(CONFIG_PATH):
             try:
-                with open(CONFIG_PATH, "r") as f:
+                with open(CONFIG_PATH) as f:
                     config = json.load(f)
             except (json.JSONDecodeError, OSError):
                 pass
@@ -616,10 +635,7 @@ class CharacterView(QWidget):
         config["character_name"] = self._char_name_input.text().strip()
         config["character_server"] = self._char_server_input.text().strip()
         config["character_region"] = self._char_region_input.text().strip() or "eu"
-        config["wcl_api_url"] = (
-            self._wcl_api_url_input.text().strip()
-            or "https://fresh.warcraftlogs.com/api/v2/client"
-        )
+        config["wcl_api_url"] = self._wcl_api_url_input.text().strip() or "https://fresh.warcraftlogs.com/api/v2/client"
 
         try:
             with open(CONFIG_PATH, "w") as f:
@@ -642,19 +658,13 @@ class CharacterView(QWidget):
         else:
             base = "https://www.warcraftlogs.com"
         url = f"{base}/character/{region}/{server}/{name}"
-        self._wcl_link.setText(
-            f'<a href="{url}" style="color: {COLORS["accent"]};">'
-            f'View on WarcraftLogs: {url}</a>'
-        )
+        self._wcl_link.setText(f'<a href="{url}" style="color: {COLORS["accent"]};">View on WarcraftLogs: {url}</a>')
 
     def _fetch_profile(self):
         char_name = self._char_name_input.text().strip()
         server = self._char_server_input.text().strip()
         region = self._char_region_input.text().strip() or "eu"
-        api_url = (
-            self._wcl_api_url_input.text().strip()
-            or "https://fresh.warcraftlogs.com/api/v2/client"
-        )
+        api_url = self._wcl_api_url_input.text().strip() or "https://fresh.warcraftlogs.com/api/v2/client"
 
         if not char_name or not server:
             self._no_config_label.setVisible(True)
@@ -694,8 +704,7 @@ class CharacterView(QWidget):
             if zr.all_stars:
                 star = zr.all_stars[0]
                 self._summary_labels["All Stars"].setText(
-                    f"{star.points:.0f}/{star.possible_points:.0f} pts  "
-                    f"(#{star.rank:,} of {star.total:,})"
+                    f"{star.points:.0f}/{star.possible_points:.0f} pts  (#{star.rank:,} of {star.total:,})"
                 )
 
             self._rankings_model.set_data(zr.encounter_rankings)
@@ -715,18 +724,17 @@ class CharacterView(QWidget):
 
         for r in profile.recent_reports:
             saved = "[Saved] " if r.code in cached_codes else ""
-            item = QListWidgetItem(
-                f"{saved}{r.date_formatted}  |  {r.zone_name}  |  {r.title}")
+            item = QListWidgetItem(f"{saved}{r.date_formatted}  |  {r.zone_name}  |  {r.title}")
             item.setData(Qt.ItemDataRole.UserRole, r.code)
             if r.code in cached_codes:
-                item.setForeground(QColor(COLORS['success']))
+                item.setForeground(QColor(COLORS["success"]))
             self._reports_list.addItem(item)
 
         self._gear_model.set_data(profile.gear_items)
         if profile.gear_items:
             item_ids = [g.item_id for g in profile.gear_items if g.item_id]
             gem_ids = [gid for g in profile.gear_items for gid in g.gems if gid]
-            if getattr(self, '_wowhead_worker', None) is not None:
+            if getattr(self, "_wowhead_worker", None) is not None:
                 self._wowhead_worker.wait()
 
             self._wowhead_worker = WowheadResolverWorker(item_ids + gem_ids)
@@ -770,8 +778,7 @@ class CharacterView(QWidget):
         if compliance and compliance.get("total_raids", 0) > 0:
             pct = compliance["compliance_pct"]
             avg = compliance["avg_per_raid"]
-            self._local_labels["Consumable Compliance"].setText(
-                f"{pct:.0f}% ({avg:.1f}/raid)")
+            self._local_labels["Consumable Compliance"].setText(f"{pct:.0f}% ({avg:.1f}/raid)")
         else:
             self._local_labels["Consumable Compliance"].setText("-")
 
@@ -809,6 +816,7 @@ class CharacterView(QWidget):
     def _load_trends(self, character_name: str):
         try:
             from ..database import PerformanceDB
+
             with PerformanceDB() as db:
                 history = db.get_character_history(character_name)
                 if not history or history.total_raids == 0:
@@ -823,29 +831,29 @@ class CharacterView(QWidget):
 
                 self._db_stats_labels["Raids Tracked"].setText(str(history.total_raids))
                 if history.first_seen and history.last_seen:
-                    period = (f"{history.first_seen.strftime('%Y-%m-%d')} to "
-                              f"{history.last_seen.strftime('%Y-%m-%d')}")
+                    period = f"{history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}"
                     self._db_stats_labels["Active Period"].setText(period)
                 else:
                     self._db_stats_labels["Active Period"].setText("-")
                 self._db_stats_labels["Avg Active Time"].setText(
-                    f"{history.avg_active_time:.1f}%" if history.avg_active_time else "-")
+                    f"{history.avg_active_time:.1f}%" if history.avg_active_time else "-"
+                )
                 self._db_stats_labels["Avg Healing"].setText(
-                    f"{history.avg_healing:,.0f}" if history.avg_healing else "-")
-                self._db_stats_labels["Avg Damage"].setText(
-                    f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
+                    f"{history.avg_healing:,.0f}" if history.avg_healing else "-"
+                )
+                self._db_stats_labels["Avg Damage"].setText(f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
                 self._db_stats_labels["Avg Mitigation"].setText(
-                    f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-")
-                self._db_stats_labels["Consumables Used"].setText(
-                    str(history.total_consumables_used))
+                    f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-"
+                )
+                self._db_stats_labels["Consumables Used"].setText(str(history.total_consumables_used))
 
                 self._all_healer_trend = db.get_healer_trend(character_name)
                 self._all_healer_spell_trend = (
-                    db.get_healer_spell_trend(character_name) if self._all_healer_trend else [])
+                    db.get_healer_spell_trend(character_name) if self._all_healer_trend else []
+                )
                 self._all_tank_trend = db.get_tank_trend(character_name)
                 self._all_dps_trend = db.get_dps_trend(character_name)
-                self._all_dps_ability_trend = (
-                    db.get_dps_ability_trend(character_name) if self._all_dps_trend else [])
+                self._all_dps_ability_trend = db.get_dps_ability_trend(character_name) if self._all_dps_trend else []
                 self._all_consumable_trend = db.get_consumable_trend(character_name)
 
                 consumes_summary = db.get_consumable_summary(character_name, limit=5)
@@ -855,7 +863,7 @@ class CharacterView(QWidget):
                         for k in row:
                             if k not in ("raid_date", "title", "report_id"):
                                 all_consumable_names.add(k)
-                    cols = ["raid_date", "title"] + sorted(all_consumable_names)
+                    cols = ["raid_date", "title", *sorted(all_consumable_names)]
                     self._consumes_trend_model.set_data(consumes_summary, cols)
                 else:
                     self._consumes_trend_model.set_data([], [])
@@ -863,8 +871,7 @@ class CharacterView(QWidget):
                 self._apply_raid_size_filter()
 
         except (sqlite3.Error, OSError, KeyError) as e:
-            self._no_trends_label.setText(
-                f"Could not load trend data: {e}")
+            self._no_trends_label.setText(f"Could not load trend data: {e}")
             self._no_trends_label.setVisible(True)
             self._trend_tabs.setVisible(False)
             self._db_stats_group.setVisible(False)
@@ -895,7 +902,16 @@ class CharacterView(QWidget):
         if self._cached_healer_trend:
             self._healer_trend_model.set_data(
                 self._cached_healer_trend,
-                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent", "active_time_percent"])
+                [
+                    "raid_date",
+                    "title",
+                    "raid_size",
+                    "total_healing",
+                    "total_overhealing",
+                    "overheal_percent",
+                    "active_time_percent",
+                ],
+            )
         else:
             self._healer_trend_model.set_data([], [])
         self._rebuild_healer_chart()
@@ -903,7 +919,16 @@ class CharacterView(QWidget):
         if self._cached_tank_trend:
             self._tank_trend_model.set_data(
                 self._cached_tank_trend,
-                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent", "active_time_percent"])
+                [
+                    "raid_date",
+                    "title",
+                    "raid_size",
+                    "total_damage_taken",
+                    "total_mitigated",
+                    "mitigation_percent",
+                    "active_time_percent",
+                ],
+            )
         else:
             self._tank_trend_model.set_data([], [])
         self._rebuild_tank_chart()
@@ -911,7 +936,8 @@ class CharacterView(QWidget):
         if self._cached_dps_trend:
             self._dps_trend_model.set_data(
                 self._cached_dps_trend,
-                ["raid_date", "title", "raid_size", "role", "total_damage", "active_time_percent"])
+                ["raid_date", "title", "raid_size", "role", "total_damage", "active_time_percent"],
+            )
         else:
             self._dps_trend_model.set_data([], [])
         self._rebuild_dps_chart()
@@ -959,11 +985,9 @@ class CharacterView(QWidget):
         elif choice == 1:
             view = build_healer_overheal_chart(trend)
         elif choice == 2:
-            view = build_spell_trend_chart(
-                spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
+            view = build_spell_trend_chart(spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
         elif choice == 3:
-            view = build_spell_trend_chart(
-                spell_trend, "casts", "Spell Casts Over Time", "Casts")
+            view = build_spell_trend_chart(spell_trend, "casts", "Spell Casts Over Time", "Casts")
         elif choice == 4:
             view = build_active_time_chart(trend)
         else:
@@ -1000,11 +1024,9 @@ class CharacterView(QWidget):
         if choice == 0:
             view = build_dps_chart(trend)
         elif choice == 1:
-            view = build_spell_trend_chart(
-                ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
+            view = build_spell_trend_chart(ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
         elif choice == 2:
-            view = build_spell_trend_chart(
-                ability_trend, "casts", "Ability Casts Over Time", "Casts")
+            view = build_spell_trend_chart(ability_trend, "casts", "Ability Casts Over Time", "Casts")
         elif choice == 3:
             view = build_active_time_chart(trend)
         else:
@@ -1029,6 +1051,7 @@ class CharacterView(QWidget):
     @staticmethod
     def _wowhead_slug(name: str) -> str:
         import re
+
         return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
     def _wowhead_item_url(self, item_id: int) -> str:

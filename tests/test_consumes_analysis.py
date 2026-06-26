@@ -54,11 +54,18 @@ class TestDetectSpikes:
 class TestCountConsumablesFromTable:
     def test_buff_consumables(self, analyzer):
         table_data = {
-            "data": {"auras": [
-                {"guid": 28507, "totalUses": 2, "bands": [
-                    {"startTime": 10_000}, {"startTime": 20_000},
-                ]},
-            ]},
+            "data": {
+                "auras": [
+                    {
+                        "guid": 28507,
+                        "totalUses": 2,
+                        "bands": [
+                            {"startTime": 10_000},
+                            {"startTime": 20_000},
+                        ],
+                    },
+                ]
+            },
         }
         analyzer._count_consumables_from_table("Player1", "dps", "r1", table_data, [])
         assert analyzer.consumes_data["Player1"]["r1"]["Haste Potion"] == 2
@@ -73,9 +80,13 @@ class TestCountConsumablesFromTable:
         assert analyzer.consumes_data["Player1"]["r1"]["Super Mana Potion"] == 2
 
     def test_ignores_unknown_abilities(self, analyzer):
-        table_data = {"data": {"auras": [
-            {"guid": 99999, "totalUses": 5, "bands": []},
-        ]}}
+        table_data = {
+            "data": {
+                "auras": [
+                    {"guid": 99999, "totalUses": 5, "bands": []},
+                ]
+            }
+        }
         analyzer._count_consumables_from_table("Player1", "dps", "r1", table_data, [])
         assert len(analyzer.consumes_data["Player1"]["r1"]) == 0
 

@@ -10,7 +10,6 @@ They decouple data from presentation, enabling:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass
@@ -111,7 +110,7 @@ class PotionSpike:
     player_count: int
     players: list[str] = field(default_factory=list)
     non_users: list[str] = field(default_factory=list)
-    next_boss_name: Optional[str] = None
+    next_boss_name: str | None = None
 
     @property
     def time_formatted(self) -> str:
@@ -125,8 +124,8 @@ class RaidMetadata:
     title: str
     owner: str
     start_time: int
-    end_time: Optional[int] = None
-    zone: Optional[str] = None
+    end_time: int | None = None
+    zone: str | None = None
 
     @property
     def date(self) -> datetime:
@@ -140,6 +139,7 @@ class RaidMetadata:
     def url(self) -> str:
         try:
             from .config import load_config
+
             api_url = load_config().get("wcl_api_url", "")
             base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
         except Exception:
@@ -166,7 +166,7 @@ class RaidComposition:
     def all_players(self) -> list[PlayerIdentity]:
         return self.tanks + self.healers + self.melee + self.ranged
 
-    def get_player(self, name: str) -> Optional[PlayerIdentity]:
+    def get_player(self, name: str) -> PlayerIdentity | None:
         for p in self.all_players:
             if p.name == name:
                 return p
@@ -176,6 +176,7 @@ class RaidComposition:
 @dataclass
 class EncounterPerformance:
     """One player's performance within a single boss encounter."""
+
     name: str
     player_class: str
     source_id: int
@@ -189,6 +190,7 @@ class EncounterPerformance:
 @dataclass
 class EncounterSummary:
     """A boss kill with per-player performance."""
+
     encounter_id: int
     name: str
     start_time: int
@@ -200,6 +202,7 @@ class EncounterSummary:
 @dataclass
 class RaidAnalysis:
     """Complete result of analyzing a single raid report."""
+
     metadata: RaidMetadata
     composition: RaidComposition
     healers: list[HealerPerformance] = field(default_factory=list)
@@ -212,6 +215,7 @@ class RaidAnalysis:
 @dataclass
 class ConsumesAnalysisResult:
     """Complete result of analyzing consumables across raids."""
+
     raid_metadata: dict[str, RaidMetadata] = field(default_factory=dict)
     consumable_usage: list[ConsumableUsage] = field(default_factory=list)
     potion_spikes: list[PotionSpike] = field(default_factory=list)
@@ -220,35 +224,52 @@ class ConsumesAnalysisResult:
 @dataclass
 class CharacterHistory:
     """Historical performance summary for a single character."""
+
     name: str
     player_class: str
     total_raids: int = 0
-    first_seen: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
-    avg_healing: Optional[float] = None
-    avg_damage: Optional[float] = None
-    avg_mitigation_percent: Optional[float] = None
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+    avg_healing: float | None = None
+    avg_damage: float | None = None
+    avg_mitigation_percent: float | None = None
     total_consumables_used: int = 0
-    avg_active_time: Optional[float] = None
+    avg_active_time: float | None = None
 
 
 @dataclass
 class RaidGroup:
     """A named group of characters with associated raid days."""
+
     id: int = 0
     name: str = ""
     raid_days: list[str] = field(default_factory=list)
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
     members: list[str] = field(default_factory=list)
 
 
 # ── WCL Character Profile / Gear models ──
 
 GEAR_SLOT_ORDER = [
-    "Head", "Neck", "Shoulder", "Shirt", "Chest",
-    "Waist", "Legs", "Feet", "Wrist", "Hands",
-    "Finger 1", "Finger 2", "Trinket 1", "Trinket 2",
-    "Back", "Main Hand", "Off Hand", "Ranged/Relic", "Tabard",
+    "Head",
+    "Neck",
+    "Shoulder",
+    "Shirt",
+    "Chest",
+    "Waist",
+    "Legs",
+    "Feet",
+    "Wrist",
+    "Hands",
+    "Finger 1",
+    "Finger 2",
+    "Trinket 1",
+    "Trinket 2",
+    "Back",
+    "Main Hand",
+    "Off Hand",
+    "Ranged/Relic",
+    "Tabard",
 ]
 
 GEAR_SLOTS_HIDDEN = {"Shirt", "Tabard"}
@@ -273,14 +294,25 @@ class GearItem:
         if not self.item_id:
             return ""
         import re
+
         slug = "/" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") if name else ""
         return f"https://www.wowhead.com/tbc/item={self.item_id}{slug}"
 
+
 WOW_CLASS_NAMES = {
-    1: "Death Knight", 2: "Druid", 3: "Hunter", 4: "Mage",
-    5: "Monk", 6: "Paladin", 7: "Priest", 8: "Rogue",
-    9: "Shaman", 10: "Warlock", 11: "Warrior",
-    12: "Demon Hunter", 13: "Evoker",
+    1: "Death Knight",
+    2: "Druid",
+    3: "Hunter",
+    4: "Mage",
+    5: "Monk",
+    6: "Paladin",
+    7: "Priest",
+    8: "Rogue",
+    9: "Shaman",
+    10: "Warlock",
+    11: "Warrior",
+    12: "Demon Hunter",
+    13: "Evoker",
 }
 
 
@@ -345,6 +377,7 @@ class CharacterReportEntry:
 @dataclass
 class CharacterProfile:
     """Complete character profile from WCL API."""
+
     name: str
     server: str
     region: str

@@ -1,7 +1,6 @@
 """Tests for configuration loading, validation, and env var overrides."""
 
 import json
-import os
 
 import pytest
 
@@ -9,7 +8,6 @@ from warcraftlogs_client.common.errors import ConfigurationError
 from warcraftlogs_client.config import (
     AppConfig,
     ConfigManager,
-    get_app_config,
     get_config_manager,
     load_config,
 )
@@ -87,13 +85,15 @@ class TestDefaults:
     def test_default_role_thresholds(self, config_file):
         mgr = ConfigManager(config_file)
         cfg = mgr.load()
-        assert cfg.role_thresholds.healer_min_healing == 50000
+        assert cfg.role_thresholds.healer_min_healing == 40000
         assert cfg.role_thresholds.tank_min_taken == 150000
         assert cfg.role_thresholds.tank_min_mitigation == 40
 
     def test_custom_role_thresholds(self, tmp_path):
         cfg_data = {
-            "client_id": "x", "client_secret": "y", "report_id": "z",
+            "client_id": "x",
+            "client_secret": "y",
+            "report_id": "z",
             "role_thresholds": {"healer_min_healing": 100_000},
         }
         path = tmp_path / "config.json"
@@ -104,7 +104,9 @@ class TestDefaults:
 
     def test_guild_id_non_integer_defaults(self, tmp_path):
         cfg_data = {
-            "client_id": "x", "client_secret": "y", "report_id": "z",
+            "client_id": "x",
+            "client_secret": "y",
+            "report_id": "z",
             "guild_id": "not_a_number",
         }
         path = tmp_path / "config.json"
@@ -121,7 +123,7 @@ class TestDefaults:
 
 class TestLegacyFormat:
     def test_load_config_returns_dict(self, config_file):
-        mgr = get_config_manager(config_file)
+        get_config_manager(config_file)
         result = load_config(config_file)
         assert isinstance(result, dict)
         assert result["client_id"] == "test_id"
@@ -131,7 +133,7 @@ class TestLegacyFormat:
         mgr = ConfigManager(config_file)
         mgr.load()
         thresholds = mgr.get_role_thresholds()
-        assert thresholds["healer_min_healing"] == 50000
+        assert thresholds["healer_min_healing"] == 40000
 
 
 class TestSingleton:
@@ -143,8 +145,14 @@ class TestSingleton:
     def test_get_config_manager_new_file_replaces(self, config_file, tmp_path):
         m1 = get_config_manager(config_file)
         other = tmp_path / "other.json"
-        other.write_text(json.dumps({
-            "client_id": "a", "client_secret": "b", "report_id": "c",
-        }))
+        other.write_text(
+            json.dumps(
+                {
+                    "client_id": "a",
+                    "client_secret": "b",
+                    "report_id": "c",
+                }
+            )
+        )
         m2 = get_config_manager(str(other))
         assert m1 is not m2

@@ -9,16 +9,25 @@ per-player deltas with spell and consumable breakdowns.
 from collections import defaultdict
 from datetime import datetime
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QGridLayout, QFrame, QFileDialog, QMessageBox,
-    QCheckBox, QComboBox,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
 from .charts import build_raid_trend_chart
+from .styles import COLORS, COMMON_STYLES
 
 _ALIGN_RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 _ALIGN_LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -127,9 +136,7 @@ class RaidCrossAnalysisWidget(QWidget):
         # ── Filter toolbar ──
         toolbar = QWidget()
         toolbar.setFixedHeight(40)
-        toolbar.setStyleSheet(
-            f"background-color: {COLORS['bg_card']}; "
-            f"border-bottom: 1px solid {COLORS['border']};")
+        toolbar.setStyleSheet(f"background-color: {COLORS['bg_card']}; border-bottom: 1px solid {COLORS['border']};")
         tb_layout = QHBoxLayout(toolbar)
         tb_layout.setContentsMargins(16, 0, 16, 0)
         tb_layout.setSpacing(16)
@@ -159,27 +166,35 @@ class RaidCrossAnalysisWidget(QWidget):
         tb_layout.addWidget(day_label)
 
         self._day_combo = QComboBox()
-        self._day_combo.addItems([
-            "Any Day", "Monday", "Tuesday", "Wednesday",
-            "Thursday", "Friday", "Saturday", "Sunday",
-        ])
+        self._day_combo.addItems(
+            [
+                "Any Day",
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+            ]
+        )
         self._day_combo.setFixedHeight(26)
         self._day_combo.setMinimumWidth(120)
         self._day_combo.setStyleSheet(f"""
             QComboBox {{
-                color: {COLORS['text']};
-                background-color: {COLORS['bg_input']};
-                border: 1px solid {COLORS['border']};
+                color: {COLORS["text"]};
+                background-color: {COLORS["bg_input"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 2px 8px;
                 font-size: 12px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                color: {COLORS['text']};
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
-                selection-background-color: {COLORS['accent']};
+                color: {COLORS["text"]};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
+                selection-background-color: {COLORS["accent"]};
             }}
         """)
         self._day_combo.currentIndexChanged.connect(self._on_mode_changed)
@@ -225,8 +240,7 @@ class RaidCrossAnalysisWidget(QWidget):
                 self._zone = raid_stats.get("zone")
 
                 self._raid_stats = raid_stats
-                self._historical = db.get_historical_raid_aggregates(
-                    self._size_mode, self._report_id, zone=self._zone)
+                self._historical = db.get_historical_raid_aggregates(self._size_mode, self._report_id, zone=self._zone)
                 self._players = db.get_player_performance_for_raid(self._report_id)
         except Exception as e:
             self._show_error(f"Error loading data: {e}")
@@ -271,8 +285,7 @@ class RaidCrossAnalysisWidget(QWidget):
             filtered_historical = self._historical
         else:
             filtered_historical = [
-                h for h in self._historical
-                if self._raid_day_name(h.get("raid_date", "")) == selected_day
+                h for h in self._historical if self._raid_day_name(h.get("raid_date", "")) == selected_day
             ]
 
         active_modes = []
@@ -285,12 +298,12 @@ class RaidCrossAnalysisWidget(QWidget):
 
         mode_data = []
         from ..database import PerformanceDB
+
         try:
             with PerformanceDB() as db:
                 for label, last_n in active_modes:
                     hist_subset = filtered_historical[-last_n:] if last_n else filtered_historical
-                    player_deltas = self._compute_player_deltas(
-                        db, self._players, self._size_mode, last_n)
+                    player_deltas = self._compute_player_deltas(db, self._players, self._size_mode, last_n)
                     mode_data.append((label, hist_subset, player_deltas))
         except Exception as e:
             self._show_error(f"Error computing: {e}")
@@ -326,8 +339,9 @@ class RaidCrossAnalysisWidget(QWidget):
                 delta["metrics"]["total_healing"] = p.get("total_healing", 0)
                 delta["metrics"]["overheal_percent"] = p.get("overheal_percent", 0)
                 trend = db.get_healer_trend(name, limit=50)
-                filtered = [r for r in trend if r.get("report_id") != self._report_id
-                            and self._matches_filter(r, size_mode)]
+                filtered = [
+                    r for r in trend if r.get("report_id") != self._report_id and self._matches_filter(r, size_mode)
+                ]
                 if last_n is not None:
                     filtered = filtered[-last_n:]
                 if filtered:
@@ -337,14 +351,14 @@ class RaidCrossAnalysisWidget(QWidget):
                     delta["metrics"]["avg_overheal"] = avg_oh
                     delta["metrics"]["healing_pct"] = _pct_change(p["total_healing"], avg_healing)
                 spell_trend = db.get_healer_spell_trend(name, limit=50)
-                delta["spell_deltas"] = self._compute_spell_deltas(
-                    spell_trend, size_mode, "total_healing", last_n)
+                delta["spell_deltas"] = self._compute_spell_deltas(spell_trend, size_mode, "total_healing", last_n)
             elif role == "tank":
                 delta["metrics"]["total_damage_taken"] = p.get("total_damage_taken", 0)
                 delta["metrics"]["mitigation_percent"] = p.get("mitigation_percent", 0)
                 trend = db.get_tank_trend(name, limit=50)
-                filtered = [r for r in trend if r.get("report_id") != self._report_id
-                            and self._matches_filter(r, size_mode)]
+                filtered = [
+                    r for r in trend if r.get("report_id") != self._report_id and self._matches_filter(r, size_mode)
+                ]
                 if last_n is not None:
                     filtered = filtered[-last_n:]
                 if filtered:
@@ -357,8 +371,9 @@ class RaidCrossAnalysisWidget(QWidget):
             else:
                 delta["metrics"]["total_damage"] = p.get("total_damage", 0)
                 trend = db.get_dps_trend(name, limit=50)
-                filtered = [r for r in trend if r.get("report_id") != self._report_id
-                            and self._matches_filter(r, size_mode)]
+                filtered = [
+                    r for r in trend if r.get("report_id") != self._report_id and self._matches_filter(r, size_mode)
+                ]
                 if last_n is not None:
                     filtered = filtered[-last_n:]
                 if filtered:
@@ -366,12 +381,10 @@ class RaidCrossAnalysisWidget(QWidget):
                     delta["metrics"]["avg_damage"] = avg_damage
                     delta["metrics"]["damage_pct"] = _pct_change(p["total_damage"], avg_damage)
                 spell_trend = db.get_dps_ability_trend(name, limit=50)
-                delta["spell_deltas"] = self._compute_spell_deltas(
-                    spell_trend, size_mode, "total_damage", last_n)
+                delta["spell_deltas"] = self._compute_spell_deltas(spell_trend, size_mode, "total_damage", last_n)
 
             con_trend = db.get_consumable_trend(name, limit=50)
-            delta["consumable_deltas"] = self._compute_consumable_deltas(
-                con_trend, size_mode, last_n)
+            delta["consumable_deltas"] = self._compute_consumable_deltas(con_trend, size_mode, last_n)
 
             deltas.append(delta)
         return deltas
@@ -445,14 +458,16 @@ class RaidCrossAnalysisWidget(QWidget):
                 avg_value = 0
             if this_data["casts"] == 0 and avg_casts == 0:
                 continue
-            results.append({
-                "spell_name": spell,
-                "this_casts": this_data["casts"],
-                "avg_casts": avg_casts,
-                "cast_delta": this_data["casts"] - avg_casts,
-                "this_value": this_data["value"],
-                "avg_value": avg_value,
-            })
+            results.append(
+                {
+                    "spell_name": spell,
+                    "this_casts": this_data["casts"],
+                    "avg_casts": avg_casts,
+                    "cast_delta": this_data["casts"] - avg_casts,
+                    "this_value": this_data["value"],
+                    "avg_value": avg_value,
+                }
+            )
         results.sort(key=lambda x: x["this_casts"], reverse=True)
         return results[:15]
 
@@ -491,12 +506,14 @@ class RaidCrossAnalysisWidget(QWidget):
             this_count = this_cons.get(con, 0)
             avg_data = con_totals.get(con)
             avg_count = avg_data["total"] / avg_data["count"] if avg_data and avg_data["count"] > 0 else 0
-            results.append({
-                "consumable_name": con,
-                "this_count": this_count,
-                "avg_count": avg_count,
-                "delta": this_count - avg_count,
-            })
+            results.append(
+                {
+                    "consumable_name": con,
+                    "this_count": this_count,
+                    "avg_count": avg_count,
+                    "delta": this_count - avg_count,
+                }
+            )
         results.sort(key=lambda x: x["this_count"], reverse=True)
         return results
 
@@ -535,7 +552,7 @@ class RaidCrossAnalysisWidget(QWidget):
                     btn.setCursor(Qt.CursorShape.PointingHandCursor)
                     btn.setStyleSheet(f"""
                         QPushButton {{
-                            color: {COLORS['accent']};
+                            color: {COLORS["accent"]};
                             background: transparent;
                             border: none;
                             font-size: 11px;
@@ -543,7 +560,7 @@ class RaidCrossAnalysisWidget(QWidget):
                             padding: 0 4px;
                         }}
                         QPushButton:hover {{
-                            color: {COLORS['text_header']};
+                            color: {COLORS["text_header"]};
                         }}
                     """)
                     rid = raid["report_id"]
@@ -565,13 +582,15 @@ class RaidCrossAnalysisWidget(QWidget):
             if not hist_subset:
                 continue
             n = len(hist_subset)
-            mode_avgs.append((
-                label,
-                sum(h["duration_ms"] for h in hist_subset) / n,
-                sum(h["total_damage"] for h in hist_subset) / n,
-                sum(h["total_healing"] for h in hist_subset) / n,
-                sum(h["total_damage_taken"] for h in hist_subset) / n,
-            ))
+            mode_avgs.append(
+                (
+                    label,
+                    sum(h["duration_ms"] for h in hist_subset) / n,
+                    sum(h["total_damage"] for h in hist_subset) / n,
+                    sum(h["total_healing"] for h in hist_subset) / n,
+                    sum(h["total_damage_taken"] for h in hist_subset) / n,
+                )
+            )
 
         if not mode_avgs:
             self._content_layout.addWidget(section)
@@ -589,7 +608,7 @@ class RaidCrossAnalysisWidget(QWidget):
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(12)
 
-        for i, (metric_label, current_val, is_duration, invert) in enumerate(metrics):
+        for _i, (metric_label, current_val, is_duration, invert) in enumerate(metrics):
             card_deltas = []
             for mode_label, avg_dur, avg_dmg, avg_heal, avg_taken in mode_avgs:
                 if metric_label == "Duration":
@@ -615,8 +634,8 @@ class RaidCrossAnalysisWidget(QWidget):
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['bg_input']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 6px;
                 padding: 12px;
             }}
@@ -707,35 +726,35 @@ class RaidCrossAnalysisWidget(QWidget):
                     self._build_player_card(player_modes)
 
     def _build_player_card(self, player_modes):
-        first_label, first_delta = player_modes[0]
+        _first_label, first_delta = player_modes[0]
 
         card = QWidget()
         card.setObjectName("playerCard")
         card.setStyleSheet(f"""
             QWidget#playerCard {{
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 6px;
             }}
             QWidget#playerCard QWidget {{
                 background-color: transparent;
-                color: {COLORS['text']};
+                color: {COLORS["text"]};
             }}
             QWidget#playerCard QLabel {{
-                color: {COLORS['text']};
+                color: {COLORS["text"]};
                 background-color: transparent;
                 border: none;
             }}
             QWidget#playerCard QPushButton {{
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
+                color: {COLORS["text"]};
                 border-radius: 4px;
                 padding: 4px 12px;
                 font-size: 12px;
             }}
             QWidget#playerCard QPushButton:hover {{
-                background-color: {COLORS['border']};
+                background-color: {COLORS["border"]};
             }}
         """)
         card_layout = QVBoxLayout(card)
@@ -841,64 +860,74 @@ class RaidCrossAnalysisWidget(QWidget):
             mode_avgs = []
             for _, delta in player_modes:
                 m = delta["metrics"]
-                mode_avgs.append((
-                    _fmt_number(m.get("avg_healing")),
-                    m.get("healing_pct"),
-                    False,
-                ))
-            row = self._metrics_row(grid, row, "Total Healing",
-                                    _fmt_number(first_delta["metrics"].get("total_healing")),
-                                    mode_avgs)
+                mode_avgs.append(
+                    (
+                        _fmt_number(m.get("avg_healing")),
+                        m.get("healing_pct"),
+                        False,
+                    )
+                )
+            row = self._metrics_row(
+                grid, row, "Total Healing", _fmt_number(first_delta["metrics"].get("total_healing")), mode_avgs
+            )
 
             oh_avgs = []
             for _, delta in player_modes:
                 m = delta["metrics"]
                 avg_oh = m.get("avg_overheal")
-                oh_avgs.append((
-                    f"{avg_oh:.1f}%" if avg_oh is not None else "N/A",
-                    None,
-                    True,
-                ))
-            row = self._metrics_row(grid, row, "Overheal %",
-                                    f"{first_delta['metrics'].get('overheal_percent', 0):.1f}%",
-                                    oh_avgs)
+                oh_avgs.append(
+                    (
+                        f"{avg_oh:.1f}%" if avg_oh is not None else "N/A",
+                        None,
+                        True,
+                    )
+                )
+            row = self._metrics_row(
+                grid, row, "Overheal %", f"{first_delta['metrics'].get('overheal_percent', 0):.1f}%", oh_avgs
+            )
         elif role == "tank":
             taken_avgs = []
             for _, delta in player_modes:
                 m = delta["metrics"]
-                taken_avgs.append((
-                    _fmt_number(m.get("avg_damage_taken")),
-                    m.get("taken_pct"),
-                    True,
-                ))
-            row = self._metrics_row(grid, row, "Damage Taken",
-                                    _fmt_number(first_delta["metrics"].get("total_damage_taken")),
-                                    taken_avgs)
+                taken_avgs.append(
+                    (
+                        _fmt_number(m.get("avg_damage_taken")),
+                        m.get("taken_pct"),
+                        True,
+                    )
+                )
+            row = self._metrics_row(
+                grid, row, "Damage Taken", _fmt_number(first_delta["metrics"].get("total_damage_taken")), taken_avgs
+            )
 
             mit_avgs = []
             for _, delta in player_modes:
                 m = delta["metrics"]
                 avg_mit = m.get("avg_mitigation")
-                mit_avgs.append((
-                    f"{avg_mit:.1f}%" if avg_mit is not None else "N/A",
-                    m.get("mitigation_pct"),
-                    False,
-                ))
-            row = self._metrics_row(grid, row, "Mitigation %",
-                                    f"{first_delta['metrics'].get('mitigation_percent', 0):.1f}%",
-                                    mit_avgs)
+                mit_avgs.append(
+                    (
+                        f"{avg_mit:.1f}%" if avg_mit is not None else "N/A",
+                        m.get("mitigation_pct"),
+                        False,
+                    )
+                )
+            row = self._metrics_row(
+                grid, row, "Mitigation %", f"{first_delta['metrics'].get('mitigation_percent', 0):.1f}%", mit_avgs
+            )
         else:
             dmg_avgs = []
             for _, delta in player_modes:
                 m = delta["metrics"]
-                dmg_avgs.append((
-                    _fmt_number(m.get("avg_damage")),
-                    m.get("damage_pct"),
-                    False,
-                ))
-            row = self._metrics_row(grid, row, "Total Damage",
-                                    _fmt_number(first_delta["metrics"].get("total_damage")),
-                                    dmg_avgs)
+                dmg_avgs.append(
+                    (
+                        _fmt_number(m.get("avg_damage")),
+                        m.get("damage_pct"),
+                        False,
+                    )
+                )
+            row = self._metrics_row(
+                grid, row, "Total Damage", _fmt_number(first_delta["metrics"].get("total_damage")), dmg_avgs
+            )
 
         wrapper = QWidget()
         wrapper.setStyleSheet("background: transparent;")
@@ -958,11 +987,11 @@ class RaidCrossAnalysisWidget(QWidget):
             grid.addWidget(_rlabel(f"{s['avg_casts']:.1f}"), row, 2)
             d = s["cast_delta"]
             if d > 0:
-                grid.addWidget(_rlabel(f"+{d:.0f}", COLORS['success']), row, 3)
+                grid.addWidget(_rlabel(f"+{d:.0f}", COLORS["success"]), row, 3)
             elif d < 0:
-                grid.addWidget(_rlabel(f"{d:.0f}", COLORS['error']), row, 3)
+                grid.addWidget(_rlabel(f"{d:.0f}", COLORS["error"]), row, 3)
             else:
-                grid.addWidget(_rlabel("—", COLORS['text_dim']), row, 3)
+                grid.addWidget(_rlabel("—", COLORS["text_dim"]), row, 3)
 
         wrapper = QWidget()
         wrapper.setStyleSheet("background: transparent;")
@@ -1003,11 +1032,11 @@ class RaidCrossAnalysisWidget(QWidget):
             grid.addWidget(_rlabel(f"{c['avg_count']:.1f}"), row, 2)
             d = c["delta"]
             if d > 0.5:
-                grid.addWidget(_rlabel(f"+{d:.0f}", COLORS['success']), row, 3)
+                grid.addWidget(_rlabel(f"+{d:.0f}", COLORS["success"]), row, 3)
             elif d < -0.5:
-                grid.addWidget(_rlabel(f"{d:.0f}", COLORS['error']), row, 3)
+                grid.addWidget(_rlabel(f"{d:.0f}", COLORS["error"]), row, 3)
             else:
-                grid.addWidget(_rlabel("—", COLORS['text_dim']), row, 3)
+                grid.addWidget(_rlabel("—", COLORS["text_dim"]), row, 3)
 
         wrapper = QWidget()
         wrapper.setStyleSheet("background: transparent;")
@@ -1029,13 +1058,13 @@ class RaidCrossAnalysisWidget(QWidget):
             return
 
         raid_stats = self._export_data["raid_stats"]
-        safe_title = "".join(
-            c if c.isalnum() or c in " _-" else "_"
-            for c in raid_stats["title"]
-        ).strip().replace(" ", "_")
+        safe_title = (
+            "".join(c if c.isalnum() or c in " _-" else "_" for c in raid_stats["title"]).strip().replace(" ", "_")
+        )
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Cross-Analysis Report",
+            self,
+            "Export Cross-Analysis Report",
             f"{safe_title}_cross_analysis.md",
             "Markdown Files (*.md);;All Files (*)",
         )
@@ -1044,6 +1073,7 @@ class RaidCrossAnalysisWidget(QWidget):
 
         try:
             from ..renderers.markdown import export_cross_analysis
+
             export_cross_analysis(
                 self._export_data["raid_stats"],
                 self._export_data["historical"],

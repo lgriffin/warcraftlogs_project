@@ -2,48 +2,56 @@
 
 from datetime import datetime
 
-import pytest
-
 from warcraftlogs_client.models import (
+    WOW_CLASS_NAMES,
     CharacterProfile,
     ConsumableUsage,
     EncounterRanking,
     HealerPerformance,
     PotionSpike,
     RaidComposition,
-    RaidMetadata,
     TankPerformance,
-    PlayerIdentity,
-    WOW_CLASS_NAMES,
 )
 
 
 class TestHealerPerformance:
     def test_overheal_percent_calculated(self):
         h = HealerPerformance(
-            name="P", player_class="Priest", source_id=1,
-            total_healing=900, total_overhealing=100,
+            name="P",
+            player_class="Priest",
+            source_id=1,
+            total_healing=900,
+            total_overhealing=100,
         )
         assert h.overheal_percent == 10.0
 
     def test_overheal_percent_zero_total(self):
         h = HealerPerformance(
-            name="P", player_class="Priest", source_id=1,
-            total_healing=0, total_overhealing=0,
+            name="P",
+            player_class="Priest",
+            source_id=1,
+            total_healing=0,
+            total_overhealing=0,
         )
         assert h.overheal_percent == 0.0
 
     def test_overheal_percent_all_overheal(self):
         h = HealerPerformance(
-            name="P", player_class="Priest", source_id=1,
-            total_healing=0, total_overhealing=1000,
+            name="P",
+            player_class="Priest",
+            source_id=1,
+            total_healing=0,
+            total_overhealing=1000,
         )
         assert h.overheal_percent == 100.0
 
     def test_overheal_percent_rounding(self):
         h = HealerPerformance(
-            name="P", player_class="Priest", source_id=1,
-            total_healing=2, total_overhealing=1,
+            name="P",
+            player_class="Priest",
+            source_id=1,
+            total_healing=2,
+            total_overhealing=1,
         )
         assert h.overheal_percent == 33.3
 
@@ -51,15 +59,21 @@ class TestHealerPerformance:
 class TestTankPerformance:
     def test_mitigation_percent_calculated(self):
         t = TankPerformance(
-            name="T", player_class="Warrior", source_id=1,
-            total_damage_taken=400, total_mitigated=600,
+            name="T",
+            player_class="Warrior",
+            source_id=1,
+            total_damage_taken=400,
+            total_mitigated=600,
         )
         assert t.mitigation_percent == 60.0
 
     def test_mitigation_percent_zero_total(self):
         t = TankPerformance(
-            name="T", player_class="Warrior", source_id=1,
-            total_damage_taken=0, total_mitigated=0,
+            name="T",
+            player_class="Warrior",
+            source_id=1,
+            total_damage_taken=0,
+            total_mitigated=0,
         )
         assert t.mitigation_percent == 0.0
 
@@ -67,32 +81,43 @@ class TestTankPerformance:
 class TestConsumableUsage:
     def test_timestamps_formatted_empty(self):
         c = ConsumableUsage(
-            player_name="P", player_role="healer",
-            report_id="r1", consumable_name="Potion",
+            player_name="P",
+            player_role="healer",
+            report_id="r1",
+            consumable_name="Potion",
         )
         assert c.timestamps_formatted == ""
 
     def test_timestamps_formatted_single(self):
         c = ConsumableUsage(
-            player_name="P", player_role="healer",
-            report_id="r1", consumable_name="Potion",
-            count=1, timestamps=[90_000],
+            player_name="P",
+            player_role="healer",
+            report_id="r1",
+            consumable_name="Potion",
+            count=1,
+            timestamps=[90_000],
         )
         assert c.timestamps_formatted == "01:30"
 
     def test_timestamps_formatted_multiple(self):
         c = ConsumableUsage(
-            player_name="P", player_role="healer",
-            report_id="r1", consumable_name="Potion",
-            count=2, timestamps=[60_000, 125_000],
+            player_name="P",
+            player_role="healer",
+            report_id="r1",
+            consumable_name="Potion",
+            count=2,
+            timestamps=[60_000, 125_000],
         )
         assert c.timestamps_formatted == "01:00, 02:05"
 
     def test_timestamps_formatted_zero(self):
         c = ConsumableUsage(
-            player_name="P", player_role="healer",
-            report_id="r1", consumable_name="Potion",
-            count=1, timestamps=[0],
+            player_name="P",
+            player_role="healer",
+            report_id="r1",
+            consumable_name="Potion",
+            count=1,
+            timestamps=[0],
         )
         assert c.timestamps_formatted == "00:00"
 
@@ -116,7 +141,11 @@ class TestRaidMetadata:
         assert isinstance(formatted, str)
         assert len(formatted) > 10
 
-    def test_url(self, sample_raid_metadata):
+    def test_url(self, sample_raid_metadata, monkeypatch):
+        monkeypatch.setattr(
+            "warcraftlogs_client.config.load_config",
+            lambda config_file=None: {"wcl_api_url": ""},
+        )
         assert sample_raid_metadata.url == "https://www.warcraftlogs.com/reports/abc123"
 
 

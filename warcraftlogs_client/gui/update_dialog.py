@@ -2,16 +2,21 @@
 Update dialog — shows release notes, downloads update, and triggers install.
 """
 
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QProgressBar, QTextEdit,
-)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+)
 
-from .styles import COLORS, COMMON_STYLES
-from ..updater import UpdateInfo, UpdateDownloader, apply_update
+from ..updater import UpdateDownloader, UpdateInfo, apply_update
 from ..version import __version__
+from .styles import COLORS, COMMON_STYLES
 
 
 class UpdateDialog(QDialog):
@@ -23,11 +28,14 @@ class UpdateDialog(QDialog):
 
         self.setWindowTitle("Update Available")
         self.setMinimumSize(520, 420)
-        self.setStyleSheet(COMMON_STYLES + f"""
+        self.setStyleSheet(
+            COMMON_STYLES
+            + f"""
             QDialog {{
-                background-color: {COLORS['bg_card']};
+                background-color: {COLORS["bg_card"]};
             }}
-        """)
+        """
+        )
         self._build_ui()
 
     def _build_ui(self):
@@ -53,9 +61,9 @@ class UpdateDialog(QDialog):
         self._notes.setMarkdown(self._info.release_notes or "No release notes.")
         self._notes.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 8px;
                 font-size: 12px;
@@ -162,6 +170,7 @@ class UpdateDialog(QDialog):
             return
 
         from PySide6.QtWidgets import QApplication
+
         QApplication.quit()
 
     def closeEvent(self, event):

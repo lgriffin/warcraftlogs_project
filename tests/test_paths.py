@@ -1,10 +1,5 @@
 """Tests for path resolution across dev and frozen environments."""
 
-from pathlib import Path
-from unittest.mock import patch
-
-import pytest
-
 from warcraftlogs_client import paths
 
 
@@ -55,9 +50,7 @@ class TestGetReportsDir:
         assert paths.get_reports_dir().name == "reports"
 
     def test_creates_directory(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            "warcraftlogs_client.paths.get_user_data_dir", lambda: tmp_path
-        )
+        monkeypatch.setattr("warcraftlogs_client.paths.get_user_data_dir", lambda: tmp_path)
         reports = paths.get_reports_dir()
         assert reports.exists()
 
@@ -80,9 +73,7 @@ class TestEnsureFirstRunConfig:
         data_dir = tmp_path / "userdata"
         data_dir.mkdir()
 
-        monkeypatch.setattr(
-            "warcraftlogs_client.paths.get_app_dir", lambda: tmp_path
-        )
+        monkeypatch.setattr("warcraftlogs_client.paths.get_app_dir", lambda: tmp_path)
         monkeypatch.setattr(
             "warcraftlogs_client.paths.get_config_path",
             lambda: data_dir / "config.json",
@@ -99,12 +90,8 @@ class TestEnsureFirstRunConfig:
         config = tmp_path / "config.json"
         config.write_text('{"existing": true}')
 
-        monkeypatch.setattr(
-            "warcraftlogs_client.paths.get_app_dir", lambda: tmp_path
-        )
-        monkeypatch.setattr(
-            "warcraftlogs_client.paths.get_config_path", lambda: config
-        )
+        monkeypatch.setattr("warcraftlogs_client.paths.get_app_dir", lambda: tmp_path)
+        monkeypatch.setattr("warcraftlogs_client.paths.get_config_path", lambda: config)
 
         paths.ensure_first_run_config()
         assert config.read_text() == '{"existing": true}'

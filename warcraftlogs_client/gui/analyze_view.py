@@ -6,20 +6,33 @@ import json
 import sqlite3
 from datetime import datetime
 
+from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtGui import QCursor, QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QCheckBox, QComboBox, QTabWidget, QTableView,
-    QProgressBar, QHeaderView, QGroupBox, QMessageBox,
-    QSplitter, QTextEdit, QFileDialog,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
+    QTableView,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex
-from PySide6.QtGui import QFont, QCursor
 
-from .styles import COMMON_STYLES, COLORS
-from .table_models import HealerTableModel, TankTableModel, DPSTableModel, HistoryTableModel
-from .detail_panel import CharacterDetailPanel
-from .worker import AnalysisWorker, GuildReportsWorker
 from ..models import RaidAnalysis
+from .detail_panel import CharacterDetailPanel
+from .styles import COLORS, COMMON_STYLES
+from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, TankTableModel
+from .worker import AnalysisWorker, GuildReportsWorker
 
 
 class AnalyzeView(QWidget):
@@ -89,8 +102,8 @@ class AnalyzeView(QWidget):
         self.raid_info = QLabel("")
         self.raid_info.setStyleSheet(f"""
             QLabel {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
                 padding: 10px 16px;
                 border-radius: 6px;
                 font-size: 13px;
@@ -127,8 +140,7 @@ class AnalyzeView(QWidget):
         day_filter_layout.addWidget(filter_label)
 
         self._day_checkboxes = {}
-        days = [("Mon", 0), ("Tue", 1), ("Wed", 2), ("Thu", 3),
-                ("Fri", 4), ("Sat", 5), ("Sun", 6)]
+        days = [("Mon", 0), ("Tue", 1), ("Wed", 2), ("Thu", 3), ("Fri", 4), ("Sat", 5), ("Sun", 6)]
         defaults_on = {2, 3, 6}  # Wed, Thu, Sun
         for label, idx in days:
             day_label = QLabel(label)
@@ -154,7 +166,7 @@ class AnalyzeView(QWidget):
         self.guild_reports_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.guild_reports_table.setStyleSheet(f"""
             QTableView {{
-                alternate-background-color: {COLORS['bg_dark']};
+                alternate-background-color: {COLORS["bg_dark"]};
             }}
         """)
         self.guild_reports_table.doubleClicked.connect(self._on_guild_report_double_clicked)
@@ -194,18 +206,18 @@ class AnalyzeView(QWidget):
         self._consumes_filter_combo.setMinimumWidth(180)
         self._consumes_filter_combo.setStyleSheet(f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 11px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._consumes_filter_combo.currentIndexChanged.connect(self._apply_consumes_filter)
@@ -230,8 +242,8 @@ class AnalyzeView(QWidget):
         self.comp_text.setReadOnly(True)
         self.comp_text.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
                 border: none;
                 font-family: "Cascadia Code", "Consolas", monospace;
                 font-size: 13px;
@@ -271,11 +283,14 @@ class AnalyzeView(QWidget):
         table.verticalHeader().setVisible(False)
         table.horizontalHeader().setStretchLastSection(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        table.setStyleSheet(table.styleSheet() + f"""
+        table.setStyleSheet(
+            table.styleSheet()
+            + f"""
             QTableView {{
-                alternate-background-color: {COLORS['bg_dark']};
+                alternate-background-color: {COLORS["bg_dark"]};
             }}
-        """)
+        """
+        )
         table.name_clicked.connect(self._on_character_clicked)
         return table
 
@@ -336,6 +351,7 @@ class AnalyzeView(QWidget):
     def _load_default_report_id(self):
         try:
             from ..config import load_config
+
             config = load_config()
             self.report_id_input.setText(config.get("report_id", ""))
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
@@ -346,6 +362,7 @@ class AnalyzeView(QWidget):
     def _fetch_guild_reports(self):
         try:
             from ..config import load_config
+
             config = load_config()
             guild_id = config.get("guild_id", 774065)
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
@@ -374,17 +391,18 @@ class AnalyzeView(QWidget):
     def _refresh_cached_codes(self):
         try:
             from ..database import PerformanceDB
+
             db = PerformanceDB()
             self._cached_codes = db.get_imported_report_codes()
         except (sqlite3.Error, OSError):
             self._cached_codes = set()
 
     def _apply_day_filter(self):
-        if not hasattr(self, '_guild_reports_raw'):
+        if not hasattr(self, "_guild_reports_raw"):
             return
 
         allowed_days = {idx for idx, cb in self._day_checkboxes.items() if cb.isChecked()}
-        cached = getattr(self, '_cached_codes', set())
+        cached = getattr(self, "_cached_codes", set())
 
         display_rows = []
         for r in self._guild_reports_raw:
@@ -395,15 +413,17 @@ class AnalyzeView(QWidget):
             if dt.weekday() not in allowed_days:
                 continue
             code = r.get("code", "")
-            display_rows.append({
-                "date": dt.strftime("%Y-%m-%d %H:%M"),
-                "day": dt.strftime("%a"),
-                "title": r.get("title", ""),
-                "owner": r.get("owner", ""),
-                "zone": r.get("zone", ""),
-                "code": code,
-                "saved": "Yes" if code in cached else "",
-            })
+            display_rows.append(
+                {
+                    "date": dt.strftime("%Y-%m-%d %H:%M"),
+                    "day": dt.strftime("%a"),
+                    "title": r.get("title", ""),
+                    "owner": r.get("owner", ""),
+                    "zone": r.get("zone", ""),
+                    "code": code,
+                    "saved": "Yes" if code in cached else "",
+                }
+            )
             if len(display_rows) >= 50:
                 break
 
@@ -423,11 +443,17 @@ class AnalyzeView(QWidget):
             code = rows[row].get("code", "")
             if not code:
                 return
-            col_name = self.guild_reports_model._columns[index.column()] if index.column() < len(self.guild_reports_model._columns) else ""
+            col_name = (
+                self.guild_reports_model._columns[index.column()]
+                if index.column() < len(self.guild_reports_model._columns)
+                else ""
+            )
             if col_name == "code":
                 import webbrowser
+
                 try:
                     from ..config import load_config
+
                     api_url = load_config().get("wcl_api_url", "")
                 except (FileNotFoundError, json.JSONDecodeError, KeyError):
                     api_url = ""
@@ -454,8 +480,7 @@ class AnalyzeView(QWidget):
     def _start_analysis(self):
         report_id = self.report_id_input.text().strip()
         if not report_id:
-            QMessageBox.warning(self, "Missing Report ID",
-                                "Please enter a WarcraftLogs report ID.")
+            QMessageBox.warning(self, "Missing Report ID", "Please enter a WarcraftLogs report ID.")
             return
 
         self.analyze_btn.setEnabled(False)
@@ -503,9 +528,10 @@ class AnalyzeView(QWidget):
         if self.save_checkbox.isChecked():
             try:
                 from ..database import PerformanceDB
+
                 with PerformanceDB() as db:
                     db.import_raid(analysis)
-                self.status_message.emit(f"Analysis complete. Saved to database.")
+                self.status_message.emit("Analysis complete. Saved to database.")
                 self._refresh_cached_codes()
                 self._apply_day_filter()
             except (sqlite3.Error, OSError) as e:
@@ -539,7 +565,7 @@ class AnalyzeView(QWidget):
         self._apply_consumes_filter()
 
     def _apply_consumes_filter(self):
-        if not hasattr(self, '_raid_consumables_raw'):
+        if not hasattr(self, "_raid_consumables_raw"):
             return
 
         consumes = self._raid_consumables_raw
@@ -550,12 +576,14 @@ class AnalyzeView(QWidget):
 
         rows = []
         for c in consumes:
-            rows.append({
-                "Player": c.player_name,
-                "Consumable": c.consumable_name,
-                "Count": c.count,
-                "Timestamps": c.timestamps_formatted,
-            })
+            rows.append(
+                {
+                    "Player": c.player_name,
+                    "Consumable": c.consumable_name,
+                    "Count": c.count,
+                    "Timestamps": c.timestamps_formatted,
+                }
+            )
 
         rows.sort(key=lambda r: (r["Player"], r["Consumable"]))
         self._consumes_model.set_data(rows, ["Player", "Consumable", "Count", "Timestamps"])
@@ -567,8 +595,12 @@ class AnalyzeView(QWidget):
         lines.append("RAID COMPOSITION")
         lines.append("=" * 50)
 
-        for label, group in [("Tanks", comp.tanks), ("Healers", comp.healers),
-                             ("Melee DPS", comp.melee), ("Ranged DPS", comp.ranged)]:
+        for label, group in [
+            ("Tanks", comp.tanks),
+            ("Healers", comp.healers),
+            ("Melee DPS", comp.melee),
+            ("Ranged DPS", comp.ranged),
+        ]:
             lines.append(f"\n{label} ({len(group)}):")
             if not group:
                 lines.append("  (none)")
@@ -589,12 +621,11 @@ class AnalyzeView(QWidget):
             return
 
         title = self._current_analysis.metadata.title
-        safe_title = "".join(
-            c if c.isalnum() or c in " _-" else "_" for c in title
-        ).strip().replace(" ", "_")
+        safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title).strip().replace(" ", "_")
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Markdown Report",
+            self,
+            "Export Markdown Report",
             f"{safe_title}.md",
             "Markdown Files (*.md);;All Files (*)",
         )
@@ -603,6 +634,7 @@ class AnalyzeView(QWidget):
 
         try:
             from ..renderers.markdown import export_raid_analysis
+
             export_raid_analysis(self._current_analysis, output_path=path)
             self.status_message.emit(f"Exported to {path}")
         except (OSError, ValueError, KeyError) as e:
@@ -610,7 +642,7 @@ class AnalyzeView(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not hasattr(self, '_guild_loaded') or not self._guild_loaded:
+        if not hasattr(self, "_guild_loaded") or not self._guild_loaded:
             self._guild_loaded = True
             self._fetch_guild_reports()
 

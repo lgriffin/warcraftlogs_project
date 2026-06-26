@@ -1,7 +1,7 @@
 """Tests for API client rate limiting and retry logic."""
 
 import time
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 import requests

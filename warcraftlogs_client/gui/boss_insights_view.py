@@ -8,21 +8,33 @@ and top performer breakdowns.
 import sqlite3
 from statistics import median
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QScrollArea, QFrame,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
 from ..database import PerformanceDB
-
+from .styles import COLORS, COMMON_STYLES
 
 DAY_OPTIONS = [
-    "All Days", "Monday", "Tuesday", "Wednesday",
-    "Thursday", "Friday", "Saturday", "Sunday",
+    "All Days",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 ]
 
 
@@ -84,8 +96,8 @@ class BossInsightsView(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}
-            QScrollArea > QWidget > QWidget {{ background-color: {COLORS['bg_dark']}; }}
+            QScrollArea {{ border: none; background-color: {COLORS["bg_dark"]}; }}
+            QScrollArea > QWidget > QWidget {{ background-color: {COLORS["bg_dark"]}; }}
         """)
 
         content = QWidget()
@@ -99,7 +111,8 @@ class BossInsightsView(QWidget):
         self._summary_label.setFont(QFont("Segoe UI", 13))
         self._summary_label.setStyleSheet(
             f"color: {COLORS['text']}; background-color: {COLORS['bg_card']}; "
-            f"border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 12px;")
+            f"border: 1px solid {COLORS['border']}; border-radius: 6px; padding: 12px;"
+        )
         self._content_layout.addWidget(self._summary_label)
 
         # Min / Median / Max stats
@@ -108,11 +121,9 @@ class BossInsightsView(QWidget):
         self._stats_table = QTableWidget()
         self._stats_table.setColumnCount(4)
         self._stats_table.setHorizontalHeaderLabels(["Metric", "Min", "Median", "Max"])
-        self._stats_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+        self._stats_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 4):
-            self._stats_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.Stretch)
+            self._stats_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self._stats_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._stats_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._stats_table.setAlternatingRowColors(True)
@@ -125,15 +136,20 @@ class BossInsightsView(QWidget):
 
         self._perf_table = QTableWidget()
         self._perf_table.setColumnCount(7)
-        self._perf_table.setHorizontalHeaderLabels([
-            "Name", "Class", "Role", "Avg Damage", "Avg Healing",
-            "Avg Dmg Taken", "Kills",
-        ])
-        self._perf_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+        self._perf_table.setHorizontalHeaderLabels(
+            [
+                "Name",
+                "Class",
+                "Role",
+                "Avg Damage",
+                "Avg Healing",
+                "Avg Dmg Taken",
+                "Kills",
+            ]
+        )
+        self._perf_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 7):
-            self._perf_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._perf_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._perf_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._perf_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._perf_table.setAlternatingRowColors(True)
@@ -163,8 +179,7 @@ class BossInsightsView(QWidget):
         self._boss_combo.clear()
         try:
             with PerformanceDB() as db:
-                self._encounters_data = db.get_distinct_encounters(
-                    raid_day=self._get_day_filter())
+                self._encounters_data = db.get_distinct_encounters(raid_day=self._get_day_filter())
         except (sqlite3.Error, OSError):
             self._encounters_data = []
 
@@ -196,8 +211,7 @@ class BossInsightsView(QWidget):
         try:
             with PerformanceDB() as db:
                 history = db.get_encounter_history(encounter_id, raid_day=day)
-                breakdown = db.get_encounter_player_breakdown(
-                    encounter_id, raid_day=day)
+                breakdown = db.get_encounter_player_breakdown(encounter_id, raid_day=day)
         except (sqlite3.Error, OSError) as e:
             self.status_message.emit(f"Error loading boss data: {e}")
             return
@@ -205,8 +219,7 @@ class BossInsightsView(QWidget):
         self._refresh_summary(history)
         self._refresh_stats(history)
         self._refresh_performers(breakdown)
-        self.status_message.emit(
-            f"Boss Insights: {len(history)} kills, {len(breakdown)} players")
+        self.status_message.emit(f"Boss Insights: {len(history)} kills, {len(breakdown)} players")
 
     def _refresh_summary(self, history: list[dict]):
         if not history:
@@ -223,7 +236,8 @@ class BossInsightsView(QWidget):
             f"Kills: {kill_count}    |    "
             f"Avg Duration: {_fmt_duration(avg_dur)}    |    "
             f"Avg Raid Damage: {_fmt(total_dmg // kill_count)}    |    "
-            f"Avg Raid Healing: {_fmt(total_heal // kill_count)}")
+            f"Avg Raid Healing: {_fmt(total_heal // kill_count)}"
+        )
 
     def _refresh_stats(self, history: list[dict]):
         if not history:
@@ -250,8 +264,7 @@ class BossInsightsView(QWidget):
             self._stats_table.setItem(i, 0, QTableWidgetItem(name))
             for j, val in enumerate([sorted_vals[0], med_val, sorted_vals[-1]]):
                 item = QTableWidgetItem(formatter(val))
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._stats_table.setItem(i, j + 1, item)
 
     def _refresh_performers(self, breakdown: list[dict]):
@@ -265,13 +278,11 @@ class BossInsightsView(QWidget):
                 item = QTableWidgetItem()
                 item.setData(Qt.ItemDataRole.DisplayRole, _fmt(row[key]))
                 item.setData(Qt.ItemDataRole.UserRole, row[key])
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._perf_table.setItem(i, j + 3, item)
             kills_item = QTableWidgetItem()
             kills_item.setData(Qt.ItemDataRole.DisplayRole, str(row["kills"]))
             kills_item.setData(Qt.ItemDataRole.UserRole, row["kills"])
-            kills_item.setTextAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            kills_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._perf_table.setItem(i, 6, kills_item)
         self._perf_table.setSortingEnabled(True)

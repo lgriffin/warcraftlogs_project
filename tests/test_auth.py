@@ -94,6 +94,7 @@ class TestGetToken:
     @patch("warcraftlogs_client.auth.requests.post")
     def test_http_error_propagates(self, mock_post, tm):
         from requests.exceptions import HTTPError
+
         mock_post.return_value = MagicMock(
             raise_for_status=MagicMock(side_effect=HTTPError("401")),
         )

@@ -19,8 +19,11 @@ class TestGetReportMetadata:
     def test_converts_to_dict(self):
         client = MagicMock()
         client.get_report_metadata.return_value = RaidMetadata(
-            report_id="r1", title="Kara", owner="Guild",
-            start_time=1700000000000, end_time=1700003600000,
+            report_id="r1",
+            title="Kara",
+            owner="Guild",
+            start_time=1700000000000,
+            end_time=1700003600000,
         )
         result = get_report_metadata(client, "r1")
         assert isinstance(result, dict)
