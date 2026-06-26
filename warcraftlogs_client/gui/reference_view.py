@@ -5,26 +5,39 @@ and compare guild vs reference performance.
 
 import sqlite3
 from collections import defaultdict
-from datetime import datetime
 
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, QRectF, Qt, QThread, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QTableView, QHeaderView, QTabWidget, QComboBox,
-    QMessageBox, QGridLayout, QFrame, QScrollArea, QFileDialog,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex, QThread, QRectF
-from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPen
 
-from .analysis_helpers import (
-    NumericSortProxy, build_heatmap_data,
-    compute_engineering_stats, classify_consumable_usage,
-    compute_shared_encounter_window, scope_analysis_to_window,
-    ENGINEERING_ITEMS,
-)
-from .styles import COMMON_STYLES, COLORS
-from .worker import ReferenceAnalysisWorker
 from ..database import PerformanceDB
 from ..user_auth import UserTokenManager, start_oauth_flow
+from .analysis_helpers import (
+    NumericSortProxy,
+    build_heatmap_data,
+    classify_consumable_usage,
+    compute_engineering_stats,
+    compute_shared_encounter_window,
+    scope_analysis_to_window,
+)
+from .styles import COLORS, COMMON_STYLES
+from .worker import ReferenceAnalysisWorker
 
 
 class _ReferenceRaidModel(QAbstractTableModel):
@@ -318,7 +331,7 @@ class ReferenceView(QWidget):
         auth_row = QHBoxLayout()
         auth_row.setSpacing(8)
         self._auth_status = QLabel("")
-        self._auth_status.setStyleSheet(f"font-size: 12px;")
+        self._auth_status.setStyleSheet("font-size: 12px;")
         auth_row.addWidget(self._auth_status)
         self._auth_btn = QPushButton("Authenticate")
         self._auth_btn.setFixedHeight(28)

@@ -5,8 +5,8 @@ Wraps QStackedWidget to support pushing/popping views on top of
 the base sidebar pages. Emits signals for back-button visibility.
 """
 
-from PySide6.QtWidgets import QStackedWidget, QWidget
 from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QStackedWidget, QWidget
 
 
 class NavigationStack(QStackedWidget):

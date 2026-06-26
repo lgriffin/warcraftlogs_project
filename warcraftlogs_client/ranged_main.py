@@ -1,16 +1,16 @@
 import argparse
 import datetime
-import json
 from collections import defaultdict
 
 import requests
 
+from . import dynamic_role_parser
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
+from .common.data import get_master_data, get_report_metadata
 from .config import load_config
 from .spell_manager import SpellBreakdown
-from . import dynamic_role_parser
-from .common.data import get_master_data, get_report_metadata
+
 
 def print_report_metadata(metadata, present_names):
     print("\n========================")

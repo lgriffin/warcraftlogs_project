@@ -2,14 +2,14 @@
 Qt table models for displaying analysis results.
 """
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor, QFont
 
-from ..models import HealerPerformance, TankPerformance, DPSPerformance, GearItem
+from ..models import DPSPerformance, GearItem, HealerPerformance, TankPerformance
 
 
 class HealerTableModel(QAbstractTableModel):
-    def __init__(self, healers: list[HealerPerformance] = None, parent=None):
+    def __init__(self, healers: list[HealerPerformance] | None = None, parent=None):
         super().__init__(parent)
         self._healers = healers or []
         self._columns = ["Name", "Class", "Healing", "Overhealing", "OH%",
@@ -86,7 +86,7 @@ class HealerTableModel(QAbstractTableModel):
 
 
 class TankTableModel(QAbstractTableModel):
-    def __init__(self, tanks: list[TankPerformance] = None, parent=None):
+    def __init__(self, tanks: list[TankPerformance] | None = None, parent=None):
         super().__init__(parent)
         self._tanks = tanks or []
         self._columns = ["Name", "Class", "Damage Taken", "Mitigated", "Mitigation%", "Active Time%"]
@@ -142,7 +142,7 @@ class TankTableModel(QAbstractTableModel):
 
 
 class DPSTableModel(QAbstractTableModel):
-    def __init__(self, dps_list: list[DPSPerformance] = None, parent=None):
+    def __init__(self, dps_list: list[DPSPerformance] | None = None, parent=None):
         super().__init__(parent)
         self._dps = dps_list or []
         self._columns = ["Name", "Class", "Total Damage", "Active Time%", "Top Ability (Casts)"]
@@ -206,7 +206,7 @@ class DPSTableModel(QAbstractTableModel):
 class HistoryTableModel(QAbstractTableModel):
     """Generic table model for history trend data (list of dicts)."""
 
-    def __init__(self, columns: list[str] = None, link_columns: set[str] = None,
+    def __init__(self, columns: list[str] | None = None, link_columns: set[str] | None = None,
                  checkable: bool = False, parent=None):
         super().__init__(parent)
         self._columns = columns or []
@@ -215,7 +215,7 @@ class HistoryTableModel(QAbstractTableModel):
         self._checkable = checkable
         self._checked: set[int] = set()
 
-    def set_data(self, rows: list[dict], columns: list[str] = None):
+    def set_data(self, rows: list[dict], columns: list[str] | None = None):
         self.beginResetModel()
         self._rows = rows
         if columns:

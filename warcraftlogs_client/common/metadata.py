@@ -1,5 +1,6 @@
 import datetime
 
+
 def print_report_metadata(metadata, present_names, master_actors):
     print("\n========================")
     print("📝 Report Metadata")

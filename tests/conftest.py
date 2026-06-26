@@ -1,15 +1,14 @@
 """Shared fixtures for the Warcraft Logs test suite."""
 
 import json
-import os
 from unittest.mock import MagicMock
 
 import pytest
 
 from warcraftlogs_client.models import (
     ConsumableUsage,
-    DPSPerformance,
     DispelUsage,
+    DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
@@ -26,8 +25,8 @@ from warcraftlogs_client.models import (
 @pytest.fixture(autouse=True)
 def reset_global_state():
     """Reset singletons between tests."""
-    import warcraftlogs_client.spell_manager as sm
     import warcraftlogs_client.config as cfg
+    import warcraftlogs_client.spell_manager as sm
 
     sm._spell_manager = None
     cfg._config_manager = None

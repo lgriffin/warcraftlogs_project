@@ -13,6 +13,7 @@ This module provides a single entry point for all analysis modes:
 """
 
 import argparse
+import logging
 import sys
 
 import requests
@@ -40,6 +41,8 @@ Examples:
     )
 
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose output (INFO level logging)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output (DEBUG level logging)')
 
     subparsers = parser.add_subparsers(
         dest='command',
@@ -93,10 +96,10 @@ Examples:
 
 
 def run_unified_analysis(args) -> int:
-    from .auth import TokenManager
-    from .config import load_config
-    from .client import WarcraftLogsClient
     from .analysis import analyze_raid
+    from .auth import TokenManager
+    from .client import WarcraftLogsClient
+    from .config import load_config
     from .renderers.console import render_raid_analysis
     from .spell_manager import reset_spell_manager
 
@@ -267,6 +270,13 @@ def run_history_query(args) -> int:
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
+
+    level = logging.WARNING
+    if getattr(args, 'verbose', False):
+        level = logging.INFO
+    if getattr(args, 'debug', False):
+        level = logging.DEBUG
+    logging.basicConfig(level=level, format="%(name)s %(levelname)s: %(message)s")
 
     if not args.command:
         args.command = 'unified'

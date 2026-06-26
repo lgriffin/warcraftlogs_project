@@ -20,6 +20,6 @@ def render_markdown_template(template_name: str, context: dict, template_dir: st
         loader=FileSystemLoader(template_dir),
         trim_blocks=True,
         lstrip_blocks=True
-    )
+    )  # nosec B701
     template = env.get_template(template_name)
     return template.render(context)

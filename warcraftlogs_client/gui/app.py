@@ -4,12 +4,12 @@ Application entry point for the WarcraftLogs Analyzer GUI.
 
 import logging
 import sys
-from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QFont
 
-from .main_window import MainWindow
+from PySide6.QtWidgets import QApplication
+
 from .. import paths
 from ..version import __version__
+from .main_window import MainWindow
 
 
 def run():

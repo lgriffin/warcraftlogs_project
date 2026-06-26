@@ -8,27 +8,45 @@ import os
 import sqlite3
 import webbrowser
 
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableView, QHeaderView, QGroupBox, QProgressBar,
-    QListWidget, QListWidgetItem, QLineEdit,
-    QFormLayout, QMessageBox, QScrollArea, QTabWidget, QComboBox,
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QFont, QColor
 
-from .styles import COMMON_STYLES, COLORS
-from .charts import SpiderChartWidget, CalendarHeatmapWidget
-from .table_models import HistoryTableModel, GearTableModel
-from .worker import CharacterProfileWorker, WowheadResolverWorker
-from .charts import (
-    build_healer_chart, build_healer_overheal_chart,
-    build_tank_chart, build_tank_mitigation_chart,
-    build_dps_chart, build_spell_trend_chart,
-    build_consumable_trend_chart, build_active_time_chart,
-)
-from ..models import CharacterProfile, ZoneRankingResult, EncounterRanking
 from ..database import PerformanceDB
+from ..models import CharacterProfile, EncounterRanking
+from .charts import (
+    CalendarHeatmapWidget,
+    SpiderChartWidget,
+    build_active_time_chart,
+    build_consumable_trend_chart,
+    build_dps_chart,
+    build_healer_chart,
+    build_healer_overheal_chart,
+    build_spell_trend_chart,
+    build_tank_chart,
+    build_tank_mitigation_chart,
+)
+from .styles import COLORS, COMMON_STYLES
+from .table_models import GearTableModel, HistoryTableModel
+from .worker import CharacterProfileWorker, WowheadResolverWorker
 
 
 class _CollapsibleSection(QWidget):
@@ -158,6 +176,7 @@ def _percent_color(pct: float):
 
 
 from .. import paths as _paths
+
 CONFIG_PATH = str(_paths.get_config_path())
 
 
@@ -592,7 +611,7 @@ class CharacterView(QWidget):
         if not os.path.exists(CONFIG_PATH):
             return
         try:
-            with open(CONFIG_PATH, "r") as f:
+            with open(CONFIG_PATH) as f:
                 config = json.load(f)
             self._char_name_input.setText(config.get("character_name", ""))
             self._char_server_input.setText(config.get("character_server", ""))
@@ -608,7 +627,7 @@ class CharacterView(QWidget):
         config = {}
         if os.path.exists(CONFIG_PATH):
             try:
-                with open(CONFIG_PATH, "r") as f:
+                with open(CONFIG_PATH) as f:
                     config = json.load(f)
             except (json.JSONDecodeError, OSError):
                 pass
@@ -855,7 +874,7 @@ class CharacterView(QWidget):
                         for k in row:
                             if k not in ("raid_date", "title", "report_id"):
                                 all_consumable_names.add(k)
-                    cols = ["raid_date", "title"] + sorted(all_consumable_names)
+                    cols = ["raid_date", "title", *sorted(all_consumable_names)]
                     self._consumes_trend_model.set_data(consumes_summary, cols)
                 else:
                     self._consumes_trend_model.set_data([], [])

@@ -5,14 +5,14 @@ import os
 import requests
 from jinja2 import Environment, FileSystemLoader
 
-from .auth import TokenManager
-from .client import WarcraftLogsClient, get_healing_data
-from .characters import Characters
-from .config import load_config
-from .spell_manager import SpellBreakdown
-from .healing import OverallHealing
 from . import dynamic_role_parser
+from .auth import TokenManager
+from .characters import Characters
+from .client import WarcraftLogsClient, get_healing_data
 from .common.data import get_master_data, get_report_metadata
+from .config import load_config
+from .healing import OverallHealing
+from .spell_manager import SpellBreakdown
 
 
 def print_report_metadata(metadata, present, all_characters):
@@ -76,7 +76,7 @@ def new_table_view(summary, spell_names, class_name, output_lines=None):
         print("\n".join(output))
 def export_markdown_report(metadata, grouped_summary, all_spell_names_by_class, output_path="report.md"):
     lines = [
-        f"# 📝 Report Metadata",
+        "# 📝 Report Metadata",
         f"- **Title**: {metadata['title']}",
         f"- **Owner**: {metadata['owner']}",
         f"- **Date**: {datetime.datetime.fromtimestamp(metadata['start'] / 1000).strftime('%A, %d %B %Y %H:%M:%S')}",
@@ -96,7 +96,7 @@ def export_markdown_report_v2(metadata, grouped_summary, all_spell_names_by_clas
     from . import paths
     template_dir = str(paths.get_template_dir())
 
-    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)  # nosec B701
     template = env.get_template("healing_report.md.j2")
 
     context = {
@@ -205,7 +205,7 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
     else:
         characters = None
         name_to_id = {actor["name"]: actor["id"] for actor in master_actors}
-        all_characters = [{"name": name} for name in name_to_id.keys()]
+        all_characters = [{"name": name} for name in name_to_id]
 
     print_report_metadata(metadata, name_to_id.keys(), all_characters)
 
@@ -219,9 +219,9 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
         if char_class not in {"Priest", "Paladin", "Druid", "Shaman"}:
             continue
 
-        print(f"\n============================")
+        print("\n============================")
         print(f"📊 Spell Breakdown for {name}")
-        print(f"============================")
+        print("============================")
 
         try:
             healing_data = get_healing_data(client, report_id, source_id)
@@ -256,13 +256,13 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
 
             dispels = SpellBreakdown.calculate_dispels(cast_entries, char_class)
             if any(dispels.values()):
-                print(f"\n🧹 Dispels:")
+                print("\n🧹 Dispels:")
                 for spell_name, count in dispels.items():
                     print(f"  - {spell_name}: {count} casts")
 
             resources = SpellBreakdown.get_resources_used(cast_entries)
             if resources:
-                print(f"\n🔋 Resources Used:")
+                print("\n🔋 Resources Used:")
                 for r_name, count in resources.items():
                     print(f"  - {r_name}: {count}")
 

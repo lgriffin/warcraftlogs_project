@@ -1,10 +1,7 @@
 """Extended database tests — analytics queries, raid groups, and edge cases."""
 
-import json
 
-import pytest
 
-from warcraftlogs_client.database import PerformanceDB
 from warcraftlogs_client.models import (
     ConsumableUsage,
     DPSPerformance,

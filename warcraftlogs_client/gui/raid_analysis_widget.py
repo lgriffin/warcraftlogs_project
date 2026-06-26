@@ -5,26 +5,41 @@ Shows full raid breakdown with role tabs, consumables, composition,
 and a slide-out detail panel when a player name is clicked.
 """
 
-import json
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTabWidget, QTableView, QTableWidget, QTableWidgetItem, QHeaderView,
-    QSplitter, QTextEdit, QComboBox, QMessageBox, QFileDialog, QScrollArea,
-)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QCursor
-
-from .analysis_helpers import (
-    NumericSortProxy, SingleBossTrashModel,
-    SingleEngineeringModel, build_heatmap_data,
-    compute_engineering_stats, classify_consumable_usage,
+from PySide6.QtGui import QCursor, QFont
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QTableView,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from .styles import COMMON_STYLES, COLORS
-from .table_models import HealerTableModel, TankTableModel, DPSTableModel, HistoryTableModel
+
+from ..models import EncounterSummary, RaidAnalysis
+from .analysis_helpers import (
+    NumericSortProxy,
+    SingleBossTrashModel,
+    SingleEngineeringModel,
+    build_heatmap_data,
+    classify_consumable_usage,
+    compute_engineering_stats,
+)
 from .detail_panel import CharacterDetailPanel
-from ..models import RaidAnalysis, EncounterSummary
+from .styles import COLORS, COMMON_STYLES
+from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, TankTableModel
 
 
 class _ClickableNameTableView(QTableView):
@@ -345,7 +360,7 @@ class RaidAnalysisWidget(QWidget):
                 row[name] = usage.get(name, 0)
             rows.append(row)
 
-        cols = ["Player"] + sorted_names
+        cols = ["Player", *sorted_names]
         self._consumes_model.set_data(rows, cols)
 
     def _populate_boss_vs_trash(self, analysis: RaidAnalysis):

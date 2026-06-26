@@ -1,17 +1,13 @@
 """Tests for per-boss encounter analysis feature."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+from warcraftlogs_client.analysis import _analyze_encounters
 from warcraftlogs_client.models import (
     EncounterPerformance,
-    EncounterSummary,
     RaidAnalysis,
     RaidComposition,
-    PlayerIdentity,
 )
-from warcraftlogs_client.analysis import _analyze_encounters
-
 
 # ── Analysis tests ──
 
@@ -324,7 +320,7 @@ class TestEncounterModels:
         assert ep.role == "ranged"
 
     def test_raid_analysis_encounters_default_empty(self):
-        from warcraftlogs_client.models import RaidMetadata, RaidComposition
+        from warcraftlogs_client.models import RaidMetadata
         analysis = RaidAnalysis(
             metadata=RaidMetadata(report_id="x", title="t", owner="o", start_time=0),
             composition=RaidComposition(),

@@ -1,21 +1,15 @@
 """Tests for PerformanceDB — SQLite persistence with real temp databases."""
 
-import json
 
-import pytest
 
 from warcraftlogs_client.database import PerformanceDB
 from warcraftlogs_client.models import (
     ConsumableUsage,
-    DPSPerformance,
-    DispelUsage,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
     RaidMetadata,
-    SpellUsage,
-    TankPerformance,
 )
 
 

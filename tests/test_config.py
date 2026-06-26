@@ -1,7 +1,6 @@
 """Tests for configuration loading, validation, and env var overrides."""
 
 import json
-import os
 
 import pytest
 
@@ -9,7 +8,6 @@ from warcraftlogs_client.common.errors import ConfigurationError
 from warcraftlogs_client.config import (
     AppConfig,
     ConfigManager,
-    get_app_config,
     get_config_manager,
     load_config,
 )
@@ -121,7 +119,7 @@ class TestDefaults:
 
 class TestLegacyFormat:
     def test_load_config_returns_dict(self, config_file):
-        mgr = get_config_manager(config_file)
+        get_config_manager(config_file)
         result = load_config(config_file)
         assert isinstance(result, dict)
         assert result["client_id"] == "test_id"

@@ -1,11 +1,13 @@
-import os
 import json
-from typing import List, Optional
+import logging
+import os
 
 import requests
 
-from .client import WarcraftLogsClient
 from . import paths
+from .client import WarcraftLogsClient
+
+logger = logging.getLogger(__name__)
 
 CACHE_FILE = str(paths.get_cache_dir() / "character_specs.json")
 
@@ -22,16 +24,16 @@ query {{
 
 
 def enrich_actors_with_specs(
-    actors: List[dict],
-    client: Optional[WarcraftLogsClient] = None,
+    actors: list[dict],
+    client: WarcraftLogsClient | None = None,
     region: str = "EU",
     server: str = "gehennas",
-) -> List[dict]:
+) -> list[dict]:
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     cache = {}
 
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as f:
+        with open(CACHE_FILE) as f:
             cache = json.load(f)
 
     updated = []
@@ -65,11 +67,11 @@ def enrich_actors_with_specs(
                 actor["classID"] = class_id
                 cache[name] = {"specID": spec_id, "classID": class_id}
                 cache_updated = True
-                print(f"[FETCHED] {name}: specID={spec_id}, classID={class_id}")
+                logger.info("Fetched %s: specID=%s, classID=%s", name, spec_id, class_id)
             else:
-                print(f"[MISSING] No character data for {name}")
+                logger.warning("No character data for %s", name)
         except (requests.RequestException, KeyError, TypeError) as e:
-            print(f"[ERROR] Failed to fetch {name}: {e}")
+            logger.error("Failed to fetch %s: %s", name, e)
 
         updated.append(actor)
 

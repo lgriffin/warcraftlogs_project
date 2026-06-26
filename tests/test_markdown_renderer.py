@@ -2,24 +2,18 @@
 
 import os
 
-import pytest
-
-from warcraftlogs_client.renderers.markdown import (
-    export_raid_analysis,
-    render_raid_analysis,
-)
 from warcraftlogs_client.models import (
     ConsumableUsage,
     DPSPerformance,
-    DispelUsage,
     HealerPerformance,
-    PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
     RaidMetadata,
-    ResourceUsage,
     SpellUsage,
-    TankPerformance,
+)
+from warcraftlogs_client.renderers.markdown import (
+    export_raid_analysis,
+    render_raid_analysis,
 )
 
 

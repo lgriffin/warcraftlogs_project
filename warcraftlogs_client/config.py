@@ -7,9 +7,9 @@ settings used throughout the application.
 
 import json
 import os
-from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import Any
+
 
 @dataclass
 class RoleThresholds:
@@ -33,7 +33,7 @@ class AppConfig:
     """Main application configuration."""
     api: ApiConfig
     role_thresholds: RoleThresholds = field(default_factory=RoleThresholds)
-    
+
     # Optional settings with defaults
     cache_enabled: bool = True
     cache_dir: str = ".cache"
@@ -55,37 +55,38 @@ class AppConfig:
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
 
+
 class ConfigManager:
     """Manages application configuration loading and validation."""
-    
-    def __init__(self, config_file: Optional[str] = None):
+
+    def __init__(self, config_file: str | None = None):
         from . import paths
         self.config_file = config_file or str(paths.get_config_path())
-        self._config: Optional[AppConfig] = None
-    
+        self._config: AppConfig | None = None
+
     def load(self) -> AppConfig:
         """Load and validate configuration from file."""
         if self._config is not None:
             return self._config
-            
+
         if not os.path.exists(self.config_file):
             raise ConfigurationError(
                 f"Configuration file '{self.config_file}' not found. "
                 "Please create it with your Warcraft Logs API credentials."
             )
-        
+
         try:
-            with open(self.config_file, "r") as f:
+            with open(self.config_file) as f:
                 raw_config = json.load(f)
         except json.JSONDecodeError as e:
-            raise ConfigurationError(f"Invalid JSON in config file: {e}")
-        except IOError as e:
-            raise ConfigurationError(f"Cannot read config file: {e}")
-        
+            raise ConfigurationError(f"Invalid JSON in config file: {e}") from e
+        except OSError as e:
+            raise ConfigurationError(f"Cannot read config file: {e}") from e
+
         self._config = self._parse_config(raw_config)
         return self._config
-    
-    def _parse_config(self, raw_config: Dict[str, Any]) -> AppConfig:
+
+    def _parse_config(self, raw_config: dict[str, Any]) -> AppConfig:
         """Parse and validate raw configuration data.
 
         Credentials are resolved in order: environment variables > config file.
@@ -119,7 +120,7 @@ class ConfigManager:
             report_id=report_id,
             guild_id=guild_id,
         )
-        
+
         # Parse role thresholds with defaults
         role_thresholds_data = raw_config.get("role_thresholds", {})
         role_thresholds = RoleThresholds(
@@ -129,7 +130,7 @@ class ConfigManager:
             healer_min_healing_10=role_thresholds_data.get("healer_min_healing_10", 400000),
             tank_min_taken_10=role_thresholds_data.get("tank_min_taken_10", 300000),
         )
-        
+
         # Create main config with optional settings
         config = AppConfig(
             api=api_config,
@@ -147,10 +148,10 @@ class ConfigManager:
             character_region=raw_config.get("character_region", "eu"),
             wcl_api_url=raw_config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"),
         )
-        
+
         return config
-    
-    def get_role_thresholds(self) -> Dict[str, Any]:
+
+    def get_role_thresholds(self) -> dict[str, Any]:
         """Get role thresholds in the format expected by legacy code."""
         config = self.load()
         return {
@@ -162,25 +163,25 @@ class ConfigManager:
         }
 
 # Global config manager instance
-_config_manager: Optional[ConfigManager] = None
+_config_manager: ConfigManager | None = None
 
-def get_config_manager(config_file: Optional[str] = None) -> ConfigManager:
+def get_config_manager(config_file: str | None = None) -> ConfigManager:
     """Get the global configuration manager instance."""
     global _config_manager
     if _config_manager is None or config_file is not None:
         _config_manager = ConfigManager(config_file)
     return _config_manager
 
-def load_config(config_file: Optional[str] = None) -> Dict[str, Any]:
+def load_config(config_file: str | None = None) -> dict[str, Any]:
     """
     Load configuration and return in legacy format for backward compatibility.
-    
+
     This function maintains compatibility with existing code while using
     the new configuration management system.
     """
     manager = get_config_manager(config_file)
     config = manager.load()
-    
+
     # Return in legacy format
     return {
         "client_id": config.api.client_id,
@@ -208,7 +209,7 @@ def load_config(config_file: Optional[str] = None) -> Dict[str, Any]:
         "wcl_api_url": config.wcl_api_url,
     }
 
-def get_app_config(config_file: Optional[str] = None) -> AppConfig:
+def get_app_config(config_file: str | None = None) -> AppConfig:
     """Get the typed application configuration."""
     manager = get_config_manager(config_file)
     return manager.load()

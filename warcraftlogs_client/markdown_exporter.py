@@ -1,8 +1,8 @@
-import os
-from jinja2 import Environment, FileSystemLoader
-from collections import defaultdict, OrderedDict
-
 import datetime
+import os
+
+from jinja2 import Environment, FileSystemLoader
+
 
 def export_combined_markdown(
     metadata,
@@ -19,7 +19,7 @@ def export_combined_markdown(
     from . import paths
     template_dir = str(paths.get_template_dir())
 
-    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)  # nosec B701
     template = env.get_template("healing_report.md.j2")
 
     if not output_path:

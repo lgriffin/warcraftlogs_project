@@ -5,30 +5,51 @@ History view — browse historical character performance and past raid analyses.
 import sqlite3
 from datetime import datetime
 
+from PySide6.QtCore import QModelIndex, QRect, QSize, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QCursor, QFont, QPainter
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QCheckBox, QComboBox, QTableView, QHeaderView, QGroupBox,
-    QSplitter, QListWidget, QListWidgetItem, QTabWidget,
-    QTextEdit, QMessageBox, QFileDialog, QStyledItemDelegate, QStyle,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QStyle,
+    QStyledItemDelegate,
+    QTableView,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex, QRect, QSize
-from PySide6.QtGui import QFont, QCursor, QPainter, QColor, QPen, QBrush
 
-from .detail_panel import CharacterDetailPanel
-
-from .styles import COMMON_STYLES, COLORS
-from .charts import (
-    build_healer_chart, build_healer_overheal_chart,
-    build_tank_chart, build_tank_mitigation_chart,
-    build_dps_chart, build_spell_trend_chart,
-    build_consumable_trend_chart,
-    SpiderChartWidget, CalendarHeatmapWidget,
-)
-from .table_models import (
-    HistoryTableModel, HealerTableModel, TankTableModel, DPSTableModel,
-)
 from ..database import PerformanceDB
-
+from .charts import (
+    CalendarHeatmapWidget,
+    SpiderChartWidget,
+    build_consumable_trend_chart,
+    build_dps_chart,
+    build_healer_chart,
+    build_healer_overheal_chart,
+    build_spell_trend_chart,
+    build_tank_chart,
+    build_tank_mitigation_chart,
+)
+from .detail_panel import CharacterDetailPanel
+from .styles import COLORS, COMMON_STYLES
+from .table_models import (
+    DPSTableModel,
+    HealerTableModel,
+    HistoryTableModel,
+    TankTableModel,
+)
 
 TAG_COLORS = [
     "#e94560", "#2ecc71", "#3498db", "#f39c12", "#9b59b6",
@@ -862,7 +883,7 @@ class HistoryView(QWidget):
                 for k in row:
                     if k not in ("raid_date", "title", "report_id"):
                         all_consumable_names.add(k)
-            cols = ["raid_date", "title"] + sorted(all_consumable_names)
+            cols = ["raid_date", "title", *sorted(all_consumable_names)]
             self.consumes_trend_model.set_data(consumes_summary, cols)
         else:
             self.consumes_trend_model.set_data([], [])
@@ -1116,7 +1137,7 @@ class HistoryView(QWidget):
             rows.sort(key=lambda r: r.get(selected, 0), reverse=True)
         else:
             consumable_names = sorted({c.consumable_name for c in consumes})
-            cols = ["Name", "Role"] + consumable_names
+            cols = ["Name", "Role", *consumable_names]
 
         self._raid_consumes_model.set_data(rows, cols)
 

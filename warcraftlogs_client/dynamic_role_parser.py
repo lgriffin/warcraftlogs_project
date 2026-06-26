@@ -1,6 +1,9 @@
 # dynamic_role_parser.py
 
+import logging
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 def group_players_by_class(master_actors):
     class_groups = defaultdict(list)
@@ -14,11 +17,11 @@ def group_players_by_class(master_actors):
                 "subType": class_name  # ✅ Add this line
             })
 
-    print("\n📚 Players Grouped by Class:")
+    logger.debug("Players Grouped by Class:")
     for class_name, players in class_groups.items():
-        print(f"\n🧙 Class: {class_name}")
+        logger.debug("Class: %s", class_name)
         for player in players:
-            print(f"  - {player['name']} (ID: {player['id']})")
+            logger.debug("  - %s (ID: %s)", player['name'], player['id'])
     return class_groups
 
 

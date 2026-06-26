@@ -5,16 +5,15 @@ Keeps the UI responsive while fetching data from WarcraftLogs.
 """
 
 import requests
-
 from PySide6.QtCore import QThread, Signal
 
+from ..analysis import analyze_raid
 from ..auth import TokenManager
 from ..cache import load_wowhead_cache, save_wowhead_cache
 from ..client import WarcraftLogsClient
 from ..common.errors import WarcraftLogsError
 from ..config import load_config
-from ..analysis import analyze_raid
-from ..models import RaidAnalysis, CharacterProfile
+from ..models import CharacterProfile, RaidAnalysis
 
 
 class AnalysisWorker(QThread):

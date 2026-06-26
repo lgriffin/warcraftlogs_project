@@ -10,7 +10,6 @@ They decouple data from presentation, enabling:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass
@@ -111,7 +110,7 @@ class PotionSpike:
     player_count: int
     players: list[str] = field(default_factory=list)
     non_users: list[str] = field(default_factory=list)
-    next_boss_name: Optional[str] = None
+    next_boss_name: str | None = None
 
     @property
     def time_formatted(self) -> str:
@@ -125,8 +124,8 @@ class RaidMetadata:
     title: str
     owner: str
     start_time: int
-    end_time: Optional[int] = None
-    zone: Optional[str] = None
+    end_time: int | None = None
+    zone: str | None = None
 
     @property
     def date(self) -> datetime:
@@ -166,7 +165,7 @@ class RaidComposition:
     def all_players(self) -> list[PlayerIdentity]:
         return self.tanks + self.healers + self.melee + self.ranged
 
-    def get_player(self, name: str) -> Optional[PlayerIdentity]:
+    def get_player(self, name: str) -> PlayerIdentity | None:
         for p in self.all_players:
             if p.name == name:
                 return p
@@ -223,13 +222,13 @@ class CharacterHistory:
     name: str
     player_class: str
     total_raids: int = 0
-    first_seen: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
-    avg_healing: Optional[float] = None
-    avg_damage: Optional[float] = None
-    avg_mitigation_percent: Optional[float] = None
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+    avg_healing: float | None = None
+    avg_damage: float | None = None
+    avg_mitigation_percent: float | None = None
     total_consumables_used: int = 0
-    avg_active_time: Optional[float] = None
+    avg_active_time: float | None = None
 
 
 @dataclass
@@ -238,7 +237,7 @@ class RaidGroup:
     id: int = 0
     name: str = ""
     raid_days: list[str] = field(default_factory=list)
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
     members: list[str] = field(default_factory=list)
 
 

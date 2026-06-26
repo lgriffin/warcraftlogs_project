@@ -6,19 +6,17 @@ track trends over time: healing output, damage dealt, mitigation,
 consumable habits, etc.
 """
 
+import contextlib
 import json
-import sqlite3
 import os
+import sqlite3
 from datetime import datetime
-from typing import Optional
 
-from .cache import clear_response_cache, _cache_file
-from .spell_manager import get_spell_manager
+from .cache import _cache_file, clear_response_cache
 from .models import (
     CharacterHistory,
     ConsumableUsage,
     DPSPerformance,
-    DispelUsage,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
@@ -27,10 +25,10 @@ from .models import (
     RaidComposition,
     RaidGroup,
     RaidMetadata,
-    ResourceUsage,
     SpellUsage,
     TankPerformance,
 )
+from .spell_manager import get_spell_manager
 
 SCHEMA_VERSION = 2
 
@@ -206,10 +204,10 @@ CREATE INDEX IF NOT EXISTS idx_encounter_perf_char ON encounter_performance(char
 class PerformanceDB:
     """SQLite database for storing and querying historical character performance."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         from . import paths
         self.db_path = db_path or str(paths.get_db_path())
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -560,7 +558,7 @@ class PerformanceDB:
     # ── Query operations ──
 
     def get_character_history(self, character_name: str,
-                              source: str = "guild") -> Optional[CharacterHistory]:
+                              source: str = "guild") -> CharacterHistory | None:
         """Get historical performance summary for a character."""
         conn = self._get_conn()
         char = conn.execute(
@@ -859,7 +857,7 @@ class PerformanceDB:
                HAVING COUNT(*) >= 3
                ORDER BY AVG(dp.total_damage) DESC
                LIMIT ?""",
-            ds_params + [top_n],
+            [*ds_params, top_n],
         ).fetchall()
         if not top_chars:
             return []
@@ -892,8 +890,8 @@ class PerformanceDB:
                ORDER BY c.name""",
             ds_params,
         ).fetchall()
-        from collections import defaultdict
         import math
+        from collections import defaultdict
         by_char: dict[str, dict] = {}
         values_by_char: dict[str, list[int]] = defaultdict(list)
         for r in rows:
@@ -984,7 +982,7 @@ class PerformanceDB:
                GROUP BY c.id
                HAVING raid_count >= ?
                ORDER BY raid_count DESC""",
-            ds_params + [min_raids],
+            [*ds_params, min_raids],
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -1019,7 +1017,7 @@ class PerformanceDB:
                 GROUP BY c.id
                 HAVING raid_count >= ?
                 ORDER BY c.name""",
-            ds_params + [min_raids],
+            [*ds_params, min_raids],
         ).fetchall()
         characters = [{"name": r["name"], "player_class": r["player_class"]} for r in char_raids]
         char_raid_counts = {r["name"]: r["raid_count"] for r in char_raids}
@@ -1069,7 +1067,7 @@ class PerformanceDB:
                GROUP BY c.id
                HAVING raids >= ?
                ORDER BY avg_healing DESC""",
-            ds_params + [min_raids],
+            [*ds_params, min_raids],
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -1149,7 +1147,7 @@ class PerformanceDB:
                GROUP BY c.id
                HAVING raids >= ?
                ORDER BY avg_mitigation DESC""",
-            ds_params + [min_raids],
+            [*ds_params, min_raids],
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -1246,10 +1244,8 @@ class PerformanceDB:
 
         cache_file = _cache_file(report_id)
         if os.path.exists(cache_file):
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(cache_file)
-            except OSError:
-                pass
         clear_response_cache()
 
     def is_raid_imported(self, report_id: str) -> bool:
@@ -1807,7 +1803,7 @@ class PerformanceDB:
         ).fetchone()
         if not char:
             return {}
-        cid = char["id"]
+        char["id"]
 
         history = self.get_character_history(character_name)
         if not history or history.total_raids == 0:
@@ -2050,7 +2046,7 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_raid_analysis(self, report_id: str) -> Optional[RaidAnalysis]:
+    def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None:
         """Reconstruct a full RaidAnalysis from stored database data."""
         conn = self._get_conn()
         raid_row = conn.execute(
@@ -2203,7 +2199,7 @@ class PerformanceDB:
                WHERE e.encounter_id = ?{ds_filter}
                GROUP BY e.id
                ORDER BY r.raid_date DESC""",
-            [encounter_id] + ds_params,
+            [encounter_id, *ds_params],
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -2269,7 +2265,7 @@ class PerformanceDB:
                 WHERE e.encounter_id = ?{ds_filter}
                 GROUP BY c.id, ep.role
                 ORDER BY avg_damage DESC""",
-            [encounter_id] + ds_params,
+            [encounter_id, *ds_params],
         ).fetchall()
         return [dict(r) for r in rows]
 

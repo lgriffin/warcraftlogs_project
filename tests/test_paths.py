@@ -1,9 +1,6 @@
 """Tests for path resolution across dev and frozen environments."""
 
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from warcraftlogs_client import paths
 

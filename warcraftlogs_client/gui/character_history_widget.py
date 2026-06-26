@@ -8,24 +8,36 @@ Used as a pushed view in the NavigationStack when a player name is clicked.
 
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QTableView, QHeaderView, QTabWidget, QComboBox,
-    QScrollArea,
-)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
-
-from .styles import COMMON_STYLES, COLORS
-from .charts import (
-    build_healer_chart, build_healer_overheal_chart,
-    build_tank_chart, build_tank_mitigation_chart,
-    build_dps_chart, build_spell_trend_chart,
-    build_consumable_trend_chart, build_active_time_chart,
-    SpiderChartWidget, CalendarHeatmapWidget,
+from PySide6.QtWidgets import (
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from .table_models import HistoryTableModel
+
 from ..database import PerformanceDB
+from .charts import (
+    CalendarHeatmapWidget,
+    SpiderChartWidget,
+    build_active_time_chart,
+    build_consumable_trend_chart,
+    build_dps_chart,
+    build_healer_chart,
+    build_healer_overheal_chart,
+    build_spell_trend_chart,
+    build_tank_chart,
+    build_tank_mitigation_chart,
+)
+from .styles import COLORS, COMMON_STYLES
+from .table_models import HistoryTableModel
 
 
 class CharacterHistoryWidget(QWidget):
@@ -301,7 +313,7 @@ class CharacterHistoryWidget(QWidget):
                         for k in row:
                             if k not in ("raid_date", "title", "report_id"):
                                 all_names.add(k)
-                    cols = ["raid_date", "title"] + sorted(all_names)
+                    cols = ["raid_date", "title", *sorted(all_names)]
                     self._consumes_trend_model.set_data(consumes_summary, cols)
                 else:
                     self._consumes_trend_model.set_data([], [])

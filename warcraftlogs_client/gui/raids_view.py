@@ -4,18 +4,24 @@ Raids view — browse analyzed raids and boss encounter history.
 
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QSplitter, QComboBox, QCheckBox, QTableWidget,
-    QTableWidgetItem, QHeaderView,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
-from .raid_list_widget import RaidListWidget
 from ..database import PerformanceDB
-
+from .raid_list_widget import RaidListWidget
+from .styles import COLORS, COMMON_STYLES
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 DAY_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]

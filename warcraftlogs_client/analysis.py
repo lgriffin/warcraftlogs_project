@@ -9,7 +9,6 @@ import json
 import logging
 import os
 from collections import defaultdict
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,21 +17,19 @@ import requests
 from .client import WarcraftLogsClient
 from .models import (
     ConsumableUsage,
-    DPSPerformance,
     DispelUsage,
+    DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
-    RaidMetadata,
     ResourceUsage,
     SpellUsage,
     TankPerformance,
 )
 from .spell_manager import SpellBreakdown, get_spell_manager
-
 
 _TEN_MAN_ZONES = {"Karazhan", "Zul'Aman"}
 
@@ -330,7 +327,7 @@ def _analyze_healers(
                 spells=spells, dispels=dispels, resources=resources, fear_ward_casts=fw_casts,
             ))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error processing healer {player.name}: {e}")
+            logger.error("Error processing healer %s: %s", player.name, e)
 
     return results
 
@@ -407,7 +404,7 @@ def _analyze_tanks(
                 damage_taken_breakdown=taken_breakdown, abilities_used=abilities_used,
             ))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error processing tank {player.name}: {e}")
+            logger.error("Error processing tank %s: %s", player.name, e)
 
     return results
 
@@ -477,7 +474,7 @@ def _analyze_dps(
                 total_damage=total_damage, abilities=abilities,
             ))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error processing {role} {player.name}: {e}")
+            logger.error("Error processing %s %s: %s", role, player.name, e)
 
     return results
 
@@ -487,7 +484,7 @@ def _load_consumes_config() -> dict:
     config_path = str(paths.get_consumes_config_path())
     if not os.path.exists(config_path):
         return {"buff_consumables": {}, "cast_consumables": {}}
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -532,7 +529,7 @@ def _analyze_consumables(
                             timestamps=timestamps,
                         ))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error analyzing buff consumables for {player.name}: {e}")
+            logger.error("Error analyzing buff consumables for %s: %s", player.name, e)
 
         try:
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
@@ -555,7 +552,7 @@ def _analyze_consumables(
                     timestamps=sorted(timestamps),
                 ))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-            print(f"Error analyzing cast consumables for {player.name}: {e}")
+            logger.error("Error analyzing cast consumables for %s: %s", player.name, e)
 
     return results
 
@@ -586,7 +583,7 @@ def _analyze_encounters(
             healing_entries = client.get_encounter_table(report_id, start, end, "Healing")
             taken_entries = client.get_encounter_table(report_id, start, end, "DamageTaken")
         except (requests.RequestException, KeyError, TypeError) as e:
-            print(f"Error fetching encounter data for {fight['name']}: {e}")
+            logger.error("Error fetching encounter data for %s: %s", fight['name'], e)
             continue
 
         fight_duration = end - start

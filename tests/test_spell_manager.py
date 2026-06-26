@@ -1,12 +1,10 @@
 """Tests for SpellManager — alias resolution, event processing, resource tracking."""
 
 import json
-import os
 
 import pytest
 
 from warcraftlogs_client.spell_manager import (
-    SpellBreakdown,
     SpellManager,
     get_spell_manager,
     reset_spell_manager,
@@ -107,7 +105,7 @@ class TestProcessCastEntries:
             {"guid": 20343, "name": "Judgement of Light", "total": 999},
             {"guid": 2060, "name": "Greater Heal", "total": 10},
         ]
-        names, casts = mgr.process_cast_entries(entries)
+        _names, casts = mgr.process_cast_entries(entries)
         assert 20343 not in casts
 
 

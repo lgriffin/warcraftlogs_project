@@ -6,20 +6,33 @@ import json
 import sqlite3
 from datetime import datetime
 
+from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtGui import QCursor, QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QCheckBox, QComboBox, QTabWidget, QTableView,
-    QProgressBar, QHeaderView, QGroupBox, QMessageBox,
-    QSplitter, QTextEdit, QFileDialog,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
+    QTableView,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex
-from PySide6.QtGui import QFont, QCursor
 
-from .styles import COMMON_STYLES, COLORS
-from .table_models import HealerTableModel, TankTableModel, DPSTableModel, HistoryTableModel
-from .detail_panel import CharacterDetailPanel
-from .worker import AnalysisWorker, GuildReportsWorker
 from ..models import RaidAnalysis
+from .detail_panel import CharacterDetailPanel
+from .styles import COLORS, COMMON_STYLES
+from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, TankTableModel
+from .worker import AnalysisWorker, GuildReportsWorker
 
 
 class AnalyzeView(QWidget):
@@ -505,7 +518,7 @@ class AnalyzeView(QWidget):
                 from ..database import PerformanceDB
                 with PerformanceDB() as db:
                     db.import_raid(analysis)
-                self.status_message.emit(f"Analysis complete. Saved to database.")
+                self.status_message.emit("Analysis complete. Saved to database.")
                 self._refresh_cached_codes()
                 self._apply_day_filter()
             except (sqlite3.Error, OSError) as e:

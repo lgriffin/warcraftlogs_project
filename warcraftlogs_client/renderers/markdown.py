@@ -170,7 +170,7 @@ def _render_tank_summary_tables(tanks: list[TankPerformance]) -> str:
     if taken_names:
         lines.append("### Damage Taken")
         lines.append("")
-        headers = ["Character", "Total Taken", "Mitigation%", "Active Time%"] + taken_names
+        headers = ["Character", "Total Taken", "Mitigation%", "Active Time%", *taken_names]
         lines.append("| " + " | ".join(headers) + " |")
         lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
@@ -203,7 +203,7 @@ def _render_tank_summary_tables(tanks: list[TankPerformance]) -> str:
 
         lines.append(f"### {class_name} — Abilities Used")
         lines.append("")
-        headers = ["Character"] + ability_names
+        headers = ["Character", *ability_names]
         lines.append("| " + " | ".join(headers) + " |")
         lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
@@ -238,7 +238,7 @@ def _render_dps_summary_tables(all_dps: list[DPSPerformance], role: str) -> str:
 
         lines.append(f"### {class_name}")
         lines.append("")
-        headers = ["Character", "Total Damage", "Active Time%"] + abilities
+        headers = ["Character", "Total Damage", "Active Time%", *abilities]
         lines.append("| " + " | ".join(headers) + " |")
         lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
@@ -420,7 +420,7 @@ def _render_consumables(consumables: list[ConsumableUsage]) -> str:
         return ""
 
     col_names = sorted(all_consumable_names)
-    headers = ["Player"] + col_names
+    headers = ["Player", *col_names]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("| " + " | ".join("---" for _ in headers) + " |")
 

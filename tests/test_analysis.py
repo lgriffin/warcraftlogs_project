@@ -1,22 +1,19 @@
 """Tests for the analysis pipeline — role detection and data processing."""
 
 import json
-import os
-from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 
 from warcraftlogs_client.analysis import (
+    _analyze_consumables,
     _classify_hybrid_role,
     _identify_composition,
     _identify_healers,
     _identify_tanks,
     _load_consumes_config,
-    _analyze_consumables,
     analyze_raid,
 )
-from warcraftlogs_client.models import PlayerIdentity, RaidComposition, RaidMetadata
+from warcraftlogs_client.models import RaidComposition, RaidMetadata
 
 
 class TestClassifyHybridRole:

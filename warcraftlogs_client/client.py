@@ -9,15 +9,20 @@ import logging
 import time
 
 import requests
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 from .cache import get_cached_response, save_response_cache
 from .models import (
-    RaidMetadata, CharacterProfile, ZoneRankingResult,
-    EncounterRanking, AllStarRanking, CharacterReportEntry,
-    GearItem, GEAR_SLOT_ORDER, GEAR_SLOTS_HIDDEN,
+    GEAR_SLOT_ORDER,
+    GEAR_SLOTS_HIDDEN,
+    AllStarRanking,
+    CharacterProfile,
+    CharacterReportEntry,
+    EncounterRanking,
+    GearItem,
+    RaidMetadata,
+    ZoneRankingResult,
 )
 
 
@@ -62,7 +67,7 @@ class WarcraftLogsClient:
             self._throttle()
             self._last_request_time = time.monotonic()
 
-            response = requests.post(self.API_URL, headers=headers, json={"query": query})
+            response = requests.post(self.API_URL, headers=headers, json={"query": query}, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
@@ -517,7 +522,7 @@ class WarcraftLogsClient:
 
     def get_character_profile(self, name: str, server_slug: str,
                               server_region: str,
-                              api_url: str = None) -> CharacterProfile:
+                              api_url: str | None = None) -> CharacterProfile:
         """Fetch a full character profile from the WCL API."""
         original_url = self.API_URL
         if api_url:
@@ -659,7 +664,7 @@ class WarcraftLogsClient:
     def get_character_zone_rankings(self, name: str, server_slug: str,
                                      server_region: str, zone_id: int,
                                      metric: str = "dps",
-                                     api_url: str = None) -> Optional[ZoneRankingResult]:
+                                     api_url: str | None = None) -> ZoneRankingResult | None:
         """Fetch zone rankings for a specific zone."""
         original_url = self.API_URL
         if api_url:

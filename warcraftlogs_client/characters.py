@@ -1,24 +1,25 @@
 import json
 
+
 class Characters:
     def __init__(self, filepath="characters.json"):
         self.name_to_class = self.load_characters(filepath)
 
     def load_characters(self, filepath):
-        with open(filepath, "r") as file:
+        with open(filepath) as file:
             data = json.load(file)
             # Support legacy list format or new dict format
             if isinstance(data.get("characters", []), list) and isinstance(data["characters"][0], dict):
                 return {char["name"]: char["class"] for char in data["characters"]}
             else:
-                return {name: "Unknown" for name in data.get("characters", [])}
+                return dict.fromkeys(data.get("characters", []), "Unknown")
 
     def get_names(self):
         return list(self.name_to_class.keys())
 
     def get_class(self, name):
         return self.name_to_class.get(name, "Unknown")
-    
+
     def get_all_names(self):
         return set(self.name_to_class.keys())
 

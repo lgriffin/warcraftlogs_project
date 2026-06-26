@@ -2,15 +2,22 @@
 Character detail side panel — full-height breakdown when a character is selected.
 """
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTabWidget, QTableView, QHeaderView, QCheckBox,
-)
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
+from ..models import ConsumableUsage, DPSPerformance, HealerPerformance, TankPerformance
 from .styles import COLORS
-from ..models import HealerPerformance, TankPerformance, DPSPerformance, ConsumableUsage
 
 
 class _SpellTableModel(QAbstractTableModel):
@@ -222,7 +229,7 @@ class CharacterDetailPanel(QWidget):
         self.setVisible(False)
         self.closed.emit()
 
-    def show_healer(self, h: HealerPerformance, consumables: list[ConsumableUsage] = None):
+    def show_healer(self, h: HealerPerformance, consumables: list[ConsumableUsage] | None = None):
         self._current_name = h.name
         self._name_label.setText(h.name)
         at_str = f"  |  Active: {h.active_time_percent:.1f}%" if h.active_time_percent > 0 else ""
@@ -247,7 +254,7 @@ class CharacterDetailPanel(QWidget):
         self._auto_select_tab()
         self.setVisible(True)
 
-    def show_tank(self, t: TankPerformance, consumables: list[ConsumableUsage] = None):
+    def show_tank(self, t: TankPerformance, consumables: list[ConsumableUsage] | None = None):
         self._current_name = t.name
         self._name_label.setText(t.name)
         at_str = f"  |  Active: {t.active_time_percent:.1f}%" if t.active_time_percent > 0 else ""
@@ -270,7 +277,7 @@ class CharacterDetailPanel(QWidget):
         self._auto_select_tab()
         self.setVisible(True)
 
-    def show_dps(self, d: DPSPerformance, consumables: list[ConsumableUsage] = None):
+    def show_dps(self, d: DPSPerformance, consumables: list[ConsumableUsage] | None = None):
         self._current_name = d.name
         self._name_label.setText(d.name)
         at_str = f"  |  Active: {d.active_time_percent:.1f}%" if d.active_time_percent > 0 else ""
@@ -289,8 +296,8 @@ class CharacterDetailPanel(QWidget):
         self._auto_select_tab()
         self.setVisible(True)
 
-    def _show_consumables(self, consumables: list[ConsumableUsage] = None,
-                          resource_rows: list[tuple] = None):
+    def _show_consumables(self, consumables: list[ConsumableUsage] | None = None,
+                          resource_rows: list[tuple] | None = None):
         rows = []
         has_ts = False
         seen_names: set[str] = set()

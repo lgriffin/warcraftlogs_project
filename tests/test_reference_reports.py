@@ -1,6 +1,5 @@
 """Tests for reference reports: isolation, comparison, and label management."""
 
-import pytest
 
 from warcraftlogs_client.models import (
     ConsumableUsage,
@@ -291,6 +290,7 @@ class TestMigration:
     def test_migrate_adds_source_column_to_existing_db(self, tmp_path):
         """Simulate an existing database without the source column."""
         import sqlite3
+
         from warcraftlogs_client.database import PerformanceDB
 
         db_path = str(tmp_path / "legacy.db")
@@ -597,7 +597,8 @@ class TestSharedEncounterScoping:
     def _guild_with_extra_encounters(self):
         """Guild with 3 encounters (2 shared + 1 extra), ref with 2."""
         from warcraftlogs_client.gui.analysis_helpers import (
-            compute_shared_encounter_window, scope_analysis_to_window,
+            compute_shared_encounter_window,
+            scope_analysis_to_window,
         )
         guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
         guild.encounters = [

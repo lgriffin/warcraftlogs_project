@@ -4,7 +4,7 @@ from . import paths
 
 
 def load_config():
-    with open(paths.get_config_path(), "r") as f:
+    with open(paths.get_config_path()) as f:
         return json.load(f)
 
 def get_report_time_range(client, report_id):
@@ -26,8 +26,8 @@ def get_report_time_range(client, report_id):
     try:
         report = response["data"]["reportData"]["report"]
         return report["startTime"], report["endTime"]
-    except KeyError:
-        raise ValueError("Unable to extract start/end time from report.\n" + json.dumps(response, indent=2))
+    except KeyError as e:
+        raise ValueError("Unable to extract start/end time from report.\n" + json.dumps(response, indent=2)) from e
 
 def load_report_table(client, report_id):
     """
@@ -48,5 +48,5 @@ def load_report_table(client, report_id):
 
     try:
         return raw["data"]["reportData"]["report"]["table"]
-    except KeyError:
-        raise ValueError("Failed to load table from report: invalid response structure.\n" + json.dumps(raw, indent=2))
+    except KeyError as e:
+        raise ValueError("Failed to load table from report: invalid response structure.\n" + json.dumps(raw, indent=2)) from e

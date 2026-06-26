@@ -1,11 +1,14 @@
 import argparse
+import logging
 
+from .analysis import analyze_raid
 from .auth import TokenManager
 from .client import WarcraftLogsClient
 from .config import load_config
-from .analysis import analyze_raid
 from .renderers.console import render_raid_analysis
 from .spell_manager import reset_spell_manager
+
+logger = logging.getLogger(__name__)
 
 
 def run_unified_report(args):
@@ -17,8 +20,8 @@ def run_unified_report(args):
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
     client = WarcraftLogsClient(token_mgr)
 
-    print("Pulling data from the report")
-    print("Initially going to try identify roles dynamically")
+    logger.info("Pulling data from the report")
+    logger.info("Initially going to try identify roles dynamically")
 
     analysis = analyze_raid(
         client, report_id,

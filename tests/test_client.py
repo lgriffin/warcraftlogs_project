@@ -6,9 +6,9 @@ import pytest
 
 from warcraftlogs_client.client import (
     WarcraftLogsClient,
-    get_healing_data,
     get_damage_done_data,
     get_damage_taken_data,
+    get_healing_data,
 )
 from warcraftlogs_client.models import RaidMetadata
 

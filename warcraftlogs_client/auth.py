@@ -1,6 +1,8 @@
 import base64
-import requests
 import time
+
+import requests
+
 
 class TokenManager:
     TOKEN_URL = "https://www.warcraftlogs.com/oauth/token"
@@ -27,7 +29,7 @@ class TokenManager:
             "grant_type": "client_credentials"
         }
 
-        response = requests.post(self.TOKEN_URL, headers=headers, data=data)
+        response = requests.post(self.TOKEN_URL, headers=headers, data=data, timeout=30)
         response.raise_for_status()
         token_data = response.json()
 

@@ -1,11 +1,11 @@
-from collections import defaultdict
 
-import requests
-
-from client import get_healing_data
-from ..spell_manager import SpellBreakdown
-from healing import OverallHealing
 import dynamic_role_parser
+import requests
+from client import get_healing_data
+from healing import OverallHealing
+
+from ..spell_manager import SpellBreakdown
+
 
 def generate_healer_summary(client, report_id, master_actors):
     grouped_summary = {"Priest": [], "Paladin": [], "Druid": []}
@@ -22,9 +22,9 @@ def generate_healer_summary(client, report_id, master_actors):
             healing_events = healing_data["data"]["reportData"]["report"]["events"]["data"]
             total_healing, total_overhealing = OverallHealing.calculate(healing_events)
 
-            print(f"\n============================")
+            print("\n============================")
             print(f"📊 Spell Breakdown for {name}")
-            print(f"============================")
+            print("============================")
             print(f"{name}'s Total Healing: {total_healing:,}")
             print(f"{name}'s Overhealing: {total_overhealing:,}")
 
@@ -51,13 +51,13 @@ def generate_healer_summary(client, report_id, master_actors):
 
             dispels = SpellBreakdown.calculate_dispels(cast_entries, char_class)
             if any(dispels.values()):
-                print(f"\n🧹 Dispels:")
+                print("\n🧹 Dispels:")
                 for spell_name, count in dispels.items():
                     print(f"  - {spell_name}: {count} casts")
 
             resources = SpellBreakdown.get_resources_used(cast_entries)
             if resources:
-                print(f"\n🔋 Resources Used:")
+                print("\n🔋 Resources Used:")
                 for r_name, count in resources.items():
                     print(f"  - {r_name}: {count}")
 

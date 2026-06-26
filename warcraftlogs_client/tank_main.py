@@ -1,15 +1,13 @@
-import datetime
 import argparse
-import json
 from collections import defaultdict
 
 import requests
 
 from .auth import TokenManager
 from .client import WarcraftLogsClient, get_damage_done_data
+from .common.data import get_master_data, get_report_metadata
 from .config import load_config
 from .spell_manager import SpellBreakdown
-from .common.data import get_master_data, get_report_metadata
 
 
 def get_damage_taken_data(client, report_id, source_id):
@@ -78,7 +76,7 @@ def run_tank_report():
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             print(f"❌ Error evaluating {name}: {e}")
 
-    
+
 
     print("============================")
     print("📊 Individual Tank Reports")
@@ -121,7 +119,7 @@ def run_tank_report():
             canonical_id = alias_map.get(spell_id, spell_id)
             print(f"  - {spell_map.get(canonical_id, f'(ID {spell_id})')}: {count} uses")
 
-        
+
     print("============================")
     print("📊 Tank Comparison Summary")
 
@@ -163,7 +161,7 @@ def run_tank_report():
     print("============================")
     for tank in sorted(tank_candidates, key=lambda x: (x["class"], -x["percent"])):
         print(f"- {tank['name']} ({tank['class']}): {tank['percent']}% mitigated ({tank['mitigated']:,} of {tank['taken'] + tank['mitigated']:,})")
-        
+
 
 
 # 📊 Class-Based Ability Usage Table

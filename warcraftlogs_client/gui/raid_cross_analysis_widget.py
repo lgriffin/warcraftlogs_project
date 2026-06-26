@@ -9,16 +9,25 @@ per-player deltas with spell and consumable breakdowns.
 from collections import defaultdict
 from datetime import datetime
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QGridLayout, QFrame, QFileDialog, QMessageBox,
-    QCheckBox, QComboBox,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
 from .charts import build_raid_trend_chart
+from .styles import COLORS, COMMON_STYLES
 
 _ALIGN_RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 _ALIGN_LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -589,7 +598,7 @@ class RaidCrossAnalysisWidget(QWidget):
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(12)
 
-        for i, (metric_label, current_val, is_duration, invert) in enumerate(metrics):
+        for _i, (metric_label, current_val, is_duration, invert) in enumerate(metrics):
             card_deltas = []
             for mode_label, avg_dur, avg_dmg, avg_heal, avg_taken in mode_avgs:
                 if metric_label == "Duration":
@@ -707,7 +716,7 @@ class RaidCrossAnalysisWidget(QWidget):
                     self._build_player_card(player_modes)
 
     def _build_player_card(self, player_modes):
-        first_label, first_delta = player_modes[0]
+        _first_label, first_delta = player_modes[0]
 
         card = QWidget()
         card.setObjectName("playerCard")

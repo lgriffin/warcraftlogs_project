@@ -4,18 +4,25 @@ Find Character view — search and browse all characters in the local database.
 
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QListWidget, QListWidgetItem, QGroupBox,
-    QSplitter, QScrollArea,
-)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
 from ..database import PerformanceDB
 from ..models import CharacterHistory
-
+from .styles import COLORS, COMMON_STYLES
 
 CLASS_COLORS = {
     "Warrior": "#C79C6E",

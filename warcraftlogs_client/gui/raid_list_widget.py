@@ -7,17 +7,21 @@ Emits raid_selected(report_id) when a raid is clicked.
 import sqlite3
 from datetime import datetime
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QCheckBox, QListWidget, QListWidgetItem,
-    QPushButton,
-)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COLORS
 from ..database import PerformanceDB
-
+from .styles import COLORS
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAY_ABBREV = {d: d[:3] for d in DAY_NAMES}
@@ -27,7 +31,7 @@ class RaidListWidget(QWidget):
     raid_selected = Signal(str)
     status_message = Signal(str)
 
-    def __init__(self, default_days: list[str] = None, parent=None):
+    def __init__(self, default_days: list[str] | None = None, parent=None):
         super().__init__(parent)
         self._all_raids: list[dict] = []
         self._default_days = default_days or ["Wednesday", "Thursday", "Sunday"]
@@ -89,7 +93,7 @@ class RaidListWidget(QWidget):
         self._raid_list.currentItemChanged.connect(self._on_item_changed)
         layout.addWidget(self._raid_list, 1)
 
-    def load_raids(self, raids: list[dict] = None):
+    def load_raids(self, raids: list[dict] | None = None):
         if raids is not None:
             self._all_raids = raids
         else:

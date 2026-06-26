@@ -1,17 +1,13 @@
 """Tests for console renderer — output correctness via capsys."""
 
-import pytest
 
-from warcraftlogs_client.renderers.console import render_raid_analysis
 from warcraftlogs_client.models import (
-    DPSPerformance,
     HealerPerformance,
     RaidAnalysis,
     RaidComposition,
     RaidMetadata,
-    SpellUsage,
-    TankPerformance,
 )
+from warcraftlogs_client.renderers.console import render_raid_analysis
 
 
 class TestRenderRaidAnalysis:

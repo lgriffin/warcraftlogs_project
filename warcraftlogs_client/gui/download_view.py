@@ -7,21 +7,24 @@ import sqlite3
 import webbrowser
 from datetime import datetime
 
+from PySide6.QtCore import QModelIndex, Signal
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QTableView, QHeaderView, QCheckBox, QProgressBar,
-    QMessageBox,
+    QCheckBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QProgressBar,
+    QPushButton,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QModelIndex
-from PySide6.QtGui import QFont, QColor
 
-from .styles import COMMON_STYLES, COLORS
+from .styles import COLORS, COMMON_STYLES
 from .table_models import HistoryTableModel
 from .worker import AnalysisWorker, GuildReportsWorker
-
-import requests
-
-from ..common.errors import WarcraftLogsError
 
 
 class DownloadView(QWidget):

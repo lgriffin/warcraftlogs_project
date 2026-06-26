@@ -2,16 +2,21 @@
 Update dialog — shows release notes, downloads update, and triggers install.
 """
 
-from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QProgressBar, QTextEdit,
-)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+)
 
-from .styles import COLORS, COMMON_STYLES
-from ..updater import UpdateInfo, UpdateDownloader, apply_update
+from ..updater import UpdateDownloader, UpdateInfo, apply_update
 from ..version import __version__
+from .styles import COLORS, COMMON_STYLES
 
 
 class UpdateDialog(QDialog):

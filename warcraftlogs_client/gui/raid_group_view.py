@@ -3,24 +3,34 @@ Raid Groups view — create and manage raid groups, assign characters,
 view raids matching the group's scheduled days, and compare class performance.
 """
 
-import json
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QListWidget, QListWidgetItem, QSplitter, QScrollArea,
-    QCheckBox, QGroupBox, QMessageBox, QTableView, QHeaderView,
-    QInputDialog, QTabWidget, QComboBox,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableView,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
-from .table_models import HistoryTableModel
-from .charts import build_group_performance_chart, build_class_comparison_chart
-from .raid_list_widget import RaidListWidget
 from ..database import PerformanceDB
-
+from .charts import build_class_comparison_chart, build_group_performance_chart
+from .raid_list_widget import RaidListWidget
+from .styles import COLORS, COMMON_STYLES
+from .table_models import HistoryTableModel
 
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAY_ABBREV = {"Monday": "Mon", "Tuesday": "Tue", "Wednesday": "Wed",

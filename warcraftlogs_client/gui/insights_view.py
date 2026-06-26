@@ -1,21 +1,30 @@
 """GM/RL Insights: cross-cutting trends, comparisons, and data exploration."""
 
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QComboBox,
-    QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton,
+    QComboBox,
     QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .styles import COMMON_STYLES, COLORS
 from .charts import (
+    ConsumableHeatmapWidget,
     build_dps_progression_chart,
     build_heal_damage_ratio_chart,
-    build_raid_duration_chart,
     build_overheal_trend_chart,
-    ConsumableHeatmapWidget,
+    build_raid_duration_chart,
 )
+from .styles import COLORS, COMMON_STYLES
 
 
 def _clear_layout_widgets(layout):

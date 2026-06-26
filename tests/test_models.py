@@ -2,19 +2,15 @@
 
 from datetime import datetime
 
-import pytest
-
 from warcraftlogs_client.models import (
+    WOW_CLASS_NAMES,
     CharacterProfile,
     ConsumableUsage,
     EncounterRanking,
     HealerPerformance,
     PotionSpike,
     RaidComposition,
-    RaidMetadata,
     TankPerformance,
-    PlayerIdentity,
-    WOW_CLASS_NAMES,
 )
 
 

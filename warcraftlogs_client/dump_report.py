@@ -1,7 +1,9 @@
 import json
+
 from .auth import TokenManager
 from .client import WarcraftLogsClient
 from .loader import load_config
+
 
 def get_report_time_range(client, report_id):
     query = f"""

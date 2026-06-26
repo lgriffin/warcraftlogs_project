@@ -7,11 +7,16 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from PySide6.QtCharts import (
-    QChart, QChartView, QLineSeries, QScatterSeries, QValueAxis, QDateTimeAxis,
+    QChart,
+    QChartView,
+    QDateTimeAxis,
+    QLineSeries,
+    QScatterSeries,
+    QValueAxis,
 )
-from PySide6.QtCore import Qt, QDateTime, QPointF, QMargins, QRectF, Signal
-from PySide6.QtGui import QPen, QColor, QPainter, QFont, QBrush, QPainterPath
-from PySide6.QtWidgets import QWidget, QToolTip
+from PySide6.QtCore import QDateTime, QMargins, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QToolTip, QWidget
 
 from .styles import COLORS
 
@@ -404,7 +409,7 @@ class SpiderChartWidget(QWidget):
         fm = painter.fontMetrics()
 
         self._label_rects = []
-        for i, (angle, label) in enumerate(zip(angles, self.LABELS)):
+        for i, (angle, label) in enumerate(zip(angles, self.LABELS, strict=False)):
             val = self._data.get(self.KEYS[i], 0)
             text = f"{label} ({val})"
             tw = fm.horizontalAdvance(text)
@@ -417,7 +422,7 @@ class SpiderChartWidget(QWidget):
         values = [self._data.get(k, 0) / 100.0 for k in self.KEYS]
         if any(v > 0 for v in values):
             fill_path = QPainterPath()
-            for i, (angle, val) in enumerate(zip(angles, values)):
+            for i, (angle, val) in enumerate(zip(angles, values, strict=False)):
                 r = radius * max(val, 0.02)
                 x = cx + r * math.cos(angle)
                 y = cy + r * math.sin(angle)
@@ -437,7 +442,7 @@ class SpiderChartWidget(QWidget):
 
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(SERIES_COLORS[0]))
-            for i, (angle, val) in enumerate(zip(angles, values)):
+            for _, (angle, val) in enumerate(zip(angles, values, strict=False)):
                 r = radius * max(val, 0.02)
                 x = cx + r * math.cos(angle)
                 y = cy + r * math.sin(angle)
@@ -526,7 +531,7 @@ class ComparisonSpiderChart(QWidget):
         painter.setPen(QColor(COLORS["text"]))
         fm = painter.fontMetrics()
 
-        for i, (angle, label) in enumerate(zip(angles, self.LABELS)):
+        for _, (angle, label) in enumerate(zip(angles, self.LABELS, strict=False)):
             tw = fm.horizontalAdvance(label)
             th = fm.height()
             lx = cx + (radius + 20) * math.cos(angle) - tw / 2
@@ -542,7 +547,7 @@ class ComparisonSpiderChart(QWidget):
                 continue
 
             fill_path = QPainterPath()
-            for i, (angle, val) in enumerate(zip(angles, values)):
+            for i, (angle, val) in enumerate(zip(angles, values, strict=False)):
                 r = radius * max(val, 0.02)
                 x = cx + r * math.cos(angle)
                 y = cy + r * math.sin(angle)
@@ -562,7 +567,7 @@ class ComparisonSpiderChart(QWidget):
 
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(color))
-            for i, (angle, val) in enumerate(zip(angles, values)):
+            for _, (angle, val) in enumerate(zip(angles, values, strict=False)):
                 r = radius * max(val, 0.02)
                 x = cx + r * math.cos(angle)
                 y = cy + r * math.sin(angle)
@@ -931,7 +936,7 @@ def _make_horizontal_bar_chart(title: str, data: list[dict], name_key: str,
                                 value_format: str = "%d",
                                 max_range: float | None = None) -> QChartView:
     """Reusable horizontal bar chart builder with proper dark-theme styling."""
-    from PySide6.QtCharts import QBarSet, QBarCategoryAxis, QHorizontalBarSeries
+    from PySide6.QtCharts import QBarCategoryAxis, QBarSet, QHorizontalBarSeries
 
     chart = _make_chart(title)
     chart.legend().setVisible(False)
@@ -1342,7 +1347,7 @@ class ConsumableTimelineHeatmap(QWidget):
         pos = event.position() if hasattr(event, 'position') else event.pos()
         for rect, player, minute, val in self._cells:
             if rect.contains(pos):
-                tip = f"{player}\n{minute}:00–{minute + 1}:00 — {val} use{'s' if val != 1 else ''}"
+                tip = f"{player}\n{minute}:00-{minute + 1}:00 - {val} use{'s' if val != 1 else ''}"
                 tip_pos = (event.globalPosition().toPoint()
                            if hasattr(event, 'globalPosition')
                            else event.globalPos())
@@ -1385,7 +1390,7 @@ class OverlayTimelineHeatmap(QWidget):
         r_minutes = self._ref.get("minutes", 0)
         total_minutes = max(g_minutes, r_minutes)
 
-        if not g_players and not r_players or total_minutes == 0:
+        if (not g_players and not r_players) or total_minutes == 0:
             painter.setPen(QColor(COLORS["text_dim"]))
             painter.setFont(QFont("Segoe UI", 11))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
@@ -1499,7 +1504,7 @@ class OverlayTimelineHeatmap(QWidget):
         for rect, player, source, minute, val in self._cells:
             if rect.contains(pos):
                 tip = (f"{player} ({source})\n"
-                       f"{minute}:00–{minute + 1}:00 — "
+                       f"{minute}:00-{minute + 1}:00 - "
                        f"{val} use{'s' if val != 1 else ''}")
                 tip_pos = (event.globalPosition().toPoint()
                            if hasattr(event, 'globalPosition')

@@ -6,16 +6,24 @@ with an overlaid radar chart, cast breakdown, and raid-size filtering.
 import sqlite3
 from collections import defaultdict
 
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QTableView, QHeaderView, QListWidget, QListWidgetItem,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QFont, QColor
 
-from .styles import COMMON_STYLES, COLORS
-from .charts import ComparisonSpiderChart, SERIES_COLORS
 from ..database import PerformanceDB
+from .charts import SERIES_COLORS, ComparisonSpiderChart
+from .styles import COLORS, COMMON_STYLES
 
 MAX_CHARACTERS = 5
 
@@ -593,7 +601,7 @@ class CompareView(QWidget):
             for row in healer_spells:
                 spell_groups[row["spell_name"]].append(row)
             for spell, rows in spell_groups.items():
-                raid_dates = set(r["raid_date"] for r in rows)
+                raid_dates = {r["raid_date"] for r in rows}
                 n_raids = len(raid_dates)
                 total_c = sum(r.get("casts", 0) for r in rows)
                 total_v = sum(r.get("total_healing", 0) for r in rows)
@@ -610,7 +618,7 @@ class CompareView(QWidget):
             for row in dps_abilities:
                 ability_groups[row["spell_name"]].append(row)
             for spell, rows in ability_groups.items():
-                raid_dates = set(r["raid_date"] for r in rows)
+                raid_dates = {r["raid_date"] for r in rows}
                 n_raids = len(raid_dates)
                 total_c = sum(r.get("casts", 0) for r in rows)
                 total_v = sum(r.get("total_damage", 0) for r in rows)
@@ -720,7 +728,7 @@ class CompareView(QWidget):
         self._char_list.blockSignals(False)
 
     def _rebuild_chips(self):
-        for name, chip in list(self._chip_widgets.items()):
+        for _, chip in list(self._chip_widgets.items()):
             self._chips_layout.removeWidget(chip)
             chip.deleteLater()
         self._chip_widgets.clear()

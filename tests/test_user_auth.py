@@ -3,17 +3,14 @@
 import json
 import os
 import time
-import threading
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 from urllib.request import urlopen
 
 import pytest
 
 from warcraftlogs_client.user_auth import (
-    UserTokenManager,
     OAuthCallbackServer,
-    get_authorize_url,
-    DEFAULT_REDIRECT_PORT,
+    UserTokenManager,
 )
 
 

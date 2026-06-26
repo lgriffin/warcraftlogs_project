@@ -3,15 +3,11 @@ Auto-update logic: check GitHub Releases, download, and apply updates.
 """
 
 import json
-import os
 import shutil
 import subprocess
-import sys
-import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
-from pathlib import Path
 
 import requests
 from PySide6.QtCore import QThread, Signal

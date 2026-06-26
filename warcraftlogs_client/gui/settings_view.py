@@ -6,14 +6,23 @@ import json
 import os
 import sqlite3
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QGroupBox, QSpinBox, QMessageBox, QFormLayout, QCheckBox,
-)
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
+from .styles import COLORS, COMMON_STYLES
 
 
 class SettingsView(QWidget):
@@ -306,7 +315,7 @@ class SettingsView(QWidget):
             return
 
         try:
-            with open(self.CONFIG_PATH, "r") as f:
+            with open(self.CONFIG_PATH) as f:
                 config = json.load(f)
 
             self.client_id_input.setText(config.get("client_id", ""))
@@ -334,7 +343,7 @@ class SettingsView(QWidget):
         # Preserve existing values if present
         if os.path.exists(self.CONFIG_PATH):
             try:
-                with open(self.CONFIG_PATH, "r") as f:
+                with open(self.CONFIG_PATH) as f:
                     config = json.load(f)
             except (json.JSONDecodeError, OSError):
                 pass
@@ -474,7 +483,6 @@ class SettingsView(QWidget):
 
         self._oauth_server, self._oauth_state = start_oauth_flow(client_id)
 
-        from PySide6.QtCore import QThread
         from .reference_view import _AuthWaitThread
         self._auth_wait_thread = _AuthWaitThread(
             self._oauth_server, self._oauth_state)

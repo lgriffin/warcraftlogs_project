@@ -5,28 +5,33 @@ Main application window with sidebar navigation and drill-down support.
 import os
 import sqlite3
 
+from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QCursor, QFont, QPixmap
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QListWidget, QListWidgetItem,
-    QStatusBar, QLabel,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, QSize, QTimer, QThread, Signal
-from PySide6.QtGui import QFont, QPixmap, QCursor
 
-from .download_view import DownloadView
-from .raids_view import RaidsView
-from .find_character_view import FindCharacterView
-from .raid_group_view import RaidGroupView
-from .character_view import CharacterView
-from .compare_view import CompareView
-from .insights_view import InsightsView
-from .boss_insights_view import BossInsightsView
-from .reference_view import ReferenceView
-from .settings_view import SettingsView
-from .nav_stack import NavigationStack
-from .raid_analysis_widget import RaidAnalysisWidget
 from ..database import PerformanceDB
 from ..version import __version__
+from .boss_insights_view import BossInsightsView
+from .character_view import CharacterView
+from .compare_view import CompareView
+from .download_view import DownloadView
+from .find_character_view import FindCharacterView
+from .insights_view import InsightsView
+from .nav_stack import NavigationStack
+from .raid_analysis_widget import RaidAnalysisWidget
+from .raid_group_view import RaidGroupView
+from .raids_view import RaidsView
+from .reference_view import ReferenceView
+from .settings_view import SettingsView
 
 
 class _UpdateCheckWorker(QThread):

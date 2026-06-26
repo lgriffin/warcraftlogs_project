@@ -8,17 +8,23 @@ and top performer breakdowns.
 import sqlite3
 from statistics import median
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QScrollArea, QFrame,
-)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .styles import COMMON_STYLES, COLORS
 from ..database import PerformanceDB
-
+from .styles import COLORS, COMMON_STYLES
 
 DAY_OPTIONS = [
     "All Days", "Monday", "Tuesday", "Wednesday",

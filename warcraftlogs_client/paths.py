@@ -1,8 +1,8 @@
 """Centralized path resolution for development and frozen (PyInstaller) environments."""
 
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
 
 APP_NAME = "WarcraftLogsAnalyzer"
