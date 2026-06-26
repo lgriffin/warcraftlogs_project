@@ -52,12 +52,24 @@ ROLE_SPECIFIC_KEYS = {"avg_healing", "avg_damage", "avg_mitigation"}
 
 class _ComparisonTableModel(QAbstractTableModel):
     ROWS = [
-        "Role", "Raids Tracked", "Avg Healing", "Avg Damage",
-        "Avg Mitigation%", "Avg Active Time%", "Total Consumables", "Consistency",
+        "Role",
+        "Raids Tracked",
+        "Avg Healing",
+        "Avg Damage",
+        "Avg Mitigation%",
+        "Avg Active Time%",
+        "Total Consumables",
+        "Consistency",
     ]
     ROW_KEYS = [
-        "role", "total_raids", "avg_healing", "avg_damage",
-        "avg_mitigation", "avg_active_time", "total_consumables", "consistency",
+        "role",
+        "total_raids",
+        "avg_healing",
+        "avg_damage",
+        "avg_mitigation",
+        "avg_active_time",
+        "total_consumables",
+        "consistency",
     ]
 
     def __init__(self, parent=None):
@@ -139,9 +151,7 @@ class _CastTableModel(QAbstractTableModel):
         self._spells: list[str] = []
         self._data: dict[str, dict[str, dict]] = {}
 
-    def set_data(self, names: list[str],
-                 data: dict[str, dict[str, dict]],
-                 spells: list[str]):
+    def set_data(self, names: list[str], data: dict[str, dict[str, dict]], spells: list[str]):
         self.beginResetModel()
         self._names = list(names)
         self._spells = list(spells)
@@ -242,16 +252,16 @@ class CompareView(QWidget):
         self._toggle_btn = QPushButton("<< Characters")
         self._toggle_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 6px 14px;
                 font-size: 12px;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['bg_dark']};
-                border-color: {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-color: {COLORS["accent"]};
             }}
         """)
         self._toggle_btn.clicked.connect(self._toggle_selector)
@@ -267,9 +277,9 @@ class CompareView(QWidget):
         self._class_filter.currentTextChanged.connect(self._apply_filter)
         combo_style = f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 6px 10px;
             }}
@@ -277,10 +287,10 @@ class CompareView(QWidget):
                 border: none;
             }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
+                border: 1px solid {COLORS["border"]};
             }}
         """
         self._class_filter.setStyleSheet(combo_style)
@@ -321,18 +331,18 @@ class CompareView(QWidget):
         self._char_list = QListWidget()
         self._char_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 6px 10px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._char_list.itemChanged.connect(self._on_item_toggled)
@@ -345,14 +355,14 @@ class CompareView(QWidget):
 
         table_style = f"""
             QTableView {{
-                alternate-background-color: {COLORS['bg_dark']};
-                gridline-color: {COLORS['border']};
+                alternate-background-color: {COLORS["bg_dark"]};
+                gridline-color: {COLORS["border"]};
                 font-size: 13px;
             }}
             QHeaderView::section {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text_header']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text_header"]};
+                border: 1px solid {COLORS["border"]};
                 padding: 6px 8px;
                 font-weight: bold;
                 font-size: 13px;
@@ -366,8 +376,7 @@ class CompareView(QWidget):
         self._table.verticalHeader().setVisible(False)
         self._table.verticalHeader().setDefaultSectionSize(30)
         self._table.horizontalHeader().setStretchLastSection(False)
-        self._table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.setMinimumHeight(160)
         self._table.setStyleSheet(table_style)
         right_panel.addWidget(self._table)
@@ -384,8 +393,7 @@ class CompareView(QWidget):
         self._cast_table.verticalHeader().setVisible(False)
         self._cast_table.verticalHeader().setDefaultSectionSize(30)
         self._cast_table.horizontalHeader().setStretchLastSection(False)
-        self._cast_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch)
+        self._cast_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._cast_table.setMinimumHeight(160)
         self._cast_table.setStyleSheet(table_style)
         right_panel.addWidget(self._cast_table)
@@ -440,9 +448,7 @@ class CompareView(QWidget):
             item = QListWidgetItem(f"{ch.name}  ({ch.player_class})")
             item.setData(Qt.ItemDataRole.UserRole, ch.name)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(
-                Qt.CheckState.Checked if ch.name in self._selected
-                else Qt.CheckState.Unchecked)
+            item.setCheckState(Qt.CheckState.Checked if ch.name in self._selected else Qt.CheckState.Unchecked)
             class_color = CLASS_COLORS.get(ch.player_class, "#eeeeee")
             item.setForeground(QColor(class_color))
             self._char_list.addItem(item)
@@ -529,9 +535,7 @@ class CompareView(QWidget):
         counts.sort(key=lambda x: x[0], reverse=True)
         return counts[0][1] if counts[0][0] > 0 else "DPS"
 
-    def _compute_stats_from_trends(self, name,
-                                   healer_trends, dps_trends, tank_trends,
-                                   consumable_trends=None):
+    def _compute_stats_from_trends(self, name, healer_trends, dps_trends, tank_trends, consumable_trends=None):
         raid_dates = set()
         avg_healing = None
         avg_damage = None
@@ -562,8 +566,7 @@ class CompareView(QWidget):
         consistency_val = None
         if consistency:
             scores = []
-            for key in ("healing_consistency", "damage_consistency",
-                        "mitigation_consistency"):
+            for key in ("healing_consistency", "damage_consistency", "mitigation_consistency"):
                 if key in consistency:
                     scores.append(consistency[key])
             consistency_val = round(sum(scores) / len(scores), 1) if scores else None
@@ -595,8 +598,7 @@ class CompareView(QWidget):
         for name in self._selected:
             char_spells: dict[str, dict] = {}
 
-            healer_spells = self._filter_by_raid_size(
-                self._raw_healer_spells.get(name, []), mode)
+            healer_spells = self._filter_by_raid_size(self._raw_healer_spells.get(name, []), mode)
             spell_groups: dict[str, list] = defaultdict(list)
             for row in healer_spells:
                 spell_groups[row["spell_name"]].append(row)
@@ -612,8 +614,7 @@ class CompareView(QWidget):
                 }
                 total_casts_per_spell[spell] += total_c
 
-            dps_abilities = self._filter_by_raid_size(
-                self._raw_dps_abilities.get(name, []), mode)
+            dps_abilities = self._filter_by_raid_size(self._raw_dps_abilities.get(name, []), mode)
             ability_groups: dict[str, list] = defaultdict(list)
             for row in dps_abilities:
                 ability_groups[row["spell_name"]].append(row)
@@ -631,24 +632,17 @@ class CompareView(QWidget):
 
             all_data[name] = char_spells
 
-        sorted_spells = sorted(total_casts_per_spell.keys(),
-                               key=lambda s: total_casts_per_spell[s],
-                               reverse=True)
+        sorted_spells = sorted(total_casts_per_spell.keys(), key=lambda s: total_casts_per_spell[s], reverse=True)
         return all_data, sorted_spells
 
     def _on_raid_size_changed(self):
         mode = self._raid_size_filter.currentIndex()
         for name in self._selected:
-            healer = self._filter_by_raid_size(
-                self._raw_healer_trends.get(name, []), mode)
-            dps = self._filter_by_raid_size(
-                self._raw_dps_trends.get(name, []), mode)
-            tank = self._filter_by_raid_size(
-                self._raw_tank_trends.get(name, []), mode)
-            consumes = self._filter_by_raid_size(
-                self._raw_consumable_trends.get(name, []), mode)
-            self._char_stats[name] = self._compute_stats_from_trends(
-                name, healer, dps, tank, consumes)
+            healer = self._filter_by_raid_size(self._raw_healer_trends.get(name, []), mode)
+            dps = self._filter_by_raid_size(self._raw_dps_trends.get(name, []), mode)
+            tank = self._filter_by_raid_size(self._raw_tank_trends.get(name, []), mode)
+            consumes = self._filter_by_raid_size(self._raw_consumable_trends.get(name, []), mode)
+            self._char_stats[name] = self._compute_stats_from_trends(name, healer, dps, tank, consumes)
         self._refresh_display()
 
     def _add_chip(self, name: str):
@@ -661,28 +655,27 @@ class CompareView(QWidget):
         chip_layout.setSpacing(4)
 
         label = QLabel(name)
-        label.setStyleSheet(
-            f"color: {color.name()}; font-weight: bold; background: transparent;")
+        label.setStyleSheet(f"color: {color.name()}; font-weight: bold; background: transparent;")
         chip_layout.addWidget(label)
 
         close_btn = QPushButton("x")
         close_btn.setFixedSize(20, 20)
         close_btn.setStyleSheet(f"""
             QPushButton {{
-                color: {COLORS['text_dim']};
+                color: {COLORS["text_dim"]};
                 background: transparent;
                 border: none;
                 font-weight: bold;
                 font-size: 12px;
             }}
-            QPushButton:hover {{ color: {COLORS['error']}; }}
+            QPushButton:hover {{ color: {COLORS["error"]}; }}
         """)
         close_btn.clicked.connect(lambda _, n=name: self._remove_character(n))
         chip_layout.addWidget(close_btn)
 
         chip.setStyleSheet(f"""
             QWidget {{
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
                 border: 1px solid {color.name()};
                 border-radius: 12px;
             }}
@@ -722,9 +715,7 @@ class CompareView(QWidget):
         for i in range(self._char_list.count()):
             item = self._char_list.item(i)
             name = item.data(Qt.ItemDataRole.UserRole)
-            item.setCheckState(
-                Qt.CheckState.Checked if name in self._selected
-                else Qt.CheckState.Unchecked)
+            item.setCheckState(Qt.CheckState.Checked if name in self._selected else Qt.CheckState.Unchecked)
         self._char_list.blockSignals(False)
 
     def _rebuild_chips(self):
@@ -748,5 +739,4 @@ class CompareView(QWidget):
         cast_data, sorted_spells = self._aggregate_casts()
         self._cast_model.set_data(self._selected, cast_data, sorted_spells)
 
-        self._spider.set_datasets(
-            {n: self._spider_data.get(n, {}) for n in self._selected})
+        self._spider.set_datasets({n: self._spider_data.get(n, {}) for n in self._selected})

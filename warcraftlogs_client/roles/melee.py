@@ -58,12 +58,7 @@ def generate_melee_summary(client, report_id, master_actors):
                 casts = casts_by_ability.get(ability, 0)
                 print(f"{ability:<30} {dmg:>15,} {casts:>10}")
 
-            summary = {
-                "name": name,
-                "damage": total_damage,
-                "spells": damage_by_ability,
-                "casts": casts_by_ability
-            }
+            summary = {"name": name, "damage": total_damage, "spells": damage_by_ability, "casts": casts_by_ability}
 
             if char_class not in grouped_summary:
                 grouped_summary[char_class] = []
@@ -87,7 +82,7 @@ def print_melee_table(summary_by_class, all_spell_names):
         print(f"======= {class_name} Melee Team =======")
         spell_names = sorted(all_spell_names.get(class_name, []))
 
-        header = f"{'Character':<15} {'Total Damage':>15}" + ''.join(f"{spell[:20]:>22}" for spell in spell_names)
+        header = f"{'Character':<15} {'Total Damage':>15}" + "".join(f"{spell[:20]:>22}" for spell in spell_names)
         print(header)
         print("-" * len(header))
 

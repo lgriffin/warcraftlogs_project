@@ -48,10 +48,18 @@ class TestGetReportMetadata:
     @patch("warcraftlogs_client.client.requests.post")
     def test_parses_response(self, mock_post, client):
         mock_post.return_value = MagicMock(
-            json=lambda: {"data": {"reportData": {"report": {
-                "title": "Kara", "owner": {"name": "Guild"},
-                "startTime": 1700000000000, "endTime": 1700003600000,
-            }}}},
+            json=lambda: {
+                "data": {
+                    "reportData": {
+                        "report": {
+                            "title": "Kara",
+                            "owner": {"name": "Guild"},
+                            "startTime": 1700000000000,
+                            "endTime": 1700003600000,
+                        }
+                    }
+                }
+            },
             status_code=200,
             raise_for_status=lambda: None,
         )
@@ -76,11 +84,21 @@ class TestGetMasterData:
     @patch("warcraftlogs_client.client.requests.post")
     def test_filters_player_type(self, mock_post, client):
         mock_post.return_value = MagicMock(
-            json=lambda: {"data": {"reportData": {"report": {"masterData": {"actors": [
-                {"id": 1, "name": "Player1", "type": "Player", "subType": "Priest"},
-                {"id": 2, "name": "Boss1", "type": "NPC", "subType": "Boss"},
-                {"id": 3, "name": "Player2", "type": "Player", "subType": "Warrior"},
-            ]}}}}},
+            json=lambda: {
+                "data": {
+                    "reportData": {
+                        "report": {
+                            "masterData": {
+                                "actors": [
+                                    {"id": 1, "name": "Player1", "type": "Player", "subType": "Priest"},
+                                    {"id": 2, "name": "Boss1", "type": "NPC", "subType": "Boss"},
+                                    {"id": 3, "name": "Player2", "type": "Player", "subType": "Warrior"},
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
             status_code=200,
             raise_for_status=lambda: None,
         )
@@ -93,9 +111,9 @@ class TestGetCastTable:
     @patch("warcraftlogs_client.client.requests.post")
     def test_nested_data_format(self, mock_post, client):
         mock_post.return_value = MagicMock(
-            json=lambda: {"data": {"reportData": {"report": {"table": {
-                "data": {"entries": [{"guid": 1, "name": "Melee"}]}
-            }}}}},
+            json=lambda: {
+                "data": {"reportData": {"report": {"table": {"data": {"entries": [{"guid": 1, "name": "Melee"}]}}}}}
+            },
             status_code=200,
             raise_for_status=lambda: None,
         )
@@ -106,9 +124,7 @@ class TestGetCastTable:
     @patch("warcraftlogs_client.client.requests.post")
     def test_flat_format(self, mock_post, client):
         mock_post.return_value = MagicMock(
-            json=lambda: {"data": {"reportData": {"report": {"table": {
-                "entries": [{"guid": 2, "name": "Strike"}]
-            }}}}},
+            json=lambda: {"data": {"reportData": {"report": {"table": {"entries": [{"guid": 2, "name": "Strike"}]}}}}},
             status_code=200,
             raise_for_status=lambda: None,
         )
@@ -130,10 +146,18 @@ class TestGetCastEventsPaginated:
     @patch("warcraftlogs_client.client.requests.post")
     def test_single_page(self, mock_post, client):
         mock_post.return_value = MagicMock(
-            json=lambda: {"data": {"reportData": {"report": {"events": {
-                "data": [{"type": "cast", "abilityGameID": 1}],
-                "nextPageTimestamp": None,
-            }}}}},
+            json=lambda: {
+                "data": {
+                    "reportData": {
+                        "report": {
+                            "events": {
+                                "data": [{"type": "cast", "abilityGameID": 1}],
+                                "nextPageTimestamp": None,
+                            }
+                        }
+                    }
+                }
+            },
             status_code=200,
             raise_for_status=lambda: None,
         )
@@ -142,12 +166,30 @@ class TestGetCastEventsPaginated:
 
     @patch("warcraftlogs_client.client.requests.post")
     def test_multi_page(self, mock_post, client):
-        page1 = {"data": {"reportData": {"report": {"events": {
-            "data": [{"id": 1}], "nextPageTimestamp": 5000,
-        }}}}}
-        page2 = {"data": {"reportData": {"report": {"events": {
-            "data": [{"id": 2}], "nextPageTimestamp": None,
-        }}}}}
+        page1 = {
+            "data": {
+                "reportData": {
+                    "report": {
+                        "events": {
+                            "data": [{"id": 1}],
+                            "nextPageTimestamp": 5000,
+                        }
+                    }
+                }
+            }
+        }
+        page2 = {
+            "data": {
+                "reportData": {
+                    "report": {
+                        "events": {
+                            "data": [{"id": 2}],
+                            "nextPageTimestamp": None,
+                        }
+                    }
+                }
+            }
+        }
         mock_post.return_value = MagicMock(status_code=200, raise_for_status=lambda: None)
         mock_post.return_value.json = MagicMock(side_effect=[page1, page2])
         result = client.get_cast_events_paginated("r1", 1)
@@ -168,13 +210,15 @@ class TestParseZoneRankings:
     def test_parses_encounter_rankings(self, client):
         zr_data = {
             "allStars": [],
-            "rankings": [{
-                "encounter": {"id": 1, "name": "Attumen"},
-                "spec": "Prot",
-                "rankPercent": 85.0,
-                "totalKills": 5,
-                "fastestKill": 120000,
-            }],
+            "rankings": [
+                {
+                    "encounter": {"id": 1, "name": "Attumen"},
+                    "spec": "Prot",
+                    "rankPercent": 85.0,
+                    "totalKills": 5,
+                    "fastestKill": 120000,
+                }
+            ],
         }
         result = client._parse_zone_rankings(zr_data)
         assert len(result.encounter_rankings) == 1

@@ -9,9 +9,12 @@ from PySide6.QtGui import QColor
 from .styles import COLORS
 
 ENGINEERING_ITEMS = {
-    "Super Sapper Charge", "Goblin Sapper Charge",
-    "Adamantite Grenade", "Gnomish Flame Turret",
-    "Fel Iron Bomb", "Bomb",
+    "Super Sapper Charge",
+    "Goblin Sapper Charge",
+    "Adamantite Grenade",
+    "Gnomish Flame Turret",
+    "Fel Iron Bomb",
+    "Bomb",
 }
 
 
@@ -40,20 +43,22 @@ class NumericSortProxy(QSortFilterProxyModel):
 def build_timeline_data(analysis, consumable_name):
     """Return per-player timeline rows for a specific consumable."""
     rows = []
-    for cu in (analysis.consumables or []):
+    for cu in analysis.consumables or []:
         if cu.consumable_name != consumable_name:
             continue
         ts_parts = []
         for ms in sorted(cu.timestamps):
             total_s = ms // 1000
             ts_parts.append(f"{total_s // 60:02d}:{total_s % 60:02d}")
-        rows.append({
-            "player": cu.player_name,
-            "role": cu.player_role,
-            "count": cu.count,
-            "timestamps": ", ".join(ts_parts) if ts_parts else "—",
-            "first_ts": cu.timestamps[0] if cu.timestamps else float("inf"),
-        })
+        rows.append(
+            {
+                "player": cu.player_name,
+                "role": cu.player_role,
+                "count": cu.count,
+                "timestamps": ", ".join(ts_parts) if ts_parts else "—",
+                "first_ts": cu.timestamps[0] if cu.timestamps else float("inf"),
+            }
+        )
     rows.sort(key=lambda r: r["first_ts"])
     return rows
 
@@ -70,7 +75,7 @@ def build_heatmap_data(analysis, consumable_name):
       - grid: dict[player_name] -> list[int] (count per minute bucket)
     """
     all_ts = []
-    for cu in (analysis.consumables or []):
+    for cu in analysis.consumables or []:
         if cu.consumable_name == consumable_name:
             all_ts.extend(cu.timestamps)
 
@@ -82,7 +87,7 @@ def build_heatmap_data(analysis, consumable_name):
     total_minutes = max((max_ts - base_ts) // 60000 + 1, 1)
 
     player_data = {}
-    for cu in (analysis.consumables or []):
+    for cu in analysis.consumables or []:
         if cu.consumable_name != consumable_name:
             continue
         buckets = [0] * total_minutes
@@ -103,11 +108,10 @@ def compute_engineering_stats(analysis):
     """Compute min/median/max avg-damage-per-cast for engineering items."""
     from statistics import median as stat_median
 
-    item_data = defaultdict(lambda: {"player_avgs": [], "total_casts": 0,
-                                      "total_damage": 0, "users": 0})
+    item_data = defaultdict(lambda: {"player_avgs": [], "total_casts": 0, "total_damage": 0, "users": 0})
     all_players = list(analysis.dps or [])
     for player in all_players:
-        for ability in (player.abilities or []):
+        for ability in player.abilities or []:
             if ability.spell_name not in ENGINEERING_ITEMS:
                 continue
             if ability.casts <= 0:
@@ -139,7 +143,7 @@ def classify_consumable_usage(analysis):
     intervals = [(e.start_time, e.end_time) for e in encounters]
 
     by_name = defaultdict(lambda: {"boss": 0, "trash": 0})
-    for cu in (analysis.consumables or []):
+    for cu in analysis.consumables or []:
         for ts in cu.timestamps:
             in_boss = any(s <= ts <= e for s, e in intervals)
             by_name[cu.consumable_name]["boss" if in_boss else "trash"] += 1
@@ -168,15 +172,22 @@ def compute_shared_encounter_window(guild_analysis, ref_analysis):
             extra.append(e)
 
     if not extra:
-        return {"has_extra_encounters": False, "guild_extra_names": [],
-                "window_start": None, "window_end": None,
-                "shared_count": len(shared)}
+        return {
+            "has_extra_encounters": False,
+            "guild_extra_names": [],
+            "window_start": None,
+            "window_end": None,
+            "shared_count": len(shared),
+        }
 
     if not shared:
-        return {"has_extra_encounters": True,
-                "guild_extra_names": sorted(e.name for e in extra),
-                "window_start": None, "window_end": None,
-                "shared_count": 0}
+        return {
+            "has_extra_encounters": True,
+            "guild_extra_names": sorted(e.name for e in extra),
+            "window_start": None,
+            "window_end": None,
+            "shared_count": 0,
+        }
 
     return {
         "has_extra_encounters": True,
@@ -190,15 +201,13 @@ def compute_shared_encounter_window(guild_analysis, ref_analysis):
 def scope_analysis_to_window(analysis, window_start, window_end):
     """Return a copy of the analysis with consumables and encounters filtered to a time window."""
     filtered_consumables = []
-    for cu in (analysis.consumables or []):
+    for cu in analysis.consumables or []:
         ts = [t for t in cu.timestamps if window_start <= t <= window_end]
         if ts:
-            filtered_consumables.append(
-                dataclasses.replace(cu, timestamps=ts, count=len(ts)))
+            filtered_consumables.append(dataclasses.replace(cu, timestamps=ts, count=len(ts)))
 
     filtered_encounters = [
-        e for e in (analysis.encounters or [])
-        if e.start_time >= window_start and e.end_time <= window_end
+        e for e in (analysis.encounters or []) if e.start_time >= window_start and e.end_time <= window_end
     ]
 
     return dataclasses.replace(
@@ -293,8 +302,7 @@ class SingleBossTrashModel(QAbstractTableModel):
 
 
 class SingleEngineeringModel(QAbstractTableModel):
-    HEADERS = ["Item", "Players", "Casts", "Total Damage",
-               "Min Avg", "Median Avg", "Max Avg"]
+    HEADERS = ["Item", "Players", "Casts", "Total Damage", "Min Avg", "Median Avg", "Max Avg"]
 
     def __init__(self, parent=None):
         super().__init__(parent)

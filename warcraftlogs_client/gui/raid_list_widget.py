@@ -73,21 +73,21 @@ class RaidListWidget(QWidget):
         self._raid_list = QListWidget()
         self._raid_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 font-size: 12px;
             }}
             QListWidget::item {{
                 padding: 8px 12px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
             QListWidget::item:hover:!selected {{
-                background-color: {COLORS['bg_input']};
+                background-color: {COLORS["bg_input"]};
             }}
         """)
         self._raid_list.currentItemChanged.connect(self._on_item_changed)

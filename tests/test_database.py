@@ -1,7 +1,5 @@
 """Tests for PerformanceDB — SQLite persistence with real temp databases."""
 
-
-
 from warcraftlogs_client.database import PerformanceDB
 from warcraftlogs_client.models import (
     ConsumableUsage,
@@ -16,17 +14,19 @@ from warcraftlogs_client.models import (
 class TestSchemaCreation:
     def test_tables_exist(self, db):
         conn = db._get_conn()
-        tables = {
-            r[0]
-            for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         expected = {
-            "schema_version", "characters", "raids",
-            "healer_performance", "healer_spells",
-            "tank_performance", "tank_damage_taken", "tank_abilities",
-            "dps_performance", "dps_abilities", "consumable_usage",
+            "schema_version",
+            "characters",
+            "raids",
+            "healer_performance",
+            "healer_spells",
+            "tank_performance",
+            "tank_damage_taken",
+            "tank_abilities",
+            "dps_performance",
+            "dps_abilities",
+            "consumable_usage",
         }
         assert expected.issubset(tables)
 
@@ -194,9 +194,12 @@ class TestImportConsumables:
     def test_standalone_import(self, db, sample_raid_metadata):
         usage = [
             ConsumableUsage(
-                player_name="Player1", player_role="dps",
-                report_id="abc123", consumable_name="Dark Rune",
-                count=2, timestamps=[30_000, 120_000],
+                player_name="Player1",
+                player_role="dps",
+                report_id="abc123",
+                consumable_name="Dark Rune",
+                count=2,
+                timestamps=[30_000, 120_000],
             ),
         ]
         db.import_consumables(sample_raid_metadata, usage)
@@ -305,16 +308,22 @@ class TestCaseInsensitiveNameMatching:
                 end_time=1_700_013_600_000,
             ),
             composition=RaidComposition(
-                tanks=[], healers=[
-                    PlayerIdentity(name="HOLYPRIEST", player_class="Priest",
-                                   source_id=1, role="healer"),
-                ], melee=[], ranged=[],
+                tanks=[],
+                healers=[
+                    PlayerIdentity(name="HOLYPRIEST", player_class="Priest", source_id=1, role="healer"),
+                ],
+                melee=[],
+                ranged=[],
             ),
             healers=[
                 HealerPerformance(
-                    name="HOLYPRIEST", player_class="Priest", source_id=1,
-                    total_healing=600_000, total_overhealing=120_000,
-                    spells=[], fear_ward_casts=0,
+                    name="HOLYPRIEST",
+                    player_class="Priest",
+                    source_id=1,
+                    total_healing=600_000,
+                    total_overhealing=120_000,
+                    spells=[],
+                    fear_ward_casts=0,
                 ),
             ],
             tanks=[],

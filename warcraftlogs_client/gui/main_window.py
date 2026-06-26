@@ -36,6 +36,7 @@ from .settings_view import SettingsView
 
 class _UpdateCheckWorker(QThread):
     """Runs the update check off the main thread."""
+
     update_available = Signal(object)  # UpdateInfo or None
 
     def __init__(self, force: bool = False, parent=None):
@@ -44,6 +45,7 @@ class _UpdateCheckWorker(QThread):
 
     def run(self):
         from ..updater import check_for_update
+
         info = check_for_update(force=self._force)
         if info:
             self.update_available.emit(info)
@@ -85,10 +87,8 @@ class MainWindow(QMainWindow):
 
         self.nav_list = QListWidget()
         self.nav_list.setIconSize(QSize(20, 20))
-        self.nav_list.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.nav_list.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.nav_list.setStyleSheet("""
             QListWidget {
                 background-color: #1a1a2e;
@@ -220,8 +220,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.status_message.connect(self.status_bar.showMessage)
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
         self.find_character_view.status_message.connect(self.status_bar.showMessage)
-        self.find_character_view.view_character_history.connect(
-            self._drill_into_character_history)
+        self.find_character_view.view_character_history.connect(self._drill_into_character_history)
         self.character_view.status_message.connect(self.status_bar.showMessage)
         self.character_view.analyze_report.connect(self._analyze_report)
         self.character_view.view_character_history.connect(self._drill_into_character_history)
@@ -241,6 +240,7 @@ class MainWindow(QMainWindow):
     def _auto_check_updates(self):
         try:
             from ..config import load_config
+
             config = load_config()
             if not config.get("auto_check_updates", True):
                 return
@@ -258,8 +258,7 @@ class MainWindow(QMainWindow):
         if self._update_label:
             self._update_label.deleteLater()
 
-        self._update_label = QLabel(
-            f"  Update available: v{info.version} — click to update  ")
+        self._update_label = QLabel(f"  Update available: v{info.version} — click to update  ")
         self._update_label.setStyleSheet("""
             QLabel {
                 color: #e94560;
@@ -281,6 +280,7 @@ class MainWindow(QMainWindow):
         if not self._pending_update:
             return
         from .update_dialog import UpdateDialog
+
         dlg = UpdateDialog(self._pending_update, parent=self)
         dlg.exec()
 
@@ -309,6 +309,7 @@ class MainWindow(QMainWindow):
 
     def _drill_into_cross_analysis(self, report_id: str):
         from .raid_cross_analysis_widget import RaidCrossAnalysisWidget
+
         widget = RaidCrossAnalysisWidget(report_id)
         widget.status_message.connect(self.status_bar.showMessage)
         widget.request_back.connect(self.stack.pop_view)
@@ -317,6 +318,7 @@ class MainWindow(QMainWindow):
 
     def _drill_into_character_history(self, name: str):
         from .character_history_widget import CharacterHistoryWidget
+
         widget = CharacterHistoryWidget(name)
         widget.status_message.connect(self.status_bar.showMessage)
         widget.request_back.connect(self.stack.pop_view)
@@ -335,6 +337,7 @@ class MainWindow(QMainWindow):
 
     def _load_guild_logo(self):
         from .. import paths
+
         logo_path = str(paths.get_logo_path())
 
         if os.path.exists(logo_path):
@@ -351,6 +354,7 @@ class MainWindow(QMainWindow):
     def _load_guild_info(self):
         try:
             from ..config import load_config
+
             config = load_config()
             guild_id = config.get("guild_id", 0)
             client_id = config.get("client_id", "")
@@ -360,6 +364,7 @@ class MainWindow(QMainWindow):
             return
 
         from .worker import GuildInfoWorker
+
         self._guild_info_worker = GuildInfoWorker(guild_id)
         self._guild_info_worker.finished.connect(self._on_guild_info_loaded)
         self._guild_info_worker.start()
@@ -367,11 +372,11 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         workers = []
         for view in [self.download_view, self.character_view]:
-            for attr in ('_worker', '_guild_worker', '_wowhead_worker'):
+            for attr in ("_worker", "_guild_worker", "_wowhead_worker"):
                 w = getattr(view, attr, None)
                 if w and w.isRunning():
                     workers.append(w)
-        for attr in ('_guild_info_worker', '_update_worker'):
+        for attr in ("_guild_info_worker", "_update_worker"):
             w = getattr(self, attr, None)
             if w and w.isRunning():
                 workers.append(w)

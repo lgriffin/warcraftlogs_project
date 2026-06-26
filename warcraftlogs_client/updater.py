@@ -110,9 +110,10 @@ def _save_check_timestamp():
 
 class UpdateDownloader(QThread):
     """Downloads an update zip with progress reporting."""
+
     progress = Signal(int, int)  # bytes_done, bytes_total
-    finished = Signal(str)       # zip_path
-    error = Signal(str)          # error message
+    finished = Signal(str)  # zip_path
+    error = Signal(str)  # error message
 
     def __init__(self, info: UpdateInfo, parent=None):
         super().__init__(parent)
@@ -228,9 +229,7 @@ del "%~f0"
             f.write(script)
     except OSError as e:
         shutil.rmtree(staged_dir, ignore_errors=True)
-        raise RuntimeError(
-            f"Cannot write update script. Is the app in a read-only folder?\n{e}"
-        ) from e
+        raise RuntimeError(f"Cannot write update script. Is the app in a read-only folder?\n{e}") from e
 
     # Launch the script detached
     CREATE_NEW_PROCESS_GROUP = 0x00000200

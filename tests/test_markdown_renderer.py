@@ -124,8 +124,11 @@ class TestDPSSummary:
     def test_ranged_section(self):
         dps = [
             DPSPerformance(
-                name="FrostMage", player_class="Mage", source_id=4,
-                role="ranged", total_damage=350_000,
+                name="FrostMage",
+                player_class="Mage",
+                source_id=4,
+                role="ranged",
+                total_damage=350_000,
                 abilities=[SpellUsage(spell_id=116, spell_name="Frostbolt", casts=200, total_amount=350_000)],
             ),
         ]
@@ -163,12 +166,15 @@ class TestConsumables:
 
     def test_multiple_players(self):
         consumables = [
-            ConsumableUsage(player_name="Alice", player_role="healer", report_id="r",
-                            consumable_name="Super Mana Potion", count=5),
-            ConsumableUsage(player_name="Bob", player_role="melee", report_id="r",
-                            consumable_name="Haste Potion", count=2),
-            ConsumableUsage(player_name="Alice", player_role="healer", report_id="r",
-                            consumable_name="Dark Rune", count=3),
+            ConsumableUsage(
+                player_name="Alice", player_role="healer", report_id="r", consumable_name="Super Mana Potion", count=5
+            ),
+            ConsumableUsage(
+                player_name="Bob", player_role="melee", report_id="r", consumable_name="Haste Potion", count=2
+            ),
+            ConsumableUsage(
+                player_name="Alice", player_role="healer", report_id="r", consumable_name="Dark Rune", count=3
+            ),
         ]
         analysis = RaidAnalysis(
             metadata=RaidMetadata(report_id="r", title="T", owner="O", start_time=1_700_000_000_000),
@@ -183,8 +189,9 @@ class TestConsumables:
 
     def test_zero_count_excluded(self):
         consumables = [
-            ConsumableUsage(player_name="Alice", player_role="healer", report_id="r",
-                            consumable_name="Super Mana Potion", count=0),
+            ConsumableUsage(
+                player_name="Alice", player_role="healer", report_id="r", consumable_name="Super Mana Potion", count=0
+            ),
         ]
         analysis = RaidAnalysis(
             metadata=RaidMetadata(report_id="r", title="T", owner="O", start_time=1_700_000_000_000),
@@ -220,7 +227,9 @@ class TestEmptyAnalysis:
     def test_no_crash(self):
         analysis = RaidAnalysis(
             metadata=RaidMetadata(
-                report_id="empty", title="Empty", owner="Nobody",
+                report_id="empty",
+                title="Empty",
+                owner="Nobody",
                 start_time=1_700_000_000_000,
             ),
             composition=RaidComposition(),

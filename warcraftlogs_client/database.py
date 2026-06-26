@@ -206,6 +206,7 @@ class PerformanceDB:
 
     def __init__(self, db_path: str | None = None):
         from . import paths
+
         self.db_path = db_path or str(paths.get_db_path())
         self._conn: sqlite3.Connection | None = None
 
@@ -256,8 +257,7 @@ class PerformanceDB:
             ) WHERE raid_size IS NULL
         """)
 
-        tables = {row[0] for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         if "raid_groups" not in tables:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS raid_groups (
@@ -302,13 +302,10 @@ class PerformanceDB:
                 CREATE INDEX IF NOT EXISTS idx_encounter_perf_char ON encounter_performance(character_id);
             """)
 
-        for table in ("healer_performance", "tank_performance",
-                      "dps_performance", "encounter_performance"):
-            t_cols = {row[1] for row in conn.execute(
-                f"PRAGMA table_info({table})").fetchall()}
+        for table in ("healer_performance", "tank_performance", "dps_performance", "encounter_performance"):
+            t_cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             if "active_time_percent" not in t_cols:
-                conn.execute(
-                    f"ALTER TABLE {table} ADD COLUMN active_time_percent REAL DEFAULT 0.0")
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN active_time_percent REAL DEFAULT 0.0")
 
     def close(self) -> None:
         if self._conn:
@@ -346,9 +343,7 @@ class PerformanceDB:
                VALUES (?, ?, ?, ?)""",
             (name, player_class, raid_date, raid_date),
         )
-        cursor = conn.execute(
-            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE", (name,)
-        )
+        cursor = conn.execute("SELECT id FROM characters WHERE name = ? COLLATE NOCASE", (name,))
         return cursor.fetchone()["id"]
 
     def _upsert_raid(self, metadata: RaidMetadata, source: str = "guild") -> int:
@@ -360,8 +355,16 @@ class PerformanceDB:
                ON CONFLICT(report_id) DO UPDATE SET
                    title = excluded.title,
                    zone = COALESCE(excluded.zone, raids.zone)""",
-            (metadata.report_id, metadata.title, metadata.owner, raid_date,
-             metadata.start_time, metadata.end_time, metadata.zone, source),
+            (
+                metadata.report_id,
+                metadata.title,
+                metadata.owner,
+                raid_date,
+                metadata.start_time,
+                metadata.end_time,
+                metadata.zone,
+                source,
+            ),
         )
         cursor = conn.execute("SELECT id FROM raids WHERE report_id = ?", (metadata.report_id,))
         return cursor.fetchone()["id"]
@@ -408,12 +411,13 @@ class PerformanceDB:
 
         conn.commit()
 
-    def _import_encounters(self, conn: sqlite3.Connection, raid_id: int,
-                            raid_date: str,
-                            encounters: list[EncounterSummary]) -> None:
+    def _import_encounters(
+        self, conn: sqlite3.Connection, raid_id: int, raid_date: str, encounters: list[EncounterSummary]
+    ) -> None:
         conn.execute(
-            "DELETE FROM encounter_performance WHERE encounter_row_id IN "
-            "(SELECT id FROM encounters WHERE raid_id = ?)", (raid_id,))
+            "DELETE FROM encounter_performance WHERE encounter_row_id IN (SELECT id FROM encounters WHERE raid_id = ?)",
+            (raid_id,),
+        )
         conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
 
         for enc in encounters:
@@ -421,8 +425,7 @@ class PerformanceDB:
                 """INSERT INTO encounters
                    (raid_id, encounter_id, name, start_time, end_time, duration_ms)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (raid_id, enc.encounter_id, enc.name,
-                 enc.start_time, enc.end_time, enc.duration_ms),
+                (raid_id, enc.encounter_id, enc.name, enc.start_time, enc.end_time, enc.duration_ms),
             )
             enc_row_id = conn.execute(
                 "SELECT id FROM encounters WHERE raid_id = ? AND encounter_id = ? AND start_time = ?",
@@ -442,9 +445,15 @@ class PerformanceDB:
                            total_healing = excluded.total_healing,
                            total_damage_taken = excluded.total_damage_taken,
                            active_time_percent = excluded.active_time_percent""",
-                    (enc_row_id, char_id, player.role,
-                     player.total_damage, player.total_healing,
-                     player.total_damage_taken, player.active_time_percent),
+                    (
+                        enc_row_id,
+                        char_id,
+                        player.role,
+                        player.total_damage,
+                        player.total_healing,
+                        player.total_damage_taken,
+                        player.active_time_percent,
+                    ),
                 )
 
     def _import_healer(self, conn: sqlite3.Connection, char_id: int, raid_id: int, h: HealerPerformance) -> None:
@@ -461,8 +470,16 @@ class PerformanceDB:
                    fear_ward_casts = excluded.fear_ward_casts,
                    total_dispels = excluded.total_dispels,
                    active_time_percent = excluded.active_time_percent""",
-            (char_id, raid_id, h.total_healing, h.total_overhealing,
-             h.overheal_percent, h.fear_ward_casts, total_dispels, h.active_time_percent),
+            (
+                char_id,
+                raid_id,
+                h.total_healing,
+                h.total_overhealing,
+                h.overheal_percent,
+                h.fear_ward_casts,
+                total_dispels,
+                h.active_time_percent,
+            ),
         )
         perf_id = conn.execute(
             "SELECT id FROM healer_performance WHERE character_id = ? AND raid_id = ?",
@@ -488,8 +505,7 @@ class PerformanceDB:
                    total_mitigated = excluded.total_mitigated,
                    mitigation_percent = excluded.mitigation_percent,
                    active_time_percent = excluded.active_time_percent""",
-            (char_id, raid_id, t.total_damage_taken, t.total_mitigated,
-             t.mitigation_percent, t.active_time_percent),
+            (char_id, raid_id, t.total_damage_taken, t.total_mitigated, t.mitigation_percent, t.active_time_percent),
         )
         perf_id = conn.execute(
             "SELECT id FROM tank_performance WHERE character_id = ? AND raid_id = ?",
@@ -557,8 +573,7 @@ class PerformanceDB:
 
     # ── Query operations ──
 
-    def get_character_history(self, character_name: str,
-                              source: str = "guild") -> CharacterHistory | None:
+    def get_character_history(self, character_name: str, source: str = "guild") -> CharacterHistory | None:
         """Get historical performance summary for a character."""
         conn = self._get_conn()
         char = conn.execute(
@@ -805,17 +820,27 @@ class PerformanceDB:
 
     # ── Insights queries ──
 
-    def _build_day_size_filter(self, raid_day: str | None = None,
-                                raid_size: str | None = None,
-                                last_n: int | None = None,
-                                zone: str | None = None,
-                                source: str = "guild") -> tuple[str, list]:
+    def _build_day_size_filter(
+        self,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+        source: str = "guild",
+    ) -> tuple[str, list]:
         def _core(alias: str) -> tuple[str, list]:
             frag = f" AND {alias}.source = ?"
             p: list = [source]
             if raid_day:
-                day_map = {"Monday": "1", "Tuesday": "2", "Wednesday": "3",
-                           "Thursday": "4", "Friday": "5", "Saturday": "6", "Sunday": "0"}
+                day_map = {
+                    "Monday": "1",
+                    "Tuesday": "2",
+                    "Wednesday": "3",
+                    "Thursday": "4",
+                    "Friday": "5",
+                    "Saturday": "6",
+                    "Sunday": "0",
+                }
                 days = [d.strip() for d in raid_day.split(",")]
                 day_nums = [int(day_map[d]) for d in days if d in day_map]
                 if day_nums:
@@ -834,17 +859,19 @@ class PerformanceDB:
         sql, params = _core("r")
         if last_n:
             inner_sql, inner_params = _core("r2")
-            sql += (f" AND r.id IN (SELECT r2.id FROM raids r2"
-                    f" WHERE 1=1{inner_sql}"
-                    f" ORDER BY r2.raid_date DESC LIMIT ?)")
+            sql += f" AND r.id IN (SELECT r2.id FROM raids r2 WHERE 1=1{inner_sql} ORDER BY r2.raid_date DESC LIMIT ?)"
             params.extend(inner_params)
             params.append(last_n)
         return sql, params
 
-    def get_dps_progression(self, top_n: int = 10, raid_day: str | None = None,
-                             raid_size: str | None = None,
-                             last_n: int | None = None,
-                             zone: str | None = None) -> list[dict]:
+    def get_dps_progression(
+        self,
+        top_n: int = 10,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-raid damage for top N DPS characters by average."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -874,10 +901,14 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_dps_consistency(self, min_raids: int = 3, raid_day: str | None = None,
-                             raid_size: str | None = None,
-                             last_n: int | None = None,
-                             zone: str | None = None) -> list[dict]:
+    def get_dps_consistency(
+        self,
+        min_raids: int = 3,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Consistency scores for DPS characters (100 - CV%)."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -892,6 +923,7 @@ class PerformanceDB:
         ).fetchall()
         import math
         from collections import defaultdict
+
         by_char: dict[str, dict] = {}
         values_by_char: dict[str, list[int]] = defaultdict(list)
         for r in rows:
@@ -910,19 +942,24 @@ class PerformanceDB:
             variance = sum((v - avg) ** 2 for v in vals) / len(vals)
             std = math.sqrt(variance)
             cv = std / avg * 100
-            results.append({
-                **info,
-                "raids": len(vals),
-                "avg_damage": avg,
-                "consistency": round(100 - cv, 1),
-            })
+            results.append(
+                {
+                    **info,
+                    "raids": len(vals),
+                    "avg_damage": avg,
+                    "consistency": round(100 - cv, 1),
+                }
+            )
         results.sort(key=lambda x: x["consistency"], reverse=True)
         return results
 
-    def get_raid_overview_trends(self, raid_day: str | None = None,
-                                  raid_size: str | None = None,
-                                  last_n: int | None = None,
-                                  zone: str | None = None) -> list[dict]:
+    def get_raid_overview_trends(
+        self,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-raid aggregates: duration, healing, damage, ratio."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -950,21 +987,27 @@ class PerformanceDB:
             total_dmg = r["total_damage"]
             total_heal = r["total_healing"]
             ratio = (total_heal / total_dmg * 100) if total_dmg > 0 else 0
-            results.append({
-                "raid_date": r["raid_date"],
-                "title": r["title"],
-                "raid_size": r["raid_size"],
-                "duration_minutes": round(duration, 1),
-                "total_healing": total_heal,
-                "total_damage": total_dmg,
-                "heal_damage_ratio": round(ratio, 1),
-            })
+            results.append(
+                {
+                    "raid_date": r["raid_date"],
+                    "title": r["title"],
+                    "raid_size": r["raid_size"],
+                    "duration_minutes": round(duration, 1),
+                    "total_healing": total_heal,
+                    "total_damage": total_dmg,
+                    "heal_damage_ratio": round(ratio, 1),
+                }
+            )
         return results
 
-    def get_attendance_stats(self, min_raids: int = 1, raid_day: str | None = None,
-                              raid_size: str | None = None,
-                              last_n: int | None = None,
-                              zone: str | None = None) -> list[dict]:
+    def get_attendance_stats(
+        self,
+        min_raids: int = 1,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-character raid attendance counts."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -986,10 +1029,14 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_consumable_compliance(self, min_raids: int = 3, raid_day: str | None = None,
-                                   raid_size: str | None = None,
-                                   last_n: int | None = None,
-                                   zone: str | None = None) -> dict:
+    def get_consumable_compliance(
+        self,
+        min_raids: int = 3,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> dict:
         """Consumable usage matrix: character x consumable avg per raid."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -1040,6 +1087,7 @@ class PerformanceDB:
         ).fetchall()
 
         from collections import defaultdict
+
         matrix: dict[str, dict[str, float]] = defaultdict(dict)
         for r in rows:
             raids = char_raid_counts.get(r["name"], 1)
@@ -1047,10 +1095,14 @@ class PerformanceDB:
 
         return {"characters": characters, "consumables": consumables, "matrix": dict(matrix)}
 
-    def get_healer_insights(self, min_raids: int = 3, raid_day: str | None = None,
-                              raid_size: str | None = None,
-                              last_n: int | None = None,
-                              zone: str | None = None) -> list[dict]:
+    def get_healer_insights(
+        self,
+        min_raids: int = 3,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-healer overheal %, dispels, and efficiency stats."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -1071,10 +1123,13 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_healer_overheal_trend(self, raid_day: str | None = None,
-                                    raid_size: str | None = None,
-                                    last_n: int | None = None,
-                                    zone: str | None = None) -> list[dict]:
+    def get_healer_overheal_trend(
+        self,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-raid average overheal % across all healers."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -1091,10 +1146,14 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_dps_per_minute(self, min_raids: int = 3, raid_day: str | None = None,
-                            raid_size: str | None = None,
-                            last_n: int | None = None,
-                            zone: str | None = None) -> list[dict]:
+    def get_dps_per_minute(
+        self,
+        min_raids: int = 3,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-character average DPS per minute (normalized by raid duration)."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -1110,6 +1169,7 @@ class PerformanceDB:
             ds_params,
         ).fetchall()
         from collections import defaultdict
+
         by_char: dict[str, dict] = {}
         dpms: dict[str, list[float]] = defaultdict(list)
         for r in rows:
@@ -1129,10 +1189,14 @@ class PerformanceDB:
         results.sort(key=lambda x: x["avg_dpm"], reverse=True)
         return results
 
-    def get_tank_mitigation_stats(self, min_raids: int = 3, raid_day: str | None = None,
-                                    raid_size: str | None = None,
-                                    last_n: int | None = None,
-                                    zone: str | None = None) -> list[dict]:
+    def get_tank_mitigation_stats(
+        self,
+        min_raids: int = 3,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-tank mitigation and damage taken stats."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -1151,10 +1215,13 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_consumable_usage_rates(self, raid_day: str | None = None,
-                                    raid_size: str | None = None,
-                                    last_n: int | None = None,
-                                    zone: str | None = None) -> list[dict]:
+    def get_consumable_usage_rates(
+        self,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Per-consumable summary stats."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -1171,12 +1238,14 @@ class PerformanceDB:
         ).fetchall()
         results = []
         for r in rows:
-            results.append({
-                "consumable_name": r["consumable_name"],
-                "total_users": r["total_users"],
-                "total_uses": r["total_uses"],
-                "avg_per_user": round(r["total_uses"] / r["total_users"], 1) if r["total_users"] > 0 else 0,
-            })
+            results.append(
+                {
+                    "consumable_name": r["consumable_name"],
+                    "total_users": r["total_users"],
+                    "total_uses": r["total_uses"],
+                    "avg_per_user": round(r["total_uses"] / r["total_users"], 1) if r["total_users"] > 0 else 0,
+                }
+            )
         return results
 
     def get_distinct_zones(self, source: str = "guild") -> list[str]:
@@ -1219,25 +1288,33 @@ class PerformanceDB:
 
         conn.execute(
             "DELETE FROM healer_spells WHERE healer_performance_id IN "
-            "(SELECT id FROM healer_performance WHERE raid_id = ?)", (raid_id,))
+            "(SELECT id FROM healer_performance WHERE raid_id = ?)",
+            (raid_id,),
+        )
         conn.execute("DELETE FROM healer_performance WHERE raid_id = ?", (raid_id,))
 
         conn.execute(
-            "DELETE FROM dps_abilities WHERE dps_performance_id IN "
-            "(SELECT id FROM dps_performance WHERE raid_id = ?)", (raid_id,))
+            "DELETE FROM dps_abilities WHERE dps_performance_id IN (SELECT id FROM dps_performance WHERE raid_id = ?)",
+            (raid_id,),
+        )
         conn.execute("DELETE FROM dps_performance WHERE raid_id = ?", (raid_id,))
 
         conn.execute(
             "DELETE FROM tank_damage_taken WHERE tank_performance_id IN "
-            "(SELECT id FROM tank_performance WHERE raid_id = ?)", (raid_id,))
+            "(SELECT id FROM tank_performance WHERE raid_id = ?)",
+            (raid_id,),
+        )
         conn.execute(
             "DELETE FROM tank_abilities WHERE tank_performance_id IN "
-            "(SELECT id FROM tank_performance WHERE raid_id = ?)", (raid_id,))
+            "(SELECT id FROM tank_performance WHERE raid_id = ?)",
+            (raid_id,),
+        )
         conn.execute("DELETE FROM tank_performance WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM consumable_usage WHERE raid_id = ?", (raid_id,))
         conn.execute(
-            "DELETE FROM encounter_performance WHERE encounter_row_id IN "
-            "(SELECT id FROM encounters WHERE raid_id = ?)", (raid_id,))
+            "DELETE FROM encounter_performance WHERE encounter_row_id IN (SELECT id FROM encounters WHERE raid_id = ?)",
+            (raid_id,),
+        )
         conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM raids WHERE id = ?", (raid_id,))
         conn.commit()
@@ -1251,9 +1328,7 @@ class PerformanceDB:
     def is_raid_imported(self, report_id: str) -> bool:
         """Check if a raid has already been imported."""
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT id FROM raids WHERE report_id = ?", (report_id,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM raids WHERE report_id = ?", (report_id,)).fetchone()
         return row is not None
 
     def get_imported_report_codes(self) -> set[str]:
@@ -1272,23 +1347,20 @@ class PerformanceDB:
             (name, days_json),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT * FROM raid_groups WHERE name = ?", (name,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM raid_groups WHERE name = ?", (name,)).fetchone()
         return RaidGroup(
-            id=row["id"], name=row["name"],
+            id=row["id"],
+            name=row["name"],
             raid_days=json.loads(row["raid_days"]),
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
-    def update_raid_group(self, group_id: int, name: str | None = None,
-                          raid_days: list[str] | None = None) -> None:
+    def update_raid_group(self, group_id: int, name: str | None = None, raid_days: list[str] | None = None) -> None:
         conn = self._get_conn()
         if name is not None:
             conn.execute("UPDATE raid_groups SET name = ? WHERE id = ?", (name, group_id))
         if raid_days is not None:
-            conn.execute("UPDATE raid_groups SET raid_days = ? WHERE id = ?",
-                         (json.dumps(raid_days), group_id))
+            conn.execute("UPDATE raid_groups SET raid_days = ? WHERE id = ?", (json.dumps(raid_days), group_id))
         conn.commit()
 
     def delete_raid_group(self, group_id: int) -> None:
@@ -1309,12 +1381,15 @@ class PerformanceDB:
                    ORDER BY c.name""",
                 (r["id"],),
             ).fetchall()
-            groups.append(RaidGroup(
-                id=r["id"], name=r["name"],
-                raid_days=json.loads(r["raid_days"]),
-                created_at=datetime.fromisoformat(r["created_at"]),
-                members=[m["name"] for m in members],
-            ))
+            groups.append(
+                RaidGroup(
+                    id=r["id"],
+                    name=r["name"],
+                    raid_days=json.loads(r["raid_days"]),
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                    members=[m["name"] for m in members],
+                )
+            )
         return groups
 
     def get_raid_group(self, group_id: int) -> RaidGroup | None:
@@ -1330,7 +1405,8 @@ class PerformanceDB:
             (r["id"],),
         ).fetchall()
         return RaidGroup(
-            id=r["id"], name=r["name"],
+            id=r["id"],
+            name=r["name"],
             raid_days=json.loads(r["raid_days"]),
             created_at=datetime.fromisoformat(r["created_at"]),
             members=[m["name"] for m in members],
@@ -1442,11 +1518,15 @@ class PerformanceDB:
             ).fetchall()
             attended = sum(1 for r in attended_rows if r["raid_id"] in raid_id_set)
             pct = round(attended / total_raids * 100, 1) if total_raids > 0 else 0.0
-            results.append({
-                "name": m["name"], "player_class": m["player_class"],
-                "attended": attended, "total_raids": total_raids,
-                "attendance_pct": pct,
-            })
+            results.append(
+                {
+                    "name": m["name"],
+                    "player_class": m["player_class"],
+                    "attended": attended,
+                    "total_raids": total_raids,
+                    "attendance_pct": pct,
+                }
+            )
         return results
 
     def get_group_role_coverage(self, group_id: int) -> list[dict]:
@@ -1467,21 +1547,29 @@ class PerformanceDB:
                 """SELECT COUNT(*) as cnt FROM healer_performance hp
                    JOIN raids r ON r.id = hp.raid_id
                    WHERE hp.character_id = ? AND r.source = 'guild'""",
-                (m["id"],)).fetchone()["cnt"]
+                (m["id"],),
+            ).fetchone()["cnt"]
             tank_count = conn.execute(
                 """SELECT COUNT(*) as cnt FROM tank_performance tp
                    JOIN raids r ON r.id = tp.raid_id
                    WHERE tp.character_id = ? AND r.source = 'guild'""",
-                (m["id"],)).fetchone()["cnt"]
+                (m["id"],),
+            ).fetchone()["cnt"]
             dps_count = conn.execute(
                 """SELECT COUNT(*) as cnt FROM dps_performance dp
                    JOIN raids r ON r.id = dp.raid_id
                    WHERE dp.character_id = ? AND r.source = 'guild'""",
-                (m["id"],)).fetchone()["cnt"]
-            results.append({
-                "name": m["name"], "player_class": m["player_class"],
-                "healer": healer_count, "tank": tank_count, "dps": dps_count,
-            })
+                (m["id"],),
+            ).fetchone()["cnt"]
+            results.append(
+                {
+                    "name": m["name"],
+                    "player_class": m["player_class"],
+                    "healer": healer_count,
+                    "tank": tank_count,
+                    "dps": dps_count,
+                }
+            )
         return results
 
     def get_group_classes(self, group_id: int) -> list[str]:
@@ -1497,9 +1585,9 @@ class PerformanceDB:
         ).fetchall()
         return [r["player_class"] for r in rows]
 
-    def get_class_comparison_trend(self, group_id: int, class_name: str,
-                                   role: str | None = None,
-                                   limit: int = 20) -> list[dict]:
+    def get_class_comparison_trend(
+        self, group_id: int, class_name: str, role: str | None = None, limit: int = 20
+    ) -> list[dict]:
         """Get per-player performance trend for a class within a group.
 
         Returns rows with: name, raid_date, title, metric_value, metric_key.
@@ -1533,12 +1621,16 @@ class PerformanceDB:
                 ).fetchall()
                 if rows:
                     for r in reversed(rows):
-                        results.append({
-                            "name": name, "raid_date": r["raid_date"],
-                            "title": r["title"], "raid_size": r["raid_size"],
-                            "metric_value": r["metric_value"],
-                            "metric_key": "healing",
-                        })
+                        results.append(
+                            {
+                                "name": name,
+                                "raid_date": r["raid_date"],
+                                "title": r["title"],
+                                "raid_size": r["raid_size"],
+                                "metric_value": r["metric_value"],
+                                "metric_key": "healing",
+                            }
+                        )
                     if role is not None:
                         continue
 
@@ -1553,12 +1645,16 @@ class PerformanceDB:
                 ).fetchall()
                 if rows:
                     for r in reversed(rows):
-                        results.append({
-                            "name": name, "raid_date": r["raid_date"],
-                            "title": r["title"], "raid_size": r["raid_size"],
-                            "metric_value": r["metric_value"],
-                            "metric_key": "mitigation",
-                        })
+                        results.append(
+                            {
+                                "name": name,
+                                "raid_date": r["raid_date"],
+                                "title": r["title"],
+                                "raid_size": r["raid_size"],
+                                "metric_value": r["metric_value"],
+                                "metric_key": "mitigation",
+                            }
+                        )
                     if role is not None:
                         continue
 
@@ -1573,12 +1669,16 @@ class PerformanceDB:
                 ).fetchall()
                 if rows:
                     for r in reversed(rows):
-                        results.append({
-                            "name": name, "raid_date": r["raid_date"],
-                            "title": r["title"], "raid_size": r["raid_size"],
-                            "metric_value": r["metric_value"],
-                            "metric_key": "damage",
-                        })
+                        results.append(
+                            {
+                                "name": name,
+                                "raid_date": r["raid_date"],
+                                "title": r["title"],
+                                "raid_size": r["raid_size"],
+                                "metric_value": r["metric_value"],
+                                "metric_key": "damage",
+                            }
+                        )
 
         return results
 
@@ -1636,16 +1736,14 @@ class PerformanceDB:
             if len(vals) >= 2:
                 mean = sum(vals) / len(vals)
                 variance = sum((v - mean) ** 2 for v in vals) / len(vals)
-                std = variance ** 0.5
+                std = variance**0.5
                 row["consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
             else:
                 row["consistency"] = 100.0
 
             compliance = self.get_character_consumable_compliance(m["name"])
             row["consumable_compliance"] = (
-                f"{compliance['avg_per_raid']:.1f}/raid"
-                if compliance and compliance.get("total_raids", 0) > 0
-                else "-"
+                f"{compliance['avg_per_raid']:.1f}/raid" if compliance and compliance.get("total_raids", 0) > 0 else "-"
             )
 
             results.append(row)
@@ -1668,13 +1766,14 @@ class PerformanceDB:
         healing_rows = conn.execute(
             """SELECT hp.total_healing FROM healer_performance hp
                JOIN raids r ON r.id = hp.raid_id
-               WHERE hp.character_id = ? AND r.source = 'guild'""", (cid,)
+               WHERE hp.character_id = ? AND r.source = 'guild'""",
+            (cid,),
         ).fetchall()
         if len(healing_rows) >= 2:
             vals = [r["total_healing"] for r in healing_rows]
             mean = sum(vals) / len(vals)
             variance = sum((v - mean) ** 2 for v in vals) / len(vals)
-            std = variance ** 0.5
+            std = variance**0.5
             result["healing_mean"] = round(mean)
             result["healing_std"] = round(std)
             result["healing_consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
@@ -1682,13 +1781,14 @@ class PerformanceDB:
         damage_rows = conn.execute(
             """SELECT dp.total_damage FROM dps_performance dp
                JOIN raids r ON r.id = dp.raid_id
-               WHERE dp.character_id = ? AND r.source = 'guild'""", (cid,)
+               WHERE dp.character_id = ? AND r.source = 'guild'""",
+            (cid,),
         ).fetchall()
         if len(damage_rows) >= 2:
             vals = [r["total_damage"] for r in damage_rows]
             mean = sum(vals) / len(vals)
             variance = sum((v - mean) ** 2 for v in vals) / len(vals)
-            std = variance ** 0.5
+            std = variance**0.5
             result["damage_mean"] = round(mean)
             result["damage_std"] = round(std)
             result["damage_consistency"] = round(100 - (std / mean * 100), 1) if mean > 0 else 0
@@ -1696,13 +1796,14 @@ class PerformanceDB:
         tank_rows = conn.execute(
             """SELECT tp.mitigation_percent FROM tank_performance tp
                JOIN raids r ON r.id = tp.raid_id
-               WHERE tp.character_id = ? AND r.source = 'guild'""", (cid,)
+               WHERE tp.character_id = ? AND r.source = 'guild'""",
+            (cid,),
         ).fetchall()
         if len(tank_rows) >= 2:
             vals = [r["mitigation_percent"] for r in tank_rows]
             mean = sum(vals) / len(vals)
             variance = sum((v - mean) ** 2 for v in vals) / len(vals)
-            std = variance ** 0.5
+            std = variance**0.5
             result["mitigation_mean"] = round(mean, 1)
             result["mitigation_std"] = round(std, 1)
             result["mitigation_consistency"] = round(100 - (std / max(mean, 0.01) * 100), 1)
@@ -1739,11 +1840,15 @@ class PerformanceDB:
                 (cid,),
             ).fetchone()
             if row:
-                results.append({
-                    "label": label, "raid_date": row["raid_date"],
-                    "title": row["title"], "report_id": row["report_id"],
-                    "value": row["value"],
-                })
+                results.append(
+                    {
+                        "label": label,
+                        "raid_date": row["raid_date"],
+                        "title": row["title"],
+                        "report_id": row["report_id"],
+                        "value": row["value"],
+                    }
+                )
         return results
 
     def get_character_consumable_compliance(self, character_name: str) -> dict:
@@ -1768,7 +1873,8 @@ class PerformanceDB:
                 UNION SELECT dp.raid_id FROM dps_performance dp
                     JOIN raids r ON r.id = dp.raid_id
                     WHERE dp.character_id = ? AND r.source = 'guild'
-            )""", (cid, cid, cid),
+            )""",
+            (cid, cid, cid),
         ).fetchone()["cnt"]
 
         raids_with_consumes = conn.execute(
@@ -1784,7 +1890,8 @@ class PerformanceDB:
                 JOIN raids r ON r.id = cu.raid_id
                 WHERE cu.character_id = ? AND r.source = 'guild'
                 GROUP BY cu.raid_id
-            )""", (cid,),
+            )""",
+            (cid,),
         ).fetchone()["avg"]
 
         return {
@@ -1911,8 +2018,9 @@ class PerformanceDB:
             "total_damage_taken": total_damage_taken,
         }
 
-    def get_historical_raid_aggregates(self, raid_size_mode: int, exclude_report_id: str,
-                                       zone: str | None = None, limit: int = 50) -> list[dict]:
+    def get_historical_raid_aggregates(
+        self, raid_size_mode: int, exclude_report_id: str, zone: str | None = None, limit: int = 50
+    ) -> list[dict]:
         conn = self._get_conn()
         if raid_size_mode == 1:
             size_clause = "AND r.raid_size <= 15"
@@ -1943,17 +2051,19 @@ class PerformanceDB:
         results = []
         for r in rows:
             duration_ms = (r["end_time"] - r["start_time"]) if r["end_time"] and r["start_time"] else 0
-            results.append({
-                "report_id": r["report_id"],
-                "title": r["title"],
-                "raid_date": r["raid_date"],
-                "raid_size": r["raid_size"],
-                "zone": r["zone"],
-                "duration_ms": duration_ms,
-                "total_healing": r["total_healing"],
-                "total_damage": r["total_damage"],
-                "total_damage_taken": r["total_damage_taken"],
-            })
+            results.append(
+                {
+                    "report_id": r["report_id"],
+                    "title": r["title"],
+                    "raid_date": r["raid_date"],
+                    "raid_size": r["raid_size"],
+                    "zone": r["zone"],
+                    "duration_ms": duration_ms,
+                    "total_healing": r["total_healing"],
+                    "total_damage": r["total_damage"],
+                    "total_damage_taken": r["total_damage_taken"],
+                }
+            )
         return results
 
     def get_player_performance_for_raid(self, report_id: str) -> list[dict]:
@@ -1968,36 +2078,51 @@ class PerformanceDB:
             """SELECT c.name, c.player_class, hp.total_healing, hp.overheal_percent
                FROM healer_performance hp
                JOIN characters c ON c.id = hp.character_id
-               WHERE hp.raid_id = ?""", (raid_id,),
+               WHERE hp.raid_id = ?""",
+            (raid_id,),
         ).fetchall():
-            results.append({
-                "name": r["name"], "player_class": r["player_class"],
-                "role": "healer", "total_healing": r["total_healing"],
-                "overheal_percent": r["overheal_percent"],
-            })
+            results.append(
+                {
+                    "name": r["name"],
+                    "player_class": r["player_class"],
+                    "role": "healer",
+                    "total_healing": r["total_healing"],
+                    "overheal_percent": r["overheal_percent"],
+                }
+            )
 
         for r in conn.execute(
             """SELECT c.name, c.player_class, tp.total_damage_taken, tp.mitigation_percent
                FROM tank_performance tp
                JOIN characters c ON c.id = tp.character_id
-               WHERE tp.raid_id = ?""", (raid_id,),
+               WHERE tp.raid_id = ?""",
+            (raid_id,),
         ).fetchall():
-            results.append({
-                "name": r["name"], "player_class": r["player_class"],
-                "role": "tank", "total_damage_taken": r["total_damage_taken"],
-                "mitigation_percent": r["mitigation_percent"],
-            })
+            results.append(
+                {
+                    "name": r["name"],
+                    "player_class": r["player_class"],
+                    "role": "tank",
+                    "total_damage_taken": r["total_damage_taken"],
+                    "mitigation_percent": r["mitigation_percent"],
+                }
+            )
 
         for r in conn.execute(
             """SELECT c.name, c.player_class, dp.role as sub_role, dp.total_damage
                FROM dps_performance dp
                JOIN characters c ON c.id = dp.character_id
-               WHERE dp.raid_id = ?""", (raid_id,),
+               WHERE dp.raid_id = ?""",
+            (raid_id,),
         ).fetchall():
-            results.append({
-                "name": r["name"], "player_class": r["player_class"],
-                "role": r["sub_role"], "total_damage": r["total_damage"],
-            })
+            results.append(
+                {
+                    "name": r["name"],
+                    "player_class": r["player_class"],
+                    "role": r["sub_role"],
+                    "total_damage": r["total_damage"],
+                }
+            )
 
         return results
 
@@ -2049,9 +2174,7 @@ class PerformanceDB:
     def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None:
         """Reconstruct a full RaidAnalysis from stored database data."""
         conn = self._get_conn()
-        raid_row = conn.execute(
-            "SELECT * FROM raids WHERE report_id = ?", (report_id,)
-        ).fetchone()
+        raid_row = conn.execute("SELECT * FROM raids WHERE report_id = ?", (report_id,)).fetchone()
         if not raid_row:
             return None
 
@@ -2070,10 +2193,23 @@ class PerformanceDB:
         consumables = self._load_consumables_for_raid(conn, raid_id, report_id)
         encounters = self._load_encounters_for_raid(conn, raid_id)
 
-        tank_ids = [PlayerIdentity(name=t.name, player_class=t.player_class, source_id=t.source_id, role="tank") for t in tanks]
-        healer_ids = [PlayerIdentity(name=h.name, player_class=h.player_class, source_id=h.source_id, role="healer") for h in healers]
-        melee_ids = [PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role="melee") for d in dps_list if d.role == "melee"]
-        ranged_ids = [PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role="ranged") for d in dps_list if d.role == "ranged"]
+        tank_ids = [
+            PlayerIdentity(name=t.name, player_class=t.player_class, source_id=t.source_id, role="tank") for t in tanks
+        ]
+        healer_ids = [
+            PlayerIdentity(name=h.name, player_class=h.player_class, source_id=h.source_id, role="healer")
+            for h in healers
+        ]
+        melee_ids = [
+            PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role="melee")
+            for d in dps_list
+            if d.role == "melee"
+        ]
+        ranged_ids = [
+            PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role="ranged")
+            for d in dps_list
+            if d.role == "ranged"
+        ]
 
         return RaidAnalysis(
             metadata=metadata,
@@ -2098,14 +2234,27 @@ class PerformanceDB:
             spells_rows = conn.execute(
                 "SELECT * FROM healer_spells WHERE healer_performance_id = ?", (r["id"],)
             ).fetchall()
-            spells = [SpellUsage(spell_id=s["spell_id"], spell_name=_resolve_name(s["spell_id"], s["spell_name"]),
-                                 casts=s["casts"], total_amount=s["total_healing"]) for s in spells_rows]
-            results.append(HealerPerformance(
-                name=r["name"], player_class=r["player_class"], source_id=0,
-                total_healing=r["total_healing"], total_overhealing=r["total_overhealing"],
-                spells=spells, fear_ward_casts=r["fear_ward_casts"],
-                active_time_percent=r["active_time_percent"] or 0.0,
-            ))
+            spells = [
+                SpellUsage(
+                    spell_id=s["spell_id"],
+                    spell_name=_resolve_name(s["spell_id"], s["spell_name"]),
+                    casts=s["casts"],
+                    total_amount=s["total_healing"],
+                )
+                for s in spells_rows
+            ]
+            results.append(
+                HealerPerformance(
+                    name=r["name"],
+                    player_class=r["player_class"],
+                    source_id=0,
+                    total_healing=r["total_healing"],
+                    total_overhealing=r["total_overhealing"],
+                    spells=spells,
+                    fear_ward_casts=r["fear_ward_casts"],
+                    active_time_percent=r["active_time_percent"] or 0.0,
+                )
+            )
         return results
 
     def _load_tanks_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[TankPerformance]:
@@ -2121,21 +2270,35 @@ class PerformanceDB:
             taken_rows = conn.execute(
                 "SELECT * FROM tank_damage_taken WHERE tank_performance_id = ?", (r["id"],)
             ).fetchall()
-            taken_breakdown = [SpellUsage(spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
-                                          casts=a["hits"]) for a in taken_rows]
+            taken_breakdown = [
+                SpellUsage(
+                    spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]), casts=a["hits"]
+                )
+                for a in taken_rows
+            ]
 
             ability_rows = conn.execute(
                 "SELECT * FROM tank_abilities WHERE tank_performance_id = ?", (r["id"],)
             ).fetchall()
-            abilities = [SpellUsage(spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
-                                    casts=a["casts"]) for a in ability_rows]
+            abilities = [
+                SpellUsage(
+                    spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]), casts=a["casts"]
+                )
+                for a in ability_rows
+            ]
 
-            results.append(TankPerformance(
-                name=r["name"], player_class=r["player_class"], source_id=0,
-                total_damage_taken=r["total_damage_taken"], total_mitigated=r["total_mitigated"],
-                damage_taken_breakdown=taken_breakdown, abilities_used=abilities,
-                active_time_percent=r["active_time_percent"] or 0.0,
-            ))
+            results.append(
+                TankPerformance(
+                    name=r["name"],
+                    player_class=r["player_class"],
+                    source_id=0,
+                    total_damage_taken=r["total_damage_taken"],
+                    total_mitigated=r["total_mitigated"],
+                    damage_taken_breakdown=taken_breakdown,
+                    abilities_used=abilities,
+                    active_time_percent=r["active_time_percent"] or 0.0,
+                )
+            )
         return results
 
     def _load_dps_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[DPSPerformance]:
@@ -2151,17 +2314,31 @@ class PerformanceDB:
             ability_rows = conn.execute(
                 "SELECT * FROM dps_abilities WHERE dps_performance_id = ?", (r["id"],)
             ).fetchall()
-            abilities = [SpellUsage(spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
-                                    casts=a["casts"], total_amount=a["total_damage"]) for a in ability_rows]
-            results.append(DPSPerformance(
-                name=r["name"], player_class=r["player_class"], source_id=0,
-                role=r["role"], total_damage=r["total_damage"], abilities=abilities,
-                active_time_percent=r["active_time_percent"] or 0.0,
-            ))
+            abilities = [
+                SpellUsage(
+                    spell_id=a["spell_id"],
+                    spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
+                    casts=a["casts"],
+                    total_amount=a["total_damage"],
+                )
+                for a in ability_rows
+            ]
+            results.append(
+                DPSPerformance(
+                    name=r["name"],
+                    player_class=r["player_class"],
+                    source_id=0,
+                    role=r["role"],
+                    total_damage=r["total_damage"],
+                    abilities=abilities,
+                    active_time_percent=r["active_time_percent"] or 0.0,
+                )
+            )
         return results
 
-    def _load_consumables_for_raid(self, conn: sqlite3.Connection, raid_id: int,
-                                    report_id: str) -> list[ConsumableUsage]:
+    def _load_consumables_for_raid(
+        self, conn: sqlite3.Connection, raid_id: int, report_id: str
+    ) -> list[ConsumableUsage]:
         rows = conn.execute(
             """SELECT cu.consumable_name, cu.count, cu.timestamps, c.name as player_name
                FROM consumable_usage cu
@@ -2171,20 +2348,26 @@ class PerformanceDB:
         ).fetchall()
         roster = self.get_raid_roster(report_id)
         role_map = {r["name"]: r["role"] for r in roster}
-        return [ConsumableUsage(
-            player_name=r["player_name"],
-            player_role=role_map.get(r["player_name"], "unknown"),
-            report_id=report_id,
-            consumable_name=r["consumable_name"],
-            count=r["count"],
-            timestamps=json.loads(r["timestamps"]) if r["timestamps"] else [],
-        ) for r in rows]
+        return [
+            ConsumableUsage(
+                player_name=r["player_name"],
+                player_role=role_map.get(r["player_name"], "unknown"),
+                report_id=report_id,
+                consumable_name=r["consumable_name"],
+                count=r["count"],
+                timestamps=json.loads(r["timestamps"]) if r["timestamps"] else [],
+            )
+            for r in rows
+        ]
 
-    def get_encounter_history(self, encounter_id: int,
-                              raid_day: str | None = None,
-                              raid_size: str | None = None,
-                              last_n: int | None = None,
-                              zone: str | None = None) -> list[dict]:
+    def get_encounter_history(
+        self,
+        encounter_id: int,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """Historical kills of a specific boss across raids."""
         conn = self._get_conn()
         ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
@@ -2203,8 +2386,7 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_character_encounter_history(self, character_name: str,
-                                         encounter_id: int) -> list[dict]:
+    def get_character_encounter_history(self, character_name: str, encounter_id: int) -> list[dict]:
         """A character's performance on a specific boss over time."""
         conn = self._get_conn()
         rows = conn.execute(
@@ -2221,14 +2403,16 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_distinct_encounters(self, raid_day: str | None = None,
-                                raid_size: str | None = None,
-                                last_n: int | None = None,
-                                zone: str | None = None) -> list[dict]:
+    def get_distinct_encounters(
+        self,
+        raid_day: str | None = None,
+        raid_size: str | None = None,
+        last_n: int | None = None,
+        zone: str | None = None,
+    ) -> list[dict]:
         """All unique boss encounters in the database with kill counts."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(
-            raid_day, raid_size, last_n, zone=zone)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
         rows = conn.execute(
             f"""SELECT e.encounter_id, e.name,
                        COUNT(DISTINCT e.id) as kill_count
@@ -2242,7 +2426,8 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_encounter_player_breakdown(
-        self, encounter_id: int,
+        self,
+        encounter_id: int,
         raid_day: str | None = None,
         raid_size: str | None = None,
         last_n: int | None = None,
@@ -2250,8 +2435,7 @@ class PerformanceDB:
     ) -> list[dict]:
         """Per-player averages for a specific boss across kills."""
         conn = self._get_conn()
-        ds_filter, ds_params = self._build_day_size_filter(
-            raid_day, raid_size, last_n, zone=zone)
+        ds_filter, ds_params = self._build_day_size_filter(raid_day, raid_size, last_n, zone=zone)
         rows = conn.execute(
             f"""SELECT c.name, c.player_class, ep.role,
                        COUNT(*) as kills,
@@ -2269,8 +2453,7 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def _load_encounters_for_raid(self, conn: sqlite3.Connection,
-                                   raid_id: int) -> list[EncounterSummary]:
+    def _load_encounters_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[EncounterSummary]:
         enc_rows = conn.execute(
             "SELECT * FROM encounters WHERE raid_id = ? ORDER BY start_time",
             (raid_id,),
@@ -2298,14 +2481,16 @@ class PerformanceDB:
                 )
                 for pr in perf_rows
             ]
-            results.append(EncounterSummary(
-                encounter_id=er["encounter_id"],
-                name=er["name"],
-                start_time=er["start_time"],
-                end_time=er["end_time"],
-                duration_ms=er["duration_ms"],
-                players=players,
-            ))
+            results.append(
+                EncounterSummary(
+                    encounter_id=er["encounter_id"],
+                    name=er["name"],
+                    start_time=er["start_time"],
+                    end_time=er["end_time"],
+                    duration_ms=er["duration_ms"],
+                    players=players,
+                )
+            )
         return results
 
     def compare_characters(self, names: list[str], role: str) -> list[dict]:
@@ -2379,14 +2564,12 @@ class PerformanceDB:
     def get_raid_source(self, report_id: str) -> str | None:
         """Get the source classification of a raid, or None if not imported."""
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT source FROM raids WHERE report_id = ?", (report_id,)
-        ).fetchone()
+        row = conn.execute("SELECT source FROM raids WHERE report_id = ?", (report_id,)).fetchone()
         return row["source"] if row else None
 
-    def get_comparison_aggregates(self, source: str = "guild",
-                                   zone: str | None = None,
-                                   raid_size: str | None = None) -> dict:
+    def get_comparison_aggregates(
+        self, source: str = "guild", zone: str | None = None, raid_size: str | None = None
+    ) -> dict:
         """Aggregate performance metrics for guild or reference raids."""
         conn = self._get_conn()
         params: list = [source]

@@ -18,9 +18,10 @@ def print_report_metadata(metadata, present_names):
     print("========================")
     print(f"📄 Title: {metadata['title']}")
     print(f"👤 Owner: {metadata['owner']}")
-    dt = datetime.datetime.fromtimestamp(metadata['start'] / 1000)
+    dt = datetime.datetime.fromtimestamp(metadata["start"] / 1000)
     print(f"📆 Date: {dt.strftime('%A, %B %d %Y %H:%M:%S')}")
     print(f"\n⚔️ Melee Characters Present: {', '.join(sorted(present_names))}")
+
 
 def print_class_summary_table(class_name, class_summaries, all_abilities):
     print(f"\n======= Team {class_name} =======")
@@ -28,12 +29,13 @@ def print_class_summary_table(class_name, class_summaries, all_abilities):
     print(header)
     print("-" * len(header))
 
-    for summary in sorted(class_summaries, key=lambda x: x['total'], reverse=True):
+    for summary in sorted(class_summaries, key=lambda x: x["total"], reverse=True):
         row = f"{summary['name']:<15} {summary['total']:>15,}"
         for ability in all_abilities:
-            count = summary['casts'].get(ability, 0)
+            count = summary["casts"].get(ability, 0)
             row += f"{count:>16}"
         print(row)
+
 
 def run_melee_report():
     config = load_config()
@@ -47,9 +49,7 @@ def run_melee_report():
 
     class_groups = dynamic_role_parser.group_players_by_class(master_actors)
     melee_classes = {"Rogue", "Warrior"}
-    melee_players_by_class = {
-        cls: class_groups.get(cls, []) for cls in melee_classes
-    }
+    melee_players_by_class = {cls: class_groups.get(cls, []) for cls in melee_classes}
 
     all_melee_names = [p["name"] for players in melee_players_by_class.values() for p in players]
     print_report_metadata(metadata, all_melee_names)
@@ -105,12 +105,9 @@ def run_melee_report():
                     print(f"{ability:<30} {dmg:>12,} {casts:>8}")
                 print()
 
-                class_summary.append({
-                    "name": name,
-                    "total": total_damage,
-                    "damage": damage_by_ability,
-                    "casts": casts_by_ability
-                })
+                class_summary.append(
+                    {"name": name, "total": total_damage, "damage": damage_by_ability, "casts": casts_by_ability}
+                )
                 all_abilities.update(damage_by_ability.keys())
 
             except (requests.RequestException, KeyError, TypeError, ValueError) as e:

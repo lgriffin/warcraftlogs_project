@@ -26,11 +26,6 @@ class Characters:
     def get_all(self):
         return [{"name": name, "class": char_class} for name, char_class in self.name_to_class.items()]
 
-
     def get_name_to_id_map_from_master_data(self, report_data):
         actors = report_data["data"]["reportData"]["report"]["masterData"]["actors"]
-        return {
-            actor["name"]: actor["id"]
-            for actor in actors
-            if actor["name"] in self.get_names()
-        }
+        return {actor["name"]: actor["id"] for actor in actors if actor["name"] in self.get_names()}

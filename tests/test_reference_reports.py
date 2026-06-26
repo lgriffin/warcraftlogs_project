@@ -1,5 +1,6 @@
 """Tests for reference reports: isolation, comparison, and label management."""
 
+import pytest
 
 from warcraftlogs_client.models import (
     ConsumableUsage,
@@ -16,60 +17,110 @@ from warcraftlogs_client.models import (
 )
 
 
-def _make_analysis(report_id, title="Test Raid", healer_name="Healer1",
-                   tank_name="Tank1", dps_name="DPS1",
-                   encounter_id=None, encounter_name="Attumen"):
+def _make_analysis(
+    report_id,
+    title="Test Raid",
+    healer_name="Healer1",
+    tank_name="Tank1",
+    dps_name="DPS1",
+    encounter_id=None,
+    encounter_name="Attumen",
+):
     metadata = RaidMetadata(
-        report_id=report_id, title=title, owner="Owner",
-        start_time=1_700_000_000_000, end_time=1_700_003_600_000,
+        report_id=report_id,
+        title=title,
+        owner="Owner",
+        start_time=1_700_000_000_000,
+        end_time=1_700_003_600_000,
     )
     comp = RaidComposition(
-        tanks=[PlayerIdentity(name=tank_name, player_class="Warrior",
-                              source_id=1, role="tank")],
-        healers=[PlayerIdentity(name=healer_name, player_class="Priest",
-                                source_id=2, role="healer")],
-        melee=[PlayerIdentity(name=dps_name, player_class="Rogue",
-                              source_id=3, role="melee")],
+        tanks=[PlayerIdentity(name=tank_name, player_class="Warrior", source_id=1, role="tank")],
+        healers=[PlayerIdentity(name=healer_name, player_class="Priest", source_id=2, role="healer")],
+        melee=[PlayerIdentity(name=dps_name, player_class="Rogue", source_id=3, role="melee")],
         ranged=[],
     )
-    healers = [HealerPerformance(
-        name=healer_name, player_class="Priest", source_id=2,
-        total_healing=500_000, total_overhealing=100_000,
-        spells=[], dispels=[], resources=[], fear_ward_casts=0,
-    )]
-    tanks = [TankPerformance(
-        name=tank_name, player_class="Warrior", source_id=1,
-        total_damage_taken=800_000, total_mitigated=600_000,
-        damage_taken_breakdown=[], abilities_used=[],
-    )]
-    dps = [DPSPerformance(
-        name=dps_name, player_class="Rogue", source_id=3,
-        role="melee", total_damage=400_000, abilities=[],
-    )]
+    healers = [
+        HealerPerformance(
+            name=healer_name,
+            player_class="Priest",
+            source_id=2,
+            total_healing=500_000,
+            total_overhealing=100_000,
+            spells=[],
+            dispels=[],
+            resources=[],
+            fear_ward_casts=0,
+        )
+    ]
+    tanks = [
+        TankPerformance(
+            name=tank_name,
+            player_class="Warrior",
+            source_id=1,
+            total_damage_taken=800_000,
+            total_mitigated=600_000,
+            damage_taken_breakdown=[],
+            abilities_used=[],
+        )
+    ]
+    dps = [
+        DPSPerformance(
+            name=dps_name,
+            player_class="Rogue",
+            source_id=3,
+            role="melee",
+            total_damage=400_000,
+            abilities=[],
+        )
+    ]
     encounters = []
     if encounter_id is not None:
-        encounters = [EncounterSummary(
-            encounter_id=encounter_id, name=encounter_name,
-            start_time=12000, end_time=180000, duration_ms=168000,
-            players=[
-                EncounterPerformance(
-                    name=dps_name, player_class="Rogue", source_id=3,
-                    role="melee", total_damage=150_000,
-                    total_healing=0, total_damage_taken=20_000),
-                EncounterPerformance(
-                    name=healer_name, player_class="Priest", source_id=2,
-                    role="healer", total_damage=5_000,
-                    total_healing=120_000, total_damage_taken=15_000),
-                EncounterPerformance(
-                    name=tank_name, player_class="Warrior", source_id=1,
-                    role="tank", total_damage=30_000,
-                    total_healing=0, total_damage_taken=200_000),
-            ],
-        )]
+        encounters = [
+            EncounterSummary(
+                encounter_id=encounter_id,
+                name=encounter_name,
+                start_time=12000,
+                end_time=180000,
+                duration_ms=168000,
+                players=[
+                    EncounterPerformance(
+                        name=dps_name,
+                        player_class="Rogue",
+                        source_id=3,
+                        role="melee",
+                        total_damage=150_000,
+                        total_healing=0,
+                        total_damage_taken=20_000,
+                    ),
+                    EncounterPerformance(
+                        name=healer_name,
+                        player_class="Priest",
+                        source_id=2,
+                        role="healer",
+                        total_damage=5_000,
+                        total_healing=120_000,
+                        total_damage_taken=15_000,
+                    ),
+                    EncounterPerformance(
+                        name=tank_name,
+                        player_class="Warrior",
+                        source_id=1,
+                        role="tank",
+                        total_damage=30_000,
+                        total_healing=0,
+                        total_damage_taken=200_000,
+                    ),
+                ],
+            )
+        ]
     return RaidAnalysis(
-        metadata=metadata, composition=comp,
-        healers=healers, tanks=tanks, dps=dps,
-        consumables=[], encounters=encounters,
+        metadata=metadata,
+        composition=comp,
+        healers=healers,
+        tanks=tanks,
+        dps=dps,
+        consumables=[],
+        encounters=encounters,
     )
 
 
@@ -107,12 +158,12 @@ class TestReferenceImport:
 
 class TestGuildIsolation:
     def test_characters_exclude_reference_only(self, db):
-        db.import_raid(_make_analysis("g1", healer_name="GuildHealer",
-                                      tank_name="GuildTank",
-                                      dps_name="GuildDPS"), source="guild")
-        db.import_raid(_make_analysis("r1", healer_name="RefHealer",
-                                      tank_name="RefTank",
-                                      dps_name="RefDPS"), source="reference")
+        db.import_raid(
+            _make_analysis("g1", healer_name="GuildHealer", tank_name="GuildTank", dps_name="GuildDPS"), source="guild"
+        )
+        db.import_raid(
+            _make_analysis("r1", healer_name="RefHealer", tank_name="RefTank", dps_name="RefDPS"), source="reference"
+        )
 
         chars = db.get_all_characters()
         names = [c.name for c in chars]
@@ -124,10 +175,8 @@ class TestGuildIsolation:
         assert "RefDPS" not in names
 
     def test_character_history_guild_only(self, db):
-        db.import_raid(_make_analysis("g1", healer_name="SharedHealer"),
-                       source="guild")
-        db.import_raid(_make_analysis("r1", healer_name="SharedHealer"),
-                       source="reference")
+        db.import_raid(_make_analysis("g1", healer_name="SharedHealer"), source="guild")
+        db.import_raid(_make_analysis("r1", healer_name="SharedHealer"), source="reference")
 
         history = db.get_character_history("SharedHealer")
         assert history is not None
@@ -152,14 +201,20 @@ class TestGuildIsolation:
     def test_distinct_zones_filters_by_source(self, db):
         g_analysis = _make_analysis("g1")
         g_analysis.metadata = RaidMetadata(
-            report_id="g1", title="G", owner="O",
-            start_time=1_700_000_000_000, end_time=1_700_003_600_000,
+            report_id="g1",
+            title="G",
+            owner="O",
+            start_time=1_700_000_000_000,
+            end_time=1_700_003_600_000,
             zone="Karazhan",
         )
         r_analysis = _make_analysis("r1")
         r_analysis.metadata = RaidMetadata(
-            report_id="r1", title="R", owner="O",
-            start_time=1_700_000_000_000, end_time=1_700_003_600_000,
+            report_id="r1",
+            title="R",
+            owner="O",
+            start_time=1_700_000_000_000,
+            end_time=1_700_003_600_000,
             zone="Gruul's Lair",
         )
         db.import_raid(g_analysis, source="guild")
@@ -173,19 +228,15 @@ class TestGuildIsolation:
         assert "Karazhan" not in ref_zones
 
     def test_healer_trend_guild_only(self, db):
-        db.import_raid(_make_analysis("g1", healer_name="Healer1"),
-                       source="guild")
-        db.import_raid(_make_analysis("r1", healer_name="Healer1"),
-                       source="reference")
+        db.import_raid(_make_analysis("g1", healer_name="Healer1"), source="guild")
+        db.import_raid(_make_analysis("r1", healer_name="Healer1"), source="reference")
 
         trend = db.get_healer_trend("Healer1")
         assert len(trend) == 1
 
     def test_dps_trend_guild_only(self, db):
-        db.import_raid(_make_analysis("g1", dps_name="DPS1"),
-                       source="guild")
-        db.import_raid(_make_analysis("r1", dps_name="DPS1"),
-                       source="reference")
+        db.import_raid(_make_analysis("g1", dps_name="DPS1"), source="guild")
+        db.import_raid(_make_analysis("r1", dps_name="DPS1"), source="reference")
 
         trend = db.get_dps_trend("DPS1")
         assert len(trend) == 1
@@ -402,15 +453,32 @@ class TestGuildRaidsForComparison:
         assert raids[0]["report_id"] == "g1"
 
 
+try:
+    import PySide6  # noqa: F401
+
+    HAS_PYSIDE6 = True
+except ImportError:
+    HAS_PYSIDE6 = False
+
+requires_pyside6 = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not installed")
+
+
+@requires_pyside6
 class TestHeadToHeadHelpers:
     def test_compute_class_performance_groups_by_class_role(self):
         from warcraftlogs_client.gui.reference_view import _compute_class_performance
 
         analysis = _make_analysis("test1")
-        analysis.dps.append(DPSPerformance(
-            name="DPS2", player_class="Rogue", source_id=4,
-            role="melee", total_damage=600_000, abilities=[],
-        ))
+        analysis.dps.append(
+            DPSPerformance(
+                name="DPS2",
+                player_class="Rogue",
+                source_id=4,
+                role="melee",
+                total_damage=600_000,
+                abilities=[],
+            )
+        )
         result = _compute_class_performance(analysis)
 
         rogue_melee = [r for r in result if r["class"] == "Rogue" and r["role"] == "melee"]
@@ -427,15 +495,30 @@ class TestHeadToHeadHelpers:
 
         analysis = _make_analysis("test1")
         analysis.consumables = [
-            ConsumableUsage(player_name="P1", player_role="melee",
-                            report_id="test1", consumable_name="Flask of the Titans",
-                            count=2, timestamps=[]),
-            ConsumableUsage(player_name="P2", player_role="melee",
-                            report_id="test1", consumable_name="Flask of the Titans",
-                            count=1, timestamps=[]),
-            ConsumableUsage(player_name="P1", player_role="melee",
-                            report_id="test1", consumable_name="Mana Potion",
-                            count=3, timestamps=[]),
+            ConsumableUsage(
+                player_name="P1",
+                player_role="melee",
+                report_id="test1",
+                consumable_name="Flask of the Titans",
+                count=2,
+                timestamps=[],
+            ),
+            ConsumableUsage(
+                player_name="P2",
+                player_role="melee",
+                report_id="test1",
+                consumable_name="Flask of the Titans",
+                count=1,
+                timestamps=[],
+            ),
+            ConsumableUsage(
+                player_name="P1",
+                player_role="melee",
+                report_id="test1",
+                consumable_name="Mana Potion",
+                count=3,
+                timestamps=[],
+            ),
         ]
         result = _compute_consumable_summary(analysis)
 
@@ -481,16 +564,30 @@ class TestHeadToHeadHelpers:
         from warcraftlogs_client.gui.reference_view import _compute_class_performance
 
         analysis = _make_analysis("test1")
-        analysis.healers.append(HealerPerformance(
-            name="PalaH", player_class="Paladin", source_id=10,
-            total_healing=300_000, total_overhealing=50_000,
-            spells=[], dispels=[], resources=[], fear_ward_casts=0,
-        ))
-        analysis.tanks.append(TankPerformance(
-            name="PalaT", player_class="Paladin", source_id=11,
-            total_damage_taken=500_000, total_mitigated=350_000,
-            damage_taken_breakdown=[], abilities_used=[],
-        ))
+        analysis.healers.append(
+            HealerPerformance(
+                name="PalaH",
+                player_class="Paladin",
+                source_id=10,
+                total_healing=300_000,
+                total_overhealing=50_000,
+                spells=[],
+                dispels=[],
+                resources=[],
+                fear_ward_casts=0,
+            )
+        )
+        analysis.tanks.append(
+            TankPerformance(
+                name="PalaT",
+                player_class="Paladin",
+                source_id=11,
+                total_damage_taken=500_000,
+                total_mitigated=350_000,
+                damage_taken_breakdown=[],
+                abilities_used=[],
+            )
+        )
         result = _compute_class_performance(analysis)
 
         paladin_rows = [r for r in result if r["class"] == "Paladin"]
@@ -499,18 +596,29 @@ class TestHeadToHeadHelpers:
         assert "tank" in roles
 
 
+@requires_pyside6
 class TestBuildTimelineData:
     def test_returns_per_player_timestamps(self):
         from warcraftlogs_client.gui.analysis_helpers import build_timeline_data
 
         analysis = _make_analysis("t1")
         analysis.consumables = [
-            ConsumableUsage(player_name="P1", player_role="melee",
-                            report_id="t1", consumable_name="Flask",
-                            count=2, timestamps=[5000, 120000]),
-            ConsumableUsage(player_name="P2", player_role="healer",
-                            report_id="t1", consumable_name="Flask",
-                            count=1, timestamps=[3000]),
+            ConsumableUsage(
+                player_name="P1",
+                player_role="melee",
+                report_id="t1",
+                consumable_name="Flask",
+                count=2,
+                timestamps=[5000, 120000],
+            ),
+            ConsumableUsage(
+                player_name="P2",
+                player_role="healer",
+                report_id="t1",
+                consumable_name="Flask",
+                count=1,
+                timestamps=[3000],
+            ),
         ]
         rows = build_timeline_data(analysis, "Flask")
         assert len(rows) == 2
@@ -527,22 +635,27 @@ class TestBuildTimelineData:
         assert build_timeline_data(analysis, "Flask") == []
 
 
+@requires_pyside6
 class TestComputeEngineeringStats:
     def test_computes_min_median_max(self):
         from warcraftlogs_client.gui.analysis_helpers import compute_engineering_stats
 
         analysis = _make_analysis("e1")
         analysis.dps[0].abilities = [
-            SpellUsage(spell_id=1, spell_name="Super Sapper Charge",
-                       casts=4, total_amount=12000),
+            SpellUsage(spell_id=1, spell_name="Super Sapper Charge", casts=4, total_amount=12000),
         ]
-        analysis.dps.append(DPSPerformance(
-            name="DPS2", player_class="Rogue", source_id=4,
-            role="melee", total_damage=500_000, abilities=[
-                SpellUsage(spell_id=1, spell_name="Super Sapper Charge",
-                           casts=4, total_amount=8000),
-            ],
-        ))
+        analysis.dps.append(
+            DPSPerformance(
+                name="DPS2",
+                player_class="Rogue",
+                source_id=4,
+                role="melee",
+                total_damage=500_000,
+                abilities=[
+                    SpellUsage(spell_id=1, spell_name="Super Sapper Charge", casts=4, total_amount=8000),
+                ],
+            )
+        )
         result = compute_engineering_stats(analysis)
         assert "Super Sapper Charge" in result
         stats = result["Super Sapper Charge"]
@@ -558,21 +671,26 @@ class TestComputeEngineeringStats:
 
         analysis = _make_analysis("e1")
         analysis.dps[0].abilities = [
-            SpellUsage(spell_id=1, spell_name="Sinister Strike",
-                       casts=50, total_amount=100000),
+            SpellUsage(spell_id=1, spell_name="Sinister Strike", casts=50, total_amount=100000),
         ]
         assert compute_engineering_stats(analysis) == {}
 
 
+@requires_pyside6
 class TestClassifyConsumableUsage:
     def test_boss_vs_trash_classification(self):
         from warcraftlogs_client.gui.analysis_helpers import classify_consumable_usage
 
         analysis = _make_analysis("c1", encounter_id=658)
         analysis.consumables = [
-            ConsumableUsage(player_name="P1", player_role="melee",
-                            report_id="c1", consumable_name="Destruction Potion",
-                            count=3, timestamps=[15000, 50000, 200000]),
+            ConsumableUsage(
+                player_name="P1",
+                player_role="melee",
+                report_id="c1",
+                consumable_name="Destruction Potion",
+                count=3,
+                timestamps=[15000, 50000, 200000],
+            ),
         ]
         result = classify_consumable_usage(analysis)
         assert "Destruction Potion" in result
@@ -584,15 +702,21 @@ class TestClassifyConsumableUsage:
 
         analysis = _make_analysis("c1")
         analysis.consumables = [
-            ConsumableUsage(player_name="P1", player_role="melee",
-                            report_id="c1", consumable_name="Flask",
-                            count=1, timestamps=[5000]),
+            ConsumableUsage(
+                player_name="P1",
+                player_role="melee",
+                report_id="c1",
+                consumable_name="Flask",
+                count=1,
+                timestamps=[5000],
+            ),
         ]
         result = classify_consumable_usage(analysis)
         assert result["Flask"]["boss"] == 0
         assert result["Flask"]["trash"] == 1
 
 
+@requires_pyside6
 class TestSharedEncounterScoping:
     def _guild_with_extra_encounters(self):
         """Guild with 3 encounters (2 shared + 1 extra), ref with 2."""
@@ -600,26 +724,29 @@ class TestSharedEncounterScoping:
             compute_shared_encounter_window,
             scope_analysis_to_window,
         )
+
         guild = _make_analysis("g1", encounter_id=658, encounter_name="Hydross")
         guild.encounters = [
-            EncounterSummary(encounter_id=658, name="Hydross",
-                             start_time=10000, end_time=50000, duration_ms=40000),
-            EncounterSummary(encounter_id=659, name="Lurker",
-                             start_time=80000, end_time=150000, duration_ms=70000),
-            EncounterSummary(encounter_id=730, name="Void Reaver",
-                             start_time=300000, end_time=400000, duration_ms=100000),
+            EncounterSummary(encounter_id=658, name="Hydross", start_time=10000, end_time=50000, duration_ms=40000),
+            EncounterSummary(encounter_id=659, name="Lurker", start_time=80000, end_time=150000, duration_ms=70000),
+            EncounterSummary(
+                encounter_id=730, name="Void Reaver", start_time=300000, end_time=400000, duration_ms=100000
+            ),
         ]
         guild.consumables = [
-            ConsumableUsage(player_name="P1", player_role="melee",
-                            report_id="g1", consumable_name="Destruction Potion",
-                            count=4, timestamps=[9000, 15000, 90000, 350000]),
+            ConsumableUsage(
+                player_name="P1",
+                player_role="melee",
+                report_id="g1",
+                consumable_name="Destruction Potion",
+                count=4,
+                timestamps=[9000, 15000, 90000, 350000],
+            ),
         ]
         ref = _make_analysis("r1", encounter_id=658, encounter_name="Hydross")
         ref.encounters = [
-            EncounterSummary(encounter_id=658, name="Hydross",
-                             start_time=5000, end_time=45000, duration_ms=40000),
-            EncounterSummary(encounter_id=659, name="Lurker",
-                             start_time=60000, end_time=130000, duration_ms=70000),
+            EncounterSummary(encounter_id=658, name="Hydross", start_time=5000, end_time=45000, duration_ms=40000),
+            EncounterSummary(encounter_id=659, name="Lurker", start_time=60000, end_time=130000, duration_ms=70000),
         ]
         return guild, ref, compute_shared_encounter_window, scope_analysis_to_window
 

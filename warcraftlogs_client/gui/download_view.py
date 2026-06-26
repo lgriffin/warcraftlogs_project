@@ -141,6 +141,7 @@ class DownloadView(QWidget):
         elif not self._auto_fetched:
             try:
                 from ..config import load_config
+
                 config = load_config()
                 guild_id = config.get("guild_id", 0)
                 client_id = config.get("client_id", "")
@@ -153,6 +154,7 @@ class DownloadView(QWidget):
     def _fetch_guild_reports(self):
         try:
             from ..config import load_config
+
             config = load_config()
             guild_id = config.get("guild_id", 774065)
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
@@ -180,6 +182,7 @@ class DownloadView(QWidget):
     def _refresh_cached_codes(self):
         try:
             from ..database import PerformanceDB
+
             with PerformanceDB() as db:
                 self._cached_codes = db.get_imported_report_codes()
         except (sqlite3.Error, OSError):
@@ -201,15 +204,17 @@ class DownloadView(QWidget):
             is_saved = code in self._cached_codes
             if not is_saved:
                 new_count += 1
-            display_rows.append({
-                "date": dt.strftime("%Y-%m-%d %H:%M"),
-                "day": dt.strftime("%a"),
-                "title": r.get("title", ""),
-                "owner": r.get("owner", ""),
-                "zone": r.get("zone", ""),
-                "code": code,
-                "status": "Downloaded" if is_saved else "",
-            })
+            display_rows.append(
+                {
+                    "date": dt.strftime("%Y-%m-%d %H:%M"),
+                    "day": dt.strftime("%a"),
+                    "title": r.get("title", ""),
+                    "owner": r.get("owner", ""),
+                    "zone": r.get("zone", ""),
+                    "code": code,
+                    "status": "Downloaded" if is_saved else "",
+                }
+            )
             if len(display_rows) >= 50:
                 break
 
@@ -234,6 +239,7 @@ class DownloadView(QWidget):
             if code:
                 try:
                     from ..config import load_config
+
                     api_url = load_config().get("wcl_api_url", "")
                 except (FileNotFoundError, json.JSONDecodeError, KeyError):
                     api_url = ""
@@ -248,9 +254,7 @@ class DownloadView(QWidget):
         selected = self._table_model.checked_rows()
         count = len(selected)
         self._analyze_selected_btn.setEnabled(count > 0)
-        self._analyze_selected_btn.setText(
-            f"Analyze Selected ({count})" if count else "Analyze Selected"
-        )
+        self._analyze_selected_btn.setText(f"Analyze Selected ({count})" if count else "Analyze Selected")
 
     def _analyze_selected(self):
         selected = self._table_model.checked_rows()
@@ -310,9 +314,11 @@ class DownloadView(QWidget):
             self._worker.wait()
 
         self._worker = AnalysisWorker(code)
-        self._worker.progress.connect(lambda msg: self._progress_label.setText(
-            f"[{self._batch_total - len(self._batch_queue)}/{self._batch_total}] {msg}"
-        ))
+        self._worker.progress.connect(
+            lambda msg: self._progress_label.setText(
+                f"[{self._batch_total - len(self._batch_queue)}/{self._batch_total}] {msg}"
+            )
+        )
         self._worker.finished.connect(self._on_analysis_finished)
         self._worker.error.connect(self._on_analysis_error)
         self._worker.start()
@@ -320,6 +326,7 @@ class DownloadView(QWidget):
     def _on_analysis_finished(self, analysis):
         try:
             from ..database import PerformanceDB
+
             with PerformanceDB() as db:
                 db.import_raid(analysis)
         except (sqlite3.Error, OSError) as e:
@@ -328,8 +335,7 @@ class DownloadView(QWidget):
         enc_count = len(analysis.encounters) if analysis.encounters else 0
         report_id = analysis.metadata.report_id
         title = analysis.metadata.title
-        self.status_message.emit(
-            f"Saved: {title} ({report_id}) — {enc_count} encounters")
+        self.status_message.emit(f"Saved: {title} ({report_id}) — {enc_count} encounters")
 
         self._refresh_cached_codes()
         self._apply_day_filter()

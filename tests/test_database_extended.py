@@ -1,7 +1,5 @@
 """Extended database tests — analytics queries, raid groups, and edge cases."""
 
-
-
 from warcraftlogs_client.models import (
     ConsumableUsage,
     DPSPerformance,
@@ -15,10 +13,20 @@ from warcraftlogs_client.models import (
 )
 
 
-def _make_analysis(report_id, title, start_time, healing=500_000, damage=400_000,
-                   damage_taken=800_000, mitigated=600_000, consumes_count=3):
+def _make_analysis(
+    report_id,
+    title,
+    start_time,
+    healing=500_000,
+    damage=400_000,
+    damage_taken=800_000,
+    mitigated=600_000,
+    consumes_count=3,
+):
     meta = RaidMetadata(
-        report_id=report_id, title=title, owner="TestGuild",
+        report_id=report_id,
+        title=title,
+        owner="TestGuild",
         start_time=start_time,
     )
     comp = RaidComposition(
@@ -28,28 +36,49 @@ def _make_analysis(report_id, title, start_time, healing=500_000, damage=400_000
         ranged=[],
     )
     return RaidAnalysis(
-        metadata=meta, composition=comp,
-        healers=[HealerPerformance(
-            name="Healer", player_class="Priest", source_id=2,
-            total_healing=healing, total_overhealing=int(healing * 0.2),
-            spells=[SpellUsage(spell_id=2060, spell_name="Greater Heal", casts=50, total_amount=healing)],
-        )],
-        tanks=[TankPerformance(
-            name="Tank", player_class="Warrior", source_id=1,
-            total_damage_taken=damage_taken, total_mitigated=mitigated,
-            damage_taken_breakdown=[SpellUsage(spell_id=1, spell_name="Melee", casts=100)],
-            abilities_used=[SpellUsage(spell_id=6572, spell_name="Revenge", casts=40)],
-        )],
-        dps=[DPSPerformance(
-            name="DPS", player_class="Rogue", source_id=3, role="melee",
-            total_damage=damage,
-            abilities=[SpellUsage(spell_id=1, spell_name="Melee", casts=200, total_amount=damage)],
-        )],
-        consumables=[ConsumableUsage(
-            player_name="Healer", player_role="healer",
-            report_id=report_id, consumable_name="Super Mana Potion",
-            count=consumes_count, timestamps=[60_000, 180_000, 300_000][:consumes_count],
-        )],
+        metadata=meta,
+        composition=comp,
+        healers=[
+            HealerPerformance(
+                name="Healer",
+                player_class="Priest",
+                source_id=2,
+                total_healing=healing,
+                total_overhealing=int(healing * 0.2),
+                spells=[SpellUsage(spell_id=2060, spell_name="Greater Heal", casts=50, total_amount=healing)],
+            )
+        ],
+        tanks=[
+            TankPerformance(
+                name="Tank",
+                player_class="Warrior",
+                source_id=1,
+                total_damage_taken=damage_taken,
+                total_mitigated=mitigated,
+                damage_taken_breakdown=[SpellUsage(spell_id=1, spell_name="Melee", casts=100)],
+                abilities_used=[SpellUsage(spell_id=6572, spell_name="Revenge", casts=40)],
+            )
+        ],
+        dps=[
+            DPSPerformance(
+                name="DPS",
+                player_class="Rogue",
+                source_id=3,
+                role="melee",
+                total_damage=damage,
+                abilities=[SpellUsage(spell_id=1, spell_name="Melee", casts=200, total_amount=damage)],
+            )
+        ],
+        consumables=[
+            ConsumableUsage(
+                player_name="Healer",
+                player_role="healer",
+                report_id=report_id,
+                consumable_name="Super Mana Potion",
+                count=consumes_count,
+                timestamps=[60_000, 180_000, 300_000][:consumes_count],
+            )
+        ],
     )
 
 
@@ -111,10 +140,8 @@ class TestCharacterConsistency:
         assert "damage_consistency" in result
 
     def test_tank_consistency(self, db):
-        db.import_raid(_make_analysis("r1", "Raid 1", 1_700_000_000_000,
-                                      damage_taken=800_000, mitigated=600_000))
-        db.import_raid(_make_analysis("r2", "Raid 2", 1_700_100_000_000,
-                                      damage_taken=900_000, mitigated=700_000))
+        db.import_raid(_make_analysis("r1", "Raid 1", 1_700_000_000_000, damage_taken=800_000, mitigated=600_000))
+        db.import_raid(_make_analysis("r2", "Raid 2", 1_700_100_000_000, damage_taken=900_000, mitigated=700_000))
         result = db.get_character_consistency("Tank")
         assert "mitigation_consistency" in result
 
@@ -257,8 +284,12 @@ class TestMultiRaidTrends:
 
     def test_trend_limit(self, db):
         for i in range(5):
-            db.import_raid(_make_analysis(
-                f"r{i}", f"Raid {i}", 1_700_000_000_000 + i * 100_000_000,
-            ))
+            db.import_raid(
+                _make_analysis(
+                    f"r{i}",
+                    f"Raid {i}",
+                    1_700_000_000_000 + i * 100_000_000,
+                )
+            )
         trend = db.get_healer_trend("Healer", limit=3)
         assert len(trend) == 3

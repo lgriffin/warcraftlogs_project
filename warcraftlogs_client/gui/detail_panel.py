@@ -87,9 +87,9 @@ class CharacterDetailPanel(QWidget):
         header_bar.setFixedHeight(48)
         header_bar.setStyleSheet(f"""
             QWidget {{
-                background-color: {COLORS['bg_card']};
-                border-bottom: 1px solid {COLORS['border']};
-                border-left: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                border-bottom: 1px solid {COLORS["border"]};
+                border-left: 1px solid {COLORS["border"]};
             }}
         """)
         header_layout = QHBoxLayout(header_bar)
@@ -104,15 +104,15 @@ class CharacterDetailPanel(QWidget):
 
         btn_style = f"""
             QPushButton {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 11px;
                 padding: 4px 10px;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['border']};
+                background-color: {COLORS["border"]};
             }}
         """
 
@@ -127,13 +127,13 @@ class CharacterDetailPanel(QWidget):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
-                color: {COLORS['text_dim']};
+                color: {COLORS["text_dim"]};
                 border: none;
                 font-size: 14px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                color: {COLORS['accent']};
+                color: {COLORS["accent"]};
             }}
         """)
         close_btn.clicked.connect(self._on_close)
@@ -146,9 +146,9 @@ class CharacterDetailPanel(QWidget):
         self._summary_label.setWordWrap(True)
         self._summary_label.setStyleSheet(f"""
             QLabel {{
-                color: {COLORS['text_dim']};
-                background-color: {COLORS['bg_card']};
-                border-left: 1px solid {COLORS['border']};
+                color: {COLORS["text_dim"]};
+                background-color: {COLORS["bg_card"]};
+                border-left: 1px solid {COLORS["border"]};
                 padding: 6px 12px;
                 font-size: 11px;
             }}
@@ -159,9 +159,9 @@ class CharacterDetailPanel(QWidget):
         toggle_bar = QWidget()
         toggle_bar.setStyleSheet(f"""
             QWidget {{
-                background-color: {COLORS['bg_card']};
-                border-left: 1px solid {COLORS['border']};
-                border-bottom: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                border-left: 1px solid {COLORS["border"]};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
         """)
         toggle_layout = QHBoxLayout(toggle_bar)
@@ -187,7 +187,7 @@ class CharacterDetailPanel(QWidget):
         self._detail_tabs = QTabWidget()
         self._detail_tabs.setStyleSheet(f"""
             QTabWidget {{
-                border-left: 1px solid {COLORS['border']};
+                border-left: 1px solid {COLORS["border"]};
             }}
         """)
 
@@ -296,8 +296,9 @@ class CharacterDetailPanel(QWidget):
         self._auto_select_tab()
         self.setVisible(True)
 
-    def _show_consumables(self, consumables: list[ConsumableUsage] | None = None,
-                          resource_rows: list[tuple] | None = None):
+    def _show_consumables(
+        self, consumables: list[ConsumableUsage] | None = None, resource_rows: list[tuple] | None = None
+    ):
         rows = []
         has_ts = False
         seen_names: set[str] = set()

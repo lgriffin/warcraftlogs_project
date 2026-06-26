@@ -101,21 +101,25 @@ class RaidsView(QWidget):
         right_layout.addLayout(day_row)
 
         self._boss_summary = QLabel()
-        self._boss_summary.setStyleSheet(
-            f"color: {COLORS['text']}; font-size: 12px; padding: 4px 0;")
+        self._boss_summary.setStyleSheet(f"color: {COLORS['text']}; font-size: 12px; padding: 4px 0;")
         right_layout.addWidget(self._boss_summary)
 
         self._boss_table = QTableWidget()
         self._boss_table.setColumnCount(7)
-        self._boss_table.setHorizontalHeaderLabels([
-            "Name", "Class", "Role", "Avg Damage", "Avg Healing",
-            "Avg Dmg Taken", "Kills",
-        ])
-        self._boss_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch)
+        self._boss_table.setHorizontalHeaderLabels(
+            [
+                "Name",
+                "Class",
+                "Role",
+                "Avg Damage",
+                "Avg Healing",
+                "Avg Dmg Taken",
+                "Kills",
+            ]
+        )
+        self._boss_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 7):
-            self._boss_table.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.ResizeToContents)
+            self._boss_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
         self._boss_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._boss_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._boss_table.setAlternatingRowColors(True)
@@ -151,8 +155,7 @@ class RaidsView(QWidget):
         try:
             with PerformanceDB() as db:
                 day_filter = self._get_selected_day()
-                self._encounters_data = db.get_distinct_encounters(
-                    raid_day=day_filter)
+                self._encounters_data = db.get_distinct_encounters(raid_day=day_filter)
         except (sqlite3.Error, OSError):
             self._encounters_data = []
 
@@ -184,10 +187,8 @@ class RaidsView(QWidget):
 
         try:
             with PerformanceDB() as db:
-                history = db.get_encounter_history(
-                    encounter_id, raid_day=day_filter)
-                breakdown = db.get_encounter_player_breakdown(
-                    encounter_id, raid_day=day_filter)
+                history = db.get_encounter_history(encounter_id, raid_day=day_filter)
+                breakdown = db.get_encounter_player_breakdown(encounter_id, raid_day=day_filter)
         except (sqlite3.Error, OSError) as e:
             self.status_message.emit(f"Error loading boss history: {e}")
             return
@@ -202,7 +203,8 @@ class RaidsView(QWidget):
                 f"Kills: {kill_count}  |  "
                 f"Avg Duration: {avg_s // 60}:{avg_s % 60:02d}  |  "
                 f"Avg Raid Damage: {avg_dmg:,}  |  "
-                f"Avg Raid Healing: {avg_heal:,}")
+                f"Avg Raid Healing: {avg_heal:,}"
+            )
         else:
             self._boss_summary.setText("No kill data")
 
@@ -216,13 +218,11 @@ class RaidsView(QWidget):
                 item = QTableWidgetItem()
                 item.setData(Qt.ItemDataRole.DisplayRole, f"{row[key]:,}")
                 item.setData(Qt.ItemDataRole.UserRole, row[key])
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._boss_table.setItem(i, j + 3, item)
             kills_item = QTableWidgetItem()
             kills_item.setData(Qt.ItemDataRole.DisplayRole, str(row["kills"]))
             kills_item.setData(Qt.ItemDataRole.UserRole, row["kills"])
-            kills_item.setTextAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            kills_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._boss_table.setItem(i, 6, kills_item)
         self._boss_table.setSortingEnabled(True)

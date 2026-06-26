@@ -99,7 +99,8 @@ class TestUserTokenManager:
     @patch("warcraftlogs_client.config.load_config")
     def test_refresh_updates_token(self, mock_config, mock_post, tmp_path):
         mock_config.return_value = {
-            "client_id": "cid", "client_secret": "csec",
+            "client_id": "cid",
+            "client_secret": "csec",
         }
         mock_post.return_value = MagicMock(
             status_code=200,
@@ -124,7 +125,8 @@ class TestUserTokenManager:
     @patch("warcraftlogs_client.config.load_config")
     def test_refresh_failure_revokes(self, mock_config, mock_post, tmp_path):
         mock_config.return_value = {
-            "client_id": "cid", "client_secret": "csec",
+            "client_id": "cid",
+            "client_secret": "csec",
         }
         mock_post.return_value = MagicMock(status_code=401)
 
@@ -139,8 +141,7 @@ class TestUserTokenManager:
             tm.get_token()
         assert not tm.is_authenticated()
 
-    @patch("warcraftlogs_client.user_auth._get_base_url",
-           return_value="https://www.warcraftlogs.com")
+    @patch("warcraftlogs_client.user_auth._get_base_url", return_value="https://www.warcraftlogs.com")
     def test_build_authorize_url(self, _mock_base):
         url = UserTokenManager.build_authorize_url("my_client_id", "my_state", 8764)
         assert "warcraftlogs.com/oauth/authorize" in url
@@ -164,6 +165,7 @@ class TestOAuthCallbackServer:
         server._server = None
 
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -190,6 +192,7 @@ class TestOAuthCallbackServer:
 
     def test_server_handles_error(self):
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]

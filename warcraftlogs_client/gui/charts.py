@@ -68,9 +68,14 @@ def _parse_dates_and_values(trend_data: list[dict], value_key: str) -> list[tupl
     return points
 
 
-def _add_series(chart: QChart, points: list[tuple[datetime, float]],
-                name: str, color_idx: int,
-                x_axis: QDateTimeAxis, y_axis: QValueAxis):
+def _add_series(
+    chart: QChart,
+    points: list[tuple[datetime, float]],
+    name: str,
+    color_idx: int,
+    x_axis: QDateTimeAxis,
+    y_axis: QValueAxis,
+):
     series = QLineSeries()
     series.setName(name)
     pen = QPen(SERIES_COLORS[color_idx % len(SERIES_COLORS)])
@@ -86,8 +91,7 @@ def _add_series(chart: QChart, points: list[tuple[datetime, float]],
     series.attachAxis(y_axis)
 
 
-def _fit_axes(x_axis: QDateTimeAxis, y_axis: QValueAxis,
-              all_points: list[tuple[datetime, float]]):
+def _fit_axes(x_axis: QDateTimeAxis, y_axis: QValueAxis, all_points: list[tuple[datetime, float]]):
     if not all_points:
         return
     dates = [p[0] for p in all_points]
@@ -109,6 +113,7 @@ def make_chart_view(chart: QChart) -> QChartView:
 
 
 # ── Standard summary charts ──
+
 
 def build_healer_chart(trend_data: list[dict]) -> QChartView:
     chart = _make_chart("Healing Performance")
@@ -253,9 +258,13 @@ def build_active_time_chart(trend_data: list[dict]) -> QChartView:
 
 # ── Per-spell/ability multi-series charts ──
 
-def _group_spell_data(spell_trend: list[dict], value_key: str,
-                      top_n: int = 8, name_key: str = "spell_name",
-                      ) -> dict[str, list[tuple[datetime, float]]]:
+
+def _group_spell_data(
+    spell_trend: list[dict],
+    value_key: str,
+    top_n: int = 8,
+    name_key: str = "spell_name",
+) -> dict[str, list[tuple[datetime, float]]]:
     """Group spell trend rows by name, keeping only the top N by total value."""
     totals: dict[str, float] = defaultdict(float)
     for row in spell_trend:
@@ -280,8 +289,7 @@ def _group_spell_data(spell_trend: list[dict], value_key: str,
     return series_data
 
 
-def build_spell_trend_chart(spell_trend: list[dict], value_key: str,
-                            title: str, y_label: str) -> QChartView:
+def build_spell_trend_chart(spell_trend: list[dict], value_key: str, title: str, y_label: str) -> QChartView:
     """Build a multi-series chart with one line per spell/ability."""
     chart = _make_chart(title)
 
@@ -323,8 +331,7 @@ def build_consumable_trend_chart(consumable_trend: list[dict]) -> QChartView:
     _style_axis(y_axis)
     chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
 
-    grouped = _group_spell_data(consumable_trend, "count",
-                                top_n=10, name_key="consumable_name")
+    grouped = _group_spell_data(consumable_trend, "count", top_n=10, name_key="consumable_name")
 
     all_pts = []
     for i, (name, points) in enumerate(grouped.items()):
@@ -344,13 +351,12 @@ def build_consumable_trend_chart(consumable_trend: list[dict]) -> QChartView:
 
 # ── Spider / Radar chart ──
 
+
 class SpiderChartWidget(QWidget):
     """Custom-painted radar chart for multi-dimensional character comparison."""
 
-    LABELS = ["Healing", "Damage", "Mitigation", "Active Time",
-              "Activity", "Consumables", "Consistency"]
-    KEYS = ["healing", "damage", "mitigation", "active_time",
-            "activity", "consumables", "consistency"]
+    LABELS = ["Healing", "Damage", "Mitigation", "Active Time", "Activity", "Consumables", "Consistency"]
+    KEYS = ["healing", "damage", "mitigation", "active_time", "activity", "consumables", "consistency"]
     DESCRIPTIONS = {
         "healing": "Percentile rank of average healing output compared to all tracked characters.",
         "damage": "Percentile rank of average damage output compared to all tracked characters.",
@@ -399,9 +405,7 @@ class SpiderChartWidget(QWidget):
             painter.drawPath(path)
 
         for angle in angles:
-            painter.drawLine(
-                QPointF(cx, cy),
-                QPointF(cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+            painter.drawLine(QPointF(cx, cy), QPointF(cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
 
         label_font = QFont("Segoe UI", 9)
         painter.setFont(label_font)
@@ -521,10 +525,7 @@ class ComparisonSpiderChart(QWidget):
             painter.drawPath(path)
 
         for angle in angles:
-            painter.drawLine(
-                QPointF(cx, cy),
-                QPointF(cx + radius * math.cos(angle),
-                        cy + radius * math.sin(angle)))
+            painter.drawLine(QPointF(cx, cy), QPointF(cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
 
         label_font = QFont("Segoe UI", 9)
         painter.setFont(label_font)
@@ -624,6 +625,7 @@ class ComparisonSpiderChart(QWidget):
 
 
 # ── Calendar Heatmap ──
+
 
 class CalendarHeatmapWidget(QWidget):
     """GitHub-style contribution heatmap colored by raid performance."""
@@ -742,7 +744,7 @@ class CalendarHeatmapWidget(QWidget):
         painter.end()
 
     def mouseMoveEvent(self, event):
-        pos = event.position() if hasattr(event, 'position') else event.pos()
+        pos = event.position() if hasattr(event, "position") else event.pos()
         for rect, date_str, raid in self._cells:
             if rect.contains(pos):
                 if raid:
@@ -757,14 +759,14 @@ class CalendarHeatmapWidget(QWidget):
                         parts.append(f"Damage: {d:,}")
                     if m:
                         parts.append(f"Mitigation: {m:.1f}%")
-                    tip_pos = (event.globalPosition().toPoint()
-                               if hasattr(event, 'globalPosition')
-                               else event.globalPos())
+                    tip_pos = (
+                        event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+                    )
                     QToolTip.showText(tip_pos, "\n".join(parts), self)
                 else:
-                    tip_pos = (event.globalPosition().toPoint()
-                               if hasattr(event, 'globalPosition')
-                               else event.globalPos())
+                    tip_pos = (
+                        event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+                    )
                     QToolTip.showText(tip_pos, f"{date_str}: No raid", self)
                 return
         QToolTip.hideText()
@@ -772,6 +774,7 @@ class CalendarHeatmapWidget(QWidget):
 
 
 # ── Group Performance chart ──
+
 
 def build_group_performance_chart(trend_data: list[dict]) -> QChartView:
     chart = _make_chart("Group Performance Over Time")
@@ -812,8 +815,9 @@ def build_group_performance_chart(trend_data: list[dict]) -> QChartView:
     return make_chart_view(chart)
 
 
-def build_raid_trend_chart(historical: list[dict], selected: dict,
-                           value_key: str, title: str, y_label: str) -> QChartView:
+def build_raid_trend_chart(
+    historical: list[dict], selected: dict, value_key: str, title: str, y_label: str
+) -> QChartView:
     chart = _make_chart(title)
 
     x_axis = QDateTimeAxis()
@@ -930,11 +934,18 @@ def build_class_comparison_chart(trend_data: list[dict], metric_key: str) -> QCh
 
 # ── Insights charts ──
 
-def _make_horizontal_bar_chart(title: str, data: list[dict], name_key: str,
-                                value_key: str, value_label: str,
-                                color_idx: int = 1, top_n: int = 25,
-                                value_format: str = "%d",
-                                max_range: float | None = None) -> QChartView:
+
+def _make_horizontal_bar_chart(
+    title: str,
+    data: list[dict],
+    name_key: str,
+    value_key: str,
+    value_label: str,
+    color_idx: int = 1,
+    top_n: int = 25,
+    value_format: str = "%d",
+    max_range: float | None = None,
+) -> QChartView:
     """Reusable horizontal bar chart builder with proper dark-theme styling."""
     from PySide6.QtCharts import QBarCategoryAxis, QBarSet, QHorizontalBarSeries
 
@@ -1017,9 +1028,15 @@ def build_dps_progression_chart(data: list[dict], top_n: int = 8) -> QChartView:
 
 def build_consistency_chart(data: list[dict], top_n: int = 20) -> QChartView:
     return _make_horizontal_bar_chart(
-        "DPS Consistency (higher = more reliable)", data,
-        "name", "consistency", "Consistency %", color_idx=2, top_n=top_n,
-        max_range=100)
+        "DPS Consistency (higher = more reliable)",
+        data,
+        "name",
+        "consistency",
+        "Consistency %",
+        color_idx=2,
+        top_n=top_n,
+        max_range=100,
+    )
 
 
 def build_heal_damage_ratio_chart(data: list[dict]) -> QChartView:
@@ -1096,8 +1113,8 @@ def build_raid_duration_chart(data: list[dict]) -> QChartView:
 
 def build_attendance_chart(data: list[dict], top_n: int = 25) -> QChartView:
     return _make_horizontal_bar_chart(
-        "Raid Attendance", data, "name", "raid_count",
-        "Raids Attended", color_idx=1, top_n=top_n)
+        "Raid Attendance", data, "name", "raid_count", "Raids Attended", color_idx=1, top_n=top_n
+    )
 
 
 def build_overheal_trend_chart(data: list[dict]) -> QChartView:
@@ -1135,23 +1152,43 @@ def build_overheal_trend_chart(data: list[dict]) -> QChartView:
 
 def build_healer_overheal_bar_chart(data: list[dict]) -> QChartView:
     return _make_horizontal_bar_chart(
-        "Healer Overheal % (lower = more efficient)", data,
-        "name", "avg_overheal", "Overheal %", color_idx=3,
-        top_n=len(data), max_range=100, value_format="%.0f")
+        "Healer Overheal % (lower = more efficient)",
+        data,
+        "name",
+        "avg_overheal",
+        "Overheal %",
+        color_idx=3,
+        top_n=len(data),
+        max_range=100,
+        value_format="%.0f",
+    )
 
 
 def build_dpm_chart(data: list[dict], top_n: int = 20) -> QChartView:
     return _make_horizontal_bar_chart(
-        "Avg Damage Per Minute (duration-normalized)", data,
-        "name", "avg_dpm", "Damage / Min", color_idx=0, top_n=top_n,
-        value_format="%'.0f")
+        "Avg Damage Per Minute (duration-normalized)",
+        data,
+        "name",
+        "avg_dpm",
+        "Damage / Min",
+        color_idx=0,
+        top_n=top_n,
+        value_format="%'.0f",
+    )
 
 
 def build_tank_mitigation_bar_chart(data: list[dict]) -> QChartView:
     return _make_horizontal_bar_chart(
-        "Tank Avg Mitigation %", data,
-        "name", "avg_mitigation", "Mitigation %", color_idx=4,
-        top_n=len(data), max_range=100, value_format="%.0f")
+        "Tank Avg Mitigation %",
+        data,
+        "name",
+        "avg_mitigation",
+        "Mitigation %",
+        color_idx=4,
+        top_n=len(data),
+        max_range=100,
+        value_format="%.0f",
+    )
 
 
 class ConsumableHeatmapWidget(QWidget):
@@ -1243,13 +1280,11 @@ class ConsumableHeatmapWidget(QWidget):
         painter.end()
 
     def mouseMoveEvent(self, event):
-        pos = event.position() if hasattr(event, 'position') else event.pos()
+        pos = event.position() if hasattr(event, "position") else event.pos()
         for rect, char_name, con_name, val in self._cells:
             if rect.contains(pos):
                 tip = f"{char_name}: {con_name}\nAvg per raid: {val:.1f}"
-                tip_pos = (event.globalPosition().toPoint()
-                           if hasattr(event, 'globalPosition')
-                           else event.globalPos())
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
                 QToolTip.showText(tip_pos, tip, self)
                 return
         QToolTip.hideText()
@@ -1280,8 +1315,7 @@ class ConsumableTimelineHeatmap(QWidget):
         if not players or total_minutes == 0:
             painter.setPen(QColor(COLORS["text_dim"]))
             painter.setFont(QFont("Segoe UI", 11))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                             "No usage data for this consumable")
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No usage data for this consumable")
             painter.end()
             return
 
@@ -1344,13 +1378,11 @@ class ConsumableTimelineHeatmap(QWidget):
         painter.end()
 
     def mouseMoveEvent(self, event):
-        pos = event.position() if hasattr(event, 'position') else event.pos()
+        pos = event.position() if hasattr(event, "position") else event.pos()
         for rect, player, minute, val in self._cells:
             if rect.contains(pos):
                 tip = f"{player}\n{minute}:00-{minute + 1}:00 - {val} use{'s' if val != 1 else ''}"
-                tip_pos = (event.globalPosition().toPoint()
-                           if hasattr(event, 'globalPosition')
-                           else event.globalPos())
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
                 QToolTip.showText(tip_pos, tip, self)
                 return
         QToolTip.hideText()
@@ -1374,8 +1406,7 @@ class OverlayTimelineHeatmap(QWidget):
             total_rows += 1
         cell_h, gap, top_margin = 20, 1, 28
         legend_h = 20
-        self.setMinimumHeight(
-            top_margin + max(total_rows, 1) * (cell_h + gap) + legend_h + 10)
+        self.setMinimumHeight(top_margin + max(total_rows, 1) * (cell_h + gap) + legend_h + 10)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1393,8 +1424,7 @@ class OverlayTimelineHeatmap(QWidget):
         if (not g_players and not r_players) or total_minutes == 0:
             painter.setPen(QColor(COLORS["text_dim"]))
             painter.setFont(QFont("Segoe UI", 11))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                             "No usage data for this consumable")
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No usage data for this consumable")
             painter.end()
             return
 
@@ -1500,15 +1530,11 @@ class OverlayTimelineHeatmap(QWidget):
         painter.end()
 
     def mouseMoveEvent(self, event):
-        pos = event.position() if hasattr(event, 'position') else event.pos()
+        pos = event.position() if hasattr(event, "position") else event.pos()
         for rect, player, source, minute, val in self._cells:
             if rect.contains(pos):
-                tip = (f"{player} ({source})\n"
-                       f"{minute}:00-{minute + 1}:00 - "
-                       f"{val} use{'s' if val != 1 else ''}")
-                tip_pos = (event.globalPosition().toPoint()
-                           if hasattr(event, 'globalPosition')
-                           else event.globalPos())
+                tip = f"{player} ({source})\n{minute}:00-{minute + 1}:00 - {val} use{'s' if val != 1 else ''}"
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
                 QToolTip.showText(tip_pos, tip, self)
                 return
         QToolTip.hideText()

@@ -99,8 +99,8 @@ class _MetricCard(QFrame):
         super().__init__(parent)
         self.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 6px;
                 padding: 12px;
             }}
@@ -133,8 +133,7 @@ class _MetricCard(QFrame):
         self._delta_lbl.setStyleSheet("border: none;")
         layout.addWidget(self._delta_lbl)
 
-    def set_values(self, guild_val, ref_val, fmt: str = "{:,.0f}",
-                   higher_is_better: bool = True):
+    def set_values(self, guild_val, ref_val, fmt: str = "{:,.0f}", higher_is_better: bool = True):
         if guild_val is not None:
             self._guild_lbl.setText(f"Guild: {fmt.format(guild_val)}")
         else:
@@ -158,10 +157,15 @@ class _MetricCard(QFrame):
 
 class _EncounterComparisonModel(QAbstractTableModel):
     HEADERS = [
-        "Boss", "Guild Kills", "Ref Kills",
-        "Guild Avg Duration", "Ref Avg Duration",
-        "Guild Avg Damage", "Ref Avg Damage",
-        "Guild Avg Healing", "Ref Avg Healing",
+        "Boss",
+        "Guild Kills",
+        "Ref Kills",
+        "Guild Avg Duration",
+        "Ref Avg Duration",
+        "Guild Avg Damage",
+        "Ref Avg Damage",
+        "Guild Avg Healing",
+        "Ref Avg Healing",
     ]
 
     def __init__(self, parent=None):
@@ -231,6 +235,7 @@ class _EncounterComparisonModel(QAbstractTableModel):
 
 class _AuthWaitThread(QThread):
     """Waits for OAuth callback server result in a background thread."""
+
     auth_complete = Signal(str)
     auth_error = Signal(str)
 
@@ -283,19 +288,19 @@ class ReferenceView(QWidget):
         self._tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: none;
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
             QTabBar::tab {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text_dim']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text_dim"]};
                 padding: 10px 24px;
                 border: none;
                 font-size: 13px;
             }}
             QTabBar::tab:selected {{
-                background-color: {COLORS['bg_dark']};
-                color: {COLORS['text_header']};
-                border-bottom: 2px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                color: {COLORS["text_header"]};
+                border-bottom: 2px solid {COLORS["accent"]};
             }}
         """)
 
@@ -362,8 +367,7 @@ class ReferenceView(QWidget):
         layout.addLayout(import_row)
 
         self._progress_label = QLabel("")
-        self._progress_label.setStyleSheet(
-            f"color: {COLORS['accent']}; font-size: 12px; font-weight: bold;")
+        self._progress_label.setStyleSheet(f"color: {COLORS['accent']}; font-size: 12px; font-weight: bold;")
         self._progress_label.setVisible(False)
         layout.addWidget(self._progress_label)
 
@@ -374,8 +378,7 @@ class ReferenceView(QWidget):
         self._ref_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self._ref_table.verticalHeader().setVisible(False)
         self._ref_table.horizontalHeader().setStretchLastSection(True)
-        self._ref_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
+        self._ref_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._ref_table.doubleClicked.connect(self._on_raid_double_clicked)
         layout.addWidget(self._ref_table, 1)
 
@@ -391,8 +394,7 @@ class ReferenceView(QWidget):
         layout.addLayout(btn_row)
 
         self._summary_label = QLabel("")
-        self._summary_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 11px;")
+        self._summary_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
         layout.addWidget(self._summary_label)
 
         return tab
@@ -463,18 +465,14 @@ class ReferenceView(QWidget):
         self._encounter_table = QTableView()
         self._encounter_table.setModel(self._encounter_model)
         self._encounter_table.setAlternatingRowColors(True)
-        self._encounter_table.setSelectionBehavior(
-            QTableView.SelectionBehavior.SelectRows)
+        self._encounter_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self._encounter_table.verticalHeader().setVisible(False)
         self._encounter_table.horizontalHeader().setStretchLastSection(True)
-        self._encounter_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
+        self._encounter_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self._encounter_table, 1)
 
-        self._no_data_label = QLabel(
-            "Import reference reports in the Manage tab to see comparison data.")
-        self._no_data_label.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 13px;")
+        self._no_data_label = QLabel("Import reference reports in the Manage tab to see comparison data.")
+        self._no_data_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 13px;")
         self._no_data_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._no_data_label)
 
@@ -526,9 +524,10 @@ class ReferenceView(QWidget):
                 existing_source = db.get_raid_source(report_id)
                 if existing_source:
                     QMessageBox.warning(
-                        self, "Already Imported",
-                        f"Report {report_id} is already imported as a "
-                        f"{existing_source} report.")
+                        self,
+                        "Already Imported",
+                        f"Report {report_id} is already imported as a {existing_source} report.",
+                    )
                     return
         except (sqlite3.Error, OSError):
             pass
@@ -536,7 +535,8 @@ class ReferenceView(QWidget):
         user_tm = UserTokenManager()
         if not user_tm.is_authenticated():
             reply = QMessageBox.question(
-                self, "Authentication Required",
+                self,
+                "Authentication Required",
                 "WarcraftLogs user authentication is required to access "
                 "other guilds' report data.\n\n"
                 "Click Yes to open your browser and authenticate.",
@@ -561,9 +561,10 @@ class ReferenceView(QWidget):
     def _on_auth_required(self):
         self._set_importing(False)
         QMessageBox.warning(
-            self, "Authentication Required",
-            "Your WarcraftLogs session has expired.\n"
-            "Please authenticate again using the button above.")
+            self,
+            "Authentication Required",
+            "Your WarcraftLogs session has expired.\nPlease authenticate again using the button above.",
+        )
 
     def _set_importing(self, busy: bool, message: str = ""):
         self._import_btn.setEnabled(not busy)
@@ -598,13 +599,13 @@ class ReferenceView(QWidget):
         self.status_message.emit(
             f"Imported '{analysis.metadata.title}' — "
             f"{healer_count} healers, {tank_count} tanks, {dps_count} DPS, "
-            f"{enc_count} encounters")
+            f"{enc_count} encounters"
+        )
 
     def _on_analysis_error(self, error_msg: str):
         self._set_importing(False)
         self.status_message.emit(f"Analysis failed: {error_msg}")
-        QMessageBox.warning(self, "Import Failed",
-                            f"Failed to download report:\n{error_msg}")
+        QMessageBox.warning(self, "Import Failed", f"Failed to download report:\n{error_msg}")
 
     # ── Auth flow ──
 
@@ -629,11 +630,11 @@ class ReferenceView(QWidget):
 
         try:
             from ..config import load_config
+
             config = load_config()
             client_id = config["client_id"]
         except Exception as e:
-            QMessageBox.warning(self, "Configuration Error",
-                                f"Could not load API credentials:\n{e}")
+            QMessageBox.warning(self, "Configuration Error", f"Could not load API credentials:\n{e}")
             return
 
         self._auth_btn.setEnabled(False)
@@ -642,8 +643,7 @@ class ReferenceView(QWidget):
 
         self._oauth_server, self._oauth_state = start_oauth_flow(client_id)
 
-        self._auth_wait_thread = _AuthWaitThread(
-            self._oauth_server, self._oauth_state)
+        self._auth_wait_thread = _AuthWaitThread(self._oauth_server, self._oauth_state)
         self._auth_wait_thread.auth_complete.connect(self._on_auth_complete)
         self._auth_wait_thread.auth_error.connect(self._on_auth_error)
         self._auth_wait_thread.start()
@@ -651,14 +651,14 @@ class ReferenceView(QWidget):
     def _on_auth_complete(self, code: str):
         try:
             from ..config import load_config
+
             config = load_config()
             user_tm = UserTokenManager()
             user_tm.complete_auth(code, config["client_id"], config["client_secret"])
         except Exception as e:
             self._auth_btn.setEnabled(True)
             self._update_auth_status()
-            QMessageBox.warning(self, "Authentication Failed",
-                                f"Token exchange failed:\n{e}")
+            QMessageBox.warning(self, "Authentication Failed", f"Token exchange failed:\n{e}")
             return
 
         self._auth_btn.setEnabled(True)
@@ -690,7 +690,8 @@ class ReferenceView(QWidget):
             return
 
         reply = QMessageBox.question(
-            self, "Delete Reference Report",
+            self,
+            "Delete Reference Report",
             f"Delete reference report {report_id}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -719,8 +720,7 @@ class ReferenceView(QWidget):
         if count:
             dates = [r.get("raid_date", "")[:10] for r in raids if r.get("raid_date")]
             date_range = f"{min(dates)} to {max(dates)}" if dates else ""
-            self._summary_label.setText(
-                f"{count} reference report{'s' if count != 1 else ''} | {date_range}")
+            self._summary_label.setText(f"{count} reference report{'s' if count != 1 else ''} | {date_range}")
         else:
             self._summary_label.setText("No reference reports imported yet.")
 
@@ -769,19 +769,13 @@ class ReferenceView(QWidget):
         has_data = guild.get("raid_count", 0) > 0 and ref.get("raid_count", 0) > 0
         self._no_data_label.setVisible(not has_data)
 
-        self._card_dps.set_values(
-            guild.get("avg_damage"), ref.get("avg_damage"))
-        self._card_healing.set_values(
-            guild.get("avg_healing"), ref.get("avg_healing"))
+        self._card_dps.set_values(guild.get("avg_damage"), ref.get("avg_damage"))
+        self._card_healing.set_values(guild.get("avg_healing"), ref.get("avg_healing"))
         self._card_overheal.set_values(
-            guild.get("avg_overheal"), ref.get("avg_overheal"),
-            fmt="{:.1f}%", higher_is_better=False)
-        self._card_mitigation.set_values(
-            guild.get("avg_mitigation"), ref.get("avg_mitigation"),
-            fmt="{:.1f}%")
-        self._card_raids.set_values(
-            guild.get("raid_count"), ref.get("raid_count"),
-            fmt="{:.0f}", higher_is_better=True)
+            guild.get("avg_overheal"), ref.get("avg_overheal"), fmt="{:.1f}%", higher_is_better=False
+        )
+        self._card_mitigation.set_values(guild.get("avg_mitigation"), ref.get("avg_mitigation"), fmt="{:.1f}%")
+        self._card_raids.set_values(guild.get("raid_count"), ref.get("raid_count"), fmt="{:.0f}", higher_is_better=True)
 
         self._refresh_encounter_table()
 
@@ -792,11 +786,13 @@ class ReferenceView(QWidget):
                 rows = []
                 for enc in common:
                     comparison = db.get_encounter_comparison(enc["encounter_id"])
-                    rows.append({
-                        "name": enc["name"],
-                        "guild": comparison.get("guild", {}),
-                        "reference": comparison.get("reference", {}),
-                    })
+                    rows.append(
+                        {
+                            "name": enc["name"],
+                            "guild": comparison.get("guild", {}),
+                            "reference": comparison.get("reference", {}),
+                        }
+                    )
         except (sqlite3.Error, OSError):
             rows = []
 
@@ -804,6 +800,7 @@ class ReferenceView(QWidget):
 
 
 # ── Head-to-Head comparison helpers ──
+
 
 def _compute_class_performance(analysis):
     """Aggregate performance by (class, role) from a RaidAnalysis."""
@@ -817,12 +814,14 @@ def _compute_class_performance(analysis):
 
     results = []
     for (cls, role), values in sorted(by_class_role.items()):
-        results.append({
-            "class": cls,
-            "role": role,
-            "count": len(values),
-            "avg_metric": sum(values) / len(values) if values else 0,
-        })
+        results.append(
+            {
+                "class": cls,
+                "role": role,
+                "count": len(values),
+                "avg_metric": sum(values) / len(values) if values else 0,
+            }
+        )
     return results
 
 
@@ -848,7 +847,7 @@ def _match_encounters(guild_analysis, ref_analysis):
     def _build_enc_data(encounters):
         by_id = {}
         by_name = {}
-        for e in (encounters or []):
+        for e in encounters or []:
             total_dmg = sum(p.total_damage for p in e.players) if e.players else 0
             total_heal = sum(p.total_healing for p in e.players) if e.players else 0
             data = {
@@ -868,26 +867,31 @@ def _match_encounters(guild_analysis, ref_analysis):
     rows = []
     matched_names = set()
     for eid in sorted(shared_ids):
-        rows.append({
-            "name": guild_by_id[eid]["name"],
-            "guild": guild_by_id[eid],
-            "ref": ref_by_id[eid],
-        })
+        rows.append(
+            {
+                "name": guild_by_id[eid]["name"],
+                "guild": guild_by_id[eid],
+                "ref": ref_by_id[eid],
+            }
+        )
         matched_names.add(guild_by_id[eid]["name"])
 
     # Fallback: match remaining encounters by boss name
     for name in sorted(set(guild_by_name.keys()) & set(ref_by_name.keys())):
         if name not in matched_names:
-            rows.append({
-                "name": name,
-                "guild": guild_by_name[name],
-                "ref": ref_by_name[name],
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "guild": guild_by_name[name],
+                    "ref": ref_by_name[name],
+                }
+            )
 
     return rows
 
 
 # ── Head-to-Head table models ──
+
 
 class _ClassComparisonModel(QAbstractTableModel):
     HEADERS = ["Class", "Role", "Guild #", "Ref #", "Guild Avg", "Ref Avg", "Delta %"]
@@ -935,8 +939,7 @@ class _ClassComparisonModel(QAbstractTableModel):
                 return self._fmt_delta(row.get("guild_avg"), row.get("ref_avg"))
         elif role == Qt.ItemDataRole.ForegroundRole:
             if col == 6:
-                return self._delta_color(row.get("guild_avg"), row.get("ref_avg"),
-                                         row.get("role") != "tank")
+                return self._delta_color(row.get("guild_avg"), row.get("ref_avg"), row.get("role") != "tank")
             return QColor(COLORS["text"])
         return None
 
@@ -1023,8 +1026,13 @@ class _ConsumableComparisonModel(QAbstractTableModel):
 
 class _H2HEncounterModel(QAbstractTableModel):
     HEADERS = [
-        "Boss", "Guild Duration", "Ref Duration",
-        "Guild Dmg", "Ref Dmg", "Guild Healing", "Ref Healing",
+        "Boss",
+        "Guild Duration",
+        "Ref Duration",
+        "Guild Dmg",
+        "Ref Dmg",
+        "Guild Healing",
+        "Ref Healing",
     ]
 
     def __init__(self, parent=None):
@@ -1115,8 +1123,7 @@ class _ConsumableComparisonChart(QWidget):
         if not self._rows:
             painter.setPen(QColor(COLORS["text_dim"]))
             painter.setFont(QFont("Segoe UI", 11))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                             "No consumable data")
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No consumable data")
             painter.end()
             return
 
@@ -1148,9 +1155,7 @@ class _ConsumableComparisonChart(QWidget):
         # Bars
         top_y = legend_y + 22
         bar_area_w = w - self.NAME_COL_WIDTH - self.RIGHT_MARGIN
-        max_val = max(
-            (max(r.get("guild_uses", 0), r.get("ref_uses", 0))
-             for r in self._rows), default=1) or 1
+        max_val = max((max(r.get("guild_uses", 0), r.get("ref_uses", 0)) for r in self._rows), default=1) or 1
 
         for i, row in enumerate(self._rows):
             y = top_y + i * self.ROW_HEIGHT
@@ -1169,34 +1174,34 @@ class _ConsumableComparisonChart(QWidget):
             bar_x = self.NAME_COL_WIDTH
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(self.GUILD_COLOR))
-            painter.drawRoundedRect(
-                QRectF(bar_x, y + 2, max(g_w, 1), self.BAR_HEIGHT), 2, 2)
+            painter.drawRoundedRect(QRectF(bar_x, y + 2, max(g_w, 1), self.BAR_HEIGHT), 2, 2)
 
             # Ref bar
             r_val = row.get("ref_uses", 0)
             r_w = (r_val / max_val) * bar_area_w if max_val > 0 else 0
             painter.setBrush(QBrush(self.REF_COLOR))
-            painter.drawRoundedRect(
-                QRectF(bar_x, y + 2 + self.BAR_HEIGHT + 2,
-                       max(r_w, 1), self.BAR_HEIGHT), 2, 2)
+            painter.drawRoundedRect(QRectF(bar_x, y + 2 + self.BAR_HEIGHT + 2, max(r_w, 1), self.BAR_HEIGHT), 2, 2)
 
             # Value labels
             painter.setFont(value_font)
             painter.setPen(QColor(COLORS["text"]))
-            painter.drawText(int(bar_x + g_w + 4), int(y + 2 + self.BAR_HEIGHT - 2),
-                             str(g_val))
-            painter.drawText(int(bar_x + r_w + 4),
-                             int(y + 2 + self.BAR_HEIGHT + 2 + self.BAR_HEIGHT - 2),
-                             str(r_val))
+            painter.drawText(int(bar_x + g_w + 4), int(y + 2 + self.BAR_HEIGHT - 2), str(g_val))
+            painter.drawText(int(bar_x + r_w + 4), int(y + 2 + self.BAR_HEIGHT + 2 + self.BAR_HEIGHT - 2), str(r_val))
 
         painter.end()
 
 
 class _EngineeringComparisonModel(QAbstractTableModel):
     HEADERS = [
-        "Item", "Guild Casts", "Ref Casts",
-        "Guild Min", "Guild Med", "Guild Max",
-        "Ref Min", "Ref Med", "Ref Max",
+        "Item",
+        "Guild Casts",
+        "Ref Casts",
+        "Guild Min",
+        "Guild Med",
+        "Guild Max",
+        "Ref Min",
+        "Ref Med",
+        "Ref Max",
     ]
 
     def __init__(self, parent=None):
@@ -1305,6 +1310,7 @@ class _BossTrashModel(QAbstractTableModel):
 
 # ── Head-to-Head panel ──
 
+
 class _HeadToHeadPanel(QWidget):
     status_message = Signal(str)
 
@@ -1361,10 +1367,10 @@ class _HeadToHeadPanel(QWidget):
         self._scroll.setStyleSheet(f"""
             QScrollArea {{
                 border: none;
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
             QScrollArea > QWidget > QWidget {{
-                background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_dark"]};
             }}
         """)
         self._content = QWidget()
@@ -1374,8 +1380,7 @@ class _HeadToHeadPanel(QWidget):
         self._content_layout.setSpacing(16)
 
         self._placeholder = QLabel("Select two raids and click Compare.")
-        self._placeholder.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 13px;")
+        self._placeholder.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 13px;")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._content_layout.addWidget(self._placeholder)
         self._content_layout.addStretch()
@@ -1432,8 +1437,7 @@ class _HeadToHeadPanel(QWidget):
                 self._guild_combo.setCurrentIndex(idx)
         self._guild_combo.blockSignals(False)
 
-        self._compare_btn.setEnabled(
-            self._ref_combo.count() > 0 and self._guild_combo.count() > 0)
+        self._compare_btn.setEnabled(self._ref_combo.count() > 0 and self._guild_combo.count() > 0)
 
     def _run_comparison(self):
         ref_id = self._ref_combo.currentData(Qt.ItemDataRole.UserRole)
@@ -1452,15 +1456,11 @@ class _HeadToHeadPanel(QWidget):
             return
 
         if not ref_analysis or not guild_analysis:
-            QMessageBox.warning(self, "Error",
-                                "Could not load one or both raids from the database.")
+            QMessageBox.warning(self, "Error", "Could not load one or both raids from the database.")
             return
 
-        self._display_comparison(guild_analysis, ref_analysis,
-                                 guild_stats or {}, ref_stats or {})
-        self.status_message.emit(
-            f"Comparing '{guild_analysis.metadata.title}' vs "
-            f"'{ref_analysis.metadata.title}'")
+        self._display_comparison(guild_analysis, ref_analysis, guild_stats or {}, ref_stats or {})
+        self.status_message.emit(f"Comparing '{guild_analysis.metadata.title}' vs '{ref_analysis.metadata.title}'")
 
     def _clear_content(self):
         old = self._scroll.takeWidget()
@@ -1481,11 +1481,9 @@ class _HeadToHeadPanel(QWidget):
         scoped_guild = guild
         is_scoped = False
 
-        if (scope_info and scope_info["has_extra_encounters"]
-                and scope_info["window_start"] is not None):
+        if scope_info and scope_info["has_extra_encounters"] and scope_info["window_start"] is not None:
             is_scoped = True
-            scoped_guild = scope_analysis_to_window(
-                guild, scope_info["window_start"], scope_info["window_end"])
+            scoped_guild = scope_analysis_to_window(guild, scope_info["window_start"], scope_info["window_end"])
 
             extra_names = ", ".join(scope_info["guild_extra_names"])
             banner = QFrame()
@@ -1493,25 +1491,25 @@ class _HeadToHeadPanel(QWidget):
                 f"QFrame {{ background-color: {COLORS['bg_card']};"
                 f" border: 1px solid {COLORS['warning']};"
                 f" border-left: 4px solid {COLORS['warning']};"
-                f" border-radius: 4px; }}")
+                f" border-radius: 4px; }}"
+            )
             banner_layout = QVBoxLayout(banner)
             banner_layout.setContentsMargins(12, 8, 12, 8)
             banner_layout.setSpacing(4)
 
             title_lbl = QLabel("Comparison Scoped to Shared Encounters")
             title_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-            title_lbl.setStyleSheet(
-                f"color: {COLORS['warning']}; border: none;")
+            title_lbl.setStyleSheet(f"color: {COLORS['warning']}; border: none;")
             banner_layout.addWidget(title_lbl)
 
             detail_lbl = QLabel(
                 f"Guild raid has encounters not in the reference: {extra_names}. "
                 f"Consumable data is scoped to the shared encounter window. "
                 f"Class Performance, Engineering, and aggregate stats cover "
-                f"the full raid.")
+                f"the full raid."
+            )
             detail_lbl.setWordWrap(True)
-            detail_lbl.setStyleSheet(
-                f"color: {COLORS['text']}; font-size: 12px; border: none;")
+            detail_lbl.setStyleSheet(f"color: {COLORS['text']}; font-size: 12px; border: none;")
             banner_layout.addWidget(detail_lbl)
             layout.addWidget(banner)
 
@@ -1525,11 +1523,11 @@ class _HeadToHeadPanel(QWidget):
         g_dur = guild_stats.get("duration_ms")
         r_dur = ref_stats.get("duration_ms")
         if g_dur is not None:
-            g_dur_fmt = f"{int(g_dur/1000)//60}:{int(g_dur/1000)%60:02d}"
+            g_dur_fmt = f"{int(g_dur / 1000) // 60}:{int(g_dur / 1000) % 60:02d}"
         else:
             g_dur_fmt = None
         if r_dur is not None:
-            r_dur_fmt = f"{int(r_dur/1000)//60}:{int(r_dur/1000)%60:02d}"
+            r_dur_fmt = f"{int(r_dur / 1000) // 60}:{int(r_dur / 1000) % 60:02d}"
         else:
             r_dur_fmt = None
         duration_card._guild_lbl.setText(f"Guild: {g_dur_fmt or '—'}")
@@ -1543,23 +1541,18 @@ class _HeadToHeadPanel(QWidget):
             duration_card._delta_lbl.setStyleSheet(f"color: {color}; border: none;")
 
         damage_card = _MetricCard("Total Damage")
-        damage_card.set_values(
-            guild_stats.get("total_damage"), ref_stats.get("total_damage"))
+        damage_card.set_values(guild_stats.get("total_damage"), ref_stats.get("total_damage"))
 
         healing_card = _MetricCard("Total Healing")
-        healing_card.set_values(
-            guild_stats.get("total_healing"), ref_stats.get("total_healing"))
+        healing_card.set_values(guild_stats.get("total_healing"), ref_stats.get("total_healing"))
 
         size_card = _MetricCard("Raid Size")
-        size_card.set_values(
-            guild_stats.get("raid_size"), ref_stats.get("raid_size"),
-            fmt="{:.0f}")
+        size_card.set_values(guild_stats.get("raid_size"), ref_stats.get("raid_size"), fmt="{:.0f}")
 
         taken_card = _MetricCard("Damage Taken")
         taken_card.set_values(
-            guild_stats.get("total_damage_taken"),
-            ref_stats.get("total_damage_taken"),
-            higher_is_better=False)
+            guild_stats.get("total_damage_taken"), ref_stats.get("total_damage_taken"), higher_is_better=False
+        )
 
         dps_count_g = len(guild.dps) if guild.dps else 1
         dps_count_r = len(ref.dps) if ref.dps else 1
@@ -1642,14 +1635,16 @@ class _HeadToHeadPanel(QWidget):
         for key in all_keys:
             gp = guild_map.get(key, {})
             rp = ref_map.get(key, {})
-            class_rows.append({
-                "class": key[0],
-                "role": key[1],
-                "guild_count": gp.get("count", 0),
-                "ref_count": rp.get("count", 0),
-                "guild_avg": gp.get("avg_metric"),
-                "ref_avg": rp.get("avg_metric"),
-            })
+            class_rows.append(
+                {
+                    "class": key[0],
+                    "role": key[1],
+                    "guild_count": gp.get("count", 0),
+                    "ref_count": rp.get("count", 0),
+                    "guild_avg": gp.get("avg_metric"),
+                    "ref_avg": rp.get("avg_metric"),
+                }
+            )
 
         self._class_model = _ClassComparisonModel()
         self._class_model.set_data(class_rows)
@@ -1681,13 +1676,15 @@ class _HeadToHeadPanel(QWidget):
             for name in all_consumables:
                 gc = guild_cons.get(name, {})
                 rc = ref_cons.get(name, {})
-                cons_rows.append({
-                    "name": name,
-                    "guild_uses": gc.get("total_uses", 0),
-                    "guild_users": gc.get("unique_users", 0),
-                    "ref_uses": rc.get("total_uses", 0),
-                    "ref_users": rc.get("unique_users", 0),
-                })
+                cons_rows.append(
+                    {
+                        "name": name,
+                        "guild_uses": gc.get("total_uses", 0),
+                        "guild_users": gc.get("unique_users", 0),
+                        "ref_uses": rc.get("total_uses", 0),
+                        "ref_users": rc.get("unique_users", 0),
+                    }
+                )
             cons_rows.sort(key=lambda r: r["guild_uses"] + r["ref_uses"], reverse=True)
 
             self._cons_model = _ConsumableComparisonModel()
@@ -1713,8 +1710,7 @@ class _HeadToHeadPanel(QWidget):
         bt_export_btn.setProperty("secondary", True)
         bt_export_btn.setFixedHeight(28)
         bt_export_btn.setFixedWidth(80)
-        bt_export_btn.clicked.connect(
-            lambda: self._export_table("_bt_table", "boss_vs_trash.png"))
+        bt_export_btn.clicked.connect(lambda: self._export_table("_bt_table", "boss_vs_trash.png"))
         bt_header_row.addWidget(bt_export_btn)
         layout.addLayout(bt_header_row)
 
@@ -1727,13 +1723,15 @@ class _HeadToHeadPanel(QWidget):
             for name in all_bt_names:
                 gb = guild_bt.get(name, {})
                 rb = ref_bt.get(name, {})
-                bt_rows.append({
-                    "name": name,
-                    "guild_boss": gb.get("boss", 0),
-                    "guild_trash": gb.get("trash", 0),
-                    "ref_boss": rb.get("boss", 0),
-                    "ref_trash": rb.get("trash", 0),
-                })
+                bt_rows.append(
+                    {
+                        "name": name,
+                        "guild_boss": gb.get("boss", 0),
+                        "guild_trash": gb.get("trash", 0),
+                        "ref_boss": rb.get("boss", 0),
+                        "ref_trash": rb.get("trash", 0),
+                    }
+                )
             bt_rows.sort(key=lambda r: r["guild_boss"] + r["ref_boss"], reverse=True)
             self._bt_model = _BossTrashModel()
             self._bt_model.set_data(bt_rows)
@@ -1745,7 +1743,8 @@ class _HeadToHeadPanel(QWidget):
             bt_export_btn.setEnabled(False)
             no_bt = QLabel(
                 "No encounter data available — cannot classify boss vs trash usage. "
-                "Re-import raids to capture encounter data.")
+                "Re-import raids to capture encounter data."
+            )
             no_bt.setWordWrap(True)
             no_bt.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             layout.addWidget(no_bt)
@@ -1762,8 +1761,7 @@ class _HeadToHeadPanel(QWidget):
         eng_export_btn.setProperty("secondary", True)
         eng_export_btn.setFixedHeight(28)
         eng_export_btn.setFixedWidth(80)
-        eng_export_btn.clicked.connect(
-            lambda: self._export_table("_eng_table", "engineering_effectiveness.png"))
+        eng_export_btn.clicked.connect(lambda: self._export_table("_eng_table", "engineering_effectiveness.png"))
         eng_header_row.addWidget(eng_export_btn)
         layout.addLayout(eng_header_row)
 
@@ -1774,11 +1772,13 @@ class _HeadToHeadPanel(QWidget):
         if all_eng_names:
             eng_rows = []
             for name in all_eng_names:
-                eng_rows.append({
-                    "name": name,
-                    "guild": guild_eng.get(name, {}),
-                    "ref": ref_eng.get(name, {}),
-                })
+                eng_rows.append(
+                    {
+                        "name": name,
+                        "guild": guild_eng.get(name, {}),
+                        "ref": ref_eng.get(name, {}),
+                    }
+                )
             self._eng_model = _EngineeringComparisonModel()
             self._eng_model.set_data(eng_rows)
             self._eng_table = self._make_table(self._eng_model)
@@ -1813,8 +1813,7 @@ class _HeadToHeadPanel(QWidget):
             self._h2h_tl_container = QVBoxLayout()
             layout.addLayout(self._h2h_tl_container)
 
-            self._h2h_tl_combo.currentIndexChanged.connect(
-                lambda: self._refresh_h2h_timeline())
+            self._h2h_tl_combo.currentIndexChanged.connect(lambda: self._refresh_h2h_timeline())
             self._refresh_h2h_timeline()
 
         # ── Section: Encounters ──
@@ -1830,23 +1829,25 @@ class _HeadToHeadPanel(QWidget):
             guild_encs = guild.encounters or []
             ref_encs = ref.encounters or []
             if not guild_encs and not ref_encs:
-                msg = ("Neither raid has encounter data. "
-                       "Try re-importing both raids to fetch boss kill data.")
+                msg = "Neither raid has encounter data. Try re-importing both raids to fetch boss kill data."
             elif not guild_encs:
                 ref_names = ", ".join(e.name for e in ref_encs)
-                msg = (f"Guild raid has no encounter data. "
-                       f"Reference raid has: {ref_names}. "
-                       "Try re-importing the guild raid.")
+                msg = (
+                    f"Guild raid has no encounter data. "
+                    f"Reference raid has: {ref_names}. "
+                    "Try re-importing the guild raid."
+                )
             elif not ref_encs:
                 guild_names = ", ".join(e.name for e in guild_encs)
-                msg = (f"Reference raid has no encounter data. "
-                       f"Guild raid has: {guild_names}. "
-                       "Try re-importing the reference raid.")
+                msg = (
+                    f"Reference raid has no encounter data. "
+                    f"Guild raid has: {guild_names}. "
+                    "Try re-importing the reference raid."
+                )
             else:
                 guild_names = ", ".join(e.name for e in guild_encs)
                 ref_names = ", ".join(e.name for e in ref_encs)
-                msg = (f"No shared bosses. Guild: {guild_names}. "
-                       f"Reference: {ref_names}.")
+                msg = f"No shared bosses. Guild: {guild_names}. Reference: {ref_names}."
             no_enc = QLabel(msg)
             no_enc.setWordWrap(True)
             no_enc.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
@@ -1898,8 +1899,7 @@ class _HeadToHeadPanel(QWidget):
             r_count = len(ref_heatmap.get("players", []))
             total_rows = g_count + r_count + (1 if g_count and r_count else 0)
             scroll.setFixedHeight(min(max(28 + total_rows * 21 + 30, 80), 600))
-            scroll.setStyleSheet(
-                f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
+            scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
             heatmap = OverlayTimelineHeatmap(guild_heatmap, ref_heatmap)
             scroll.setWidget(heatmap)
             container.addWidget(scroll)
@@ -1914,8 +1914,8 @@ class _HeadToHeadPanel(QWidget):
             self.status_message.emit("No data to export")
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Table", default_filename,
-            "PNG Image (*.png);;JPEG Image (*.jpg)")
+            self, "Export Table", default_filename, "PNG Image (*.png);;JPEG Image (*.jpg)"
+        )
         if not path:
             return
         pixmap = widget.grab()
@@ -1931,9 +1931,8 @@ class _HeadToHeadPanel(QWidget):
             return
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Consumable Chart",
-            "consumable_comparison.png",
-            "PNG Image (*.png);;JPEG Image (*.jpg)")
+            self, "Export Consumable Chart", "consumable_comparison.png", "PNG Image (*.png);;JPEG Image (*.jpg)"
+        )
         if not path:
             return
 
@@ -1955,8 +1954,7 @@ class _HeadToHeadPanel(QWidget):
         table.verticalHeader().setVisible(False)
         header = table.horizontalHeader()
         header.setStretchLastSection(False)
-        header.setDefaultAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         row_count = model.rowCount()
         row_height = 30

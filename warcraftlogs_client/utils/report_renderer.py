@@ -16,10 +16,6 @@ def render_markdown_template(template_name: str, context: dict, template_dir: st
         Rendered Markdown as string
     """
     template_dir = template_dir or str(paths.get_template_dir())
-    env = Environment(
-        loader=FileSystemLoader(template_dir),
-        trim_blocks=True,
-        lstrip_blocks=True
-    )  # nosec B701
+    env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)  # nosec B701
     template = env.get_template(template_name)
     return template.render(context)

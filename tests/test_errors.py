@@ -84,12 +84,14 @@ class TestSafeApiCall:
     def test_failure_returns_none(self):
         def boom():
             raise RuntimeError("network error")
+
         result = safe_api_call(boom)
         assert result is None
 
     def test_kwargs_forwarded(self):
         def fn(a, b=10):
             return a + b
+
         assert safe_api_call(fn, 3, b=7) == 10
 
 
@@ -101,6 +103,7 @@ class TestSafeDataProcessing:
     def test_failure_returns_none(self):
         def boom():
             raise ValueError("parse error")
+
         result = safe_data_processing(boom)
         assert result is None
 
@@ -125,12 +128,14 @@ class TestErrorHandlerDecorator:
         @error_handler("test op")
         def fn(x):
             return x + 1
+
         assert fn(5) == 6
 
     def test_reraises_custom_errors(self):
         @error_handler("test op")
         def fn():
             raise ConfigurationError("bad")
+
         with pytest.raises(ConfigurationError):
             fn()
 
@@ -138,6 +143,7 @@ class TestErrorHandlerDecorator:
         @error_handler("test op")
         def fn():
             raise ValueError("raw")
+
         with pytest.raises(DataProcessingError):
             fn()
 
@@ -145,5 +151,6 @@ class TestErrorHandlerDecorator:
         @error_handler("api call")
         def query_api():
             raise RuntimeError("timeout")
+
         with pytest.raises(ApiError):
             query_api()

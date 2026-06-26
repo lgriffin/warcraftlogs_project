@@ -107,9 +107,9 @@ def sample_composition():
 
 
 @pytest.fixture
-def sample_raid_analysis(sample_raid_metadata, sample_composition,
-                         sample_healer_performance, sample_tank_performance,
-                         sample_dps_performance):
+def sample_raid_analysis(
+    sample_raid_metadata, sample_composition, sample_healer_performance, sample_tank_performance, sample_dps_performance
+):
     return RaidAnalysis(
         metadata=sample_raid_metadata,
         composition=sample_composition,
@@ -118,9 +118,12 @@ def sample_raid_analysis(sample_raid_metadata, sample_composition,
         dps=[sample_dps_performance],
         consumables=[
             ConsumableUsage(
-                player_name="HolyPriest", player_role="healer",
-                report_id="abc123", consumable_name="Super Mana Potion",
-                count=3, timestamps=[60_000, 180_000, 300_000],
+                player_name="HolyPriest",
+                player_role="healer",
+                report_id="abc123",
+                consumable_name="Super Mana Potion",
+                count=3,
+                timestamps=[60_000, 180_000, 300_000],
             ),
         ],
     )
@@ -136,16 +139,31 @@ def sample_encounter_summary():
         duration_ms=168000,
         players=[
             EncounterPerformance(
-                name="StabbyRogue", player_class="Rogue", source_id=3,
-                role="melee", total_damage=150_000, total_healing=0, total_damage_taken=20_000,
+                name="StabbyRogue",
+                player_class="Rogue",
+                source_id=3,
+                role="melee",
+                total_damage=150_000,
+                total_healing=0,
+                total_damage_taken=20_000,
             ),
             EncounterPerformance(
-                name="HolyPriest", player_class="Priest", source_id=1,
-                role="healer", total_damage=5_000, total_healing=120_000, total_damage_taken=15_000,
+                name="HolyPriest",
+                player_class="Priest",
+                source_id=1,
+                role="healer",
+                total_damage=5_000,
+                total_healing=120_000,
+                total_damage_taken=15_000,
             ),
             EncounterPerformance(
-                name="TankWarrior", player_class="Warrior", source_id=2,
-                role="tank", total_damage=30_000, total_healing=0, total_damage_taken=200_000,
+                name="TankWarrior",
+                player_class="Warrior",
+                source_id=2,
+                role="tank",
+                total_damage=30_000,
+                total_healing=0,
+                total_damage_taken=200_000,
             ),
         ],
     )
@@ -185,6 +203,7 @@ def mock_client():
 @pytest.fixture
 def db(tmp_path):
     from warcraftlogs_client.database import PerformanceDB
+
     db_path = str(tmp_path / "test.db")
     with PerformanceDB(db_path) as database:
         yield database

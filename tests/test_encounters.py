@@ -11,15 +11,13 @@ from warcraftlogs_client.models import (
 
 # ── Analysis tests ──
 
+
 class TestAnalyzeEncounters:
     def test_filters_to_boss_kills_only(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Trash", "startTime": 0, "endTime": 10000,
-             "kill": True, "encounterID": 0},
-            {"id": 2, "name": "Attumen", "startTime": 12000, "endTime": 60000,
-             "kill": True, "encounterID": 658},
-            {"id": 3, "name": "Moroes", "startTime": 70000, "endTime": 90000,
-             "kill": False, "encounterID": 659},
+            {"id": 1, "name": "Trash", "startTime": 0, "endTime": 10000, "kill": True, "encounterID": 0},
+            {"id": 2, "name": "Attumen", "startTime": 12000, "endTime": 60000, "kill": True, "encounterID": 658},
+            {"id": 3, "name": "Moroes", "startTime": 70000, "endTime": 90000, "kill": False, "encounterID": 659},
         ]
         mock_client.get_encounter_table.return_value = []
 
@@ -36,16 +34,14 @@ class TestAnalyzeEncounters:
 
     def test_trash_only_returns_empty(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Trash", "startTime": 0, "endTime": 5000,
-             "kill": True, "encounterID": 0},
+            {"id": 1, "name": "Trash", "startTime": 0, "endTime": 5000, "kill": True, "encounterID": 0},
         ]
         result = _analyze_encounters(mock_client, "abc123", sample_composition)
         assert result == []
 
     def test_merges_damage_healing_taken(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Boss", "startTime": 0, "endTime": 60000,
-             "kill": True, "encounterID": 100},
+            {"id": 1, "name": "Boss", "startTime": 0, "endTime": 60000, "kill": True, "encounterID": 100},
         ]
 
         def fake_table(report_id, start, end, data_type):
@@ -80,13 +76,16 @@ class TestAnalyzeEncounters:
 
     def test_skips_pets(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Boss", "startTime": 0, "endTime": 60000,
-             "kill": True, "encounterID": 100},
+            {"id": 1, "name": "Boss", "startTime": 0, "endTime": 60000, "kill": True, "encounterID": 100},
         ]
-        mock_client.get_encounter_table.side_effect = lambda *args: [
-            {"name": "StabbyRogue", "type": "Player", "total": 100000},
-            {"name": "Wolf", "type": "Pet", "total": 20000},
-        ] if args[3] == "DamageDone" else []
+        mock_client.get_encounter_table.side_effect = lambda *args: (
+            [
+                {"name": "StabbyRogue", "type": "Player", "total": 100000},
+                {"name": "Wolf", "type": "Pet", "total": 20000},
+            ]
+            if args[3] == "DamageDone"
+            else []
+        )
 
         result = _analyze_encounters(mock_client, "abc123", sample_composition)
         assert len(result[0].players) == 1
@@ -94,10 +93,8 @@ class TestAnalyzeEncounters:
 
     def test_api_error_skips_encounter(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Boss1", "startTime": 0, "endTime": 30000,
-             "kill": True, "encounterID": 100},
-            {"id": 2, "name": "Boss2", "startTime": 40000, "endTime": 80000,
-             "kill": True, "encounterID": 200},
+            {"id": 1, "name": "Boss1", "startTime": 0, "endTime": 30000, "kill": True, "encounterID": 100},
+            {"id": 2, "name": "Boss2", "startTime": 40000, "endTime": 80000, "kill": True, "encounterID": 200},
         ]
 
         call_count = [0]
@@ -116,12 +113,9 @@ class TestAnalyzeEncounters:
 
     def test_multiple_boss_kills(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Boss1", "startTime": 0, "endTime": 30000,
-             "kill": True, "encounterID": 100},
-            {"id": 2, "name": "Trash", "startTime": 35000, "endTime": 38000,
-             "kill": True, "encounterID": 0},
-            {"id": 3, "name": "Boss2", "startTime": 40000, "endTime": 80000,
-             "kill": True, "encounterID": 200},
+            {"id": 1, "name": "Boss1", "startTime": 0, "endTime": 30000, "kill": True, "encounterID": 100},
+            {"id": 2, "name": "Trash", "startTime": 35000, "endTime": 38000, "kill": True, "encounterID": 0},
+            {"id": 3, "name": "Boss2", "startTime": 40000, "endTime": 80000, "kill": True, "encounterID": 200},
         ]
         mock_client.get_encounter_table.return_value = []
 
@@ -132,12 +126,15 @@ class TestAnalyzeEncounters:
 
     def test_assigns_unknown_role_for_unknown_players(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = [
-            {"id": 1, "name": "Boss", "startTime": 0, "endTime": 60000,
-             "kill": True, "encounterID": 100},
+            {"id": 1, "name": "Boss", "startTime": 0, "endTime": 60000, "kill": True, "encounterID": 100},
         ]
-        mock_client.get_encounter_table.side_effect = lambda *args: [
-            {"name": "UnknownPlayer", "type": "Player", "total": 5000},
-        ] if args[3] == "DamageDone" else []
+        mock_client.get_encounter_table.side_effect = lambda *args: (
+            [
+                {"name": "UnknownPlayer", "type": "Player", "total": 5000},
+            ]
+            if args[3] == "DamageDone"
+            else []
+        )
 
         result = _analyze_encounters(mock_client, "abc123", sample_composition)
         assert result[0].players[0].name == "UnknownPlayer"
@@ -146,6 +143,7 @@ class TestAnalyzeEncounters:
 
 
 # ── Database roundtrip tests ──
+
 
 class TestEncounterDatabase:
     def test_import_and_load_encounters(self, db, sample_raid_analysis, sample_encounter_summary):
@@ -253,9 +251,11 @@ class TestEncounterDatabase:
 
 # ── Client method tests ──
 
+
 class TestGetEncounterTable:
     def test_query_formation(self):
         from warcraftlogs_client.client import WarcraftLogsClient
+
         token_mgr = MagicMock()
         token_mgr.get_token.return_value = "fake_token"
         client = WarcraftLogsClient(token_mgr, cache_enabled=False)
@@ -263,11 +263,19 @@ class TestGetEncounterTable:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "data": {"reportData": {"report": {"table": {
-                "data": {"entries": [
-                    {"name": "Player1", "total": 100000},
-                ]}
-            }}}}
+            "data": {
+                "reportData": {
+                    "report": {
+                        "table": {
+                            "data": {
+                                "entries": [
+                                    {"name": "Player1", "total": 100000},
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         with patch("requests.post", return_value=mock_response) as mock_post:
@@ -286,15 +294,14 @@ class TestGetEncounterTable:
 
     def test_handles_empty_response(self):
         from warcraftlogs_client.client import WarcraftLogsClient
+
         token_mgr = MagicMock()
         token_mgr.get_token.return_value = "fake_token"
         client = WarcraftLogsClient(token_mgr, cache_enabled=False)
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {"reportData": {"report": {"table": {}}}}
-        }
+        mock_response.json.return_value = {"data": {"reportData": {"report": {"table": {}}}}}
 
         with patch("requests.post", return_value=mock_response):
             result = client.get_encounter_table("abc123", 0, 60000, "Healing")
@@ -303,6 +310,7 @@ class TestGetEncounterTable:
 
 
 # ── Model tests ──
+
 
 class TestEncounterModels:
     def test_encounter_summary_fields(self, sample_encounter_summary):
@@ -313,14 +321,21 @@ class TestEncounterModels:
 
     def test_encounter_performance_fields(self):
         ep = EncounterPerformance(
-            name="Test", player_class="Mage", source_id=1, role="ranged",
-            total_damage=100, total_healing=50, total_damage_taken=10)
+            name="Test",
+            player_class="Mage",
+            source_id=1,
+            role="ranged",
+            total_damage=100,
+            total_healing=50,
+            total_damage_taken=10,
+        )
         assert ep.total_damage == 100
         assert ep.total_healing == 50
         assert ep.role == "ranged"
 
     def test_raid_analysis_encounters_default_empty(self):
         from warcraftlogs_client.models import RaidMetadata
+
         analysis = RaidAnalysis(
             metadata=RaidMetadata(report_id="x", title="t", owner="o", start_time=0),
             composition=RaidComposition(),
@@ -330,10 +345,10 @@ class TestEncounterModels:
 
 # ── Migration tests ──
 
+
 class TestEncounterMigration:
     def test_migration_creates_tables(self, db):
         conn = db._get_conn()
-        tables = {row[0] for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "encounters" in tables
         assert "encounter_performance" in tables

@@ -91,7 +91,9 @@ class TestDefaults:
 
     def test_custom_role_thresholds(self, tmp_path):
         cfg_data = {
-            "client_id": "x", "client_secret": "y", "report_id": "z",
+            "client_id": "x",
+            "client_secret": "y",
+            "report_id": "z",
             "role_thresholds": {"healer_min_healing": 100_000},
         }
         path = tmp_path / "config.json"
@@ -102,7 +104,9 @@ class TestDefaults:
 
     def test_guild_id_non_integer_defaults(self, tmp_path):
         cfg_data = {
-            "client_id": "x", "client_secret": "y", "report_id": "z",
+            "client_id": "x",
+            "client_secret": "y",
+            "report_id": "z",
             "guild_id": "not_a_number",
         }
         path = tmp_path / "config.json"
@@ -141,8 +145,14 @@ class TestSingleton:
     def test_get_config_manager_new_file_replaces(self, config_file, tmp_path):
         m1 = get_config_manager(config_file)
         other = tmp_path / "other.json"
-        other.write_text(json.dumps({
-            "client_id": "a", "client_secret": "b", "report_id": "c",
-        }))
+        other.write_text(
+            json.dumps(
+                {
+                    "client_id": "a",
+                    "client_secret": "b",
+                    "report_id": "c",
+                }
+            )
+        )
         m2 = get_config_manager(str(other))
         assert m1 is not m2

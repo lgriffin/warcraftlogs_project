@@ -13,21 +13,24 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class ErrorSeverity(Enum):
     """Error severity levels."""
+
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
 
+
 class WarcraftLogsError(Exception):
     """Base exception for all Warcraft Logs analysis errors."""
 
-    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.ERROR,
-                 details: str | None = None):
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.ERROR, details: str | None = None):
         super().__init__(message)
         self.message = message
         self.severity = severity
         self.details = details
+
 
 class ConfigurationError(WarcraftLogsError):
     """Raised when configuration is invalid or missing."""
@@ -35,16 +38,17 @@ class ConfigurationError(WarcraftLogsError):
     def __init__(self, message: str, details: str | None = None):
         super().__init__(message, ErrorSeverity.CRITICAL, details)
 
+
 class ApiError(WarcraftLogsError):
     """Raised when API calls fail."""
 
-    def __init__(self, message: str, response_data: Any | None = None,
-                 severity: ErrorSeverity = ErrorSeverity.ERROR):
+    def __init__(self, message: str, response_data: Any | None = None, severity: ErrorSeverity = ErrorSeverity.ERROR):
         details = None
         if response_data:
             details = f"API Response: {response_data}"
         super().__init__(message, severity, details)
         self.response_data = response_data
+
 
 class DataProcessingError(WarcraftLogsError):
     """Raised when data processing fails."""
@@ -54,17 +58,16 @@ class DataProcessingError(WarcraftLogsError):
         super().__init__(message, ErrorSeverity.WARNING, details)
         self.actor_name = actor_name
 
+
 class ReportGenerationError(WarcraftLogsError):
     """Raised when report generation fails."""
+
     pass
+
 
 def format_error_message(error: WarcraftLogsError) -> str:
     """Format error message with appropriate emoji and details."""
-    severity_icons = {
-        ErrorSeverity.WARNING: "⚠️",
-        ErrorSeverity.ERROR: "❌",
-        ErrorSeverity.CRITICAL: "🚨"
-    }
+    severity_icons = {ErrorSeverity.WARNING: "⚠️", ErrorSeverity.ERROR: "❌", ErrorSeverity.CRITICAL: "🚨"}
 
     icon = severity_icons.get(error.severity, "❌")
     message = f"{icon} {error.message}"
@@ -74,8 +77,8 @@ def format_error_message(error: WarcraftLogsError) -> str:
 
     return message
 
-def handle_error(error: Exception, context: str | None = None,
-                 exit_on_critical: bool = True) -> bool:
+
+def handle_error(error: Exception, context: str | None = None, exit_on_critical: bool = True) -> bool:
     """
     Handle errors consistently across the application.
 
@@ -118,8 +121,8 @@ def handle_error(error: Exception, context: str | None = None,
             sys.exit(1)
         return False
 
-def safe_api_call(func, *args, error_message: str = "API call failed",
-                  actor_name: str | None = None, **kwargs):
+
+def safe_api_call(func, *args, error_message: str = "API call failed", actor_name: str | None = None, **kwargs):
     """
     Safely execute an API call with consistent error handling.
 
@@ -142,8 +145,7 @@ def safe_api_call(func, *args, error_message: str = "API call failed",
         else:
             # Missing data error - likely invalid report ID or expired token
             api_error = ApiError(
-                f"{error_message}: Invalid report ID or expired token",
-                severity=ErrorSeverity.CRITICAL
+                f"{error_message}: Invalid report ID or expired token", severity=ErrorSeverity.CRITICAL
             )
 
         if actor_name:
@@ -152,8 +154,10 @@ def safe_api_call(func, *args, error_message: str = "API call failed",
         handle_error(api_error, exit_on_critical=False)
         return None
 
-def safe_data_processing(func, *args, error_message: str = "Data processing failed",
-                        actor_name: str | None = None, **kwargs):
+
+def safe_data_processing(
+    func, *args, error_message: str = "Data processing failed", actor_name: str | None = None, **kwargs
+):
     """
     Safely execute data processing with consistent error handling.
 
@@ -174,8 +178,8 @@ def safe_data_processing(func, *args, error_message: str = "Data processing fail
         handle_error(processing_error, exit_on_critical=False)
         return None
 
-def validate_api_response(response: Any, expected_keys: list,
-                         context: str = "API response") -> bool:
+
+def validate_api_response(response: Any, expected_keys: list, context: str = "API response") -> bool:
     """
     Validate API response structure.
 
@@ -203,14 +207,14 @@ def validate_api_response(response: Any, expected_keys: list,
     if missing_keys:
         raise ApiError(
             f"Invalid {context}: Missing required data path",
-            response_data=f"Missing: {' -> '.join(expected_keys[:len(expected_keys)-len(missing_keys)+1])}",
+            response_data=f"Missing: {' -> '.join(expected_keys[: len(expected_keys) - len(missing_keys) + 1])}",
         )
 
     return True
 
+
 # Decorator for consistent error handling
-def error_handler(error_message: str = "Operation failed",
-                 actor_context: bool = False):
+def error_handler(error_message: str = "Operation failed", actor_context: bool = False):
     """
     Decorator for consistent error handling across functions.
 
@@ -218,6 +222,7 @@ def error_handler(error_message: str = "Operation failed",
         error_message: Base error message
         actor_context: Whether to extract actor name from function arguments
     """
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             try:
@@ -229,10 +234,10 @@ def error_handler(error_message: str = "Operation failed",
                 actor_name = None
                 if actor_context and len(args) > 0:
                     # Try to extract actor name from arguments
-                    if hasattr(args[0], 'get'):
-                        actor_name = args[0].get('name')
-                    elif len(args) > 1 and hasattr(args[1], 'get'):
-                        actor_name = args[1].get('name')
+                    if hasattr(args[0], "get"):
+                        actor_name = args[0].get("name")
+                    elif len(args) > 1 and hasattr(args[1], "get"):
+                        actor_name = args[1].get("name")
 
                 if "api" in func.__name__.lower() or "query" in func.__name__.lower():
                     raise ApiError(f"{error_message}: {e}") from e
@@ -240,4 +245,5 @@ def error_handler(error_message: str = "Operation failed",
                     raise DataProcessingError(f"{error_message}: {e}", actor_name) from e
 
         return wrapper
+
     return decorator

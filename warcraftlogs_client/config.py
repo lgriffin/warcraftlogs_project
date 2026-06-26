@@ -14,23 +14,28 @@ from typing import Any
 @dataclass
 class RoleThresholds:
     """Configuration for role detection thresholds."""
+
     healer_min_healing: int = 40000
     tank_min_taken: int = 150000
     tank_min_mitigation: int = 40
     healer_min_healing_10: int = 400000
     tank_min_taken_10: int = 300000
 
+
 @dataclass
 class ApiConfig:
     """Configuration for Warcraft Logs API access."""
+
     client_id: str
     client_secret: str
     report_id: str
     guild_id: int = 774065
 
+
 @dataclass
 class AppConfig:
     """Main application configuration."""
+
     api: ApiConfig
     role_thresholds: RoleThresholds = field(default_factory=RoleThresholds)
 
@@ -52,6 +57,7 @@ class AppConfig:
     character_region: str = "eu"
     wcl_api_url: str = "https://fresh.warcraftlogs.com/api/v2/client"
 
+
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
 
@@ -61,6 +67,7 @@ class ConfigManager:
 
     def __init__(self, config_file: str | None = None):
         from . import paths
+
         self.config_file = config_file or str(paths.get_config_path())
         self._config: AppConfig | None = None
 
@@ -104,9 +111,7 @@ class ConfigManager:
             missing.append("report_id (or WARCRAFTLOGS_REPORT_ID env var)")
 
         if missing:
-            raise ConfigurationError(
-                f"Missing required configuration: {', '.join(missing)}"
-            )
+            raise ConfigurationError(f"Missing required configuration: {', '.join(missing)}")
 
         guild_id = raw_config.get("guild_id", 774065)
         try:
@@ -162,8 +167,10 @@ class ConfigManager:
             "tank_min_taken_10": config.role_thresholds.tank_min_taken_10,
         }
 
+
 # Global config manager instance
 _config_manager: ConfigManager | None = None
+
 
 def get_config_manager(config_file: str | None = None) -> ConfigManager:
     """Get the global configuration manager instance."""
@@ -171,6 +178,7 @@ def get_config_manager(config_file: str | None = None) -> ConfigManager:
     if _config_manager is None or config_file is not None:
         _config_manager = ConfigManager(config_file)
     return _config_manager
+
 
 def load_config(config_file: str | None = None) -> dict[str, Any]:
     """
@@ -208,6 +216,7 @@ def load_config(config_file: str | None = None) -> dict[str, Any]:
         "character_region": config.character_region,
         "wcl_api_url": config.wcl_api_url,
     }
+
 
 def get_app_config(config_file: str | None = None) -> AppConfig:
     """Get the typed application configuration."""

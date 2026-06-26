@@ -29,6 +29,7 @@ class SettingsView(QWidget):
     status_message = Signal(str)
 
     from .. import paths as _paths
+
     CONFIG_PATH = str(_paths.get_config_path())
 
     def __init__(self, parent=None):
@@ -42,11 +43,12 @@ class SettingsView(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         from PySide6.QtWidgets import QScrollArea
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}
-            QScrollArea > QWidget > QWidget {{ background-color: {COLORS['bg_dark']}; }}
+            QScrollArea {{ border: none; background-color: {COLORS["bg_dark"]}; }}
+            QScrollArea > QWidget > QWidget {{ background-color: {COLORS["bg_dark"]}; }}
         """)
         outer.addWidget(scroll)
 
@@ -98,24 +100,23 @@ class SettingsView(QWidget):
         self.show_secret_btn.setFixedWidth(80)
         self.show_secret_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 6px 12px;
                 font-size: 12px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['border']};
+                background-color: {COLORS["border"]};
             }}
         """)
         self.show_secret_btn.clicked.connect(self._toggle_secret_visibility)
         creds_layout.addRow("", self.show_secret_btn)
 
         env_note = QLabel(
-            "Credentials can also be set via environment variables:\n"
-            "WARCRAFTLOGS_CLIENT_ID, WARCRAFTLOGS_CLIENT_SECRET"
+            "Credentials can also be set via environment variables:\nWARCRAFTLOGS_CLIENT_ID, WARCRAFTLOGS_CLIENT_SECRET"
         )
         env_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
         env_note.setWordWrap(True)
@@ -225,7 +226,7 @@ class SettingsView(QWidget):
         clear_all_btn.setFixedWidth(160)
         clear_all_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['error']};
+                background-color: {COLORS["error"]};
                 color: white;
                 border: none;
                 border-radius: 4px;
@@ -247,6 +248,7 @@ class SettingsView(QWidget):
         update_layout = QVBoxLayout(update_group)
 
         from ..version import __version__
+
         ver_label = QLabel(f"Current version: v{__version__}")
         ver_label.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px;")
         update_layout.addWidget(ver_label)
@@ -260,16 +262,16 @@ class SettingsView(QWidget):
         check_update_btn.setFixedWidth(180)
         check_update_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 8px 16px;
                 font-size: 13px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['border']};
+                background-color: {COLORS["border"]};
             }}
         """)
         check_update_btn.clicked.connect(self._check_for_updates)
@@ -352,8 +354,7 @@ class SettingsView(QWidget):
         client_secret = self.client_secret_input.text().strip()
 
         if not client_id or not client_secret:
-            QMessageBox.warning(self, "Missing Credentials",
-                                "Client ID and Client Secret are required.")
+            QMessageBox.warning(self, "Missing Credentials", "Client ID and Client Secret are required.")
             return
 
         config["client_id"] = client_id
@@ -379,6 +380,7 @@ class SettingsView(QWidget):
 
             # Reset the config manager so changes take effect immediately
             from ..config import get_config_manager
+
             get_config_manager(self.CONFIG_PATH)
 
             QMessageBox.information(self, "Saved", "Settings saved successfully.")
@@ -388,6 +390,7 @@ class SettingsView(QWidget):
 
     def _clear_all_data(self):
         from PySide6.QtWidgets import QInputDialog
+
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Confirm Clear All Data")
         dlg.setLabelText(
@@ -397,12 +400,12 @@ class SettingsView(QWidget):
         )
         dlg.setStyleSheet(f"""
             QInputDialog, QLabel, QLineEdit, QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
             }}
             QLineEdit {{
-                background-color: {COLORS['bg_input']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 padding: 6px 10px;
             }}
@@ -414,15 +417,17 @@ class SettingsView(QWidget):
             return
         try:
             from ..database import PerformanceDB
+
             with PerformanceDB() as db:
                 db.clear_all()
 
             from ..cache import clear_response_cache
+
             cache_count = clear_response_cache()
 
             QMessageBox.information(
-                self, "Cleared",
-                f"Database cleared and {cache_count} cached API responses removed.")
+                self, "Cleared", f"Database cleared and {cache_count} cached API responses removed."
+            )
             self.status_message.emit(f"All data cleared ({cache_count} cache files)")
         except (sqlite3.Error, OSError) as e:
             QMessageBox.critical(self, "Error", f"Failed to clear data:\n{e}")
@@ -433,6 +438,7 @@ class SettingsView(QWidget):
         self._update_status_label.repaint()
 
         from ..updater import check_for_update
+
         try:
             info = check_for_update(force=True)
         except Exception as e:
@@ -442,16 +448,18 @@ class SettingsView(QWidget):
         if info:
             self._update_status_label.setVisible(False)
             from .update_dialog import UpdateDialog
+
             dlg = UpdateDialog(info, parent=self)
             dlg.exec()
         else:
             from ..version import __version__
-            self._update_status_label.setText(
-                f"You're up to date (v{__version__})")
+
+            self._update_status_label.setText(f"You're up to date (v{__version__})")
             self.status_message.emit("No updates available")
 
     def _refresh_auth_status(self):
         from ..user_auth import UserTokenManager
+
         user_tm = UserTokenManager()
         if user_tm.is_authenticated():
             self._settings_auth_status.setText("Connected to WarcraftLogs")
@@ -464,6 +472,7 @@ class SettingsView(QWidget):
 
     def _toggle_auth(self):
         from ..user_auth import UserTokenManager, start_oauth_flow
+
         user_tm = UserTokenManager()
         if user_tm.is_authenticated():
             user_tm.revoke()
@@ -473,8 +482,7 @@ class SettingsView(QWidget):
 
         client_id = self.client_id_input.text().strip()
         if not client_id:
-            QMessageBox.warning(self, "Missing Credentials",
-                                "Please enter a Client ID first.")
+            QMessageBox.warning(self, "Missing Credentials", "Please enter a Client ID first.")
             return
 
         self._settings_auth_btn.setEnabled(False)
@@ -484,14 +492,15 @@ class SettingsView(QWidget):
         self._oauth_server, self._oauth_state = start_oauth_flow(client_id)
 
         from .reference_view import _AuthWaitThread
-        self._auth_wait_thread = _AuthWaitThread(
-            self._oauth_server, self._oauth_state)
+
+        self._auth_wait_thread = _AuthWaitThread(self._oauth_server, self._oauth_state)
         self._auth_wait_thread.auth_complete.connect(self._on_settings_auth_complete)
         self._auth_wait_thread.auth_error.connect(self._on_settings_auth_error)
         self._auth_wait_thread.start()
 
     def _on_settings_auth_complete(self, code: str):
         from ..user_auth import UserTokenManager
+
         client_id = self.client_id_input.text().strip()
         client_secret = self.client_secret_input.text().strip()
         try:
@@ -500,8 +509,7 @@ class SettingsView(QWidget):
         except Exception as e:
             self._settings_auth_btn.setEnabled(True)
             self._refresh_auth_status()
-            QMessageBox.warning(self, "Authentication Failed",
-                                f"Token exchange failed:\n{e}")
+            QMessageBox.warning(self, "Authentication Failed", f"Token exchange failed:\n{e}")
             return
 
         self._settings_auth_btn.setEnabled(True)

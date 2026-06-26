@@ -15,6 +15,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
 class SpellManager:
     """
     Manages spell ID to name mappings and spell aliases efficiently.
@@ -28,6 +29,7 @@ class SpellManager:
 
     def __init__(self, spell_data_dir: str | None = None):
         from . import paths
+
         self.spell_data_dir = spell_data_dir or str(paths.get_spell_data_dir())
         self._aliases: dict[int, int] | None = None
         self._names: dict[int, str] | None = None
@@ -46,12 +48,12 @@ class SpellManager:
             return self._aliases
 
         try:
-            with open(aliases_file, encoding='utf-8') as f:
+            with open(aliases_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Flatten all alias groups into a single dictionary
             for group_name, aliases in data.items():
-                if group_name.startswith('_'):  # Skip metadata fields
+                if group_name.startswith("_"):  # Skip metadata fields
                     continue
 
                 if isinstance(aliases, dict):
@@ -82,12 +84,12 @@ class SpellManager:
             return self._names
 
         try:
-            with open(names_file, encoding='utf-8') as f:
+            with open(names_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Flatten all name groups into a single dictionary
             for category_name, spells in data.items():
-                if category_name.startswith('_'):  # Skip metadata fields
+                if category_name.startswith("_"):  # Skip metadata fields
                     continue
 
                 if isinstance(spells, dict):
@@ -244,10 +246,7 @@ class SpellManager:
         Returns:
             Dictionary mapping resource names to usage counts
         """
-        resource_ids = {
-            28499: "Super Mana Potion",
-            27869: "Dark Rune"
-        }
+        resource_ids = {28499: "Super Mana Potion", 27869: "Dark Rune"}
 
         resources_used = {}
         for entry in cast_entries:
@@ -270,10 +269,7 @@ class SpellManager:
         """
         for entry in cast_entries:
             if entry.get("guid") == 6346:  # Fear Ward
-                return {
-                    "spell": "Fear Ward",
-                    "casts": entry.get("total", entry.get("hitCount", 0))
-                }
+                return {"spell": "Fear Ward", "casts": entry.get("total", entry.get("hitCount", 0))}
         return None
 
     def calculate_dispels(self, cast_entries: list, class_type: str) -> dict[str, int]:
@@ -288,11 +284,11 @@ class SpellManager:
             Dictionary mapping dispel names to cast counts
         """
         dispel_ids = {
-            988: "Dispel Magic",      # Priest
-            552: "Abolish Disease",   # Priest
-            4987: "Cleanse",          # Paladin
-            2782: "Remove Curse",     # Druid
-            2893: "Abolish Poison"    # Druid
+            988: "Dispel Magic",  # Priest
+            552: "Abolish Disease",  # Priest
+            4987: "Cleanse",  # Paladin
+            2782: "Remove Curse",  # Druid
+            2893: "Abolish Poison",  # Druid
         }
 
         dispels = {}
@@ -378,8 +374,10 @@ class SpellManager:
             logger.error("Configuration validation failed: %s", e)
             return False
 
+
 # Global instance for backward compatibility
 _spell_manager: SpellManager | None = None
+
 
 def get_spell_manager() -> SpellManager:
     """Get the global spell manager instance."""
@@ -388,10 +386,12 @@ def get_spell_manager() -> SpellManager:
         _spell_manager = SpellManager()
     return _spell_manager
 
+
 def reset_spell_manager() -> None:
     """Reset the global spell manager instance to pick up configuration changes."""
     global _spell_manager
     _spell_manager = None
+
 
 # Legacy compatibility functions
 class SpellBreakdown:
@@ -474,7 +474,8 @@ class SpellBreakdown:
                     if canonical_id == 15663:
                         logger.debug("Found mapped Cleave ID: %s -> %s", spell_id, canonical_id)
                 elif "cleave" in str(event.get("ability", "")).lower():
-                    logger.debug("Potential Cleave variant: %s -- name: %s", spell_id, event.get('ability'))
+                    logger.debug("Potential Cleave variant: %s -- name: %s", spell_id, event.get("ability"))
+
 
 # Initialize the legacy class attribute
 SpellBreakdown.spell_id_aliases = get_spell_manager().get_legacy_aliases()

@@ -7,6 +7,7 @@ def load_config():
     with open(paths.get_config_path()) as f:
         return json.load(f)
 
+
 def get_report_time_range(client, report_id):
     """
     Uses the 'fights' query to get the start and end time of the full report.
@@ -29,6 +30,7 @@ def get_report_time_range(client, report_id):
     except KeyError as e:
         raise ValueError("Unable to extract start/end time from report.\n" + json.dumps(response, indent=2)) from e
 
+
 def load_report_table(client, report_id):
     """
     Fetches the raw JSON blob of the healing table using start and end time from the report.
@@ -49,4 +51,6 @@ def load_report_table(client, report_id):
     try:
         return raw["data"]["reportData"]["report"]["table"]
     except KeyError as e:
-        raise ValueError("Failed to load table from report: invalid response structure.\n" + json.dumps(raw, indent=2)) from e
+        raise ValueError(
+            "Failed to load table from report: invalid response structure.\n" + json.dumps(raw, indent=2)
+        ) from e

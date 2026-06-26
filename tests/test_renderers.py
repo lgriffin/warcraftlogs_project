@@ -1,6 +1,5 @@
 """Tests for console renderer — output correctness via capsys."""
 
-
 from warcraftlogs_client.models import (
     HealerPerformance,
     RaidAnalysis,
@@ -50,7 +49,9 @@ class TestEmptyAnalysis:
     def test_no_crash(self):
         analysis = RaidAnalysis(
             metadata=RaidMetadata(
-                report_id="empty", title="Empty", owner="Nobody",
+                report_id="empty",
+                title="Empty",
+                owner="Nobody",
                 start_time=1_700_000_000_000,
             ),
             composition=RaidComposition(),

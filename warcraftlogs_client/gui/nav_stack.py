@@ -10,7 +10,6 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 
 
 class NavigationStack(QStackedWidget):
-
     depth_changed = Signal(int)
 
     def __init__(self, parent=None):

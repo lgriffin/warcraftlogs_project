@@ -12,8 +12,18 @@ class HealerTableModel(QAbstractTableModel):
     def __init__(self, healers: list[HealerPerformance] | None = None, parent=None):
         super().__init__(parent)
         self._healers = healers or []
-        self._columns = ["Name", "Class", "Healing", "Overhealing", "OH%",
-                         "Active Time%", "Top Spell (Casts)", "Dispels", "Mana Pot", "Dark Rune"]
+        self._columns = [
+            "Name",
+            "Class",
+            "Healing",
+            "Overhealing",
+            "OH%",
+            "Active Time%",
+            "Top Spell (Casts)",
+            "Dispels",
+            "Mana Pot",
+            "Dark Rune",
+        ]
 
     def set_data(self, healers: list[HealerPerformance]):
         self.beginResetModel()
@@ -40,11 +50,16 @@ class HealerTableModel(QAbstractTableModel):
         resource_lookup = {r.name: r.count for r in h.resources}
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if col == 0: return h.name
-            if col == 1: return h.player_class
-            if col == 2: return f"{h.total_healing:,}"
-            if col == 3: return f"{h.total_overhealing:,}"
-            if col == 4: return f"{h.overheal_percent:.1f}%"
+            if col == 0:
+                return h.name
+            if col == 1:
+                return h.player_class
+            if col == 2:
+                return f"{h.total_healing:,}"
+            if col == 3:
+                return f"{h.total_overhealing:,}"
+            if col == 4:
+                return f"{h.overheal_percent:.1f}%"
             if col == 5:
                 return f"{h.active_time_percent:.1f}%" if h.active_time_percent > 0 else "-"
             if col == 6:
@@ -54,7 +69,8 @@ class HealerTableModel(QAbstractTableModel):
                 if top.casts:
                     return f"{top.spell_name} ({top.casts})"
                 return top.spell_name
-            if col == 7: return sum(d.casts for d in h.dispels)
+            if col == 7:
+                return sum(d.casts for d in h.dispels)
             if col == 8:
                 mana = resource_lookup.get("Super Mana Potion", 0)
                 if not mana:
@@ -63,7 +79,8 @@ class HealerTableModel(QAbstractTableModel):
                             mana = count
                             break
                 return mana
-            if col == 9: return resource_lookup.get("Dark Rune", 0)
+            if col == 9:
+                return resource_lookup.get("Dark Rune", 0)
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             if col in (0, 1, 6):
@@ -115,11 +132,16 @@ class TankTableModel(QAbstractTableModel):
         col = index.column()
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if col == 0: return t.name
-            if col == 1: return t.player_class
-            if col == 2: return f"{t.total_damage_taken:,}"
-            if col == 3: return f"{t.total_mitigated:,}"
-            if col == 4: return f"{t.mitigation_percent:.1f}%"
+            if col == 0:
+                return t.name
+            if col == 1:
+                return t.player_class
+            if col == 2:
+                return f"{t.total_damage_taken:,}"
+            if col == 3:
+                return f"{t.total_mitigated:,}"
+            if col == 4:
+                return f"{t.mitigation_percent:.1f}%"
             if col == 5:
                 return f"{t.active_time_percent:.1f}%" if t.active_time_percent > 0 else "-"
 
@@ -173,9 +195,12 @@ class DPSTableModel(QAbstractTableModel):
         top = d.abilities[0] if d.abilities else None
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if col == 0: return d.name
-            if col == 1: return d.player_class
-            if col == 2: return f"{d.total_damage:,}"
+            if col == 0:
+                return d.name
+            if col == 1:
+                return d.player_class
+            if col == 2:
+                return f"{d.total_damage:,}"
             if col == 3:
                 return f"{d.active_time_percent:.1f}%" if d.active_time_percent > 0 else "-"
             if col == 4:
@@ -206,8 +231,13 @@ class DPSTableModel(QAbstractTableModel):
 class HistoryTableModel(QAbstractTableModel):
     """Generic table model for history trend data (list of dicts)."""
 
-    def __init__(self, columns: list[str] | None = None, link_columns: set[str] | None = None,
-                 checkable: bool = False, parent=None):
+    def __init__(
+        self,
+        columns: list[str] | None = None,
+        link_columns: set[str] | None = None,
+        checkable: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
         self._columns = columns or []
         self._rows: list[dict] = []
@@ -347,16 +377,18 @@ class GearTableModel(QAbstractTableModel):
         col = index.column()
 
         if role == Qt.ItemDataRole.DisplayRole:
-            if col == 0: return item.slot
-            if col == 1: return self._names.get(item.item_id, f"#{item.item_id}")
-            if col == 2: return item.item_level if item.item_level else ""
-            if col == 3: return item.quality_name
+            if col == 0:
+                return item.slot
+            if col == 1:
+                return self._names.get(item.item_id, f"#{item.item_id}")
+            if col == 2:
+                return item.item_level if item.item_level else ""
+            if col == 3:
+                return item.quality_name
             if col == 4:
                 if not item.gems:
                     return ""
-                return ", ".join(
-                    self._names.get(gid, f"#{gid}") for gid in item.gems
-                )
+                return ", ".join(self._names.get(gid, f"#{gid}") for gid in item.gems)
 
         if role == Qt.ItemDataRole.ToolTipRole:
             if col == 1 and item.item_id in self._tooltips:

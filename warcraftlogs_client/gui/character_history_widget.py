@@ -73,10 +73,7 @@ class CharacterHistoryWidget(QWidget):
 
         header = QWidget()
         header.setFixedHeight(52)
-        header.setStyleSheet(
-            f"background-color: {COLORS['bg_card']}; "
-            f"border-bottom: 1px solid {COLORS['border']};"
-        )
+        header.setStyleSheet(f"background-color: {COLORS['bg_card']}; border-bottom: 1px solid {COLORS['border']};")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 0, 16, 0)
 
@@ -102,9 +99,17 @@ class CharacterHistoryWidget(QWidget):
         summary_layout = QVBoxLayout(self.summary_card)
         self.summary_labels: dict[str, QLabel] = {}
         for key in [
-            "Name", "Class", "Raids Tracked", "Active Period",
-            "Avg Active Time", "Avg Healing", "Avg Damage", "Avg Mitigation",
-            "Consumables Used", "Consistency", "Consumable Compliance",
+            "Name",
+            "Class",
+            "Raids Tracked",
+            "Active Period",
+            "Avg Active Time",
+            "Avg Healing",
+            "Avg Damage",
+            "Avg Mitigation",
+            "Consumables Used",
+            "Consistency",
+            "Consumable Compliance",
         ]:
             row = QHBoxLayout()
             label = QLabel(f"{key}:")
@@ -121,17 +126,17 @@ class CharacterHistoryWidget(QWidget):
 
         combo_style = f"""
             QComboBox {{
-                background-color: {COLORS['bg_input']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px; padding: 4px 8px;
                 font-size: 11px; min-width: 160px;
             }}
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                selection-background-color: {COLORS['bg_dark']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                selection-background-color: {COLORS["bg_dark"]};
             }}
         """
 
@@ -156,10 +161,15 @@ class CharacterHistoryWidget(QWidget):
         bar = QHBoxLayout()
         bar.addWidget(QLabel("Chart:"))
         self._healer_chart_combo = QComboBox()
-        self._healer_chart_combo.addItems([
-            "Healing & Overhealing", "Overheal %", "Spell Healing", "Spell Casts",
-            "Active Time %",
-        ])
+        self._healer_chart_combo.addItems(
+            [
+                "Healing & Overhealing",
+                "Overheal %",
+                "Spell Healing",
+                "Spell Casts",
+                "Active Time %",
+            ]
+        )
         self._healer_chart_combo.setStyleSheet(combo_style)
         self._healer_chart_combo.currentIndexChanged.connect(self._rebuild_healer_chart)
         bar.addWidget(self._healer_chart_combo)
@@ -270,10 +280,7 @@ class CharacterHistoryWidget(QWidget):
                 self.summary_labels["Raids Tracked"].setText(str(history.total_raids))
 
                 if history.first_seen and history.last_seen:
-                    period = (
-                        f"{history.first_seen.strftime('%Y-%m-%d')} to "
-                        f"{history.last_seen.strftime('%Y-%m-%d')}"
-                    )
+                    period = f"{history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}"
                     self.summary_labels["Active Period"].setText(period)
 
                 self.summary_labels["Avg Active Time"].setText(
@@ -282,28 +289,17 @@ class CharacterHistoryWidget(QWidget):
                 self.summary_labels["Avg Healing"].setText(
                     f"{history.avg_healing:,.0f}" if history.avg_healing else "-"
                 )
-                self.summary_labels["Avg Damage"].setText(
-                    f"{history.avg_damage:,.0f}" if history.avg_damage else "-"
-                )
+                self.summary_labels["Avg Damage"].setText(f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
                 self.summary_labels["Avg Mitigation"].setText(
-                    f"{history.avg_mitigation_percent:.1f}%"
-                    if history.avg_mitigation_percent else "-"
+                    f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-"
                 )
-                self.summary_labels["Consumables Used"].setText(
-                    str(history.total_consumables_used)
-                )
+                self.summary_labels["Consumables Used"].setText(str(history.total_consumables_used))
 
                 self._all_healer_trend = db.get_healer_trend(self._name)
-                self._all_healer_spell_trend = (
-                    db.get_healer_spell_trend(self._name)
-                    if self._all_healer_trend else []
-                )
+                self._all_healer_spell_trend = db.get_healer_spell_trend(self._name) if self._all_healer_trend else []
                 self._all_tank_trend = db.get_tank_trend(self._name)
                 self._all_dps_trend = db.get_dps_trend(self._name)
-                self._all_dps_ability_trend = (
-                    db.get_dps_ability_trend(self._name)
-                    if self._all_dps_trend else []
-                )
+                self._all_dps_ability_trend = db.get_dps_ability_trend(self._name) if self._all_dps_trend else []
                 self._all_consumable_trend = db.get_consumable_trend(self._name)
 
                 consumes_summary = db.get_consumable_summary(self._name, limit=5)
@@ -334,9 +330,7 @@ class CharacterHistoryWidget(QWidget):
                 if compliance and compliance.get("total_raids", 0) > 0:
                     pct = compliance["compliance_pct"]
                     avg = compliance["avg_per_raid"]
-                    self.summary_labels["Consumable Compliance"].setText(
-                        f"{pct:.0f}% ({avg:.1f}/raid)"
-                    )
+                    self.summary_labels["Consumable Compliance"].setText(f"{pct:.0f}% ({avg:.1f}/raid)")
 
                 bests = db.get_character_personal_bests(self._name)
                 if bests:
@@ -389,7 +383,16 @@ class CharacterHistoryWidget(QWidget):
         if self._cached_healer_trend:
             self._healer_trend_model.set_data(
                 self._cached_healer_trend,
-                ["raid_date", "title", "raid_size", "total_healing", "total_overhealing", "overheal_percent", "active_time_percent"])
+                [
+                    "raid_date",
+                    "title",
+                    "raid_size",
+                    "total_healing",
+                    "total_overhealing",
+                    "overheal_percent",
+                    "active_time_percent",
+                ],
+            )
         else:
             self._healer_trend_model.set_data([], [])
         self._rebuild_healer_chart()
@@ -397,7 +400,16 @@ class CharacterHistoryWidget(QWidget):
         if self._cached_tank_trend:
             self._tank_trend_model.set_data(
                 self._cached_tank_trend,
-                ["raid_date", "title", "raid_size", "total_damage_taken", "total_mitigated", "mitigation_percent", "active_time_percent"])
+                [
+                    "raid_date",
+                    "title",
+                    "raid_size",
+                    "total_damage_taken",
+                    "total_mitigated",
+                    "mitigation_percent",
+                    "active_time_percent",
+                ],
+            )
         else:
             self._tank_trend_model.set_data([], [])
         self._rebuild_tank_chart()
@@ -405,7 +417,8 @@ class CharacterHistoryWidget(QWidget):
         if self._cached_dps_trend:
             self._dps_trend_model.set_data(
                 self._cached_dps_trend,
-                ["raid_date", "title", "raid_size", "role", "total_damage", "active_time_percent"])
+                ["raid_date", "title", "raid_size", "role", "total_damage", "active_time_percent"],
+            )
         else:
             self._dps_trend_model.set_data([], [])
         self._rebuild_dps_chart()
@@ -451,11 +464,9 @@ class CharacterHistoryWidget(QWidget):
         elif choice == 1:
             view = build_healer_overheal_chart(trend)
         elif choice == 2:
-            view = build_spell_trend_chart(
-                spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
+            view = build_spell_trend_chart(spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
         elif choice == 3:
-            view = build_spell_trend_chart(
-                spell_trend, "casts", "Spell Casts Over Time", "Casts")
+            view = build_spell_trend_chart(spell_trend, "casts", "Spell Casts Over Time", "Casts")
         elif choice == 4:
             view = build_active_time_chart(trend)
         else:
@@ -488,11 +499,9 @@ class CharacterHistoryWidget(QWidget):
         if choice == 0:
             view = build_dps_chart(trend)
         elif choice == 1:
-            view = build_spell_trend_chart(
-                ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
+            view = build_spell_trend_chart(ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
         elif choice == 2:
-            view = build_spell_trend_chart(
-                ability_trend, "casts", "Ability Casts Over Time", "Casts")
+            view = build_spell_trend_chart(ability_trend, "casts", "Ability Casts Over Time", "Casts")
         elif choice == 3:
             view = build_active_time_chart(trend)
         else:

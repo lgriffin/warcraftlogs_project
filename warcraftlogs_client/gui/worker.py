@@ -39,7 +39,8 @@ class AnalysisWorker(QThread):
 
             self.progress.emit("Analyzing raid data (this may take a minute)...")
             result = analyze_raid(
-                client, self.report_id,
+                client,
+                self.report_id,
                 healer_threshold=role_thresholds.get("healer_min_healing", 40000),
                 tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
                 tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
@@ -89,7 +90,8 @@ class ReferenceAnalysisWorker(QThread):
 
             self.progress.emit("Downloading and analyzing raid data (this may take a minute)...")
             result = analyze_raid(
-                client, self.report_id,
+                client,
+                self.report_id,
                 healer_threshold=role_thresholds.get("healer_min_healing", 40000),
                 tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
                 tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
@@ -152,8 +154,7 @@ class CharacterProfileWorker(QThread):
     finished = Signal(CharacterProfile)
     error = Signal(str)
 
-    def __init__(self, char_name: str, server: str, region: str,
-                 api_url: str, parent=None):
+    def __init__(self, char_name: str, server: str, region: str, api_url: str, parent=None):
         super().__init__(parent)
         self.char_name = char_name
         self.server = server
@@ -166,7 +167,9 @@ class CharacterProfileWorker(QThread):
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
             client = WarcraftLogsClient(token_mgr)
             profile = client.get_character_profile(
-                self.char_name, self.server, self.region,
+                self.char_name,
+                self.server,
+                self.region,
                 api_url=self.api_url,
             )
             self.finished.emit(profile)
@@ -186,8 +189,7 @@ class WowheadResolverWorker(QThread):
         super().__init__(parent)
         self.item_ids = item_ids
 
-    def _resolve_item(self, item_id: int, cache: dict,
-                      names: dict, tooltips: dict) -> bool:
+    def _resolve_item(self, item_id: int, cache: dict, names: dict, tooltips: dict) -> bool:
         sid = str(item_id)
         if sid in cache["items"]:
             names[item_id] = cache["items"][sid]
@@ -197,7 +199,8 @@ class WowheadResolverWorker(QThread):
         try:
             resp = requests.get(
                 f"{self.WOWHEAD_API}/item/{item_id}",
-                params=self.PARAMS, timeout=5,
+                params=self.PARAMS,
+                timeout=5,
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -227,7 +230,9 @@ class WowheadResolverWorker(QThread):
         if dirty:
             save_wowhead_cache(cache)
 
-        self.finished.emit({
-            "items": item_names,
-            "tooltips": tooltips,
-        })
+        self.finished.emit(
+            {
+                "items": item_names,
+                "tooltips": tooltips,
+            }
+        )

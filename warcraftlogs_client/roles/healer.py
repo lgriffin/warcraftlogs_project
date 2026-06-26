@@ -1,4 +1,3 @@
-
 import dynamic_role_parser
 import requests
 from client import get_healing_data
@@ -40,7 +39,7 @@ def generate_healer_summary(client, report_id, master_actors):
             for spell_id, amount in sorted(spell_totals.items(), key=lambda x: x[1], reverse=True):
                 spell_name = spell_map.get(spell_id, f"(ID {spell_id})")
                 casts = spell_casts.get(spell_id, 0)
-                cast_display = '-' if spell_id == 17543 and casts == 0 else casts
+                cast_display = "-" if spell_id == 17543 and casts == 0 else casts
                 print(f"{spell_name:<30} {amount:>15,} {cast_display:>10}")
                 per_character_spells[spell_name] = per_character_spells.get(spell_name, 0) + casts
                 all_spell_names_by_class[char_class].add(spell_name)
@@ -62,8 +61,7 @@ def generate_healer_summary(client, report_id, master_actors):
                     print(f"  - {r_name}: {count}")
 
             healing_by_name = {
-                spell_map.get(spell_id, f"(ID {spell_id})"): amount
-                for spell_id, amount in spell_totals.items()
+                spell_map.get(spell_id, f"(ID {spell_id})"): amount for spell_id, amount in spell_totals.items()
             }
 
             summary = {
@@ -85,11 +83,7 @@ def generate_healer_summary(client, report_id, master_actors):
             print(f"❌ Error processing {name}: {e}")
 
     # 🧠 Identify actual healers based on healing output
-    healing_totals = {
-        summary["name"]: summary["healing"]
-        for group in grouped_summary.values()
-        for summary in group
-    }
+    healing_totals = {summary["name"]: summary["healing"] for group in grouped_summary.values() for summary in group}
     healers = dynamic_role_parser.identify_healers(master_actors, healing_totals)
 
     # Filter grouped_summary to only include identified healers
@@ -112,9 +106,9 @@ def print_healer_table(summary, spell_names, class_name):
 
     dispel_headers = "".join(f"{dispel[:16]:>16}" for dispel in sorted(all_dispels))
     header = (
-        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} " +
-        "".join(f"{spell[:14]:>16}" for spell in spell_names) +
-        f"{dispel_headers}{'Restore Mana':>16} {'Dark Rune':>12}"
+        f"{'Character':<15} {'Healing':>12} {'Overheal':>12} "
+        + "".join(f"{spell[:14]:>16}" for spell in spell_names)
+        + f"{dispel_headers}{'Restore Mana':>16} {'Dark Rune':>12}"
     )
     print(header)
     print("-" * len(header))
@@ -126,15 +120,10 @@ def print_healer_table(summary, spell_names, class_name):
                 healing = row.get("healing_spells", {}).get("Fire Protection", 0)
                 spell_counts += f"{healing:>16,}"
             else:
-                cast_total = sum(
-                    count for name, count in row["spells"].items()
-                    if name == spell
-                )
+                cast_total = sum(count for name, count in row["spells"].items() if name == spell)
                 spell_counts += f"{cast_total:>16}"
 
-        dispel_counts = "".join(
-            f"{row.get('dispels', {}).get(d, 0):>16}" for d in sorted(all_dispels)
-        )
+        dispel_counts = "".join(f"{row.get('dispels', {}).get(d, 0):>16}" for d in sorted(all_dispels))
 
         restore_mana = row.get("resources", {}).get("Super Mana Potion", 0)
         dark_rune = row.get("resources", {}).get("Dark Rune", 0)

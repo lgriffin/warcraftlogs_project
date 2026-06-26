@@ -24,7 +24,8 @@ def run_unified_report(args):
     logger.info("Initially going to try identify roles dynamically")
 
     analysis = analyze_raid(
-        client, report_id,
+        client,
+        report_id,
         healer_threshold=role_thresholds.get("healer_min_healing", 40000),
         tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
         tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
@@ -36,6 +37,7 @@ def run_unified_report(args):
 
     if args.md:
         from .renderers.markdown import export_raid_analysis
+
         path = export_raid_analysis(analysis)
         print(f"\nMarkdown report exported to: {path}")
 

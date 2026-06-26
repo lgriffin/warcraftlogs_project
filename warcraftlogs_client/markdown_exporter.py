@@ -14,9 +14,10 @@ def export_combined_markdown(
     tank_damage_summary,
     spell_names,
     report_title,
-    output_path=None
+    output_path=None,
 ):
     from . import paths
+
     template_dir = str(paths.get_template_dir())
 
     env = Environment(loader=FileSystemLoader(template_dir), trim_blocks=True, lstrip_blocks=True)  # nosec B701
@@ -40,7 +41,7 @@ def export_combined_markdown(
         "tank_damage_summary": [],
         "spell_names": spell_names,
         "include_healer": True,
-        "include_melee": True
+        "include_melee": True,
     }
 
     # Populate healer summary_by_class
@@ -52,15 +53,17 @@ def export_combined_markdown(
         context["summary_by_class"][class_type] = []
 
         for row in class_rows:
-            context["summary_by_class"][class_type].append({
-                "name": row["name"],
-                "healing": f"{row['healing']:,}",
-                "overhealing": f"{row['overhealing']:,}",
-                "spells": row["spells"],
-                "dispels": row["dispels"],
-                "mana_potions": row.get("mana_potions") or row.get("resources", {}).get("Super Mana Potion", 0),
-                "dark_runes": row.get("dark_runes") or row.get("resources", {}).get("Dark Rune", 0)
-            })
+            context["summary_by_class"][class_type].append(
+                {
+                    "name": row["name"],
+                    "healing": f"{row['healing']:,}",
+                    "overhealing": f"{row['overhealing']:,}",
+                    "spells": row["spells"],
+                    "dispels": row["dispels"],
+                    "mana_potions": row.get("mana_potions") or row.get("resources", {}).get("Super Mana Potion", 0),
+                    "dark_runes": row.get("dark_runes") or row.get("resources", {}).get("Dark Rune", 0),
+                }
+            )
 
     # Populate melee_classes with unified spell headers
     for class_name in melee_summary:
@@ -69,18 +72,16 @@ def export_combined_markdown(
             all_spells.update(spell for spell, count in row["casts"].items() if count > 0)
 
         sorted_spells = sorted(all_spells)
-        context["melee_classes"].append({
-            "class_name": class_name,
-            "spells": sorted_spells,
-            "players": []
-        })
+        context["melee_classes"].append({"class_name": class_name, "spells": sorted_spells, "players": []})
 
         for row in melee_summary[class_name]:
-            context["melee_classes"][-1]["players"].append({
-                "name": row["name"],
-                "damage": f"{row['total']:,}",
-                "spells_map": { spell: row["casts"].get(spell, 0) for spell in sorted_spells }
-            })
+            context["melee_classes"][-1]["players"].append(
+                {
+                    "name": row["name"],
+                    "damage": f"{row['total']:,}",
+                    "spells_map": {spell: row["casts"].get(spell, 0) for spell in sorted_spells},
+                }
+            )
 
     # Populate ranged_classes with unified spell headers
     for class_name in ranged_summary:
@@ -89,44 +90,29 @@ def export_combined_markdown(
             all_spells.update(spell for spell, count in row["casts"].items() if count > 0)
 
         sorted_spells = sorted(all_spells)
-        context["ranged_classes"].append({
-            "class_name": class_name,
-            "spells": sorted_spells,
-            "players": []
-        })
+        context["ranged_classes"].append({"class_name": class_name, "spells": sorted_spells, "players": []})
 
         for row in ranged_summary[class_name]:
-            context["ranged_classes"][-1]["players"].append({
-                "name": row["name"],
-                "damage": f"{row['total']:,}",
-                "spells_map": { spell: row["casts"].get(spell, 0) for spell in sorted_spells }
-            })
+            context["ranged_classes"][-1]["players"].append(
+                {
+                    "name": row["name"],
+                    "damage": f"{row['total']:,}",
+                    "spells_map": {spell: row["casts"].get(spell, 0) for spell in sorted_spells},
+                }
+            )
 
     # Aggregate tank damage summary (merge duplicate spell names)
     for tank_class in tank_damage_summary:
         spell_names = list(tank_class["spells_map"].keys())
-        class_group = {
-            "class_name": tank_class["class_name"],
-            "spells": spell_names,
-            "players": []
-        }
+        class_group = {"class_name": tank_class["class_name"], "spells": spell_names, "players": []}
 
         for player in tank_class["players"]:
             aggregated_casts = {}
             for spell, ids in tank_class["spells_map"].items():
-                aggregated_casts[spell] = sum(
-                    player["casts"].get(int(spell_variant), 0) for spell_variant in ids
-                )
-            class_group["players"].append({
-                "name": player["name"],
-                "damage": "-",
-                "spells_map": aggregated_casts
-            })
-
+                aggregated_casts[spell] = sum(player["casts"].get(int(spell_variant), 0) for spell_variant in ids)
+            class_group["players"].append({"name": player["name"], "damage": "-", "spells_map": aggregated_casts})
 
         context["tank_damage_summary"].append(class_group)
-
-
 
     rendered = template.render(context)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
