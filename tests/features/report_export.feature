@@ -1,32 +1,36 @@
 Feature: Markdown Report Export
-  As a raid leader
-  I want to export analysis results as a markdown file
-  So that I can share and archive raid performance data
+  The system shall export analysis results as markdown, including
+  raid title, owner, composition, and role summaries.
 
-  Scenario: Rendered markdown starts with raid title
+  @ears_ubiquitous
+  Scenario: The system shall start markdown output with the raid title as heading
     Given a completed raid analysis for "Karazhan Clear"
     When the analysis is rendered to markdown
     Then the markdown should start with "# Karazhan Clear"
 
-  Scenario: Markdown includes raid owner
+  @ears_ubiquitous
+  Scenario: The system shall include the raid owner in markdown output
     Given a completed raid analysis owned by "TestGuild"
     When the analysis is rendered to markdown
     Then the markdown should contain "**Owner:** TestGuild"
 
-  Scenario: Markdown includes composition sections
+  @ears_ubiquitous
+  Scenario: The system shall include composition role sections in markdown output
     Given a completed raid analysis with tanks, healers, and DPS
     When the analysis is rendered to markdown
     Then the markdown should contain "**Tanks**"
     And the markdown should contain "**Healers**"
     And the markdown should contain "**DPS**"
 
-  Scenario: Markdown includes healer summary table
+  @ears_ubiquitous
+  Scenario: The system shall include a healer summary section in markdown output
     Given a completed raid analysis with a healer named "HolyPriest"
     When the analysis is rendered to markdown
     Then the markdown should contain "## Healer Summary"
     And the markdown should contain "HolyPriest"
 
-  Scenario: Export writes file to disk
+  @ears_event_driven
+  Scenario: When analysis is exported to file, the system shall write valid markdown to disk
     Given a completed raid analysis for "Karazhan Clear"
     When the analysis is exported to a file
     Then the file should exist
