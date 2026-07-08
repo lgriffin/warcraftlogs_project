@@ -4,6 +4,7 @@ import pytest
 
 from warcraftlogs_client.common.errors import (
     ApiError,
+    AuthenticationError,
     ConfigurationError,
     DataProcessingError,
     ErrorSeverity,
@@ -19,9 +20,17 @@ from warcraftlogs_client.common.errors import (
 
 class TestErrorHierarchy:
     def test_all_inherit_from_base(self):
-        for cls in (ConfigurationError, ApiError, DataProcessingError, ReportGenerationError):
+        for cls in (ConfigurationError, ApiError, AuthenticationError, DataProcessingError, ReportGenerationError):
             assert issubclass(cls, WarcraftLogsError)
             assert issubclass(cls, Exception)
+
+    def test_authentication_error_severity(self):
+        err = AuthenticationError("bad token")
+        assert err.severity == ErrorSeverity.ERROR
+
+    def test_authentication_error_with_details(self):
+        err = AuthenticationError("failed", details="HTTP 401")
+        assert err.details == "HTTP 401"
 
     def test_configuration_error_is_critical(self):
         err = ConfigurationError("bad config")

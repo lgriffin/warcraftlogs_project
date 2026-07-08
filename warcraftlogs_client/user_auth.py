@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import requests
 
 from . import paths
+from .common.errors import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -94,23 +95,33 @@ class UserTokenManager:
         client_secret = config["client_secret"]
 
         token_url = get_token_url()
-        response = requests.post(
-            token_url,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": self._refresh_token,
-                "client_id": client_id,
-                "client_secret": client_secret,
-            },
-            timeout=30,
-        )
+        try:
+            response = requests.post(
+                token_url,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self._refresh_token,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                },
+                timeout=30,
+            )
+        except requests.ConnectionError:
+            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection")
+        except requests.Timeout:
+            raise AuthenticationError("WarcraftLogs authentication timed out — try again later")
 
         if response.status_code != 200:
             self.revoke()
-            raise RuntimeError("Token refresh failed — please re-authenticate")
+            raise AuthenticationError("Token refresh failed — please re-authenticate")
 
-        token_data = response.json()
-        self._access_token = token_data["access_token"]
+        try:
+            token_data = response.json()
+            self._access_token = token_data["access_token"]
+        except (ValueError, KeyError) as e:
+            self.revoke()
+            raise AuthenticationError("Received invalid response during token refresh", details=str(e))
+
         self._refresh_token = token_data.get("refresh_token", self._refresh_token)
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
         self._save()
@@ -125,27 +136,38 @@ class UserTokenManager:
         logger.info("  client_secret=%s...%s (len=%d)", client_secret[:4], client_secret[-4:], len(client_secret))
         logger.info("  code=%s...%s", code[:8], code[-4:] if len(code) > 8 else "")
 
-        response = requests.post(
-            token_url,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-                "client_id": client_id,
-                "client_secret": client_secret,
-            },
-            timeout=30,
-        )
+        try:
+            response = requests.post(
+                token_url,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                },
+                timeout=30,
+            )
+        except requests.ConnectionError:
+            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection")
+        except requests.Timeout:
+            raise AuthenticationError("WarcraftLogs authentication timed out — try again later")
 
         logger.info("Token response: %d", response.status_code)
         logger.info("  headers: %s", dict(response.headers))
         logger.info("  body: %s", response.text)
 
         if response.status_code != 200:
-            raise RuntimeError(f"Token exchange failed (HTTP {response.status_code}): {response.text}")
+            raise AuthenticationError(
+                f"Token exchange failed (HTTP {response.status_code})", details=response.text
+            )
 
-        token_data = response.json()
-        self._access_token = token_data["access_token"]
+        try:
+            token_data = response.json()
+            self._access_token = token_data["access_token"]
+        except (ValueError, KeyError) as e:
+            raise AuthenticationError("Received invalid response during token exchange", details=str(e))
+
         self._refresh_token = token_data.get("refresh_token")
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
         self._save()

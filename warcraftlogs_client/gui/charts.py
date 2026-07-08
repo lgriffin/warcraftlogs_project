@@ -1004,6 +1004,9 @@ def build_dps_progression_chart(data: list[dict], top_n: int = 8) -> QChartView:
     _style_axis(y_axis)
     chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
 
+    if not data:
+        return make_chart_view(chart)
+
     by_player: dict[str, list[tuple[datetime, float]]] = {}
     for row in data:
         name = row["name"]
@@ -1013,7 +1016,11 @@ def build_dps_progression_chart(data: list[dict], top_n: int = 8) -> QChartView:
             continue
         by_player.setdefault(name, []).append((dt, float(row["total_damage"])))
 
-    avgs = {name: sum(v for _, v in pts) / len(pts) for name, pts in by_player.items()}
+    avgs = {
+        name: sum(v for _, v in pts) / len(pts)
+        for name, pts in by_player.items()
+        if pts
+    }
     top_names = sorted(avgs, key=avgs.get, reverse=True)[:top_n]
 
     all_pts = []
