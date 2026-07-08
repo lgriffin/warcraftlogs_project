@@ -65,6 +65,13 @@ skips = ["B101", "B105", "B110", "B404", "B603", "B607", "B608"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 bdd_features_base_dir = "tests/features/"
+markers = [
+    "ears_event_driven: EARS event-driven requirement (When trigger, system shall respond)",
+    "ears_ubiquitous: EARS ubiquitous requirement (system shall always behave this way)",
+    "ears_unwanted_behavior: EARS unwanted-behavior requirement (If condition, system shall handle)",
+    "ears_state_driven: EARS state-driven requirement (While state, system shall behave)",
+    "ears_optional: EARS optional requirement (Where feature, system shall behave)",
+]
 
 [tool.codespell]
 skip = ".git,.venv,.mypy_cache,.ruff_cache,.pytest_cache,*.egg-info,build,dist,*.db,*.ico,*.png,*.csv,spell_data,reports,*.spec"

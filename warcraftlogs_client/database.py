@@ -2229,33 +2229,37 @@ class PerformanceDB:
                WHERE hp.raid_id = ?""",
             (raid_id,),
         ).fetchall()
-        results = []
-        for r in rows:
-            spells_rows = conn.execute(
-                "SELECT * FROM healer_spells WHERE healer_performance_id = ?", (r["id"],)
-            ).fetchall()
-            spells = [
-                SpellUsage(
-                    spell_id=s["spell_id"],
-                    spell_name=_resolve_name(s["spell_id"], s["spell_name"]),
-                    casts=s["casts"],
-                    total_amount=s["total_healing"],
+
+        perf_ids = [r["id"] for r in rows]
+        spells_by_perf: dict[int, list[SpellUsage]] = {pid: [] for pid in perf_ids}
+        if perf_ids:
+            placeholders = ",".join("?" * len(perf_ids))
+            for s in conn.execute(
+                f"SELECT * FROM healer_spells WHERE healer_performance_id IN ({placeholders})",
+                perf_ids,
+            ).fetchall():
+                spells_by_perf[s["healer_performance_id"]].append(
+                    SpellUsage(
+                        spell_id=s["spell_id"],
+                        spell_name=_resolve_name(s["spell_id"], s["spell_name"]),
+                        casts=s["casts"],
+                        total_amount=s["total_healing"],
+                    )
                 )
-                for s in spells_rows
-            ]
-            results.append(
-                HealerPerformance(
-                    name=r["name"],
-                    player_class=r["player_class"],
-                    source_id=0,
-                    total_healing=r["total_healing"],
-                    total_overhealing=r["total_overhealing"],
-                    spells=spells,
-                    fear_ward_casts=r["fear_ward_casts"],
-                    active_time_percent=r["active_time_percent"] or 0.0,
-                )
+
+        return [
+            HealerPerformance(
+                name=r["name"],
+                player_class=r["player_class"],
+                source_id=0,
+                total_healing=r["total_healing"],
+                total_overhealing=r["total_overhealing"],
+                spells=spells_by_perf.get(r["id"], []),
+                fear_ward_casts=r["fear_ward_casts"],
+                active_time_percent=r["active_time_percent"] or 0.0,
             )
-        return results
+            for r in rows
+        ]
 
     def _load_tanks_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[TankPerformance]:
         rows = conn.execute(
@@ -2265,41 +2269,48 @@ class PerformanceDB:
                WHERE tp.raid_id = ?""",
             (raid_id,),
         ).fetchall()
-        results = []
-        for r in rows:
-            taken_rows = conn.execute(
-                "SELECT * FROM tank_damage_taken WHERE tank_performance_id = ?", (r["id"],)
-            ).fetchall()
-            taken_breakdown = [
-                SpellUsage(
-                    spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]), casts=a["hits"]
-                )
-                for a in taken_rows
-            ]
 
-            ability_rows = conn.execute(
-                "SELECT * FROM tank_abilities WHERE tank_performance_id = ?", (r["id"],)
-            ).fetchall()
-            abilities = [
-                SpellUsage(
-                    spell_id=a["spell_id"], spell_name=_resolve_name(a["spell_id"], a["spell_name"]), casts=a["casts"]
+        perf_ids = [r["id"] for r in rows]
+        taken_by_perf: dict[int, list[SpellUsage]] = {pid: [] for pid in perf_ids}
+        abilities_by_perf: dict[int, list[SpellUsage]] = {pid: [] for pid in perf_ids}
+        if perf_ids:
+            placeholders = ",".join("?" * len(perf_ids))
+            for a in conn.execute(
+                f"SELECT * FROM tank_damage_taken WHERE tank_performance_id IN ({placeholders})",
+                perf_ids,
+            ).fetchall():
+                taken_by_perf[a["tank_performance_id"]].append(
+                    SpellUsage(
+                        spell_id=a["spell_id"],
+                        spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
+                        casts=a["hits"],
+                    )
                 )
-                for a in ability_rows
-            ]
+            for a in conn.execute(
+                f"SELECT * FROM tank_abilities WHERE tank_performance_id IN ({placeholders})",
+                perf_ids,
+            ).fetchall():
+                abilities_by_perf[a["tank_performance_id"]].append(
+                    SpellUsage(
+                        spell_id=a["spell_id"],
+                        spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
+                        casts=a["casts"],
+                    )
+                )
 
-            results.append(
-                TankPerformance(
-                    name=r["name"],
-                    player_class=r["player_class"],
-                    source_id=0,
-                    total_damage_taken=r["total_damage_taken"],
-                    total_mitigated=r["total_mitigated"],
-                    damage_taken_breakdown=taken_breakdown,
-                    abilities_used=abilities,
-                    active_time_percent=r["active_time_percent"] or 0.0,
-                )
+        return [
+            TankPerformance(
+                name=r["name"],
+                player_class=r["player_class"],
+                source_id=0,
+                total_damage_taken=r["total_damage_taken"],
+                total_mitigated=r["total_mitigated"],
+                damage_taken_breakdown=taken_by_perf.get(r["id"], []),
+                abilities_used=abilities_by_perf.get(r["id"], []),
+                active_time_percent=r["active_time_percent"] or 0.0,
             )
-        return results
+            for r in rows
+        ]
 
     def _load_dps_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[DPSPerformance]:
         rows = conn.execute(
@@ -2309,32 +2320,36 @@ class PerformanceDB:
                WHERE dp.raid_id = ?""",
             (raid_id,),
         ).fetchall()
-        results = []
-        for r in rows:
-            ability_rows = conn.execute(
-                "SELECT * FROM dps_abilities WHERE dps_performance_id = ?", (r["id"],)
-            ).fetchall()
-            abilities = [
-                SpellUsage(
-                    spell_id=a["spell_id"],
-                    spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
-                    casts=a["casts"],
-                    total_amount=a["total_damage"],
+
+        perf_ids = [r["id"] for r in rows]
+        abilities_by_perf: dict[int, list[SpellUsage]] = {pid: [] for pid in perf_ids}
+        if perf_ids:
+            placeholders = ",".join("?" * len(perf_ids))
+            for a in conn.execute(
+                f"SELECT * FROM dps_abilities WHERE dps_performance_id IN ({placeholders})",
+                perf_ids,
+            ).fetchall():
+                abilities_by_perf[a["dps_performance_id"]].append(
+                    SpellUsage(
+                        spell_id=a["spell_id"],
+                        spell_name=_resolve_name(a["spell_id"], a["spell_name"]),
+                        casts=a["casts"],
+                        total_amount=a["total_damage"],
+                    )
                 )
-                for a in ability_rows
-            ]
-            results.append(
-                DPSPerformance(
-                    name=r["name"],
-                    player_class=r["player_class"],
-                    source_id=0,
-                    role=r["role"],
-                    total_damage=r["total_damage"],
-                    abilities=abilities,
-                    active_time_percent=r["active_time_percent"] or 0.0,
-                )
+
+        return [
+            DPSPerformance(
+                name=r["name"],
+                player_class=r["player_class"],
+                source_id=0,
+                role=r["role"],
+                total_damage=r["total_damage"],
+                abilities=abilities_by_perf.get(r["id"], []),
+                active_time_percent=r["active_time_percent"] or 0.0,
             )
-        return results
+            for r in rows
+        ]
 
     def _load_consumables_for_raid(
         self, conn: sqlite3.Connection, raid_id: int, report_id: str
