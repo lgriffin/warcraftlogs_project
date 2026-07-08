@@ -106,10 +106,10 @@ class UserTokenManager:
                 },
                 timeout=30,
             )
-        except requests.ConnectionError:
-            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection")
-        except requests.Timeout:
-            raise AuthenticationError("WarcraftLogs authentication timed out — try again later")
+        except requests.ConnectionError as e:
+            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection") from e
+        except requests.Timeout as e:
+            raise AuthenticationError("WarcraftLogs authentication timed out — try again later") from e
 
         if response.status_code != 200:
             self.revoke()
@@ -120,7 +120,7 @@ class UserTokenManager:
             self._access_token = token_data["access_token"]
         except (ValueError, KeyError) as e:
             self.revoke()
-            raise AuthenticationError("Received invalid response during token refresh", details=str(e))
+            raise AuthenticationError("Received invalid response during token refresh", details=str(e)) from e
 
         self._refresh_token = token_data.get("refresh_token", self._refresh_token)
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
@@ -148,10 +148,10 @@ class UserTokenManager:
                 },
                 timeout=30,
             )
-        except requests.ConnectionError:
-            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection")
-        except requests.Timeout:
-            raise AuthenticationError("WarcraftLogs authentication timed out — try again later")
+        except requests.ConnectionError as e:
+            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection") from e
+        except requests.Timeout as e:
+            raise AuthenticationError("WarcraftLogs authentication timed out — try again later") from e
 
         logger.info("Token response: %d", response.status_code)
         logger.info("  headers: %s", dict(response.headers))
@@ -166,7 +166,7 @@ class UserTokenManager:
             token_data = response.json()
             self._access_token = token_data["access_token"]
         except (ValueError, KeyError) as e:
-            raise AuthenticationError("Received invalid response during token exchange", details=str(e))
+            raise AuthenticationError("Received invalid response during token exchange", details=str(e)) from e
 
         self._refresh_token = token_data.get("refresh_token")
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60

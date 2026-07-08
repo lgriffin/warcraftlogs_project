@@ -30,14 +30,14 @@ class TokenManager:
             response = requests.post(self.TOKEN_URL, headers=headers, data=data, timeout=30)
             response.raise_for_status()
             token_data = response.json()
-        except requests.ConnectionError:
-            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection")
-        except requests.Timeout:
-            raise AuthenticationError("WarcraftLogs authentication timed out — try again later")
+        except requests.ConnectionError as e:
+            raise AuthenticationError("Cannot reach WarcraftLogs — check your internet connection") from e
+        except requests.Timeout as e:
+            raise AuthenticationError("WarcraftLogs authentication timed out — try again later") from e
         except requests.HTTPError as e:
-            raise AuthenticationError(f"Authentication failed (HTTP {e.response.status_code})", details=str(e))
+            raise AuthenticationError(f"Authentication failed (HTTP {e.response.status_code})", details=str(e)) from e
         except (ValueError, KeyError) as e:
-            raise AuthenticationError("Received invalid response from WarcraftLogs", details=str(e))
+            raise AuthenticationError("Received invalid response from WarcraftLogs", details=str(e)) from e
 
         self.access_token = token_data["access_token"]
         self.token_expiry = time.time() + token_data.get("expires_in", 3600) - 60
