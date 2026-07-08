@@ -50,6 +50,13 @@ class ApiError(WarcraftLogsError):
         self.response_data = response_data
 
 
+class AuthenticationError(WarcraftLogsError):
+    """Raised when authentication or token operations fail."""
+
+    def __init__(self, message: str, details: str | None = None):
+        super().__init__(message, ErrorSeverity.ERROR, details)
+
+
 class DataProcessingError(WarcraftLogsError):
     """Raised when data processing fails."""
 

@@ -4,8 +4,10 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from warcraftlogs_client.auth import TokenManager
+from warcraftlogs_client.common.errors import AuthenticationError
 
 
 @pytest.fixture
@@ -92,11 +94,31 @@ class TestGetToken:
         assert mock_post.call_count == 2
 
     @patch("warcraftlogs_client.auth.requests.post")
-    def test_http_error_propagates(self, mock_post, tm):
-        from requests.exceptions import HTTPError
-
+    def test_http_error_raises_auth_error(self, mock_post, tm):
+        resp = MagicMock(status_code=401)
         mock_post.return_value = MagicMock(
-            raise_for_status=MagicMock(side_effect=HTTPError("401")),
+            raise_for_status=MagicMock(side_effect=requests.HTTPError("401", response=resp)),
         )
-        with pytest.raises(HTTPError):
+        with pytest.raises(AuthenticationError, match="Authentication failed"):
+            tm.get_token()
+
+    @patch("warcraftlogs_client.auth.requests.post")
+    def test_connection_error_raises_auth_error(self, mock_post, tm):
+        mock_post.side_effect = requests.ConnectionError("DNS failure")
+        with pytest.raises(AuthenticationError, match="Cannot reach"):
+            tm.get_token()
+
+    @patch("warcraftlogs_client.auth.requests.post")
+    def test_timeout_raises_auth_error(self, mock_post, tm):
+        mock_post.side_effect = requests.Timeout("timed out")
+        with pytest.raises(AuthenticationError, match="timed out"):
+            tm.get_token()
+
+    @patch("warcraftlogs_client.auth.requests.post")
+    def test_malformed_json_raises_auth_error(self, mock_post, tm):
+        mock_post.return_value = MagicMock(
+            raise_for_status=lambda: None,
+            json=MagicMock(side_effect=ValueError("No JSON")),
+        )
+        with pytest.raises(AuthenticationError, match="invalid response"):
             tm.get_token()

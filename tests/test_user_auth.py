@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 from urllib.request import urlopen
 
 import pytest
+import requests
 
+from warcraftlogs_client.common.errors import AuthenticationError
 from warcraftlogs_client.user_auth import (
     OAuthCallbackServer,
     UserTokenManager,
@@ -137,9 +139,54 @@ class TestUserTokenManager:
         tm._expires_at = time.time() - 100
         tm._save()
 
-        with pytest.raises(RuntimeError, match="refresh failed"):
+        with pytest.raises(AuthenticationError, match="refresh failed"):
             tm.get_token()
         assert not tm.is_authenticated()
+
+    @patch("warcraftlogs_client.user_auth.requests.post")
+    @patch("warcraftlogs_client.config.load_config")
+    def test_refresh_connection_error(self, mock_config, mock_post, tmp_path):
+        mock_config.return_value = {"client_id": "cid", "client_secret": "csec"}
+        mock_post.side_effect = requests.ConnectionError("offline")
+
+        path = str(tmp_path / "token.json")
+        tm = UserTokenManager(token_path=path)
+        tm._access_token = "expired"
+        tm._refresh_token = "old_refresh"
+        tm._expires_at = time.time() - 100
+        tm._save()
+
+        with pytest.raises(AuthenticationError, match="Cannot reach"):
+            tm.get_token()
+
+    @patch("warcraftlogs_client.user_auth.requests.post")
+    def test_complete_auth_connection_error(self, mock_post, tmp_path):
+        mock_post.side_effect = requests.ConnectionError("offline")
+
+        tm = UserTokenManager(token_path=str(tmp_path / "token.json"))
+        with pytest.raises(AuthenticationError, match="Cannot reach"):
+            tm.complete_auth("code", "client_id", "client_secret")
+
+    @patch("warcraftlogs_client.user_auth.requests.post")
+    def test_complete_auth_timeout(self, mock_post, tmp_path):
+        mock_post.side_effect = requests.Timeout("slow")
+
+        tm = UserTokenManager(token_path=str(tmp_path / "token.json"))
+        with pytest.raises(AuthenticationError, match="timed out"):
+            tm.complete_auth("code", "client_id", "client_secret")
+
+    @patch("warcraftlogs_client.user_auth.requests.post")
+    def test_complete_auth_malformed_json(self, mock_post, tmp_path):
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=MagicMock(side_effect=ValueError("not json")),
+            text="<html>error</html>",
+            headers={},
+        )
+
+        tm = UserTokenManager(token_path=str(tmp_path / "token.json"))
+        with pytest.raises(AuthenticationError, match="invalid response"):
+            tm.complete_auth("code", "client_id", "client_secret")
 
     @patch("warcraftlogs_client.user_auth._get_base_url", return_value="https://www.warcraftlogs.com")
     def test_build_authorize_url(self, _mock_base):
