@@ -9,7 +9,9 @@ from warcraftlogs_client.models import (
     EncounterRanking,
     HealerPerformance,
     PotionSpike,
+    RaidAnalysis,
     RaidComposition,
+    RaidMetadata,
     TankPerformance,
 )
 
@@ -190,3 +192,19 @@ class TestCharacterProfile:
         for cid, name in WOW_CLASS_NAMES.items():
             p = CharacterProfile(name="X", server="S", region="R", class_id=cid)
             assert p.class_name == name
+
+
+class TestRaidAnalysis:
+    def test_warnings_defaults_empty(self):
+        meta = RaidMetadata(report_id="r1", title="T", owner="O", start_time=0)
+        comp = RaidComposition()
+        analysis = RaidAnalysis(metadata=meta, composition=comp)
+        assert analysis.warnings == []
+
+    def test_warnings_preserved(self):
+        meta = RaidMetadata(report_id="r1", title="T", owner="O", start_time=0)
+        comp = RaidComposition()
+        warns = ["Failed to analyze healer X: timeout"]
+        analysis = RaidAnalysis(metadata=meta, composition=comp, warnings=warns)
+        assert analysis.warnings == warns
+        assert len(analysis.warnings) == 1

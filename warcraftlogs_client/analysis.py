@@ -72,15 +72,22 @@ def analyze_raid(
         len(composition.ranged),
     )
 
-    healers = _analyze_healers(client, report_id, composition.healers)
+    all_warnings: list[str] = []
+
+    healers, healer_warns = _analyze_healers(client, report_id, composition.healers)
+    all_warnings.extend(healer_warns)
     logger.info("  healers analyzed: %d", len(healers))
-    tanks = _analyze_tanks(client, report_id, composition.tanks)
+    tanks, tank_warns = _analyze_tanks(client, report_id, composition.tanks)
+    all_warnings.extend(tank_warns)
     logger.info("  tanks analyzed: %d", len(tanks))
-    melee_dps = _analyze_dps(client, report_id, composition.melee, "melee")
-    ranged_dps = _analyze_dps(client, report_id, composition.ranged, "ranged")
+    melee_dps, melee_warns = _analyze_dps(client, report_id, composition.melee, "melee")
+    all_warnings.extend(melee_warns)
+    ranged_dps, ranged_warns = _analyze_dps(client, report_id, composition.ranged, "ranged")
+    all_warnings.extend(ranged_warns)
     logger.info("  dps analyzed: %d melee, %d ranged", len(melee_dps), len(ranged_dps))
 
-    consumables = _analyze_consumables(client, report_id, composition)
+    consumables, consume_warns = _analyze_consumables(client, report_id, composition)
+    all_warnings.extend(consume_warns)
 
     try:
         encounters = _analyze_encounters(client, report_id, composition)
@@ -88,8 +95,12 @@ def analyze_raid(
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
         logger.error("  encounter analysis failed: %s", e)
         encounters = []
+        all_warnings.append(f"Encounter analysis failed: {e}")
 
     _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
+
+    if all_warnings:
+        logger.warning("analyze_raid: completed with %d warnings", len(all_warnings))
 
     logger.info("analyze_raid: complete for %s", report_id)
     return RaidAnalysis(
@@ -100,6 +111,7 @@ def analyze_raid(
         dps=melee_dps + ranged_dps,
         consumables=consumables,
         encounters=encounters,
+        warnings=all_warnings,
     )
 
 
@@ -319,8 +331,9 @@ def _analyze_healers(
     client: WarcraftLogsClient,
     report_id: str,
     healer_ids: list[PlayerIdentity],
-) -> list[HealerPerformance]:
+) -> tuple[list[HealerPerformance], list[str]]:
     results = []
+    warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
     spell_mgr = get_spell_manager()
 
@@ -371,16 +384,18 @@ def _analyze_healers(
             )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error processing healer %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze healer {player.name}: {e}")
 
-    return results
+    return results, warnings
 
 
 def _analyze_tanks(
     client: WarcraftLogsClient,
     report_id: str,
     tank_ids: list[PlayerIdentity],
-) -> list[TankPerformance]:
+) -> tuple[list[TankPerformance], list[str]]:
     results = []
+    warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
 
     spell_mgr = get_spell_manager()
@@ -454,8 +469,9 @@ def _analyze_tanks(
             )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error processing tank %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze tank {player.name}: {e}")
 
-    return results
+    return results, warnings
 
 
 def _analyze_dps(
@@ -463,8 +479,9 @@ def _analyze_dps(
     report_id: str,
     player_ids: list[PlayerIdentity],
     role: str,
-) -> list[DPSPerformance]:
+) -> tuple[list[DPSPerformance], list[str]]:
     results = []
+    warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
 
     spell_mgr = get_spell_manager()
@@ -527,8 +544,9 @@ def _analyze_dps(
             )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error processing %s %s: %s", role, player.name, e)
+            warnings.append(f"Failed to analyze {role} {player.name}: {e}")
 
-    return results
+    return results, warnings
 
 
 def _load_consumes_config() -> dict:
@@ -545,13 +563,14 @@ def _analyze_consumables(
     client: WarcraftLogsClient,
     report_id: str,
     composition: RaidComposition,
-) -> list[ConsumableUsage]:
+) -> tuple[list[ConsumableUsage], list[str]]:
     config = _load_consumes_config()
 
     buff_ids: dict[int, str] = {int(sid): name for sid, name in config.get("buff_consumables", {}).items()}
     cast_ids: dict[int, str] = {int(sid): name for sid, name in config.get("cast_consumables", {}).items()}
 
     results: list[ConsumableUsage] = []
+    warnings: list[str] = []
 
     for player in composition.all_players:
         try:
@@ -581,6 +600,7 @@ def _analyze_consumables(
                         )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing buff consumables for %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze consumables for {player.name}: {e}")
 
         try:
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
@@ -606,8 +626,9 @@ def _analyze_consumables(
                 )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing cast consumables for %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze consumables for {player.name}: {e}")
 
-    return results
+    return results, warnings
 
 
 def _analyze_encounters(

@@ -368,6 +368,9 @@ class AnalyzeView(QWidget):
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
             guild_id = 774065
 
+        if getattr(self, "_guild_worker", None) and self._guild_worker.isRunning():
+            return
+
         self.refresh_guild_btn.setEnabled(False)
         self.status_message.emit("Fetching guild reports...")
 
@@ -483,6 +486,9 @@ class AnalyzeView(QWidget):
             QMessageBox.warning(self, "Missing Report ID", "Please enter a WarcraftLogs report ID.")
             return
 
+        if getattr(self, "_worker", None) and self._worker.isRunning():
+            return
+
         self.analyze_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_label.setVisible(True)
@@ -507,13 +513,21 @@ class AnalyzeView(QWidget):
 
         m = analysis.metadata
         comp = analysis.composition
-        self.raid_info.setText(
+        info_text = (
             f"{m.title}  |  {m.date_formatted}  |  "
             f"Owner: {m.owner}  |  "
             f"{len(comp.tanks)}T / {len(comp.healers)}H / "
             f"{len(comp.melee)}M / {len(comp.ranged)}R"
         )
+        if analysis.warnings:
+            info_text += f"  |  {len(analysis.warnings)} warning(s)"
+        self.raid_info.setText(info_text)
         self.raid_info.setVisible(True)
+
+        if analysis.warnings:
+            self.status_message.emit(
+                f"Analysis complete with {len(analysis.warnings)} warning(s) — some player data may be incomplete"
+            )
 
         self.export_btn.setEnabled(True)
 
