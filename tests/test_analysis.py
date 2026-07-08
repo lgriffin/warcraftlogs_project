@@ -166,7 +166,7 @@ class TestAnalyzeConsumables:
         }
         mock_client.get_cast_events_paginated.return_value = []
 
-        result = _analyze_consumables(mock_client, "r1", sample_composition)
+        result, _warnings = _analyze_consumables(mock_client, "r1", sample_composition)
         haste = [c for c in result if c.consumable_name == "Haste Potion"]
         assert len(haste) > 0
         assert haste[0].count == 2
@@ -187,11 +187,23 @@ class TestAnalyzeConsumables:
             {"abilityGameID": 28499, "timestamp": 180_000},
         ]
 
-        result = _analyze_consumables(mock_client, "r1", sample_composition)
+        result, _warnings = _analyze_consumables(mock_client, "r1", sample_composition)
         mana = [c for c in result if c.consumable_name == "Super Mana Potion"]
         assert len(mana) > 0
         assert mana[0].count == 2
         assert 60_000 in mana[0].timestamps
+
+    def test_warnings_on_api_failure(self, mock_client, sample_composition, monkeypatch):
+        monkeypatch.setattr(
+            "warcraftlogs_client.analysis._load_consumes_config",
+            lambda: {"buff_consumables": {"12345": "Flask"}, "cast_consumables": {}},
+        )
+        mock_client.get_buffs_table.side_effect = requests.RequestException("timeout")
+        mock_client.get_cast_events_paginated.return_value = []
+
+        _result, warnings = _analyze_consumables(mock_client, "r1", sample_composition)
+        assert len(warnings) > 0
+        assert any("consumables" in w for w in warnings)
 
 
 class TestAnalyzeRaid:
@@ -230,3 +242,35 @@ class TestAnalyzeRaid:
         analysis = analyze_raid(mock_client, "r1")
         assert analysis.metadata.report_id == "r1"
         assert len(analysis.composition.all_players) > 0
+        assert isinstance(analysis.warnings, list)
+
+    def test_warnings_collected_on_player_error(self, mock_client, monkeypatch):
+        mock_client.get_report_metadata.return_value = RaidMetadata(
+            report_id="r1",
+            title="Test",
+            owner="Owner",
+            start_time=1_700_000_000_000,
+        )
+        mock_client.get_master_data.return_value = [
+            {"name": "Healer", "id": 1, "type": "Player", "subType": "Priest"},
+        ]
+        # First call succeeds (for _identify_healers), second fails (during _analyze_healers)
+        mock_client.get_healing_data.side_effect = [
+            [{"type": "heal", "amount": 500_000, "overheal": 0, "abilityGameID": 2060}],
+            requests.RequestException("timeout"),
+        ]
+        mock_client.get_damage_done_data.return_value = []
+        mock_client.run_query.return_value = {"data": {"reportData": {"report": {"table": {"data": {"entries": []}}}}}}
+        mock_client.get_buffs_table.return_value = {"data": {"auras": []}}
+        mock_client.get_cast_events_paginated.return_value = []
+        mock_client.get_damage_taken_table.return_value = []
+        mock_client.get_damage_done_table.return_value = []
+
+        monkeypatch.setattr(
+            "warcraftlogs_client.analysis._load_consumes_config",
+            lambda: {"buff_consumables": {}, "cast_consumables": {}},
+        )
+
+        analysis = analyze_raid(mock_client, "r1")
+        assert len(analysis.warnings) > 0
+        assert any("Healer" in w for w in analysis.warnings)

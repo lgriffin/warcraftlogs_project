@@ -160,6 +160,9 @@ class DownloadView(QWidget):
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
             guild_id = 774065
 
+        if getattr(self, "_guild_worker", None) and self._guild_worker.isRunning():
+            return
+
         self._fetch_btn.setEnabled(False)
         self.status_message.emit("Fetching guild reports...")
 

@@ -210,6 +210,7 @@ class RaidAnalysis:
     dps: list[DPSPerformance] = field(default_factory=list)
     consumables: list[ConsumableUsage] = field(default_factory=list)
     encounters: list[EncounterSummary] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass

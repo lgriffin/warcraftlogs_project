@@ -249,6 +249,9 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(3000, self._run_update_check)
 
     def _run_update_check(self, force: bool = False):
+        if getattr(self, "_update_worker", None) and self._update_worker.isRunning():
+            return
+
         self._update_worker = _UpdateCheckWorker(force=force, parent=self)
         self._update_worker.update_available.connect(self._on_update_available)
         self._update_worker.start()
@@ -365,20 +368,34 @@ class MainWindow(QMainWindow):
 
         from .worker import GuildInfoWorker
 
+        if getattr(self, "_guild_info_worker", None) and self._guild_info_worker.isRunning():
+            return
+
         self._guild_info_worker = GuildInfoWorker(guild_id)
         self._guild_info_worker.finished.connect(self._on_guild_info_loaded)
         self._guild_info_worker.start()
 
     def closeEvent(self, event):
+        worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
+        views = [
+            self,
+            self.download_view,
+            self.character_view,
+            self.analyze_view,
+            self.reference_view,
+            self.settings_view,
+        ]
         workers = []
-        for view in [self.download_view, self.character_view]:
-            for attr in ("_worker", "_guild_worker", "_wowhead_worker"):
+        for view in views:
+            for attr in worker_attrs:
                 w = getattr(view, attr, None)
                 if w and w.isRunning():
+                    w.quit()
                     workers.append(w)
         for attr in ("_guild_info_worker", "_update_worker"):
             w = getattr(self, attr, None)
             if w and w.isRunning():
+                w.quit()
                 workers.append(w)
         for w in workers:
             w.wait(5000)

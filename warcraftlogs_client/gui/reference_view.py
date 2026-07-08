@@ -550,6 +550,9 @@ class ReferenceView(QWidget):
         self._start_import(report_id)
 
     def _start_import(self, report_id: str):
+        if getattr(self, "_worker", None) and self._worker.isRunning():
+            return
+
         self._set_importing(True, f"Downloading report {report_id}...")
         self._worker = ReferenceAnalysisWorker(report_id)
         self._worker.progress.connect(self._on_progress)
@@ -642,6 +645,9 @@ class ReferenceView(QWidget):
         self.status_message.emit("Opening browser for WarcraftLogs authentication...")
 
         self._oauth_server, self._oauth_state = start_oauth_flow(client_id)
+
+        if getattr(self, "_auth_wait_thread", None) and self._auth_wait_thread.isRunning():
+            return
 
         self._auth_wait_thread = _AuthWaitThread(self._oauth_server, self._oauth_state)
         self._auth_wait_thread.auth_complete.connect(self._on_auth_complete)

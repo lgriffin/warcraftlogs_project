@@ -493,6 +493,9 @@ class SettingsView(QWidget):
 
         from .reference_view import _AuthWaitThread
 
+        if getattr(self, "_auth_wait_thread", None) and self._auth_wait_thread.isRunning():
+            return
+
         self._auth_wait_thread = _AuthWaitThread(self._oauth_server, self._oauth_state)
         self._auth_wait_thread.auth_complete.connect(self._on_settings_auth_complete)
         self._auth_wait_thread.auth_error.connect(self._on_settings_auth_error)
