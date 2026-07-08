@@ -158,9 +158,7 @@ class UserTokenManager:
         logger.info("  body: %s", response.text)
 
         if response.status_code != 200:
-            raise AuthenticationError(
-                f"Token exchange failed (HTTP {response.status_code})", details=response.text
-            )
+            raise AuthenticationError(f"Token exchange failed (HTTP {response.status_code})", details=response.text)
 
         try:
             token_data = response.json()

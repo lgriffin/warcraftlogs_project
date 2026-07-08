@@ -97,9 +97,7 @@ class TestGetToken:
     def test_http_error_raises_auth_error(self, mock_post, tm):
         resp = MagicMock(status_code=401)
         mock_post.return_value = MagicMock(
-            raise_for_status=MagicMock(
-                side_effect=requests.HTTPError("401", response=resp)
-            ),
+            raise_for_status=MagicMock(side_effect=requests.HTTPError("401", response=resp)),
         )
         with pytest.raises(AuthenticationError, match="Authentication failed"):
             tm.get_token()
