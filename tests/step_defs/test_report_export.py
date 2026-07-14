@@ -2,115 +2,38 @@
 
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from warcraftlogs_client.models import (
-    DPSPerformance,
-    HealerPerformance,
-    PlayerIdentity,
-    RaidAnalysis,
-    RaidComposition,
-    RaidMetadata,
-    SpellUsage,
-    TankPerformance,
-)
 from warcraftlogs_client.renderers.markdown import export_raid_analysis, render_raid_analysis
 
 scenarios("report_export.feature")
-
-
-def _make_analysis(title="Test Raid", owner="TestGuild"):
-    metadata = RaidMetadata(
-        report_id="abc123",
-        title=title,
-        owner=owner,
-        start_time=1_700_000_000_000,
-        end_time=1_700_003_600_000,
-    )
-    composition = RaidComposition(
-        tanks=[PlayerIdentity(name="TankWarrior", player_class="Warrior", source_id=2, role="tank")],
-        healers=[PlayerIdentity(name="HolyPriest", player_class="Priest", source_id=1, role="healer")],
-        melee=[PlayerIdentity(name="StabbyRogue", player_class="Rogue", source_id=3, role="melee")],
-        ranged=[],
-    )
-    return RaidAnalysis(
-        metadata=metadata,
-        composition=composition,
-        healers=[
-            HealerPerformance(
-                name="HolyPriest",
-                player_class="Priest",
-                source_id=1,
-                total_healing=500_000,
-                total_overhealing=100_000,
-                spells=[SpellUsage(spell_id=2060, spell_name="Greater Heal", casts=50, total_amount=300_000)],
-                dispels=[],
-                resources=[],
-                fear_ward_casts=0,
-            )
-        ],
-        tanks=[
-            TankPerformance(
-                name="TankWarrior",
-                player_class="Warrior",
-                source_id=2,
-                total_damage_taken=800_000,
-                total_mitigated=600_000,
-                damage_taken_breakdown=[],
-                abilities_used=[],
-            )
-        ],
-        dps=[
-            DPSPerformance(
-                name="StabbyRogue",
-                player_class="Rogue",
-                source_id=3,
-                role="melee",
-                total_damage=400_000,
-                abilities=[],
-            )
-        ],
-        consumables=[],
-    )
 
 
 @given(
     parsers.parse('a completed raid analysis for "{title}"'),
     target_fixture="export_ctx",
 )
-def analysis_for_title(title):
-    return {"analysis": _make_analysis(title=title)}
+def analysis_for_title(build_analysis, title):
+    return {"analysis": build_analysis(title=title)}
 
 
 @given(
     parsers.parse('a completed raid analysis owned by "{owner}"'),
     target_fixture="export_ctx",
 )
-def analysis_for_owner(owner):
-    return {"analysis": _make_analysis(owner=owner)}
+def analysis_for_owner(build_analysis, owner):
+    return {"analysis": build_analysis(owner=owner)}
 
 
 @given("a completed raid analysis with tanks, healers, and DPS", target_fixture="export_ctx")
-def analysis_with_roles():
-    return {"analysis": _make_analysis()}
+def analysis_with_roles(build_analysis):
+    return {"analysis": build_analysis()}
 
 
 @given(
     parsers.parse('a completed raid analysis with a healer named "{name}"'),
     target_fixture="export_ctx",
 )
-def analysis_with_healer(name):
-    a = _make_analysis()
-    a.healers[0] = HealerPerformance(
-        name=name,
-        player_class="Priest",
-        source_id=1,
-        total_healing=500_000,
-        total_overhealing=100_000,
-        spells=[SpellUsage(spell_id=2060, spell_name="Greater Heal", casts=50, total_amount=300_000)],
-        dispels=[],
-        resources=[],
-        fear_ward_casts=0,
-    )
-    return {"analysis": a}
+def analysis_with_healer(build_analysis, name):
+    return {"analysis": build_analysis(healer_name=name)}
 
 
 @when("the analysis is rendered to markdown", target_fixture="render_result")

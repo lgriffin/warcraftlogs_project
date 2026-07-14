@@ -71,6 +71,10 @@ markers = [
     "ears_unwanted_behavior: EARS unwanted-behavior requirement (If condition, system shall handle)",
     "ears_state_driven: EARS state-driven requirement (While state, system shall behave)",
     "ears_optional: EARS optional requirement (Where feature, system shall behave)",
+    "database: Tests involving SQLite database operations",
+    "api: Tests involving WCL API client or network calls",
+    "auth: Tests involving authentication and token management",
+    "reference: Tests for reference report comparison features",
 ]
 
 [tool.codespell]
