@@ -2,7 +2,6 @@
 
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from warcraftlogs_client.models import HealerPerformance, SpellUsage
 from warcraftlogs_client.renderers.markdown import export_raid_analysis, render_raid_analysis
 
 scenarios("report_export.feature")

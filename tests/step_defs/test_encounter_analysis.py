@@ -1,7 +1,5 @@
 """Step definitions for encounter analysis feature."""
 
-from unittest.mock import MagicMock
-
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from warcraftlogs_client.analysis import _analyze_encounters

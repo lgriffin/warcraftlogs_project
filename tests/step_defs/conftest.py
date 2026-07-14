@@ -2,11 +2,9 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 from pytest_bdd import given, parsers
 
 from warcraftlogs_client.database import PerformanceDB
-from warcraftlogs_client.models import RaidMetadata
 
 
 @given("a fresh test database", target_fixture="db_ctx")

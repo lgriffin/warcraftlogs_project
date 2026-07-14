@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 import requests
 from pytest_bdd import given, parsers, scenarios, then, when
 
