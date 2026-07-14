@@ -220,3 +220,92 @@ def config_file(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps(cfg))
     return str(path)
+
+
+@pytest.fixture
+def build_analysis():
+    """Factory fixture for building RaidAnalysis objects with sensible defaults.
+
+    Override only the fields you care about in each test.
+    """
+
+    def _build(
+        report_id="test_report",
+        title="Test Raid",
+        owner="TestGuild",
+        start_time=1_700_000_000_000,
+        end_time=1_700_003_600_000,
+        healer_name="HolyPriest",
+        healer_class="Priest",
+        healer_healing=500_000,
+        healer_overhealing=100_000,
+        tank_name="TankWarrior",
+        tank_class="Warrior",
+        tank_damage_taken=800_000,
+        tank_mitigated=600_000,
+        dps_name="StabbyRogue",
+        dps_class="Rogue",
+        dps_damage=400_000,
+        dps_role="melee",
+        consumables=None,
+        encounters=None,
+    ):
+        metadata = RaidMetadata(
+            report_id=report_id,
+            title=title,
+            owner=owner,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        composition = RaidComposition(
+            tanks=[PlayerIdentity(name=tank_name, player_class=tank_class, source_id=2, role="tank")],
+            healers=[PlayerIdentity(name=healer_name, player_class=healer_class, source_id=1, role="healer")],
+            melee=[PlayerIdentity(name=dps_name, player_class=dps_class, source_id=3, role=dps_role)]
+            if dps_role == "melee"
+            else [],
+            ranged=[PlayerIdentity(name=dps_name, player_class=dps_class, source_id=3, role=dps_role)]
+            if dps_role == "ranged"
+            else [],
+        )
+        return RaidAnalysis(
+            metadata=metadata,
+            composition=composition,
+            healers=[
+                HealerPerformance(
+                    name=healer_name,
+                    player_class=healer_class,
+                    source_id=1,
+                    total_healing=healer_healing,
+                    total_overhealing=healer_overhealing,
+                    spells=[SpellUsage(spell_id=2060, spell_name="Greater Heal", casts=50, total_amount=300_000)],
+                    dispels=[],
+                    resources=[],
+                    fear_ward_casts=0,
+                )
+            ],
+            tanks=[
+                TankPerformance(
+                    name=tank_name,
+                    player_class=tank_class,
+                    source_id=2,
+                    total_damage_taken=tank_damage_taken,
+                    total_mitigated=tank_mitigated,
+                    damage_taken_breakdown=[],
+                    abilities_used=[],
+                )
+            ],
+            dps=[
+                DPSPerformance(
+                    name=dps_name,
+                    player_class=dps_class,
+                    source_id=3,
+                    role=dps_role,
+                    total_damage=dps_damage,
+                    abilities=[],
+                )
+            ],
+            consumables=consumables or [],
+            encounters=encounters or [],
+        )
+
+    return _build
