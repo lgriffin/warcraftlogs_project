@@ -1,38 +1,43 @@
 Feature: Configuration Management
-  As a user of the Warcraft Logs analyzer
-  I want to configure the tool via a JSON file and environment variables
-  So that I can provide API credentials and customize thresholds
+  The system shall load configuration from a JSON file and environment
+  variables, providing API credentials and customizable role thresholds.
 
-  Scenario: Load valid configuration file
+  @ears_event_driven
+  Scenario: When a valid config file is loaded, the system shall provide API credentials
     Given a config file with client_id "test_id" and client_secret "test_secret"
     When the configuration is loaded
     Then the API client_id should be "test_id"
     And the API client_secret should be "test_secret"
 
-  Scenario: Environment variables override file values
+  @ears_state_driven
+  Scenario: While environment variables are set, the system shall use them over file values
     Given a config file with client_id "file_id" and client_secret "file_secret"
     And environment variable "WARCRAFTLOGS_CLIENT_ID" is set to "env_id"
     When the configuration is loaded
     Then the API client_id should be "env_id"
 
-  Scenario: Default role thresholds are applied
+  @ears_ubiquitous
+  Scenario: The system shall apply default role thresholds when none are specified
     Given a config file with minimal required fields
     When the configuration is loaded
     Then healer_min_healing should be 40000
     And tank_min_taken should be 150000
     And tank_min_mitigation should be 40
 
-  Scenario: Custom role thresholds override defaults
+  @ears_event_driven
+  Scenario: When custom thresholds are configured, the system shall use them instead of defaults
     Given a config file with healer_min_healing set to 100000
     When the configuration is loaded
     Then healer_min_healing should be 100000
 
-  Scenario: Configuration can be reloaded without error
+  @ears_ubiquitous
+  Scenario: The system shall support idempotent configuration reloading
     Given a config file with minimal required fields
     When the configuration is loaded twice
     Then both loads should return valid config
 
-  Scenario: Missing config file raises error
+  @ears_unwanted_behavior
+  Scenario: If the config file is missing, then the system shall raise a configuration error
     Given a nonexistent config file path
     When the configuration is loaded
     Then a configuration error should be raised
