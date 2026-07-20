@@ -1542,3 +1542,125 @@ class OverlayTimelineHeatmap(QWidget):
                 return
         QToolTip.hideText()
         super().mouseMoveEvent(event)
+
+
+class DebuffTimelineWidget(QWidget):
+    """Horizontal timeline bars showing debuff uptime per boss fight."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._uptimes: list = []
+        self._fight_start: int = 0
+        self._fight_end: int = 0
+        self._cells: list[tuple[QRectF, str, float]] = []
+        self.setMouseTracking(True)
+        self.setMinimumHeight(60)
+
+    def set_data(self, uptimes, fight_start: int, fight_end: int):
+        self._uptimes = uptimes
+        self._fight_start = fight_start
+        self._fight_end = fight_end
+        rows = len(uptimes) if uptimes else 1
+        self.setMinimumHeight(40 + rows * 36 + 30)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        if not self._uptimes or self._fight_end <= self._fight_start:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 11))
+            painter.drawText(
+                self.rect(), Qt.AlignmentFlag.AlignCenter, "No debuff data for this fight"
+            )
+            painter.end()
+            return
+
+        name_col_w = 150
+        top_margin = 30
+        row_h = 28
+        row_gap = 8
+        right_pad = 60
+
+        duration = self._fight_end - self._fight_start
+        duration_s = duration / 1000
+        avail_w = self.width() - name_col_w - right_pad
+        if avail_w < 100:
+            avail_w = 100
+
+        label_font = QFont("Segoe UI", 7)
+        name_font = QFont("Segoe UI", 9)
+        pct_font = QFont("Segoe UI", 8, QFont.Weight.Bold)
+
+        painter.setPen(QColor(COLORS["text_dim"]))
+        painter.setFont(label_font)
+        interval = 30
+        if duration_s > 300:
+            interval = 60
+        t = 0
+        while t <= duration_s:
+            x = name_col_w + (t / duration_s) * avail_w
+            m = int(t) // 60
+            s = int(t) % 60
+            painter.drawText(int(x) - 10, top_margin - 6, f"{m}:{s:02d}")
+            painter.setPen(QPen(QColor(COLORS["border"]), 1, Qt.PenStyle.DotLine))
+            painter.drawLine(int(x), top_margin, int(x), top_margin + len(self._uptimes) * (row_h + row_gap))
+            painter.setPen(QColor(COLORS["text_dim"]))
+            t += interval
+
+        self._cells = []
+        for i, au in enumerate(self._uptimes):
+            y = top_margin + i * (row_h + row_gap)
+
+            painter.setPen(QColor(COLORS["text"]))
+            painter.setFont(name_font)
+            painter.drawText(4, int(y + row_h - 8), au.spell_name[:18])
+
+            bg_rect = QRectF(name_col_w, y, avail_w, row_h)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(COLORS["bg_dark"])))
+            painter.drawRoundedRect(bg_rect, 3, 3)
+
+            if au.uptime_percent >= 95:
+                band_color = QColor("#2ecc71")
+            elif au.uptime_percent >= 80:
+                band_color = QColor("#f39c12")
+            else:
+                band_color = QColor("#e74c3c")
+
+            for band in au.bands:
+                bs = max(band.start_time - self._fight_start, 0)
+                be = min(band.end_time - self._fight_start, duration)
+                if be <= bs:
+                    continue
+                bx = name_col_w + (bs / duration) * avail_w
+                bw = ((be - bs) / duration) * avail_w
+                band_rect = QRectF(bx, y + 2, max(bw, 2), row_h - 4)
+                painter.setBrush(QBrush(band_color))
+                painter.drawRoundedRect(band_rect, 2, 2)
+
+            self._cells.append((bg_rect, au.spell_name, au.uptime_percent))
+
+            pct_x = name_col_w + avail_w + 8
+            painter.setPen(band_color)
+            painter.setFont(pct_font)
+            painter.drawText(int(pct_x), int(y + row_h - 8), f"{au.uptime_percent:.1f}%")
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        for rect, name, pct in self._cells:
+            if rect.contains(pos):
+                tip = f"{name}: {pct:.1f}% uptime"
+                tip_pos = (
+                    event.globalPosition().toPoint()
+                    if hasattr(event, "globalPosition")
+                    else event.globalPos()
+                )
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)

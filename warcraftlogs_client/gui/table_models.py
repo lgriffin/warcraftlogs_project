@@ -5,7 +5,7 @@ Qt table models for displaying analysis results.
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor, QFont
 
-from ..models import DPSPerformance, GearItem, HealerPerformance, TankPerformance
+from ..models import DPSPerformance, GearItem, HealerPerformance, InterruptUsage, TankPerformance
 
 
 class HealerTableModel(QAbstractTableModel):
@@ -437,3 +437,84 @@ def _class_color(class_name: str) -> QColor:
         "Hunter": QColor("#ABD473"),
     }
     return colors.get(class_name, QColor("#EEEEEE"))
+
+
+class InterruptTableModel(QAbstractTableModel):
+    """Player x interrupt-spell grid with totals."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+        self._spell_names: list[str] = []
+        self._columns: list[str] = []
+
+    def set_data(self, interrupts: list[InterruptUsage]):
+        self.beginResetModel()
+        spell_set: dict[str, None] = {}
+        for iu in interrupts:
+            spell_set.setdefault(iu.spell_name, None)
+        self._spell_names = list(spell_set.keys())
+        self._columns = ["Name", "Class", *self._spell_names, "Total"]
+
+        player_data: dict[str, dict] = {}
+        for iu in interrupts:
+            if iu.player_name not in player_data:
+                player_data[iu.player_name] = {
+                    "name": iu.player_name,
+                    "class": iu.player_class,
+                    "spells": {},
+                    "total": 0,
+                }
+            player_data[iu.player_name]["spells"][iu.spell_name] = (
+                player_data[iu.player_name]["spells"].get(iu.spell_name, 0) + iu.count
+            )
+            player_data[iu.player_name]["total"] += iu.count
+
+        self._rows = sorted(player_data.values(), key=lambda r: r["total"], reverse=True)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self._columns)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self._columns[section] if section < len(self._columns) else None
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or index.row() >= len(self._rows):
+            return None
+
+        row = self._rows[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return row["name"]
+            if col == 1:
+                return row["class"]
+            if col == len(self._columns) - 1:
+                return row["total"]
+            spell_name = self._spell_names[col - 2]
+            count = row["spells"].get(spell_name, 0)
+            return count if count > 0 else "-"
+
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            if col >= 2:
+                return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if col == 0:
+                return _link_color()
+            if col == 1:
+                return _class_color(row["class"])
+
+        if role == Qt.ItemDataRole.FontRole:
+            if col == 0:
+                return _link_font()
+
+        return None

@@ -16,12 +16,15 @@ import requests
 
 from .client import WarcraftLogsClient
 from .models import (
+    AuraBand,
+    AuraUptime,
     ConsumableUsage,
     DispelUsage,
     DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
+    InterruptUsage,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
@@ -89,6 +92,10 @@ def analyze_raid(
     consumables, consume_warns = _analyze_consumables(client, report_id, composition)
     all_warnings.extend(consume_warns)
 
+    interrupts, interrupt_warns = _analyze_interrupts(client, report_id, composition)
+    all_warnings.extend(interrupt_warns)
+    logger.info("  interrupts analyzed: %d entries", len(interrupts))
+
     try:
         encounters = _analyze_encounters(client, report_id, composition)
         logger.info("  encounters analyzed: %d", len(encounters))
@@ -98,6 +105,26 @@ def analyze_raid(
         all_warnings.append(f"Encounter analysis failed: {e}")
 
     _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
+
+    try:
+        aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters)
+        all_warnings.extend(aura_warns)
+        logger.info("  aura uptimes analyzed: %d entries", len(aura_uptimes))
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("  aura uptime analysis failed: %s", e)
+        aura_uptimes = []
+        all_warnings.append(f"Aura uptime analysis failed: {e}")
+
+    try:
+        totem_uptimes, totem_warns = _analyze_totem_uptimes(
+            client, report_id, composition, encounters
+        )
+        all_warnings.extend(totem_warns)
+        logger.info("  totem uptimes analyzed: %d entries", len(totem_uptimes))
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("  totem uptime analysis failed: %s", e)
+        totem_uptimes = []
+        all_warnings.append(f"Totem uptime analysis failed: {e}")
 
     if all_warnings:
         logger.warning("analyze_raid: completed with %d warnings", len(all_warnings))
@@ -110,6 +137,9 @@ def analyze_raid(
         tanks=tanks,
         dps=melee_dps + ranged_dps,
         consumables=consumables,
+        interrupts=interrupts,
+        aura_uptimes=aura_uptimes,
+        totem_uptimes=totem_uptimes,
         encounters=encounters,
         warnings=all_warnings,
     )
@@ -627,6 +657,231 @@ def _analyze_consumables(
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing cast consumables for %s: %s", player.name, e)
             warnings.append(f"Failed to analyze consumables for {player.name}: {e}")
+
+    return results, warnings
+
+
+def _load_interrupt_config() -> dict[int, str]:
+    from . import paths
+
+    config_path = str(paths.get_interrupt_config_path())
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path, encoding="utf-8") as f:
+        raw = json.load(f)
+    return {int(sid): name for sid, name in raw.items()}
+
+
+def _analyze_interrupts(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+) -> tuple[list[InterruptUsage], list[str]]:
+    interrupt_ids = _load_interrupt_config()
+    if not interrupt_ids:
+        return [], []
+
+    results: list[InterruptUsage] = []
+    warnings: list[str] = []
+
+    for player in composition.all_players:
+        try:
+            cast_events = client.get_cast_events_paginated(report_id, player.source_id)
+            spell_data: dict[int, list[int]] = defaultdict(list)
+            for e in cast_events:
+                if e.get("type") == "begincast":
+                    continue
+                aid = e.get("abilityGameID")
+                if aid in interrupt_ids:
+                    spell_data[aid].append(e.get("timestamp", 0))
+
+            for spell_id, timestamps in spell_data.items():
+                results.append(
+                    InterruptUsage(
+                        player_name=player.name,
+                        player_class=player.player_class,
+                        source_id=player.source_id,
+                        spell_id=spell_id,
+                        spell_name=interrupt_ids[spell_id],
+                        count=len(timestamps),
+                        timestamps=sorted(timestamps),
+                    )
+                )
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("Error analyzing interrupts for %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze interrupts for {player.name}: {e}")
+
+    return results, warnings
+
+
+def _load_debuff_config() -> dict[int, str]:
+    from . import paths
+
+    config_path = str(paths.get_debuff_config_path())
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path, encoding="utf-8") as f:
+        raw = json.load(f)
+    boss_debuffs = raw.get("boss_debuffs", {})
+    return {int(sid): name for sid, name in boss_debuffs.items()}
+
+
+def _analyze_aura_uptimes(
+    client: WarcraftLogsClient,
+    report_id: str,
+    encounters: list[EncounterSummary],
+) -> tuple[list[AuraUptime], list[str]]:
+    debuff_ids = _load_debuff_config()
+    if not debuff_ids:
+        return [], []
+
+    results: list[AuraUptime] = []
+    warnings: list[str] = []
+
+    for enc in encounters:
+        try:
+            table_data = client.get_debuffs_table(
+                report_id, enc.start_time, enc.end_time
+            )
+            if isinstance(table_data, str):
+                table_data = json.loads(table_data)
+
+            auras = table_data.get("data", {}).get("auras", [])
+            if not auras:
+                auras = table_data.get("auras", [])
+
+            fight_duration = enc.end_time - enc.start_time
+            if fight_duration <= 0:
+                continue
+
+            for aura in auras:
+                ability_id = aura.get("guid")
+                if ability_id not in debuff_ids:
+                    continue
+
+                raw_bands = aura.get("bands", [])
+                bands = []
+                total_uptime = 0
+                for b in raw_bands:
+                    s = b.get("startTime", enc.start_time)
+                    e = b.get("endTime", enc.end_time)
+                    s = max(s, enc.start_time)
+                    e = min(e, enc.end_time)
+                    if e > s:
+                        bands.append(AuraBand(start_time=s, end_time=e))
+                        total_uptime += e - s
+
+                uptime_pct = round(total_uptime / fight_duration * 100, 1)
+
+                results.append(
+                    AuraUptime(
+                        spell_id=ability_id,
+                        spell_name=debuff_ids[ability_id],
+                        fight_name=enc.name,
+                        fight_start=enc.start_time,
+                        fight_end=enc.end_time,
+                        uptime_percent=uptime_pct,
+                        bands=bands,
+                    )
+                )
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("Error analyzing debuff uptimes for %s: %s", enc.name, e)
+            warnings.append(f"Failed to analyze debuff uptimes for {enc.name}: {e}")
+
+    return results, warnings
+
+
+def _load_totem_config() -> dict[int, dict]:
+    from . import paths
+
+    config_path = str(paths.get_totem_config_path())
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path, encoding="utf-8") as f:
+        raw = json.load(f)
+    totems = raw.get("totems", {})
+    return {int(sid): info for sid, info in totems.items()}
+
+
+def _merge_bands(bands: list[AuraBand]) -> list[AuraBand]:
+    if not bands:
+        return []
+    sorted_bands = sorted(bands, key=lambda b: b.start_time)
+    merged = [AuraBand(start_time=sorted_bands[0].start_time, end_time=sorted_bands[0].end_time)]
+    for b in sorted_bands[1:]:
+        if b.start_time <= merged[-1].end_time:
+            merged[-1] = AuraBand(start_time=merged[-1].start_time, end_time=max(merged[-1].end_time, b.end_time))
+        else:
+            merged.append(AuraBand(start_time=b.start_time, end_time=b.end_time))
+    return merged
+
+
+def _analyze_totem_uptimes(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+    encounters: list[EncounterSummary],
+) -> tuple[list[AuraUptime], list[str]]:
+    totem_config = _load_totem_config()
+    if not totem_config:
+        return [], []
+
+    shamans = [p for p in composition.all_players if p.player_class == "Shaman"]
+    if not shamans:
+        return [], []
+
+    results: list[AuraUptime] = []
+    warnings: list[str] = []
+
+    shaman_casts: dict[int, list[dict]] = {}
+    for shaman in shamans:
+        try:
+            casts = client.get_cast_events_paginated(report_id, shaman.source_id)
+            shaman_casts[shaman.source_id] = [
+                c for c in casts
+                if c.get("type") == "cast" and c.get("abilityGameID") in totem_config
+            ]
+        except requests.RequestException as e:
+            warnings.append(f"Failed to get casts for {shaman.name}: {e}")
+
+    for enc in encounters:
+        fight_duration = enc.end_time - enc.start_time
+        if fight_duration <= 0:
+            continue
+
+        totem_bands: dict[int, list[AuraBand]] = {}
+
+        for casts in shaman_casts.values():
+            for cast in casts:
+                ts = cast.get("timestamp", 0)
+                spell_id = cast["abilityGameID"]
+                duration_s = totem_config[spell_id].get("duration", 120)
+                totem_expires = ts + duration_s * 1000
+                if totem_expires <= enc.start_time or ts >= enc.end_time:
+                    continue
+                band_end = min(totem_expires, enc.end_time)
+                band_start = max(ts, enc.start_time)
+                if band_end > band_start:
+                    totem_bands.setdefault(spell_id, []).append(
+                        AuraBand(start_time=band_start, end_time=band_end)
+                    )
+
+        for spell_id, raw_bands in totem_bands.items():
+            merged = _merge_bands(raw_bands)
+            total_uptime = sum(b.end_time - b.start_time for b in merged)
+            uptime_pct = round(total_uptime / fight_duration * 100, 1)
+
+            results.append(
+                AuraUptime(
+                    spell_id=spell_id,
+                    spell_name=totem_config[spell_id]["name"],
+                    fight_name=enc.name,
+                    fight_start=enc.start_time,
+                    fight_end=enc.end_time,
+                    uptime_percent=uptime_pct,
+                    bands=merged,
+                )
+            )
 
     return results, warnings
 

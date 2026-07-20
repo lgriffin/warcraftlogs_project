@@ -1,0 +1,26 @@
+{
+  "boss_debuffs": {
+    "25225": "Sunder Armor",
+    "26866": "Expose Armor",
+    "27228": "Curse of the Elements",
+    "27226": "Curse of Recklessness",
+    "11719": "Curse of Tongues",
+    "27159": "Judgement of the Crusader",
+    "27164": "Judgement of Wisdom",
+    "26993": "Faerie Fire",
+    "27011": "Faerie Fire (Feral)",
+    "12579": "Winter's Chill",
+    "33200": "Misery",
+    "15258": "Shadow Weaving",
+    "14325": "Hunter's Mark",
+    "34501": "Expose Weakness",
+    "33987": "Mangle (Bear)",
+    "17364": "Stormstrike",
+    "11374": "Gift of Arthas",
+    "25203": "Demoralizing Shout",
+    "26998": "Demoralizing Roar",
+    "30330": "Mortal Strike",
+    "17800": "Shadow and Flame",
+    "27013": "Insect Swarm"
+  }
+}

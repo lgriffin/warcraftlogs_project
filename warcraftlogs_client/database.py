@@ -14,12 +14,15 @@ from datetime import datetime
 
 from .cache import _cache_file, clear_response_cache
 from .models import (
+    AuraBand,
+    AuraUptime,
     CharacterHistory,
     ConsumableUsage,
     DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
+    InterruptUsage,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
@@ -307,6 +310,54 @@ class PerformanceDB:
             if "active_time_percent" not in t_cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN active_time_percent REAL DEFAULT 0.0")
 
+        if "interrupt_usage" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS interrupt_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id),
+                    raid_id INTEGER NOT NULL REFERENCES raids(id),
+                    spell_id INTEGER NOT NULL,
+                    spell_name TEXT NOT NULL,
+                    count INTEGER NOT NULL DEFAULT 0,
+                    timestamps TEXT DEFAULT NULL,
+                    UNIQUE(character_id, raid_id, spell_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_interrupt_char ON interrupt_usage(character_id);
+                CREATE INDEX IF NOT EXISTS idx_interrupt_raid ON interrupt_usage(raid_id);
+            """)
+
+        if "aura_uptime" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS aura_uptime (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    raid_id INTEGER NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+                    encounter_row_id INTEGER NOT NULL REFERENCES encounters(id) ON DELETE CASCADE,
+                    spell_id INTEGER NOT NULL,
+                    spell_name TEXT NOT NULL,
+                    uptime_percent REAL NOT NULL DEFAULT 0.0,
+                    bands_json TEXT DEFAULT NULL,
+                    UNIQUE(raid_id, encounter_row_id, spell_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_aura_raid ON aura_uptime(raid_id);
+                CREATE INDEX IF NOT EXISTS idx_aura_enc ON aura_uptime(encounter_row_id);
+            """)
+
+        if "totem_uptime" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS totem_uptime (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    raid_id INTEGER NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+                    encounter_row_id INTEGER NOT NULL REFERENCES encounters(id) ON DELETE CASCADE,
+                    spell_id INTEGER NOT NULL,
+                    spell_name TEXT NOT NULL,
+                    uptime_percent REAL NOT NULL DEFAULT 0.0,
+                    bands_json TEXT DEFAULT NULL,
+                    UNIQUE(raid_id, encounter_row_id, spell_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_totem_raid ON totem_uptime(raid_id);
+                CREATE INDEX IF NOT EXISTS idx_totem_enc ON totem_uptime(encounter_row_id);
+            """)
+
     def close(self) -> None:
         if self._conn:
             self._conn.close()
@@ -406,8 +457,28 @@ class PerformanceDB:
                 (char_id, raid_id, cu.consumable_name, cu.count, ts_json),
             )
 
+        for iu in analysis.interrupts:
+            char_id = self._upsert_character(iu.player_name, iu.player_class, raid_date)
+            ts_json = json.dumps(iu.timestamps) if iu.timestamps else None
+            conn.execute(
+                """INSERT INTO interrupt_usage
+                   (character_id, raid_id, spell_id, spell_name, count, timestamps)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(character_id, raid_id, spell_id) DO UPDATE SET
+                       spell_name = excluded.spell_name,
+                       count = excluded.count,
+                       timestamps = excluded.timestamps""",
+                (char_id, raid_id, iu.spell_id, iu.spell_name, iu.count, ts_json),
+            )
+
         if analysis.encounters:
             self._import_encounters(conn, raid_id, raid_date, analysis.encounters)
+
+        if analysis.aura_uptimes:
+            self._import_aura_uptimes(conn, raid_id, analysis.aura_uptimes)
+
+        if analysis.totem_uptimes:
+            self._import_totem_uptimes(conn, raid_id, analysis.totem_uptimes)
 
         conn.commit()
 
@@ -455,6 +526,60 @@ class PerformanceDB:
                         player.active_time_percent,
                     ),
                 )
+
+    def _import_aura_uptimes(
+        self, conn: sqlite3.Connection, raid_id: int, aura_uptimes: list[AuraUptime]
+    ) -> None:
+        conn.execute("DELETE FROM aura_uptime WHERE raid_id = ?", (raid_id,))
+        for au in aura_uptimes:
+            enc_row = conn.execute(
+                "SELECT id FROM encounters WHERE raid_id = ? AND start_time = ?",
+                (raid_id, au.fight_start),
+            ).fetchone()
+            if not enc_row:
+                continue
+
+            bands_json = json.dumps(
+                [{"start": b.start_time, "end": b.end_time} for b in au.bands]
+            ) if au.bands else None
+
+            conn.execute(
+                """INSERT INTO aura_uptime
+                   (raid_id, encounter_row_id, spell_id, spell_name, uptime_percent, bands_json)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(raid_id, encounter_row_id, spell_id) DO UPDATE SET
+                       spell_name = excluded.spell_name,
+                       uptime_percent = excluded.uptime_percent,
+                       bands_json = excluded.bands_json""",
+                (raid_id, enc_row["id"], au.spell_id, au.spell_name, au.uptime_percent, bands_json),
+            )
+
+    def _import_totem_uptimes(
+        self, conn: sqlite3.Connection, raid_id: int, totem_uptimes: list[AuraUptime]
+    ) -> None:
+        conn.execute("DELETE FROM totem_uptime WHERE raid_id = ?", (raid_id,))
+        for tu in totem_uptimes:
+            enc_row = conn.execute(
+                "SELECT id FROM encounters WHERE raid_id = ? AND start_time = ?",
+                (raid_id, tu.fight_start),
+            ).fetchone()
+            if not enc_row:
+                continue
+
+            bands_json = json.dumps(
+                [{"start": b.start_time, "end": b.end_time} for b in tu.bands]
+            ) if tu.bands else None
+
+            conn.execute(
+                """INSERT INTO totem_uptime
+                   (raid_id, encounter_row_id, spell_id, spell_name, uptime_percent, bands_json)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(raid_id, encounter_row_id, spell_id) DO UPDATE SET
+                       spell_name = excluded.spell_name,
+                       uptime_percent = excluded.uptime_percent,
+                       bands_json = excluded.bands_json""",
+                (raid_id, enc_row["id"], tu.spell_id, tu.spell_name, tu.uptime_percent, bands_json),
+            )
 
     def _import_healer(self, conn: sqlite3.Connection, char_id: int, raid_id: int, h: HealerPerformance) -> None:
         total_dispels = sum(d.casts for d in h.dispels)
@@ -1311,6 +1436,9 @@ class PerformanceDB:
         )
         conn.execute("DELETE FROM tank_performance WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM consumable_usage WHERE raid_id = ?", (raid_id,))
+        conn.execute("DELETE FROM interrupt_usage WHERE raid_id = ?", (raid_id,))
+        conn.execute("DELETE FROM aura_uptime WHERE raid_id = ?", (raid_id,))
+        conn.execute("DELETE FROM totem_uptime WHERE raid_id = ?", (raid_id,))
         conn.execute(
             "DELETE FROM encounter_performance WHERE encounter_row_id IN (SELECT id FROM encounters WHERE raid_id = ?)",
             (raid_id,),
@@ -2191,6 +2319,9 @@ class PerformanceDB:
         tanks = self._load_tanks_for_raid(conn, raid_id)
         dps_list = self._load_dps_for_raid(conn, raid_id)
         consumables = self._load_consumables_for_raid(conn, raid_id, report_id)
+        interrupts = self._load_interrupts_for_raid(conn, raid_id)
+        aura_uptimes = self._load_aura_uptimes_for_raid(conn, raid_id)
+        totem_uptimes = self._load_totem_uptimes_for_raid(conn, raid_id)
         encounters = self._load_encounters_for_raid(conn, raid_id)
 
         tank_ids = [
@@ -2218,6 +2349,9 @@ class PerformanceDB:
             tanks=tanks,
             dps=dps_list,
             consumables=consumables,
+            interrupts=interrupts,
+            aura_uptimes=aura_uptimes,
+            totem_uptimes=totem_uptimes,
             encounters=encounters,
         )
 
@@ -2374,6 +2508,90 @@ class PerformanceDB:
             )
             for r in rows
         ]
+
+    def _load_interrupts_for_raid(
+        self, conn: sqlite3.Connection, raid_id: int
+    ) -> list[InterruptUsage]:
+        rows = conn.execute(
+            """SELECT iu.spell_id, iu.spell_name, iu.count, iu.timestamps,
+                      c.name as player_name, c.player_class
+               FROM interrupt_usage iu
+               JOIN characters c ON c.id = iu.character_id
+               WHERE iu.raid_id = ?""",
+            (raid_id,),
+        ).fetchall()
+        return [
+            InterruptUsage(
+                player_name=r["player_name"],
+                player_class=r["player_class"],
+                source_id=0,
+                spell_id=r["spell_id"],
+                spell_name=r["spell_name"],
+                count=r["count"],
+                timestamps=json.loads(r["timestamps"]) if r["timestamps"] else [],
+            )
+            for r in rows
+        ]
+
+    def _load_aura_uptimes_for_raid(
+        self, conn: sqlite3.Connection, raid_id: int
+    ) -> list[AuraUptime]:
+        rows = conn.execute(
+            """SELECT au.spell_id, au.spell_name, au.uptime_percent, au.bands_json,
+                      e.name as fight_name, e.start_time as fight_start, e.end_time as fight_end
+               FROM aura_uptime au
+               JOIN encounters e ON e.id = au.encounter_row_id
+               WHERE au.raid_id = ?""",
+            (raid_id,),
+        ).fetchall()
+        results = []
+        for r in rows:
+            bands = []
+            if r["bands_json"]:
+                for b in json.loads(r["bands_json"]):
+                    bands.append(AuraBand(start_time=b["start"], end_time=b["end"]))
+            results.append(
+                AuraUptime(
+                    spell_id=r["spell_id"],
+                    spell_name=r["spell_name"],
+                    fight_name=r["fight_name"],
+                    fight_start=r["fight_start"],
+                    fight_end=r["fight_end"],
+                    uptime_percent=r["uptime_percent"],
+                    bands=bands,
+                )
+            )
+        return results
+
+    def _load_totem_uptimes_for_raid(
+        self, conn: sqlite3.Connection, raid_id: int
+    ) -> list[AuraUptime]:
+        rows = conn.execute(
+            """SELECT tu.spell_id, tu.spell_name, tu.uptime_percent, tu.bands_json,
+                      e.name as fight_name, e.start_time as fight_start, e.end_time as fight_end
+               FROM totem_uptime tu
+               JOIN encounters e ON e.id = tu.encounter_row_id
+               WHERE tu.raid_id = ?""",
+            (raid_id,),
+        ).fetchall()
+        results = []
+        for r in rows:
+            bands = []
+            if r["bands_json"]:
+                for b in json.loads(r["bands_json"]):
+                    bands.append(AuraBand(start_time=b["start"], end_time=b["end"]))
+            results.append(
+                AuraUptime(
+                    spell_id=r["spell_id"],
+                    spell_name=r["spell_name"],
+                    fight_name=r["fight_name"],
+                    fight_start=r["fight_start"],
+                    fight_end=r["fight_end"],
+                    uptime_percent=r["uptime_percent"],
+                    bands=bands,
+                )
+            )
+        return results
 
     def get_encounter_history(
         self,

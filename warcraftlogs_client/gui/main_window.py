@@ -28,6 +28,7 @@ from .find_character_view import FindCharacterView
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
+from .raid_diff_view import RaidDiffView
 from .raid_group_view import RaidGroupView
 from .raids_view import RaidsView
 from .reference_view import ReferenceView
@@ -121,6 +122,7 @@ class MainWindow(QMainWindow):
             ("GM/RL Insights", "Explore performance trends and comparisons"),
             ("Boss Insights", "Aggregate boss encounter performance"),
             ("Reference Reports", "Import and compare reference reports"),
+            ("Raid Diff", "Compare two guild raids side-by-side"),
             ("Settings", "Configure credentials and thresholds"),
         ]
         for name, tooltip in nav_items:
@@ -178,6 +180,7 @@ class MainWindow(QMainWindow):
         self.insights_view = InsightsView()
         self.boss_insights_view = BossInsightsView()
         self.reference_view = ReferenceView()
+        self.raid_diff_view = RaidDiffView()
         self.settings_view = SettingsView()
 
         self.stack.addWidget(self.download_view)
@@ -189,8 +192,9 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.insights_view)
         self.stack.addWidget(self.boss_insights_view)
         self.stack.addWidget(self.reference_view)
+        self.stack.addWidget(self.raid_diff_view)
         self.stack.addWidget(self.settings_view)
-        self.stack.set_base_count(10)
+        self.stack.set_base_count(11)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
@@ -229,6 +233,7 @@ class MainWindow(QMainWindow):
         self.boss_insights_view.status_message.connect(self.status_bar.showMessage)
         self.reference_view.status_message.connect(self.status_bar.showMessage)
         self.reference_view.open_raid.connect(self._drill_into_raid)
+        self.raid_diff_view.status_message.connect(self.status_bar.showMessage)
         self.settings_view.status_message.connect(self._on_settings_saved)
 
         self._load_guild_info()

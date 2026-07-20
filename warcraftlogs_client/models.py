@@ -82,6 +82,34 @@ class DPSPerformance:
 
 
 @dataclass
+class AuraBand:
+    start_time: int
+    end_time: int
+
+
+@dataclass
+class AuraUptime:
+    spell_id: int
+    spell_name: str
+    fight_name: str
+    fight_start: int
+    fight_end: int
+    uptime_percent: float = 0.0
+    bands: list[AuraBand] = field(default_factory=list)
+
+
+@dataclass
+class InterruptUsage:
+    player_name: str
+    player_class: str
+    source_id: int
+    spell_id: int
+    spell_name: str
+    count: int = 0
+    timestamps: list[int] = field(default_factory=list)
+
+
+@dataclass
 class ConsumableUsage:
     player_name: str
     player_role: str
@@ -209,6 +237,9 @@ class RaidAnalysis:
     tanks: list[TankPerformance] = field(default_factory=list)
     dps: list[DPSPerformance] = field(default_factory=list)
     consumables: list[ConsumableUsage] = field(default_factory=list)
+    interrupts: list[InterruptUsage] = field(default_factory=list)
+    aura_uptimes: list[AuraUptime] = field(default_factory=list)
+    totem_uptimes: list[AuraUptime] = field(default_factory=list)
     encounters: list[EncounterSummary] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
