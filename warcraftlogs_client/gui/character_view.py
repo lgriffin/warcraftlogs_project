@@ -175,6 +175,71 @@ def _percent_color(pct: float):
     return QColor("#9d9d9d")
 
 
+def _ordinal(n: int) -> str:
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{['th', 'st', 'nd', 'rd'][min(n % 10, 4)] if n % 10 < 4 else 'th'}"
+
+
+class _BossComparisonTableModel(QAbstractTableModel):
+    COLUMNS = ["Boss", "Kills", "Your Avg", "Role Avg", "Delta", "Rank"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+
+    def set_data(self, rows: list[dict]):
+        self.beginResetModel()
+        self._rows = rows
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.COLUMNS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.COLUMNS[section]
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or index.row() >= len(self._rows):
+            return None
+        r = self._rows[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return r["boss_name"]
+            if col == 1:
+                return r["kills"]
+            if col == 2:
+                return f"{r['my_value']:,}"
+            if col == 3:
+                return f"{r['role_avg']:,}"
+            if col == 4:
+                d = r["delta_pct"]
+                return f"{d:+.1f}%"
+            if col == 5:
+                return f"{_ordinal(r['rank'])} of {r['peer_count']}"
+
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            if col >= 1:
+                return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if col == 4:
+                d = r["delta_pct"]
+                is_lower_better = r.get("role") == "tank"
+                good = d < 0 if is_lower_better else d > 0
+                return QColor(COLORS["success"]) if good else QColor(COLORS["error"])
+
+        return None
+
+
 from .. import paths as _paths
 
 CONFIG_PATH = str(_paths.get_config_path())
@@ -191,6 +256,9 @@ class CharacterView(QWidget):
         self._worker = None
         self._profile = None
         self._chart_widgets = {}
+        self._detected_role: str | None = None
+        self._all_role_avg_trend: list[dict] = []
+        self._cached_role_avg_trend: list[dict] = []
         self._all_healer_trend = []
         self._all_healer_spell_trend = []
         self._all_tank_trend = []
@@ -353,6 +421,17 @@ class CharacterView(QWidget):
             db_stats_layout.addWidget(col_widget)
 
         layout.addWidget(self._db_stats_group)
+
+        # ── Role Comparison (collapsible) ──
+        self._role_comparison_section = _CollapsibleSection("Role Comparison")
+        self._role_comparison_container = QWidget()
+        self._role_comparison_layout = QHBoxLayout(self._role_comparison_container)
+        self._role_comparison_layout.setSpacing(16)
+        self._role_comparison_layout.setContentsMargins(8, 8, 8, 8)
+        self._role_tiles: dict[str, tuple[QLabel, QLabel, QLabel]] = {}
+        self._role_comparison_section.content_layout().addWidget(self._role_comparison_container)
+        self._role_comparison_section.setVisible(False)
+        layout.addWidget(self._role_comparison_section)
 
         # ── Encounter Rankings (collapsible) ──
         self._rankings_section = _CollapsibleSection("Encounter Rankings")
@@ -592,6 +671,18 @@ class CharacterView(QWidget):
         self._local_calendar_widget = None
         self._local_tabs.addTab(self._local_calendar_tab, "Calendar")
 
+        self._boss_comp_model = _BossComparisonTableModel()
+        boss_comp_table = QTableView()
+        boss_comp_table.setModel(self._boss_comp_model)
+        boss_comp_table.setAlternatingRowColors(True)
+        boss_comp_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        boss_comp_table.setSortingEnabled(True)
+        boss_comp_table.verticalHeader().setVisible(False)
+        boss_comp_table.horizontalHeader().setStretchLastSection(True)
+        boss_comp_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        boss_comp_table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
+        self._local_tabs.addTab(boss_comp_table, "Boss Comparison")
+
         local_layout.addWidget(self._local_tabs, 1)
         layout.addWidget(self._local_perf_group, 1)
 
@@ -754,8 +845,14 @@ class CharacterView(QWidget):
                 bests = db.get_character_personal_bests(name)
                 spider_data = db.get_character_spider_data(name)
                 calendar_data = db.get_character_raid_calendar(name)
+                self._detected_role = db.get_character_primary_role(name)
+                boss_comparison = db.get_character_boss_comparison(name) if self._detected_role else []
+                role_data = self._compute_role_comparison(db, name, self._detected_role)
         except (sqlite3.Error, OSError):
             return
+
+        self._populate_role_comparison(role_data)
+        self._boss_comp_model.set_data(boss_comparison)
 
         if history and history.total_raids > 0:
             self._local_labels["Raids Tracked"].setText(str(history.total_raids))
@@ -802,6 +899,137 @@ class CharacterView(QWidget):
         if calendar_data:
             self._local_calendar_widget = CalendarHeatmapWidget(calendar_data)
             self._local_calendar_layout.addWidget(self._local_calendar_widget)
+
+    @staticmethod
+    def _compute_role_comparison(db, name: str, role: str | None) -> dict | None:
+        if not role:
+            return None
+        if role == "healer":
+            peers = db.get_healer_insights(min_raids=1)
+            if not peers:
+                return None
+            my_row = next((p for p in peers if p["name"].lower() == name.lower()), None)
+            if not my_row:
+                return None
+            avg_healing = sum(p["avg_healing"] for p in peers) / len(peers)
+            avg_overheal = sum(p["avg_overheal"] for p in peers) / len(peers)
+            avg_dispels = sum(p.get("total_dispels", 0) for p in peers) / len(peers)
+            sorted_peers = sorted(peers, key=lambda p: p["avg_healing"], reverse=True)
+            rank = next(i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == name.lower())
+            return {
+                "role_label": "Healer",
+                "peer_count": len(peers),
+                "rank": rank,
+                "metrics": [
+                    ("Avg Healing", my_row["avg_healing"], avg_healing, True),
+                    ("Avg Overheal %", my_row["avg_overheal"], avg_overheal, False),
+                    ("Total Dispels", my_row.get("total_dispels", 0), avg_dispels, True),
+                ],
+            }
+        if role == "tank":
+            peers = db.get_tank_mitigation_stats(min_raids=1)
+            if not peers:
+                return None
+            my_row = next((p for p in peers if p["name"].lower() == name.lower()), None)
+            if not my_row:
+                return None
+            avg_mit = sum(p["avg_mitigation"] for p in peers) / len(peers)
+            avg_taken = sum(p["avg_damage_taken"] for p in peers) / len(peers)
+            sorted_peers = sorted(peers, key=lambda p: p["avg_mitigation"], reverse=True)
+            rank = next(i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == name.lower())
+            return {
+                "role_label": "Tank",
+                "peer_count": len(peers),
+                "rank": rank,
+                "metrics": [
+                    ("Avg Mitigation %", my_row["avg_mitigation"], avg_mit, True),
+                    ("Avg Damage Taken", my_row["avg_damage_taken"], avg_taken, False),
+                ],
+            }
+        peers = db.get_dps_consistency(min_raids=1)
+        if not peers:
+            return None
+        my_row = next((p for p in peers if p["name"].lower() == name.lower()), None)
+        if not my_row:
+            return None
+        avg_damage = sum(p["avg_damage"] for p in peers) / len(peers)
+        avg_cons = sum(p["consistency"] for p in peers) / len(peers)
+        sorted_peers = sorted(peers, key=lambda p: p["avg_damage"], reverse=True)
+        rank = next(i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == name.lower())
+        return {
+            "role_label": "DPS",
+            "peer_count": len(peers),
+            "rank": rank,
+            "metrics": [
+                ("Avg Damage", my_row["avg_damage"], avg_damage, True),
+                ("Consistency", my_row["consistency"], avg_cons, True),
+            ],
+        }
+
+    def _populate_role_comparison(self, data: dict | None):
+        while self._role_comparison_layout.count():
+            item = self._role_comparison_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._role_tiles.clear()
+
+        if not data:
+            self._role_comparison_section.setVisible(False)
+            return
+
+        self._role_comparison_section.setVisible(True)
+
+        rank_tile = QWidget()
+        rank_layout = QVBoxLayout(rank_tile)
+        rank_layout.setSpacing(2)
+        rank_label = QLabel("Role Rank")
+        rank_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        rank_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        rank_val = QLabel(f"{_ordinal(data['rank'])} of {data['peer_count']} {data['role_label']}s")
+        rank_val.setStyleSheet(f"color: {COLORS['accent']}; font-size: 16px; font-weight: bold;")
+        rank_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        rank_layout.addWidget(rank_label)
+        rank_layout.addWidget(rank_val)
+        self._role_comparison_layout.addWidget(rank_tile)
+
+        for label, my_val, role_avg, higher_is_better in data["metrics"]:
+            tile = QWidget()
+            tile_layout = QVBoxLayout(tile)
+            tile_layout.setSpacing(2)
+
+            title = QLabel(label)
+            title.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            if isinstance(my_val, float) and my_val < 200:
+                yours_text = f"{my_val:.1f}"
+                avg_text = f"{role_avg:.1f}"
+            else:
+                yours_text = f"{my_val:,.0f}"
+                avg_text = f"{role_avg:,.0f}"
+
+            yours = QLabel(f"You: {yours_text}")
+            yours.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px; font-weight: bold;")
+            yours.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            avg_lbl = QLabel(f"Avg: {avg_text}")
+            avg_lbl.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+            avg_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            delta = ((my_val - role_avg) / role_avg * 100) if role_avg else 0
+            good = delta > 0 if higher_is_better else delta < 0
+            color = COLORS["success"] if good else COLORS["error"]
+            delta_lbl = QLabel(f"{delta:+.1f}%")
+            delta_lbl.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold;")
+            delta_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            tile_layout.addWidget(title)
+            tile_layout.addWidget(yours)
+            tile_layout.addWidget(avg_lbl)
+            tile_layout.addWidget(delta_lbl)
+            self._role_comparison_layout.addWidget(tile)
+
+        self._role_comparison_layout.addStretch()
 
     def _on_profile_error(self, error_msg: str):
         self._refresh_btn.setEnabled(True)
@@ -856,6 +1084,15 @@ class CharacterView(QWidget):
                 self._all_dps_ability_trend = db.get_dps_ability_trend(character_name) if self._all_dps_trend else []
                 self._all_consumable_trend = db.get_consumable_trend(character_name)
 
+                if self._detected_role == "healer":
+                    self._all_role_avg_trend = db.get_healer_role_avg_trend()
+                elif self._detected_role == "tank":
+                    self._all_role_avg_trend = db.get_tank_role_avg_trend()
+                elif self._detected_role in ("melee", "ranged"):
+                    self._all_role_avg_trend = db.get_dps_role_avg_trend()
+                else:
+                    self._all_role_avg_trend = []
+
                 consumes_summary = db.get_consumable_summary(character_name, limit=5)
                 if consumes_summary:
                     all_consumable_names = set()
@@ -898,6 +1135,7 @@ class CharacterView(QWidget):
         self._cached_dps_trend = self._filter_by_raid_size(self._all_dps_trend, mode)
         self._cached_dps_ability_trend = self._filter_by_raid_size(self._all_dps_ability_trend, mode)
         self._cached_consumable_trend = self._filter_by_raid_size(self._all_consumable_trend, mode)
+        self._cached_role_avg_trend = self._filter_by_raid_size(self._all_role_avg_trend, mode)
 
         if self._cached_healer_trend:
             self._healer_trend_model.set_data(
@@ -980,16 +1218,18 @@ class CharacterView(QWidget):
             self._clear_chart(self._healer_chart_container, "healer")
             return
 
+        ra = self._cached_role_avg_trend if self._detected_role == "healer" else None
+
         if choice == 0:
-            view = build_healer_chart(trend)
+            view = build_healer_chart(trend, role_avg=ra)
         elif choice == 1:
-            view = build_healer_overheal_chart(trend)
+            view = build_healer_overheal_chart(trend, role_avg=ra)
         elif choice == 2:
             view = build_spell_trend_chart(spell_trend, "total_healing", "Spell Healing Over Time", "Healing")
         elif choice == 3:
             view = build_spell_trend_chart(spell_trend, "casts", "Spell Casts Over Time", "Casts")
         elif choice == 4:
-            view = build_active_time_chart(trend)
+            view = build_active_time_chart(trend, role_avg=ra)
         else:
             return
         self._set_chart(self._healer_chart_container, "healer", view)
@@ -1002,12 +1242,14 @@ class CharacterView(QWidget):
             self._clear_chart(self._tank_chart_container, "tank")
             return
 
+        ra = self._cached_role_avg_trend if self._detected_role == "tank" else None
+
         if choice == 0:
-            view = build_tank_chart(trend)
+            view = build_tank_chart(trend, role_avg=ra)
         elif choice == 1:
-            view = build_tank_mitigation_chart(trend)
+            view = build_tank_mitigation_chart(trend, role_avg=ra)
         elif choice == 2:
-            view = build_active_time_chart(trend)
+            view = build_active_time_chart(trend, role_avg=ra)
         else:
             return
         self._set_chart(self._tank_chart_container, "tank", view)
@@ -1021,14 +1263,16 @@ class CharacterView(QWidget):
             self._clear_chart(self._dps_chart_container, "dps")
             return
 
+        ra = self._cached_role_avg_trend if self._detected_role in ("melee", "ranged") else None
+
         if choice == 0:
-            view = build_dps_chart(trend)
+            view = build_dps_chart(trend, role_avg=ra)
         elif choice == 1:
             view = build_spell_trend_chart(ability_trend, "total_damage", "Ability Damage Over Time", "Damage")
         elif choice == 2:
             view = build_spell_trend_chart(ability_trend, "casts", "Ability Casts Over Time", "Casts")
         elif choice == 3:
-            view = build_active_time_chart(trend)
+            view = build_active_time_chart(trend, role_avg=ra)
         else:
             return
         self._set_chart(self._dps_chart_container, "dps", view)

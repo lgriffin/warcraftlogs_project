@@ -112,10 +112,34 @@ def make_chart_view(chart: QChart) -> QChartView:
     return view
 
 
+def _add_overlay_series(
+    chart: QChart,
+    points: list[tuple[datetime, float]],
+    name: str,
+    x_axis: QDateTimeAxis,
+    y_axis: QValueAxis,
+):
+    """Add a dashed 'Role Avg' overlay line to an existing chart."""
+    if not points:
+        return
+    series = QLineSeries()
+    series.setName(name)
+    pen = QPen(QColor("#ffffff"))
+    pen.setWidth(2)
+    pen.setStyle(Qt.PenStyle.DashLine)
+    series.setPen(pen)
+    for dt, val in points:
+        ms = QDateTime(dt).toMSecsSinceEpoch()
+        series.append(QPointF(ms, val))
+    chart.addSeries(series)
+    series.attachAxis(x_axis)
+    series.attachAxis(y_axis)
+
+
 # ── Standard summary charts ──
 
 
-def build_healer_chart(trend_data: list[dict]) -> QChartView:
+def build_healer_chart(trend_data: list[dict], role_avg: list[dict] | None = None) -> QChartView:
     chart = _make_chart("Healing Performance")
 
     x_axis = QDateTimeAxis()
@@ -131,17 +155,19 @@ def build_healer_chart(trend_data: list[dict]) -> QChartView:
 
     healing_pts = _parse_dates_and_values(trend_data, "total_healing")
     overheal_pts = _parse_dates_and_values(trend_data, "total_overhealing")
+    avg_pts = _parse_dates_and_values(role_avg, "avg_healing") if role_avg else []
 
-    all_pts = healing_pts + overheal_pts
+    all_pts = healing_pts + overheal_pts + avg_pts
     _fit_axes(x_axis, y_axis, all_pts)
 
     _add_series(chart, healing_pts, "Healing", 0, x_axis, y_axis)
     _add_series(chart, overheal_pts, "Overhealing", 1, x_axis, y_axis)
+    _add_overlay_series(chart, avg_pts, "Role Avg", x_axis, y_axis)
 
     return make_chart_view(chart)
 
 
-def build_healer_overheal_chart(trend_data: list[dict]) -> QChartView:
+def build_healer_overheal_chart(trend_data: list[dict], role_avg: list[dict] | None = None) -> QChartView:
     chart = _make_chart("Overheal %")
 
     x_axis = QDateTimeAxis()
@@ -155,15 +181,18 @@ def build_healer_overheal_chart(trend_data: list[dict]) -> QChartView:
     chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
 
     pts = _parse_dates_and_values(trend_data, "overheal_percent")
-    _fit_axes(x_axis, y_axis, pts)
-    if pts:
-        y_axis.setRange(0, min(100, max(v for _, v in pts) * 1.2))
+    avg_pts = _parse_dates_and_values(role_avg, "avg_overheal") if role_avg else []
+    all_pts = pts + avg_pts
+    _fit_axes(x_axis, y_axis, all_pts)
+    if all_pts:
+        y_axis.setRange(0, min(100, max(v for _, v in all_pts) * 1.2))
     _add_series(chart, pts, "Overheal %", 3, x_axis, y_axis)
+    _add_overlay_series(chart, avg_pts, "Role Avg", x_axis, y_axis)
 
     return make_chart_view(chart)
 
 
-def build_tank_chart(trend_data: list[dict]) -> QChartView:
+def build_tank_chart(trend_data: list[dict], role_avg: list[dict] | None = None) -> QChartView:
     chart = _make_chart("Tank Performance")
 
     x_axis = QDateTimeAxis()
@@ -179,17 +208,19 @@ def build_tank_chart(trend_data: list[dict]) -> QChartView:
 
     taken_pts = _parse_dates_and_values(trend_data, "total_damage_taken")
     mitigated_pts = _parse_dates_and_values(trend_data, "total_mitigated")
+    avg_pts = _parse_dates_and_values(role_avg, "avg_damage_taken") if role_avg else []
 
-    all_pts = taken_pts + mitigated_pts
+    all_pts = taken_pts + mitigated_pts + avg_pts
     _fit_axes(x_axis, y_axis, all_pts)
 
     _add_series(chart, taken_pts, "Damage Taken", 0, x_axis, y_axis)
     _add_series(chart, mitigated_pts, "Mitigated", 2, x_axis, y_axis)
+    _add_overlay_series(chart, avg_pts, "Role Avg Taken", x_axis, y_axis)
 
     return make_chart_view(chart)
 
 
-def build_tank_mitigation_chart(trend_data: list[dict]) -> QChartView:
+def build_tank_mitigation_chart(trend_data: list[dict], role_avg: list[dict] | None = None) -> QChartView:
     chart = _make_chart("Mitigation %")
 
     x_axis = QDateTimeAxis()
@@ -203,15 +234,18 @@ def build_tank_mitigation_chart(trend_data: list[dict]) -> QChartView:
     chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
 
     pts = _parse_dates_and_values(trend_data, "mitigation_percent")
-    _fit_axes(x_axis, y_axis, pts)
-    if pts:
-        y_axis.setRange(0, min(100, max(v for _, v in pts) * 1.2))
+    avg_pts = _parse_dates_and_values(role_avg, "avg_mitigation") if role_avg else []
+    all_pts = pts + avg_pts
+    _fit_axes(x_axis, y_axis, all_pts)
+    if all_pts:
+        y_axis.setRange(0, min(100, max(v for _, v in all_pts) * 1.2))
     _add_series(chart, pts, "Mitigation %", 2, x_axis, y_axis)
+    _add_overlay_series(chart, avg_pts, "Role Avg", x_axis, y_axis)
 
     return make_chart_view(chart)
 
 
-def build_dps_chart(trend_data: list[dict]) -> QChartView:
+def build_dps_chart(trend_data: list[dict], role_avg: list[dict] | None = None) -> QChartView:
     chart = _make_chart("DPS Performance")
 
     x_axis = QDateTimeAxis()
@@ -226,14 +260,17 @@ def build_dps_chart(trend_data: list[dict]) -> QChartView:
     chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
 
     damage_pts = _parse_dates_and_values(trend_data, "total_damage")
+    avg_pts = _parse_dates_and_values(role_avg, "avg_damage") if role_avg else []
 
-    _fit_axes(x_axis, y_axis, damage_pts)
+    all_pts = damage_pts + avg_pts
+    _fit_axes(x_axis, y_axis, all_pts)
     _add_series(chart, damage_pts, "Damage", 0, x_axis, y_axis)
+    _add_overlay_series(chart, avg_pts, "Role Avg", x_axis, y_axis)
 
     return make_chart_view(chart)
 
 
-def build_active_time_chart(trend_data: list[dict]) -> QChartView:
+def build_active_time_chart(trend_data: list[dict], role_avg: list[dict] | None = None) -> QChartView:
     chart = _make_chart("Active Time %")
 
     x_axis = QDateTimeAxis()
@@ -248,10 +285,13 @@ def build_active_time_chart(trend_data: list[dict]) -> QChartView:
     chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
 
     pts = _parse_dates_and_values(trend_data, "active_time_percent")
-    _fit_axes(x_axis, y_axis, pts)
-    if pts:
-        y_axis.setRange(0, min(100, max(v for _, v in pts) * 1.1))
+    avg_pts = _parse_dates_and_values(role_avg, "avg_active_time") if role_avg else []
+    all_pts = pts + avg_pts
+    _fit_axes(x_axis, y_axis, all_pts)
+    if all_pts:
+        y_axis.setRange(0, min(100, max(v for _, v in all_pts) * 1.1))
     _add_series(chart, pts, "Active Time %", 2, x_axis, y_axis)
+    _add_overlay_series(chart, avg_pts, "Role Avg", x_axis, y_axis)
 
     return make_chart_view(chart)
 

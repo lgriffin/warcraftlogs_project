@@ -1878,6 +1878,197 @@ class PerformanceDB:
 
         return results
 
+    def get_character_primary_role(self, character_name: str) -> str | None:
+        """Detect primary role by counting performance rows per table."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
+        ).fetchone()
+        if not char:
+            return None
+        cid = char["id"]
+
+        healer_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM healer_performance hp "
+            "JOIN raids r ON r.id = hp.raid_id "
+            "WHERE hp.character_id = ? AND r.source = 'guild'",
+            (cid,),
+        ).fetchone()["cnt"]
+
+        tank_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM tank_performance tp "
+            "JOIN raids r ON r.id = tp.raid_id "
+            "WHERE tp.character_id = ? AND r.source = 'guild'",
+            (cid,),
+        ).fetchone()["cnt"]
+
+        dps_row = conn.execute(
+            "SELECT COUNT(*) as cnt, dp.role FROM dps_performance dp "
+            "JOIN raids r ON r.id = dp.raid_id "
+            "WHERE dp.character_id = ? AND r.source = 'guild' "
+            "GROUP BY dp.role ORDER BY cnt DESC LIMIT 1",
+            (cid,),
+        ).fetchone()
+        dps_count = dps_row["cnt"] if dps_row else 0
+        dps_role = dps_row["role"] if dps_row else "melee"
+
+        candidates = [
+            (healer_count, "healer"),
+            (tank_count, "tank"),
+            (dps_count, dps_role),
+        ]
+        best = max(candidates, key=lambda x: x[0])
+        return best[1] if best[0] > 0 else None
+
+    def get_character_boss_comparison(self, character_name: str) -> list[dict]:
+        """Per-boss performance comparison against role peers."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
+        ).fetchone()
+        if not char:
+            return []
+        cid = char["id"]
+
+        boss_rows = conn.execute(
+            """SELECT DISTINCT e.encounter_id, e.name
+               FROM encounter_performance ep
+               JOIN encounters e ON e.id = ep.encounter_row_id
+               JOIN raids r ON r.id = e.raid_id
+               WHERE ep.character_id = ? AND r.source = 'guild'
+               ORDER BY e.name""",
+            (cid,),
+        ).fetchall()
+
+        results = []
+        for boss in boss_rows:
+            enc_id = boss["encounter_id"]
+
+            my_row = conn.execute(
+                """SELECT ep.role,
+                          COUNT(*) as kills,
+                          CAST(AVG(ep.total_damage) AS INTEGER) as avg_damage,
+                          CAST(AVG(ep.total_healing) AS INTEGER) as avg_healing,
+                          CAST(AVG(ep.total_damage_taken) AS INTEGER) as avg_damage_taken,
+                          AVG(ep.active_time_percent) as avg_active_time
+                   FROM encounter_performance ep
+                   JOIN encounters e ON e.id = ep.encounter_row_id
+                   JOIN raids r ON r.id = e.raid_id
+                   WHERE ep.character_id = ? AND e.encounter_id = ? AND r.source = 'guild'
+                   GROUP BY ep.role
+                   ORDER BY kills DESC LIMIT 1""",
+                (cid, enc_id),
+            ).fetchone()
+            if not my_row:
+                continue
+
+            my_role = my_row["role"]
+
+            peers = conn.execute(
+                """SELECT c.name,
+                          CAST(AVG(ep.total_damage) AS INTEGER) as avg_damage,
+                          CAST(AVG(ep.total_healing) AS INTEGER) as avg_healing,
+                          CAST(AVG(ep.total_damage_taken) AS INTEGER) as avg_damage_taken
+                   FROM encounter_performance ep
+                   JOIN encounters e ON e.id = ep.encounter_row_id
+                   JOIN raids r ON r.id = e.raid_id
+                   JOIN characters c ON c.id = ep.character_id
+                   WHERE e.encounter_id = ? AND ep.role = ? AND r.source = 'guild'
+                   GROUP BY c.id""",
+                (enc_id, my_role),
+            ).fetchall()
+
+            peer_count = len(peers)
+            if peer_count == 0:
+                continue
+
+            if my_role == "healer":
+                primary_key = "avg_healing"
+                reverse_sort = True
+            elif my_role == "tank":
+                primary_key = "avg_damage_taken"
+                reverse_sort = False
+            else:
+                primary_key = "avg_damage"
+                reverse_sort = True
+
+            my_value = my_row[primary_key] or 0
+            role_avg = sum(p[primary_key] or 0 for p in peers) / peer_count
+
+            sorted_peers = sorted(peers, key=lambda p: p[primary_key] or 0, reverse=reverse_sort)
+            rank = next(
+                (i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == character_name.lower()),
+                peer_count,
+            )
+
+            delta_pct = ((my_value - role_avg) / role_avg * 100) if role_avg else 0.0
+
+            results.append({
+                "boss_name": boss["name"],
+                "encounter_id": enc_id,
+                "role": my_role,
+                "kills": my_row["kills"],
+                "my_value": my_value,
+                "role_avg": round(role_avg),
+                "delta_pct": round(delta_pct, 1),
+                "rank": rank,
+                "peer_count": peer_count,
+            })
+
+        return results
+
+    def get_healer_role_avg_trend(self) -> list[dict]:
+        """Per-raid average healing stats across all healers (for overlay)."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT r.raid_date, r.raid_size,
+                      AVG(hp.total_healing) as avg_healing,
+                      AVG(hp.overheal_percent) as avg_overheal,
+                      AVG(hp.active_time_percent) as avg_active_time
+               FROM healer_performance hp
+               JOIN raids r ON r.id = hp.raid_id
+               WHERE r.source = 'guild'
+               GROUP BY hp.raid_id
+               ORDER BY r.raid_date DESC
+               LIMIT 20""",
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_tank_role_avg_trend(self) -> list[dict]:
+        """Per-raid average tank stats across all tanks (for overlay)."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT r.raid_date, r.raid_size,
+                      AVG(tp.total_damage_taken) as avg_damage_taken,
+                      AVG(tp.mitigation_percent) as avg_mitigation,
+                      AVG(tp.active_time_percent) as avg_active_time
+               FROM tank_performance tp
+               JOIN raids r ON r.id = tp.raid_id
+               WHERE r.source = 'guild'
+               GROUP BY tp.raid_id
+               ORDER BY r.raid_date DESC
+               LIMIT 20""",
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_dps_role_avg_trend(self) -> list[dict]:
+        """Per-raid average DPS stats across all DPS (for overlay)."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT r.raid_date, r.raid_size,
+                      AVG(dp.total_damage) as avg_damage,
+                      AVG(dp.active_time_percent) as avg_active_time
+               FROM dps_performance dp
+               JOIN raids r ON r.id = dp.raid_id
+               WHERE r.source = 'guild'
+               GROUP BY dp.raid_id
+               ORDER BY r.raid_date DESC
+               LIMIT 20""",
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_character_consistency(self, character_name: str) -> dict:
         """Compute consistency scores (std dev) for a character's performance."""
         conn = self._get_conn()
