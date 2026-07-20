@@ -37,9 +37,10 @@ from .analysis_helpers import (
     classify_consumable_usage,
     compute_engineering_stats,
 )
+from .charts import DebuffTimelineWidget
 from .detail_panel import CharacterDetailPanel
 from .styles import COLORS, COMMON_STYLES
-from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, TankTableModel
+from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, InterruptTableModel, TankTableModel
 
 
 class _ClickableNameTableView(QTableView):
@@ -186,6 +187,68 @@ class RaidAnalysisWidget(QWidget):
         consumes_layout.addWidget(consumes_table)
         self._tabs.addTab(consumes_widget, "Consumables")
 
+        # ── Interrupts tab ──
+        int_widget = QWidget()
+        int_layout = QVBoxLayout(int_widget)
+        int_layout.setContentsMargins(0, 8, 0, 0)
+        self._int_model = InterruptTableModel()
+        int_table = QTableView()
+        int_table.setModel(self._int_model)
+        int_table.setAlternatingRowColors(True)
+        int_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        int_table.setSortingEnabled(True)
+        int_table.verticalHeader().setVisible(False)
+        int_table.horizontalHeader().setStretchLastSection(True)
+        int_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        int_layout.addWidget(int_table)
+        self._int_tab_index = self._tabs.addTab(int_widget, "Interrupts")
+
+        # ── Debuff Uptime tab ──
+        du_widget = QWidget()
+        du_layout = QVBoxLayout(du_widget)
+        du_layout.setContentsMargins(0, 8, 0, 0)
+
+        du_header = QHBoxLayout()
+        du_header.addWidget(QLabel("Boss Fight:"))
+        self._du_combo = QComboBox()
+        self._du_combo.currentIndexChanged.connect(self._on_debuff_fight_changed)
+        du_header.addWidget(self._du_combo, 1)
+        du_layout.addLayout(du_header)
+
+        self._du_scroll = QScrollArea()
+        self._du_scroll.setWidgetResizable(True)
+        self._du_scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}"
+        )
+        du_layout.addWidget(self._du_scroll)
+
+        self._du_timeline = DebuffTimelineWidget()
+        self._du_scroll.setWidget(self._du_timeline)
+        self._du_tab_index = self._tabs.addTab(du_widget, "Debuff Uptime")
+
+        # ── Totem Uptime tab ──
+        tu_widget = QWidget()
+        tu_layout = QVBoxLayout(tu_widget)
+        tu_layout.setContentsMargins(0, 8, 0, 0)
+
+        tu_header = QHBoxLayout()
+        tu_header.addWidget(QLabel("Boss Fight:"))
+        self._tu_combo = QComboBox()
+        self._tu_combo.currentIndexChanged.connect(self._on_totem_fight_changed)
+        tu_header.addWidget(self._tu_combo, 1)
+        tu_layout.addLayout(tu_header)
+
+        self._tu_scroll = QScrollArea()
+        self._tu_scroll.setWidgetResizable(True)
+        self._tu_scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}"
+        )
+        tu_layout.addWidget(self._tu_scroll)
+
+        self._tu_timeline = DebuffTimelineWidget()
+        self._tu_scroll.setWidget(self._tu_timeline)
+        self._tu_tab_index = self._tabs.addTab(tu_widget, "Totem Uptime")
+
         # ── Boss vs Trash tab ──
         bt_widget = QWidget()
         bt_layout = QVBoxLayout(bt_widget)
@@ -320,6 +383,57 @@ class RaidAnalysisWidget(QWidget):
 
         self._all_consumables = analysis.consumables
         self._filter_consumables()
+
+        if analysis.interrupts:
+            self._int_model.set_data(analysis.interrupts)
+            self._tabs.setTabVisible(self._int_tab_index, True)
+        else:
+            self._tabs.setTabVisible(self._int_tab_index, False)
+
+        self._all_aura_uptimes = analysis.aura_uptimes
+        if analysis.aura_uptimes:
+            self._tabs.setTabVisible(self._du_tab_index, True)
+            fights = []
+            seen = set()
+            for au in analysis.aura_uptimes:
+                key = (au.fight_name, au.fight_start)
+                if key not in seen:
+                    seen.add(key)
+                    fights.append((au.fight_name, au.fight_start, au.fight_end))
+            self._du_fights = fights
+            self._du_combo.blockSignals(True)
+            self._du_combo.clear()
+            for name, _, _ in fights:
+                self._du_combo.addItem(name)
+            self._du_combo.blockSignals(False)
+            if fights:
+                self._du_combo.setCurrentIndex(0)
+                self._on_debuff_fight_changed(0)
+        else:
+            self._tabs.setTabVisible(self._du_tab_index, False)
+
+        self._all_totem_uptimes = analysis.totem_uptimes
+        if analysis.totem_uptimes:
+            self._tabs.setTabVisible(self._tu_tab_index, True)
+            fights = []
+            seen = set()
+            for tu in analysis.totem_uptimes:
+                key = (tu.fight_name, tu.fight_start)
+                if key not in seen:
+                    seen.add(key)
+                    fights.append((tu.fight_name, tu.fight_start, tu.fight_end))
+            self._tu_fights = fights
+            self._tu_combo.blockSignals(True)
+            self._tu_combo.clear()
+            for name, _, _ in fights:
+                self._tu_combo.addItem(name)
+            self._tu_combo.blockSignals(False)
+            if fights:
+                self._tu_combo.setCurrentIndex(0)
+                self._on_totem_fight_changed(0)
+        else:
+            self._tabs.setTabVisible(self._tu_tab_index, False)
+
         self._populate_boss_vs_trash(analysis)
         self._populate_engineering(analysis)
         self._populate_timeline(analysis)
@@ -472,6 +586,28 @@ class RaidAnalysisWidget(QWidget):
             at_item = QTableWidgetItem(f"{p.active_time_percent:.1f}%")
             at_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._enc_table.setItem(i, 6, at_item)
+
+    def _on_debuff_fight_changed(self, index: int):
+        if not hasattr(self, "_du_fights") or index < 0 or index >= len(self._du_fights):
+            return
+        fight_name, fight_start, fight_end = self._du_fights[index]
+        fight_uptimes = [
+            au for au in self._all_aura_uptimes
+            if au.fight_start == fight_start and au.fight_name == fight_name
+        ]
+        fight_uptimes.sort(key=lambda au: au.uptime_percent)
+        self._du_timeline.set_data(fight_uptimes, fight_start, fight_end)
+
+    def _on_totem_fight_changed(self, index: int):
+        if not hasattr(self, "_tu_fights") or index < 0 or index >= len(self._tu_fights):
+            return
+        fight_name, fight_start, fight_end = self._tu_fights[index]
+        fight_uptimes = [
+            tu for tu in self._all_totem_uptimes
+            if tu.fight_start == fight_start and tu.fight_name == fight_name
+        ]
+        fight_uptimes.sort(key=lambda tu: tu.uptime_percent)
+        self._tu_timeline.set_data(fight_uptimes, fight_start, fight_end)
 
     def _on_name_clicked(self, name: str):
         a = self._analysis

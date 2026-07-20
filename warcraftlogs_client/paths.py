@@ -77,6 +77,18 @@ def get_consumes_config_path() -> Path:
     return get_app_dir() / "consumes_config.json"
 
 
+def get_interrupt_config_path() -> Path:
+    return get_app_dir() / "interrupt_config.json"
+
+
+def get_debuff_config_path() -> Path:
+    return get_app_dir() / "debuff_config.json"
+
+
+def get_totem_config_path() -> Path:
+    return get_app_dir() / "totem_config.json"
+
+
 def get_update_dir() -> Path:
     """Temp directory for downloading and staging updates."""
     base = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))

@@ -197,6 +197,7 @@ def mock_client():
     client.get_master_data.return_value = []
     client.get_fights.return_value = []
     client.get_encounter_table.return_value = []
+    client.get_debuffs_table.return_value = {"data": {"auras": []}}
     return client
 
 

@@ -460,6 +460,24 @@ class WarcraftLogsClient:
         report = _extract_report(result)
         return report.get("table") or {}
 
+    def get_debuffs_table(
+        self, report_id: str, start_time: int, end_time: int
+    ) -> dict:
+        """Fetch debuff table for enemies in a fight time window."""
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              table(dataType: Debuffs, startTime: {start_time}, endTime: {end_time},
+                    hostilityType: Enemies)
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        report = _extract_report(result)
+        return report.get("table") or {}
+
     def get_damage_done_data(self, report_id: str, source_id: int) -> list[dict]:
         query = f"""
         {{
