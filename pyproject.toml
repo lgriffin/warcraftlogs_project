@@ -19,6 +19,9 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-bdd>=7.0",
+    "pytest-qt>=4.2",
+    "hypothesis>=6.0",
+    "pytest-xdist>=3.0",
     "ruff",
     "mypy",
     "bandit[toml]",
@@ -65,6 +68,7 @@ skips = ["B101", "B105", "B110", "B404", "B603", "B607", "B608"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 bdd_features_base_dir = "tests/features/"
+addopts = "--strict-markers"
 markers = [
     "ears_event_driven: EARS event-driven requirement (When trigger, system shall respond)",
     "ears_ubiquitous: EARS ubiquitous requirement (system shall always behave this way)",
@@ -75,6 +79,25 @@ markers = [
     "api: Tests involving WCL API client or network calls",
     "auth: Tests involving authentication and token management",
     "reference: Tests for reference report comparison features",
+    "gui: Tests requiring PySide6 GUI framework",
+    "fuzz: Property-based fuzz tests using hypothesis",
+    "security: Security-focused tests",
+    "integration: Integration tests spanning multiple modules",
+    "live: Tests hitting real external APIs (opt-in)",
+    "slow: Tests that take significant time to run",
+]
+
+[tool.coverage.run]
+source = ["warcraftlogs_client"]
+omit = ["warcraftlogs_client/gui/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
 ]
 
 [tool.codespell]

@@ -2,6 +2,8 @@
 
 import pytest
 
+pytest.importorskip("PySide6")
+
 from warcraftlogs_client.gui.raid_diff_view import RaidDiffView
 from warcraftlogs_client.models import (
     ConsumableUsage,
