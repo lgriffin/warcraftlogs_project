@@ -36,6 +36,7 @@ from .charts import (
     CalendarHeatmapWidget,
     SpiderChartWidget,
     build_active_time_chart,
+    build_cancel_rate_chart,
     build_consumable_trend_chart,
     build_dps_chart,
     build_healer_chart,
@@ -265,6 +266,7 @@ class CharacterView(QWidget):
         self._all_dps_trend = []
         self._all_dps_ability_trend = []
         self._all_consumable_trend = []
+        self._all_cancel_rate_trend = []
         self._cached_healer_trend = []
         self._cached_healer_spell_trend = []
         self._cached_tank_trend = []
@@ -559,6 +561,7 @@ class CharacterView(QWidget):
                 "Spell Healing",
                 "Spell Casts",
                 "Active Time %",
+                "Cancel Rate %",
             ]
         )
         self._healer_chart_combo.setStyleSheet(combo_style)
@@ -579,7 +582,7 @@ class CharacterView(QWidget):
         tank_bar = QHBoxLayout()
         tank_bar.addWidget(QLabel("Chart:"))
         self._tank_chart_combo = QComboBox()
-        self._tank_chart_combo.addItems(["Damage & Mitigation", "Mitigation %", "Active Time %"])
+        self._tank_chart_combo.addItems(["Damage & Mitigation", "Mitigation %", "Active Time %", "Cancel Rate %"])
         self._tank_chart_combo.setStyleSheet(combo_style)
         self._tank_chart_combo.currentIndexChanged.connect(self._rebuild_tank_chart)
         tank_bar.addWidget(self._tank_chart_combo)
@@ -598,7 +601,7 @@ class CharacterView(QWidget):
         dps_bar = QHBoxLayout()
         dps_bar.addWidget(QLabel("Chart:"))
         self._dps_chart_combo = QComboBox()
-        self._dps_chart_combo.addItems(["Total Damage", "Ability Damage", "Ability Casts", "Active Time %"])
+        self._dps_chart_combo.addItems(["Total Damage", "Ability Damage", "Ability Casts", "Active Time %", "Cancel Rate %"])
         self._dps_chart_combo.setStyleSheet(combo_style)
         self._dps_chart_combo.currentIndexChanged.connect(self._rebuild_dps_chart)
         dps_bar.addWidget(self._dps_chart_combo)
@@ -904,6 +907,23 @@ class CharacterView(QWidget):
     def _compute_role_comparison(db, name: str, role: str | None) -> dict | None:
         if not role:
             return None
+
+        cc_trend = db.get_cancelled_cast_trend(name)
+        my_cancel = sum(r["cancel_rate"] for r in cc_trend) / len(cc_trend) if cc_trend else None
+
+        conn = db._get_conn()
+        all_cc = conn.execute(
+            """SELECT AVG(cc.cancel_rate) as avg_rate
+               FROM cancelled_casts cc
+               JOIN raids r ON r.id = cc.raid_id
+               WHERE r.source = 'guild'""",
+        ).fetchone()
+        role_cancel = all_cc["avg_rate"] if all_cc and all_cc["avg_rate"] is not None else None
+
+        cancel_metric = None
+        if my_cancel is not None and role_cancel is not None:
+            cancel_metric = ("Cancel Rate %", round(my_cancel, 1), round(role_cancel, 1), False)
+
         if role == "healer":
             peers = db.get_healer_insights(min_raids=1)
             if not peers:
@@ -916,15 +936,18 @@ class CharacterView(QWidget):
             avg_dispels = sum(p.get("total_dispels", 0) for p in peers) / len(peers)
             sorted_peers = sorted(peers, key=lambda p: p["avg_healing"], reverse=True)
             rank = next(i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == name.lower())
+            metrics = [
+                ("Avg Healing", my_row["avg_healing"], avg_healing, True),
+                ("Avg Overheal %", my_row["avg_overheal"], avg_overheal, False),
+                ("Total Dispels", my_row.get("total_dispels", 0), avg_dispels, True),
+            ]
+            if cancel_metric:
+                metrics.append(cancel_metric)
             return {
                 "role_label": "Healer",
                 "peer_count": len(peers),
                 "rank": rank,
-                "metrics": [
-                    ("Avg Healing", my_row["avg_healing"], avg_healing, True),
-                    ("Avg Overheal %", my_row["avg_overheal"], avg_overheal, False),
-                    ("Total Dispels", my_row.get("total_dispels", 0), avg_dispels, True),
-                ],
+                "metrics": metrics,
             }
         if role == "tank":
             peers = db.get_tank_mitigation_stats(min_raids=1)
@@ -937,14 +960,17 @@ class CharacterView(QWidget):
             avg_taken = sum(p["avg_damage_taken"] for p in peers) / len(peers)
             sorted_peers = sorted(peers, key=lambda p: p["avg_mitigation"], reverse=True)
             rank = next(i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == name.lower())
+            metrics = [
+                ("Avg Mitigation %", my_row["avg_mitigation"], avg_mit, True),
+                ("Avg Damage Taken", my_row["avg_damage_taken"], avg_taken, False),
+            ]
+            if cancel_metric:
+                metrics.append(cancel_metric)
             return {
                 "role_label": "Tank",
                 "peer_count": len(peers),
                 "rank": rank,
-                "metrics": [
-                    ("Avg Mitigation %", my_row["avg_mitigation"], avg_mit, True),
-                    ("Avg Damage Taken", my_row["avg_damage_taken"], avg_taken, False),
-                ],
+                "metrics": metrics,
             }
         peers = db.get_dps_consistency(min_raids=1)
         if not peers:
@@ -956,14 +982,17 @@ class CharacterView(QWidget):
         avg_cons = sum(p["consistency"] for p in peers) / len(peers)
         sorted_peers = sorted(peers, key=lambda p: p["avg_damage"], reverse=True)
         rank = next(i + 1 for i, p in enumerate(sorted_peers) if p["name"].lower() == name.lower())
+        metrics = [
+            ("Avg Damage", my_row["avg_damage"], avg_damage, True),
+            ("Consistency", my_row["consistency"], avg_cons, True),
+        ]
+        if cancel_metric:
+            metrics.append(cancel_metric)
         return {
             "role_label": "DPS",
             "peer_count": len(peers),
             "rank": rank,
-            "metrics": [
-                ("Avg Damage", my_row["avg_damage"], avg_damage, True),
-                ("Consistency", my_row["consistency"], avg_cons, True),
-            ],
+            "metrics": metrics,
         }
 
     def _populate_role_comparison(self, data: dict | None):
@@ -1093,6 +1122,8 @@ class CharacterView(QWidget):
                 else:
                     self._all_role_avg_trend = []
 
+                self._all_cancel_rate_trend = db.get_cancelled_cast_trend(character_name)
+
                 consumes_summary = db.get_consumable_summary(character_name, limit=5)
                 if consumes_summary:
                     all_consumable_names = set()
@@ -1136,6 +1167,7 @@ class CharacterView(QWidget):
         self._cached_dps_ability_trend = self._filter_by_raid_size(self._all_dps_ability_trend, mode)
         self._cached_consumable_trend = self._filter_by_raid_size(self._all_consumable_trend, mode)
         self._cached_role_avg_trend = self._filter_by_raid_size(self._all_role_avg_trend, mode)
+        self._cached_cancel_rate_trend = self._filter_by_raid_size(self._all_cancel_rate_trend, mode)
 
         if self._cached_healer_trend:
             self._healer_trend_model.set_data(
@@ -1230,6 +1262,11 @@ class CharacterView(QWidget):
             view = build_spell_trend_chart(spell_trend, "casts", "Spell Casts Over Time", "Casts")
         elif choice == 4:
             view = build_active_time_chart(trend, role_avg=ra)
+        elif choice == 5:
+            if not self._cached_cancel_rate_trend:
+                self._clear_chart(self._healer_chart_container, "healer")
+                return
+            view = build_cancel_rate_chart(self._cached_cancel_rate_trend)
         else:
             return
         self._set_chart(self._healer_chart_container, "healer", view)
@@ -1250,6 +1287,11 @@ class CharacterView(QWidget):
             view = build_tank_mitigation_chart(trend, role_avg=ra)
         elif choice == 2:
             view = build_active_time_chart(trend, role_avg=ra)
+        elif choice == 3:
+            if not self._cached_cancel_rate_trend:
+                self._clear_chart(self._tank_chart_container, "tank")
+                return
+            view = build_cancel_rate_chart(self._cached_cancel_rate_trend)
         else:
             return
         self._set_chart(self._tank_chart_container, "tank", view)
@@ -1273,6 +1315,11 @@ class CharacterView(QWidget):
             view = build_spell_trend_chart(ability_trend, "casts", "Ability Casts Over Time", "Casts")
         elif choice == 3:
             view = build_active_time_chart(trend, role_avg=ra)
+        elif choice == 4:
+            if not self._cached_cancel_rate_trend:
+                self._clear_chart(self._dps_chart_container, "dps")
+                return
+            view = build_cancel_rate_chart(self._cached_cancel_rate_trend)
         else:
             return
         self._set_chart(self._dps_chart_container, "dps", view)

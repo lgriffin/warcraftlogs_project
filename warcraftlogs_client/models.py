@@ -110,6 +110,16 @@ class InterruptUsage:
 
 
 @dataclass
+class CancelledCastSummary:
+    player_name: str
+    player_class: str
+    source_id: int
+    total_casts: int
+    cancelled_casts: int
+    cancel_rate: float
+
+
+@dataclass
 class ConsumableUsage:
     player_name: str
     player_role: str
@@ -238,6 +248,7 @@ class RaidAnalysis:
     dps: list[DPSPerformance] = field(default_factory=list)
     consumables: list[ConsumableUsage] = field(default_factory=list)
     interrupts: list[InterruptUsage] = field(default_factory=list)
+    cancelled_casts: list[CancelledCastSummary] = field(default_factory=list)
     aura_uptimes: list[AuraUptime] = field(default_factory=list)
     totem_uptimes: list[AuraUptime] = field(default_factory=list)
     encounters: list[EncounterSummary] = field(default_factory=list)

@@ -5,7 +5,7 @@ Qt table models for displaying analysis results.
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor, QFont
 
-from ..models import DPSPerformance, GearItem, HealerPerformance, InterruptUsage, TankPerformance
+from ..models import CancelledCastSummary, DPSPerformance, GearItem, HealerPerformance, InterruptUsage, TankPerformance
 
 
 class HealerTableModel(QAbstractTableModel):
@@ -512,6 +512,73 @@ class InterruptTableModel(QAbstractTableModel):
                 return _link_color()
             if col == 1:
                 return _class_color(row["class"])
+
+        if role == Qt.ItemDataRole.FontRole:
+            if col == 0:
+                return _link_font()
+
+        return None
+
+
+class CancelledCastTableModel(QAbstractTableModel):
+    """Per-player cancelled cast summary with cancel rate."""
+
+    COLUMNS = ["Name", "Class", "Total Casts", "Cancelled", "Cancel Rate"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[CancelledCastSummary] = []
+
+    def set_data(self, data: list[CancelledCastSummary]):
+        self.beginResetModel()
+        self._rows = sorted(data, key=lambda r: r.cancel_rate)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self._rows)
+
+    def columnCount(self, parent=QModelIndex()):
+        return len(self.COLUMNS)
+
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+            return self.COLUMNS[section] if section < len(self.COLUMNS) else None
+        return None
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or index.row() >= len(self._rows):
+            return None
+        r = self._rows[index.row()]
+        col = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if col == 0:
+                return r.player_name
+            if col == 1:
+                return r.player_class
+            if col == 2:
+                return r.total_casts
+            if col == 3:
+                return r.cancelled_casts
+            if col == 4:
+                return f"{r.cancel_rate:.1f}%"
+
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            if col >= 2:
+                return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if col == 0:
+                return _link_color()
+            if col == 1:
+                return _class_color(r.player_class)
+            if col == 4:
+                if r.cancel_rate < 5:
+                    return QColor("#1eff00")
+                if r.cancel_rate < 15:
+                    return QColor("#ff8000")
+                return QColor("#ff4444")
 
         if role == Qt.ItemDataRole.FontRole:
             if col == 0:

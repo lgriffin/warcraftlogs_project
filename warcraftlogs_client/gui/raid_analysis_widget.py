@@ -40,7 +40,14 @@ from .analysis_helpers import (
 from .charts import DebuffTimelineWidget
 from .detail_panel import CharacterDetailPanel
 from .styles import COLORS, COMMON_STYLES
-from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, InterruptTableModel, TankTableModel
+from .table_models import (
+    CancelledCastTableModel,
+    DPSTableModel,
+    HealerTableModel,
+    HistoryTableModel,
+    InterruptTableModel,
+    TankTableModel,
+)
 
 
 class _ClickableNameTableView(QTableView):
@@ -218,6 +225,22 @@ class RaidAnalysisWidget(QWidget):
         int_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         int_layout.addWidget(int_table)
         self._int_tab_index = self._tabs.addTab(int_widget, "Interrupts")
+
+        # ── Cast Efficiency tab ──
+        cc_widget = QWidget()
+        cc_layout = QVBoxLayout(cc_widget)
+        cc_layout.setContentsMargins(0, 8, 0, 0)
+        self._cc_model = CancelledCastTableModel()
+        cc_table = QTableView()
+        cc_table.setModel(self._cc_model)
+        cc_table.setAlternatingRowColors(True)
+        cc_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+        cc_table.setSortingEnabled(True)
+        cc_table.verticalHeader().setVisible(False)
+        cc_table.horizontalHeader().setStretchLastSection(True)
+        cc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        cc_layout.addWidget(cc_table)
+        self._cc_tab_index = self._tabs.addTab(cc_widget, "Cast Efficiency")
 
         # ── Debuff Uptime tab ──
         du_widget = QWidget()
@@ -405,6 +428,12 @@ class RaidAnalysisWidget(QWidget):
             self._tabs.setTabVisible(self._int_tab_index, True)
         else:
             self._tabs.setTabVisible(self._int_tab_index, False)
+
+        if analysis.cancelled_casts:
+            self._cc_model.set_data(analysis.cancelled_casts)
+            self._tabs.setTabVisible(self._cc_tab_index, True)
+        else:
+            self._tabs.setTabVisible(self._cc_tab_index, False)
 
         self._all_aura_uptimes = analysis.aura_uptimes
         if analysis.aura_uptimes:
