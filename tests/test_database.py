@@ -187,7 +187,7 @@ class TestImportedReportCodes:
         assert "abc123" in codes
 
     def test_empty(self, db):
-        assert db.get_imported_report_codes() == set()
+        assert db.get_imported_report_codes() == {}
 
 
 class TestImportConsumables:
