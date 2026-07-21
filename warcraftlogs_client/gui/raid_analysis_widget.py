@@ -199,48 +199,19 @@ class RaidAnalysisWidget(QWidget):
         consumes_layout.addWidget(self._consumes_filter)
 
         self._consumes_model = HistoryTableModel()
-        consumes_table = QTableView()
-        consumes_table.setModel(self._consumes_model)
-        consumes_table.setAlternatingRowColors(True)
-        consumes_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        consumes_table.setSortingEnabled(True)
-        consumes_table.verticalHeader().setVisible(False)
-        consumes_table.horizontalHeader().setStretchLastSection(True)
-        consumes_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        consumes_table = self._make_table(self._consumes_model)
         consumes_layout.addWidget(consumes_table)
         self._tabs.addTab(consumes_widget, "Consumables")
 
         # ── Interrupts tab ──
-        int_widget = QWidget()
-        int_layout = QVBoxLayout(int_widget)
-        int_layout.setContentsMargins(0, 8, 0, 0)
         self._int_model = InterruptTableModel()
-        int_table = QTableView()
-        int_table.setModel(self._int_model)
-        int_table.setAlternatingRowColors(True)
-        int_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        int_table.setSortingEnabled(True)
-        int_table.verticalHeader().setVisible(False)
-        int_table.horizontalHeader().setStretchLastSection(True)
-        int_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        int_layout.addWidget(int_table)
-        self._int_tab_index = self._tabs.addTab(int_widget, "Interrupts")
+        int_table = self._make_table(self._int_model)
+        self._int_tab_index = self._tabs.addTab(int_table, "Interrupts")
 
         # ── Cast Efficiency tab ──
-        cc_widget = QWidget()
-        cc_layout = QVBoxLayout(cc_widget)
-        cc_layout.setContentsMargins(0, 8, 0, 0)
         self._cc_model = CancelledCastTableModel()
-        cc_table = QTableView()
-        cc_table.setModel(self._cc_model)
-        cc_table.setAlternatingRowColors(True)
-        cc_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        cc_table.setSortingEnabled(True)
-        cc_table.verticalHeader().setVisible(False)
-        cc_table.horizontalHeader().setStretchLastSection(True)
-        cc_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        cc_layout.addWidget(cc_table)
-        self._cc_tab_index = self._tabs.addTab(cc_widget, "Cast Efficiency")
+        cc_table = self._make_table(self._cc_model)
+        self._cc_tab_index = self._tabs.addTab(cc_table, "Cast Efficiency")
 
         # ── Debuff Uptime tab ──
         du_widget = QWidget()
@@ -657,20 +628,21 @@ class RaidAnalysisWidget(QWidget):
     def _on_name_clicked(self, name: str):
         a = self._analysis
         player_consumes = [c for c in a.consumables if c.player_name == name]
+        player_cc = next((cc for cc in a.cancelled_casts if cc.player_name == name), None)
 
         for h in a.healers:
             if h.name == name:
-                self._detail_panel.show_healer(h, player_consumes)
+                self._detail_panel.show_healer(h, player_consumes, cancelled=player_cc)
                 self._splitter.setSizes([3, 1])
                 return
         for t in a.tanks:
             if t.name == name:
-                self._detail_panel.show_tank(t, player_consumes)
+                self._detail_panel.show_tank(t, player_consumes, cancelled=player_cc)
                 self._splitter.setSizes([3, 1])
                 return
         for d in a.dps:
             if d.name == name:
-                self._detail_panel.show_dps(d, player_consumes)
+                self._detail_panel.show_dps(d, player_consumes, cancelled=player_cc)
                 self._splitter.setSizes([3, 1])
                 return
 

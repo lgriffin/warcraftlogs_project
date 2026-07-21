@@ -18,6 +18,7 @@ from .client import WarcraftLogsClient
 from .models import (
     AuraBand,
     AuraUptime,
+    CancelledCastDetail,
     CancelledCastSummary,
     ConsumableUsage,
     DispelUsage,
@@ -739,6 +740,9 @@ def _analyze_cancelled_casts(
             pending: dict[int, int] = {}
             completed = 0
             cancelled = 0
+            spell_completed: dict[int, int] = {}
+            spell_cancelled: dict[int, int] = {}
+            spell_names: dict[int, str] = {}
 
             for e in cast_events:
                 etype = e.get("type")
@@ -746,21 +750,45 @@ def _analyze_cancelled_casts(
                 if not aid:
                     continue
 
+                ability = e.get("ability")
+                if ability and ability.get("name"):
+                    spell_names[aid] = ability["name"]
+
                 if etype == "begincast":
                     if aid in pending:
                         cancelled += 1
+                        spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
                     pending[aid] = e.get("timestamp", 0)
                 elif etype == "cast":
                     if aid in pending:
                         completed += 1
+                        spell_completed[aid] = spell_completed.get(aid, 0) + 1
                         del pending[aid]
 
-            cancelled += len(pending)
+            for aid in pending:
+                cancelled += 1
+                spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
+
             total = completed + cancelled
             if total == 0:
                 continue
 
             cancel_rate = round(cancelled / total * 100, 1)
+
+            details = []
+            for sid in set(spell_completed) | set(spell_cancelled):
+                sc = spell_completed.get(sid, 0)
+                sn = spell_cancelled.get(sid, 0)
+                st = sc + sn
+                details.append(CancelledCastDetail(
+                    spell_id=sid,
+                    spell_name=spell_names.get(sid, f"Unknown ({sid})"),
+                    total_casts=sc,
+                    cancelled_casts=sn,
+                    cancel_rate=round(sn / st * 100, 1) if st else 0.0,
+                ))
+            details.sort(key=lambda d: d.cancelled_casts, reverse=True)
+
             results.append(
                 CancelledCastSummary(
                     player_name=player.name,
@@ -769,6 +797,7 @@ def _analyze_cancelled_casts(
                     total_casts=completed,
                     cancelled_casts=cancelled,
                     cancel_rate=cancel_rate,
+                    spell_details=details,
                 )
             )
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:

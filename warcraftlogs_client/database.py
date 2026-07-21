@@ -16,6 +16,7 @@ from .cache import _cache_file, clear_response_cache
 from .models import (
     AuraBand,
     AuraUptime,
+    CancelledCastDetail,
     CancelledCastSummary,
     CharacterHistory,
     ConsumableUsage,
@@ -372,6 +373,20 @@ class PerformanceDB:
                 );
                 CREATE INDEX IF NOT EXISTS idx_cc_char ON cancelled_casts(character_id);
                 CREATE INDEX IF NOT EXISTS idx_cc_raid ON cancelled_casts(raid_id);
+
+                CREATE TABLE IF NOT EXISTS cancelled_cast_spells (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id),
+                    raid_id INTEGER NOT NULL REFERENCES raids(id),
+                    spell_id INTEGER NOT NULL,
+                    spell_name TEXT NOT NULL DEFAULT '',
+                    total_casts INTEGER NOT NULL DEFAULT 0,
+                    cancelled_casts INTEGER NOT NULL DEFAULT 0,
+                    cancel_rate REAL NOT NULL DEFAULT 0.0,
+                    UNIQUE(character_id, raid_id, spell_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ccs_char ON cancelled_cast_spells(character_id);
+                CREATE INDEX IF NOT EXISTS idx_ccs_raid ON cancelled_cast_spells(raid_id);
             """)
 
     def close(self) -> None:
@@ -500,6 +515,19 @@ class PerformanceDB:
                        cancel_rate = excluded.cancel_rate""",
                 (char_id, raid_id, cc.total_casts, cc.cancelled_casts, cc.cancel_rate),
             )
+            for detail in cc.spell_details:
+                conn.execute(
+                    """INSERT INTO cancelled_cast_spells
+                       (character_id, raid_id, spell_id, spell_name, total_casts, cancelled_casts, cancel_rate)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(character_id, raid_id, spell_id) DO UPDATE SET
+                           spell_name = excluded.spell_name,
+                           total_casts = excluded.total_casts,
+                           cancelled_casts = excluded.cancelled_casts,
+                           cancel_rate = excluded.cancel_rate""",
+                    (char_id, raid_id, detail.spell_id, detail.spell_name,
+                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate),
+                )
 
         if analysis.encounters:
             self._import_encounters(conn, raid_id, raid_date, analysis.encounters)
@@ -1468,6 +1496,7 @@ class PerformanceDB:
         conn.execute("DELETE FROM consumable_usage WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM interrupt_usage WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM cancelled_casts WHERE raid_id = ?", (raid_id,))
+        conn.execute("DELETE FROM cancelled_cast_spells WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM aura_uptime WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM totem_uptime WHERE raid_id = ?", (raid_id,))
         conn.execute(
@@ -2805,12 +2834,32 @@ class PerformanceDB:
     ) -> list[CancelledCastSummary]:
         rows = conn.execute(
             """SELECT cc.total_casts, cc.cancelled_casts, cc.cancel_rate,
-                      c.name as player_name, c.player_class
+                      cc.character_id, c.name as player_name, c.player_class
                FROM cancelled_casts cc
                JOIN characters c ON c.id = cc.character_id
                WHERE cc.raid_id = ?""",
             (raid_id,),
         ).fetchall()
+
+        spell_rows = conn.execute(
+            """SELECT ccs.character_id, ccs.spell_id, ccs.spell_name,
+                      ccs.total_casts, ccs.cancelled_casts, ccs.cancel_rate
+               FROM cancelled_cast_spells ccs
+               WHERE ccs.raid_id = ?""",
+            (raid_id,),
+        ).fetchall()
+        spells_by_char: dict[int, list[CancelledCastDetail]] = {}
+        for sr in spell_rows:
+            spells_by_char.setdefault(sr["character_id"], []).append(
+                CancelledCastDetail(
+                    spell_id=sr["spell_id"],
+                    spell_name=sr["spell_name"],
+                    total_casts=sr["total_casts"],
+                    cancelled_casts=sr["cancelled_casts"],
+                    cancel_rate=sr["cancel_rate"],
+                )
+            )
+
         return [
             CancelledCastSummary(
                 player_name=r["player_name"],
@@ -2819,6 +2868,11 @@ class PerformanceDB:
                 total_casts=r["total_casts"],
                 cancelled_casts=r["cancelled_casts"],
                 cancel_rate=r["cancel_rate"],
+                spell_details=sorted(
+                    spells_by_char.get(r["character_id"], []),
+                    key=lambda d: d.cancelled_casts,
+                    reverse=True,
+                ),
             )
             for r in rows
         ]

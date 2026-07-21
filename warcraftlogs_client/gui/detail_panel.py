@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..models import ConsumableUsage, DPSPerformance, HealerPerformance, TankPerformance
+from ..models import CancelledCastSummary, ConsumableUsage, DPSPerformance, HealerPerformance, TankPerformance
 from .styles import COLORS
 
 
@@ -67,6 +67,7 @@ class CharacterDetailPanel(QWidget):
         ("dispels", "Dispels"),
         ("damage_taken", "Dmg Taken"),
         ("abilities_used", "Abilities"),
+        ("cancelled_casts", "Cancelled"),
         ("consumables", "Consumables"),
     ]
 
@@ -229,7 +230,12 @@ class CharacterDetailPanel(QWidget):
         self.setVisible(False)
         self.closed.emit()
 
-    def show_healer(self, h: HealerPerformance, consumables: list[ConsumableUsage] | None = None):
+    def show_healer(
+        self,
+        h: HealerPerformance,
+        consumables: list[ConsumableUsage] | None = None,
+        cancelled: CancelledCastSummary | None = None,
+    ):
         self._current_name = h.name
         self._name_label.setText(h.name)
         at_str = f"  |  Active: {h.active_time_percent:.1f}%" if h.active_time_percent > 0 else ""
@@ -249,12 +255,18 @@ class CharacterDetailPanel(QWidget):
 
         self._clear_section("damage_taken")
         self._clear_section("abilities_used")
+        self._show_cancelled_casts(cancelled)
         self._show_consumables(consumables, resource_rows)
 
         self._auto_select_tab()
         self.setVisible(True)
 
-    def show_tank(self, t: TankPerformance, consumables: list[ConsumableUsage] | None = None):
+    def show_tank(
+        self,
+        t: TankPerformance,
+        consumables: list[ConsumableUsage] | None = None,
+        cancelled: CancelledCastSummary | None = None,
+    ):
         self._current_name = t.name
         self._name_label.setText(t.name)
         at_str = f"  |  Active: {t.active_time_percent:.1f}%" if t.active_time_percent > 0 else ""
@@ -272,12 +284,18 @@ class CharacterDetailPanel(QWidget):
 
         self._clear_section("spell_breakdown")
         self._clear_section("dispels")
+        self._show_cancelled_casts(cancelled)
         self._show_consumables(consumables)
 
         self._auto_select_tab()
         self.setVisible(True)
 
-    def show_dps(self, d: DPSPerformance, consumables: list[ConsumableUsage] | None = None):
+    def show_dps(
+        self,
+        d: DPSPerformance,
+        consumables: list[ConsumableUsage] | None = None,
+        cancelled: CancelledCastSummary | None = None,
+    ):
         self._current_name = d.name
         self._name_label.setText(d.name)
         at_str = f"  |  Active: {d.active_time_percent:.1f}%" if d.active_time_percent > 0 else ""
@@ -291,10 +309,22 @@ class CharacterDetailPanel(QWidget):
         self._clear_section("dispels")
         self._clear_section("damage_taken")
         self._clear_section("abilities_used")
+        self._show_cancelled_casts(cancelled)
         self._show_consumables(consumables)
 
         self._auto_select_tab()
         self.setVisible(True)
+
+    def _show_cancelled_casts(self, cancelled: CancelledCastSummary | None = None):
+        if cancelled and cancelled.spell_details:
+            rows = [
+                (d.spell_name, d.total_casts, d.cancelled_casts, f"{d.cancel_rate:.1f}%")
+                for d in cancelled.spell_details
+                if d.cancelled_casts > 0
+            ]
+            self._populate_section("cancelled_casts", rows, ["Spell", "Casts", "Cancelled", "Rate"])
+        else:
+            self._clear_section("cancelled_casts")
 
     def _show_consumables(
         self, consumables: list[ConsumableUsage] | None = None, resource_rows: list[tuple] | None = None

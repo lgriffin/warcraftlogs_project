@@ -6,6 +6,7 @@ import pytest
 
 from warcraftlogs_client.analysis import _analyze_cancelled_casts
 from warcraftlogs_client.models import (
+    CancelledCastDetail,
     CancelledCastSummary,
     HealerPerformance,
     PlayerIdentity,
@@ -168,6 +169,48 @@ class TestAnalyzeCancelledCasts:
         results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
         assert results == []
 
+    def test_spell_details_populated(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 3000},
+            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 4000},
+            {"type": "cast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 5000},
+        ]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        assert len(results) == 1
+        details = results[0].spell_details
+        assert len(details) == 2
+
+        fireball = next(d for d in details if d.spell_name == "Fireball")
+        assert fireball.total_casts == 1
+        assert fireball.cancelled_casts == 1
+        assert fireball.cancel_rate == 50.0
+
+        frostbolt = next(d for d in details if d.spell_name == "Frostbolt")
+        assert frostbolt.total_casts == 1
+        assert frostbolt.cancelled_casts == 0
+        assert frostbolt.cancel_rate == 0.0
+
+    def test_spell_details_sorted_by_cancelled_desc(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 3000},
+            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 4000},
+            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 5000},
+        ]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        details = results[0].spell_details
+        assert details[0].spell_name == "Frostbolt"
+        assert details[0].cancelled_casts == 3
+        assert details[1].spell_name == "Fireball"
+        assert details[1].cancelled_casts == 0
+
 
 class TestCancelledCastDatabase:
     def test_import_and_load_round_trip(self, db):
@@ -225,6 +268,55 @@ class TestCancelledCastDatabase:
         assert len(summary) == 2
         assert summary[0]["player_name"] == "Rogue"
         assert summary[1]["player_name"] == "Mage"
+
+    def test_spell_details_round_trip(self, db):
+        details = [
+            CancelledCastDetail(
+                spell_id=100, spell_name="Fireball",
+                total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+            ),
+            CancelledCastDetail(
+                spell_id=200, spell_name="Frostbolt",
+                total_casts=20, cancelled_casts=1, cancel_rate=4.8,
+            ),
+        ]
+        cc = CancelledCastSummary(
+            player_name="Mage", player_class="Mage", source_id=1,
+            total_casts=30, cancelled_casts=4, cancel_rate=11.8,
+            spell_details=details,
+        )
+        raid = _make_raid("r1", cancelled_casts=[cc])
+        db.import_raid(raid)
+
+        loaded = db.get_raid_analysis("r1")
+        assert loaded is not None
+        lcc = loaded.cancelled_casts[0]
+        assert len(lcc.spell_details) == 2
+        fireball = next(d for d in lcc.spell_details if d.spell_name == "Fireball")
+        assert fireball.cancelled_casts == 3
+        assert fireball.cancel_rate == pytest.approx(23.1)
+        frostbolt = next(d for d in lcc.spell_details if d.spell_name == "Frostbolt")
+        assert frostbolt.cancelled_casts == 1
+
+    def test_delete_raid_cleans_up_spell_details(self, db):
+        details = [
+            CancelledCastDetail(
+                spell_id=100, spell_name="Fireball",
+                total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+            ),
+        ]
+        cc = CancelledCastSummary(
+            player_name="Mage", player_class="Mage", source_id=1,
+            total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+            spell_details=details,
+        )
+        raid = _make_raid("r1", cancelled_casts=[cc])
+        db.import_raid(raid)
+        db.delete_raid("r1")
+
+        conn = db._get_conn()
+        count = conn.execute("SELECT COUNT(*) as cnt FROM cancelled_cast_spells").fetchone()["cnt"]
+        assert count == 0
 
     def test_delete_raid_cleans_up(self, db):
         cc = CancelledCastSummary(

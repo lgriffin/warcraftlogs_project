@@ -110,6 +110,15 @@ class InterruptUsage:
 
 
 @dataclass
+class CancelledCastDetail:
+    spell_id: int
+    spell_name: str
+    total_casts: int
+    cancelled_casts: int
+    cancel_rate: float
+
+
+@dataclass
 class CancelledCastSummary:
     player_name: str
     player_class: str
@@ -117,6 +126,7 @@ class CancelledCastSummary:
     total_casts: int
     cancelled_casts: int
     cancel_rate: float
+    spell_details: list[CancelledCastDetail] = field(default_factory=list)
 
 
 @dataclass
