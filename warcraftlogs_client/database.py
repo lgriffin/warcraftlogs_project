@@ -373,7 +373,10 @@ class PerformanceDB:
                 );
                 CREATE INDEX IF NOT EXISTS idx_cc_char ON cancelled_casts(character_id);
                 CREATE INDEX IF NOT EXISTS idx_cc_raid ON cancelled_casts(raid_id);
+            """)
 
+        if "cancelled_cast_spells" not in tables:
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS cancelled_cast_spells (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     character_id INTEGER NOT NULL REFERENCES characters(id),
