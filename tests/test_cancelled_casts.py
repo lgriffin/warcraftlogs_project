@@ -336,3 +336,110 @@ class TestCancelledCastDatabase:
         db.delete_raid("r1")
 
         assert db.get_cancelled_cast_trend("Mage") == []
+
+
+class TestCancelledCastTimestamps:
+    def test_timestamps_collected(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 3000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 5000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 6000},
+        ]
+        client.get_cast_table.return_value = [{"guid": 100, "name": "Fireball"}]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = results[0].spell_details[0]
+        assert fireball.spell_name == "Fireball"
+        assert fireball.cancelled_casts == 1
+        assert fireball.timestamps == [3000]
+
+    def test_timestamps_match_cancelled_not_completed(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 3000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 4000},
+        ]
+        client.get_cast_table.return_value = [{"guid": 100, "name": "Fireball"}]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = results[0].spell_details[0]
+        assert fireball.cancelled_casts == 2
+        assert fireball.timestamps == [1000, 2000]
+
+    def test_trailing_begincast_timestamp(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 5000},
+        ]
+        client.get_cast_table.return_value = [{"guid": 100, "name": "Fireball"}]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = results[0].spell_details[0]
+        assert fireball.cancelled_casts == 1
+        assert fireball.timestamps == [5000]
+
+    def test_timestamps_sorted(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 500},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 1500},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 2000},
+        ]
+        client.get_cast_table.return_value = [
+            {"guid": 100, "name": "Fireball"},
+            {"guid": 200, "name": "Frostbolt"},
+        ]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        for detail in results[0].spell_details:
+            assert detail.timestamps == sorted(detail.timestamps)
+
+    def test_no_timestamps_when_no_cancels(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 2000},
+        ]
+        client.get_cast_table.return_value = [{"guid": 100, "name": "Fireball"}]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = results[0].spell_details[0]
+        assert fireball.cancelled_casts == 0
+        assert fireball.timestamps == []
+
+    def test_timestamps_round_trip(self, db):
+        details = [
+            CancelledCastDetail(
+                spell_id=100, spell_name="Fireball",
+                total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+                timestamps=[1000, 3000, 5000],
+            ),
+            CancelledCastDetail(
+                spell_id=200, spell_name="Frostbolt",
+                total_casts=20, cancelled_casts=0, cancel_rate=0.0,
+                timestamps=[],
+            ),
+        ]
+        cc = CancelledCastSummary(
+            player_name="Mage", player_class="Mage", source_id=1,
+            total_casts=30, cancelled_casts=3, cancel_rate=9.1,
+            spell_details=details,
+        )
+        raid = _make_raid("r1", cancelled_casts=[cc])
+        db.import_raid(raid)
+
+        loaded = db.get_raid_analysis("r1")
+        assert loaded is not None
+        lcc = loaded.cancelled_casts[0]
+        fireball = next(d for d in lcc.spell_details if d.spell_name == "Fireball")
+        assert fireball.timestamps == [1000, 3000, 5000]
+        frostbolt = next(d for d in lcc.spell_details if d.spell_name == "Frostbolt")
+        assert frostbolt.timestamps == []

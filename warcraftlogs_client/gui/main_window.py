@@ -391,7 +391,6 @@ class MainWindow(QMainWindow):
             self,
             self.download_view,
             self.character_view,
-            self.analyze_view,
             self.reference_view,
             self.settings_view,
         ]

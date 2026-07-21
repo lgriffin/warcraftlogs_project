@@ -629,20 +629,21 @@ class RaidAnalysisWidget(QWidget):
         a = self._analysis
         player_consumes = [c for c in a.consumables if c.player_name == name]
         player_cc = next((cc for cc in a.cancelled_casts if cc.player_name == name), None)
+        encounters = a.encounters or []
 
         for h in a.healers:
             if h.name == name:
-                self._detail_panel.show_healer(h, player_consumes, cancelled=player_cc)
+                self._detail_panel.show_healer(h, player_consumes, cancelled=player_cc, encounters=encounters)
                 self._splitter.setSizes([3, 1])
                 return
         for t in a.tanks:
             if t.name == name:
-                self._detail_panel.show_tank(t, player_consumes, cancelled=player_cc)
+                self._detail_panel.show_tank(t, player_consumes, cancelled=player_cc, encounters=encounters)
                 self._splitter.setSizes([3, 1])
                 return
         for d in a.dps:
             if d.name == name:
-                self._detail_panel.show_dps(d, player_consumes, cancelled=player_cc)
+                self._detail_panel.show_dps(d, player_consumes, cancelled=player_cc, encounters=encounters)
                 self._splitter.setSizes([3, 1])
                 return
 

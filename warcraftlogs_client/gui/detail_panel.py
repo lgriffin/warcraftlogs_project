@@ -6,6 +6,7 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -16,7 +17,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..models import CancelledCastSummary, ConsumableUsage, DPSPerformance, HealerPerformance, TankPerformance
+from ..models import (
+    CancelledCastSummary,
+    ConsumableUsage,
+    DPSPerformance,
+    EncounterSummary,
+    HealerPerformance,
+    TankPerformance,
+)
 from .styles import COLORS
 
 
@@ -207,7 +215,32 @@ class CharacterDetailPanel(QWidget):
             table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
             table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
 
-            tab_idx = self._detail_tabs.addTab(table, label)
+            if key == "cancelled_casts":
+                wrapper = QWidget()
+                wrapper_layout = QVBoxLayout(wrapper)
+                wrapper_layout.setContentsMargins(0, 0, 0, 0)
+                wrapper_layout.setSpacing(4)
+
+                self._cc_boss_combo = QComboBox()
+                self._cc_boss_combo.setFixedHeight(28)
+                self._cc_boss_combo.setStyleSheet(f"""
+                    QComboBox {{
+                        background-color: {COLORS["bg_input"]};
+                        color: {COLORS["text"]};
+                        border: 1px solid {COLORS["border"]};
+                        border-radius: 4px;
+                        padding: 4px 8px;
+                        font-size: 11px;
+                    }}
+                """)
+                self._cc_boss_combo.currentIndexChanged.connect(self._on_cc_boss_changed)
+                wrapper_layout.addWidget(self._cc_boss_combo)
+                wrapper_layout.addWidget(table, 1)
+
+                tab_idx = self._detail_tabs.addTab(wrapper, label)
+            else:
+                tab_idx = self._detail_tabs.addTab(table, label)
+
             self._section_models[key] = model
             self._section_table_views[key] = table
             self._section_tabs[key] = tab_idx
@@ -215,6 +248,8 @@ class CharacterDetailPanel(QWidget):
         outer.addWidget(self._detail_tabs, 1)
 
         self._current_name = None
+        self._cc_data: CancelledCastSummary | None = None
+        self._cc_encounters: list[EncounterSummary] = []
 
     def _toggle_section(self, key: str, visible: bool):
         tab_idx = self._section_tabs.get(key)
@@ -235,6 +270,7 @@ class CharacterDetailPanel(QWidget):
         h: HealerPerformance,
         consumables: list[ConsumableUsage] | None = None,
         cancelled: CancelledCastSummary | None = None,
+        encounters: list[EncounterSummary] | None = None,
     ):
         self._current_name = h.name
         self._name_label.setText(h.name)
@@ -255,7 +291,7 @@ class CharacterDetailPanel(QWidget):
 
         self._clear_section("damage_taken")
         self._clear_section("abilities_used")
-        self._show_cancelled_casts(cancelled)
+        self._show_cancelled_casts(cancelled, encounters)
         self._show_consumables(consumables, resource_rows)
 
         self._auto_select_tab()
@@ -266,6 +302,7 @@ class CharacterDetailPanel(QWidget):
         t: TankPerformance,
         consumables: list[ConsumableUsage] | None = None,
         cancelled: CancelledCastSummary | None = None,
+        encounters: list[EncounterSummary] | None = None,
     ):
         self._current_name = t.name
         self._name_label.setText(t.name)
@@ -284,7 +321,7 @@ class CharacterDetailPanel(QWidget):
 
         self._clear_section("spell_breakdown")
         self._clear_section("dispels")
-        self._show_cancelled_casts(cancelled)
+        self._show_cancelled_casts(cancelled, encounters)
         self._show_consumables(consumables)
 
         self._auto_select_tab()
@@ -295,6 +332,7 @@ class CharacterDetailPanel(QWidget):
         d: DPSPerformance,
         consumables: list[ConsumableUsage] | None = None,
         cancelled: CancelledCastSummary | None = None,
+        encounters: list[EncounterSummary] | None = None,
     ):
         self._current_name = d.name
         self._name_label.setText(d.name)
@@ -309,14 +347,43 @@ class CharacterDetailPanel(QWidget):
         self._clear_section("dispels")
         self._clear_section("damage_taken")
         self._clear_section("abilities_used")
-        self._show_cancelled_casts(cancelled)
+        self._show_cancelled_casts(cancelled, encounters)
         self._show_consumables(consumables)
 
         self._auto_select_tab()
         self.setVisible(True)
 
-    def _show_cancelled_casts(self, cancelled: CancelledCastSummary | None = None):
-        if cancelled and cancelled.spell_details:
+    def _show_cancelled_casts(
+        self,
+        cancelled: CancelledCastSummary | None = None,
+        encounters: list[EncounterSummary] | None = None,
+    ):
+        self._cc_data = cancelled
+        self._cc_encounters = encounters or []
+
+        self._cc_boss_combo.blockSignals(True)
+        self._cc_boss_combo.clear()
+        self._cc_boss_combo.addItem("All (Raid)")
+        for enc in self._cc_encounters:
+            self._cc_boss_combo.addItem(enc.name)
+        self._cc_boss_combo.setCurrentIndex(0)
+        self._cc_boss_combo.blockSignals(False)
+        self._cc_boss_combo.setVisible(bool(self._cc_encounters))
+
+        self._refresh_cc_table()
+
+    def _on_cc_boss_changed(self, _index: int):
+        self._refresh_cc_table()
+
+    def _refresh_cc_table(self):
+        cancelled = self._cc_data
+        if not cancelled or not cancelled.spell_details:
+            self._clear_section("cancelled_casts")
+            return
+
+        boss_idx = self._cc_boss_combo.currentIndex()
+
+        if boss_idx <= 0:
             rows = [
                 (d.spell_name, d.total_casts, d.cancelled_casts, f"{d.cancel_rate:.1f}%")
                 for d in cancelled.spell_details
@@ -324,7 +391,18 @@ class CharacterDetailPanel(QWidget):
             ]
             self._populate_section("cancelled_casts", rows, ["Spell", "Casts", "Cancelled", "Rate"])
         else:
-            self._clear_section("cancelled_casts")
+            enc = self._cc_encounters[boss_idx - 1]
+            rows = []
+            for d in cancelled.spell_details:
+                boss_ts = [t for t in d.timestamps if enc.start_time <= t <= enc.end_time]
+                if not boss_ts:
+                    continue
+                ts_strs = ", ".join(
+                    f"{(t - enc.start_time) // 60000}:{((t - enc.start_time) // 1000) % 60:02d}"
+                    for t in boss_ts
+                )
+                rows.append((d.spell_name, len(boss_ts), ts_strs))
+            self._populate_section("cancelled_casts", rows, ["Spell", "Cancelled", "Timestamps"])
 
     def _show_consumables(
         self, consumables: list[ConsumableUsage] | None = None, resource_rows: list[tuple] | None = None

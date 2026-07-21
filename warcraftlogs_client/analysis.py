@@ -99,15 +99,6 @@ def analyze_raid(
     logger.info("  interrupts analyzed: %d entries", len(interrupts))
 
     try:
-        cancelled_casts, cc_warns = _analyze_cancelled_casts(client, report_id, composition)
-        all_warnings.extend(cc_warns)
-        logger.info("  cancelled casts analyzed: %d entries", len(cancelled_casts))
-    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
-        logger.error("  cancelled cast analysis failed: %s", e)
-        cancelled_casts = []
-        all_warnings.append(f"Cancelled cast analysis failed: {e}")
-
-    try:
         encounters = _analyze_encounters(client, report_id, composition)
         logger.info("  encounters analyzed: %d", len(encounters))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
@@ -116,6 +107,15 @@ def analyze_raid(
         all_warnings.append(f"Encounter analysis failed: {e}")
 
     _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
+
+    try:
+        cancelled_casts, cc_warns = _analyze_cancelled_casts(client, report_id, composition)
+        all_warnings.extend(cc_warns)
+        logger.info("  cancelled casts analyzed: %d entries", len(cancelled_casts))
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("  cancelled cast analysis failed: %s", e)
+        cancelled_casts = []
+        all_warnings.append(f"Cancelled cast analysis failed: {e}")
 
     try:
         aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters)
@@ -755,6 +755,7 @@ def _analyze_cancelled_casts(
             cancelled = 0
             spell_completed: dict[int, int] = {}
             spell_cancelled: dict[int, int] = {}
+            spell_cancel_timestamps: dict[int, list[int]] = {}
 
             for e in cast_events:
                 etype = e.get("type")
@@ -766,6 +767,7 @@ def _analyze_cancelled_casts(
                     if aid in pending:
                         cancelled += 1
                         spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
+                        spell_cancel_timestamps.setdefault(aid, []).append(pending[aid])
                     pending[aid] = e.get("timestamp", 0)
                 elif etype == "cast":
                     if aid in pending:
@@ -773,9 +775,10 @@ def _analyze_cancelled_casts(
                         spell_completed[aid] = spell_completed.get(aid, 0) + 1
                         del pending[aid]
 
-            for aid in pending:
+            for aid, ts in pending.items():
                 cancelled += 1
                 spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
+                spell_cancel_timestamps.setdefault(aid, []).append(ts)
 
             total = completed + cancelled
             if total == 0:
@@ -794,6 +797,7 @@ def _analyze_cancelled_casts(
                     total_casts=sc,
                     cancelled_casts=sn,
                     cancel_rate=round(sn / st * 100, 1) if st else 0.0,
+                    timestamps=sorted(spell_cancel_timestamps.get(sid, [])),
                 ))
             details.sort(key=lambda d: d.cancelled_casts, reverse=True)
 

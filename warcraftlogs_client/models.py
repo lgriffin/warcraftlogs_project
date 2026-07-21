@@ -116,6 +116,7 @@ class CancelledCastDetail:
     total_casts: int
     cancelled_casts: int
     cancel_rate: float
+    timestamps: list[int] = field(default_factory=list)
 
 
 @dataclass

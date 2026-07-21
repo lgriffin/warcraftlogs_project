@@ -248,6 +248,9 @@ class PerformanceDB:
             conn.execute("ALTER TABLE raids ADD COLUMN source TEXT DEFAULT 'guild'")
         if "label" not in raid_cols:
             conn.execute("ALTER TABLE raids ADD COLUMN label TEXT DEFAULT NULL")
+        if "imported_at" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN imported_at TEXT DEFAULT NULL")
+            conn.execute("UPDATE raids SET imported_at = raid_date WHERE imported_at IS NULL")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raids_source ON raids(source)")
 
         conn.execute("""
@@ -386,11 +389,16 @@ class PerformanceDB:
                     total_casts INTEGER NOT NULL DEFAULT 0,
                     cancelled_casts INTEGER NOT NULL DEFAULT 0,
                     cancel_rate REAL NOT NULL DEFAULT 0.0,
+                    timestamps TEXT DEFAULT NULL,
                     UNIQUE(character_id, raid_id, spell_id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_ccs_char ON cancelled_cast_spells(character_id);
                 CREATE INDEX IF NOT EXISTS idx_ccs_raid ON cancelled_cast_spells(raid_id);
             """)
+
+        ccs_cols = {row[1] for row in conn.execute("PRAGMA table_info(cancelled_cast_spells)").fetchall()}
+        if "timestamps" not in ccs_cols:
+            conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN timestamps TEXT DEFAULT NULL")
 
     def close(self) -> None:
         if self._conn:
@@ -519,17 +527,20 @@ class PerformanceDB:
                 (char_id, raid_id, cc.total_casts, cc.cancelled_casts, cc.cancel_rate),
             )
             for detail in cc.spell_details:
+                ts_json = json.dumps(detail.timestamps) if detail.timestamps else None
                 conn.execute(
                     """INSERT INTO cancelled_cast_spells
-                       (character_id, raid_id, spell_id, spell_name, total_casts, cancelled_casts, cancel_rate)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       (character_id, raid_id, spell_id, spell_name, total_casts,
+                        cancelled_casts, cancel_rate, timestamps)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(character_id, raid_id, spell_id) DO UPDATE SET
                            spell_name = excluded.spell_name,
                            total_casts = excluded.total_casts,
                            cancelled_casts = excluded.cancelled_casts,
-                           cancel_rate = excluded.cancel_rate""",
+                           cancel_rate = excluded.cancel_rate,
+                           timestamps = excluded.timestamps""",
                     (char_id, raid_id, detail.spell_id, detail.spell_name,
-                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate),
+                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate, ts_json),
                 )
 
         if analysis.encounters:
@@ -2846,13 +2857,15 @@ class PerformanceDB:
 
         spell_rows = conn.execute(
             """SELECT ccs.character_id, ccs.spell_id, ccs.spell_name,
-                      ccs.total_casts, ccs.cancelled_casts, ccs.cancel_rate
+                      ccs.total_casts, ccs.cancelled_casts, ccs.cancel_rate,
+                      ccs.timestamps
                FROM cancelled_cast_spells ccs
                WHERE ccs.raid_id = ?""",
             (raid_id,),
         ).fetchall()
         spells_by_char: dict[int, list[CancelledCastDetail]] = {}
         for sr in spell_rows:
+            ts = json.loads(sr["timestamps"]) if sr["timestamps"] else []
             spells_by_char.setdefault(sr["character_id"], []).append(
                 CancelledCastDetail(
                     spell_id=sr["spell_id"],
@@ -2860,6 +2873,7 @@ class PerformanceDB:
                     total_casts=sr["total_casts"],
                     cancelled_casts=sr["cancelled_casts"],
                     cancel_rate=sr["cancel_rate"],
+                    timestamps=ts,
                 )
             )
 
