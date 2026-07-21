@@ -16,6 +16,8 @@ from .cache import _cache_file, clear_response_cache
 from .models import (
     AuraBand,
     AuraUptime,
+    CancelledCastDetail,
+    CancelledCastSummary,
     CharacterHistory,
     ConsumableUsage,
     DPSPerformance,
@@ -246,6 +248,9 @@ class PerformanceDB:
             conn.execute("ALTER TABLE raids ADD COLUMN source TEXT DEFAULT 'guild'")
         if "label" not in raid_cols:
             conn.execute("ALTER TABLE raids ADD COLUMN label TEXT DEFAULT NULL")
+        if "imported_at" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN imported_at TEXT DEFAULT NULL")
+            conn.execute("UPDATE raids SET imported_at = raid_date WHERE imported_at IS NULL")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raids_source ON raids(source)")
 
         conn.execute("""
@@ -357,6 +362,43 @@ class PerformanceDB:
                 CREATE INDEX IF NOT EXISTS idx_totem_raid ON totem_uptime(raid_id);
                 CREATE INDEX IF NOT EXISTS idx_totem_enc ON totem_uptime(encounter_row_id);
             """)
+
+        if "cancelled_casts" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS cancelled_casts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id),
+                    raid_id INTEGER NOT NULL REFERENCES raids(id),
+                    total_casts INTEGER NOT NULL DEFAULT 0,
+                    cancelled_casts INTEGER NOT NULL DEFAULT 0,
+                    cancel_rate REAL NOT NULL DEFAULT 0.0,
+                    UNIQUE(character_id, raid_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_cc_char ON cancelled_casts(character_id);
+                CREATE INDEX IF NOT EXISTS idx_cc_raid ON cancelled_casts(raid_id);
+            """)
+
+        if "cancelled_cast_spells" not in tables:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS cancelled_cast_spells (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id),
+                    raid_id INTEGER NOT NULL REFERENCES raids(id),
+                    spell_id INTEGER NOT NULL,
+                    spell_name TEXT NOT NULL DEFAULT '',
+                    total_casts INTEGER NOT NULL DEFAULT 0,
+                    cancelled_casts INTEGER NOT NULL DEFAULT 0,
+                    cancel_rate REAL NOT NULL DEFAULT 0.0,
+                    timestamps TEXT DEFAULT NULL,
+                    UNIQUE(character_id, raid_id, spell_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ccs_char ON cancelled_cast_spells(character_id);
+                CREATE INDEX IF NOT EXISTS idx_ccs_raid ON cancelled_cast_spells(raid_id);
+            """)
+
+        ccs_cols = {row[1] for row in conn.execute("PRAGMA table_info(cancelled_cast_spells)").fetchall()}
+        if "timestamps" not in ccs_cols:
+            conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN timestamps TEXT DEFAULT NULL")
 
     def close(self) -> None:
         if self._conn:
@@ -471,6 +513,35 @@ class PerformanceDB:
                        timestamps = excluded.timestamps""",
                 (char_id, raid_id, iu.spell_id, iu.spell_name, iu.count, ts_json),
             )
+
+        for cc in analysis.cancelled_casts:
+            char_id = self._upsert_character(cc.player_name, cc.player_class, raid_date)
+            conn.execute(
+                """INSERT INTO cancelled_casts
+                   (character_id, raid_id, total_casts, cancelled_casts, cancel_rate)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(character_id, raid_id) DO UPDATE SET
+                       total_casts = excluded.total_casts,
+                       cancelled_casts = excluded.cancelled_casts,
+                       cancel_rate = excluded.cancel_rate""",
+                (char_id, raid_id, cc.total_casts, cc.cancelled_casts, cc.cancel_rate),
+            )
+            for detail in cc.spell_details:
+                ts_json = json.dumps(detail.timestamps) if detail.timestamps else None
+                conn.execute(
+                    """INSERT INTO cancelled_cast_spells
+                       (character_id, raid_id, spell_id, spell_name, total_casts,
+                        cancelled_casts, cancel_rate, timestamps)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(character_id, raid_id, spell_id) DO UPDATE SET
+                           spell_name = excluded.spell_name,
+                           total_casts = excluded.total_casts,
+                           cancelled_casts = excluded.cancelled_casts,
+                           cancel_rate = excluded.cancel_rate,
+                           timestamps = excluded.timestamps""",
+                    (char_id, raid_id, detail.spell_id, detail.spell_name,
+                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate, ts_json),
+                )
 
         if analysis.encounters:
             self._import_encounters(conn, raid_id, raid_date, analysis.encounters)
@@ -1438,6 +1509,8 @@ class PerformanceDB:
         conn.execute("DELETE FROM tank_performance WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM consumable_usage WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM interrupt_usage WHERE raid_id = ?", (raid_id,))
+        conn.execute("DELETE FROM cancelled_casts WHERE raid_id = ?", (raid_id,))
+        conn.execute("DELETE FROM cancelled_cast_spells WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM aura_uptime WHERE raid_id = ?", (raid_id,))
         conn.execute("DELETE FROM totem_uptime WHERE raid_id = ?", (raid_id,))
         conn.execute(
@@ -2078,6 +2151,41 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_cancelled_cast_trend(self, character_name: str) -> list[dict]:
+        """Per-raid cancel rate trend for a character."""
+        conn = self._get_conn()
+        char = conn.execute(
+            "SELECT id FROM characters WHERE name = ? COLLATE NOCASE",
+            (character_name,),
+        ).fetchone()
+        if not char:
+            return []
+        rows = conn.execute(
+            """SELECT r.raid_date, r.raid_size, r.title,
+                      cc.total_casts, cc.cancelled_casts, cc.cancel_rate
+               FROM cancelled_casts cc
+               JOIN raids r ON r.id = cc.raid_id
+               WHERE cc.character_id = ? AND r.source = 'guild'
+               ORDER BY r.raid_date DESC
+               LIMIT 20""",
+            (char["id"],),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_cancelled_cast_raid_summary(self, raid_id: int) -> list[dict]:
+        """All players' cancel stats for a single raid."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT c.name as player_name, c.player_class,
+                      cc.total_casts, cc.cancelled_casts, cc.cancel_rate
+               FROM cancelled_casts cc
+               JOIN characters c ON c.id = cc.character_id
+               WHERE cc.raid_id = ?
+               ORDER BY cc.cancel_rate ASC""",
+            (raid_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_character_consistency(self, character_name: str) -> dict:
         """Compute consistency scores (std dev) for a character's performance."""
         conn = self._get_conn()
@@ -2520,6 +2628,7 @@ class PerformanceDB:
         dps_list = self._load_dps_for_raid(conn, raid_id)
         consumables = self._load_consumables_for_raid(conn, raid_id, report_id)
         interrupts = self._load_interrupts_for_raid(conn, raid_id)
+        cancelled_casts = self._load_cancelled_casts_for_raid(conn, raid_id)
         aura_uptimes = self._load_aura_uptimes_for_raid(conn, raid_id)
         totem_uptimes = self._load_totem_uptimes_for_raid(conn, raid_id)
         encounters = self._load_encounters_for_raid(conn, raid_id)
@@ -2550,6 +2659,7 @@ class PerformanceDB:
             dps=dps_list,
             consumables=consumables,
             interrupts=interrupts,
+            cancelled_casts=cancelled_casts,
             aura_uptimes=aura_uptimes,
             totem_uptimes=totem_uptimes,
             encounters=encounters,
@@ -2729,6 +2839,57 @@ class PerformanceDB:
                 spell_name=r["spell_name"],
                 count=r["count"],
                 timestamps=json.loads(r["timestamps"]) if r["timestamps"] else [],
+            )
+            for r in rows
+        ]
+
+    def _load_cancelled_casts_for_raid(
+        self, conn: sqlite3.Connection, raid_id: int
+    ) -> list[CancelledCastSummary]:
+        rows = conn.execute(
+            """SELECT cc.total_casts, cc.cancelled_casts, cc.cancel_rate,
+                      cc.character_id, c.name as player_name, c.player_class
+               FROM cancelled_casts cc
+               JOIN characters c ON c.id = cc.character_id
+               WHERE cc.raid_id = ?""",
+            (raid_id,),
+        ).fetchall()
+
+        spell_rows = conn.execute(
+            """SELECT ccs.character_id, ccs.spell_id, ccs.spell_name,
+                      ccs.total_casts, ccs.cancelled_casts, ccs.cancel_rate,
+                      ccs.timestamps
+               FROM cancelled_cast_spells ccs
+               WHERE ccs.raid_id = ?""",
+            (raid_id,),
+        ).fetchall()
+        spells_by_char: dict[int, list[CancelledCastDetail]] = {}
+        for sr in spell_rows:
+            ts = json.loads(sr["timestamps"]) if sr["timestamps"] else []
+            spells_by_char.setdefault(sr["character_id"], []).append(
+                CancelledCastDetail(
+                    spell_id=sr["spell_id"],
+                    spell_name=sr["spell_name"],
+                    total_casts=sr["total_casts"],
+                    cancelled_casts=sr["cancelled_casts"],
+                    cancel_rate=sr["cancel_rate"],
+                    timestamps=ts,
+                )
+            )
+
+        return [
+            CancelledCastSummary(
+                player_name=r["player_name"],
+                player_class=r["player_class"],
+                source_id=0,
+                total_casts=r["total_casts"],
+                cancelled_casts=r["cancelled_casts"],
+                cancel_rate=r["cancel_rate"],
+                spell_details=sorted(
+                    spells_by_char.get(r["character_id"], []),
+                    key=lambda d: d.cancelled_casts,
+                    reverse=True,
+                ),
             )
             for r in rows
         ]

@@ -40,7 +40,14 @@ from .analysis_helpers import (
 from .charts import DebuffTimelineWidget
 from .detail_panel import CharacterDetailPanel
 from .styles import COLORS, COMMON_STYLES
-from .table_models import DPSTableModel, HealerTableModel, HistoryTableModel, InterruptTableModel, TankTableModel
+from .table_models import (
+    CancelledCastTableModel,
+    DPSTableModel,
+    HealerTableModel,
+    HistoryTableModel,
+    InterruptTableModel,
+    TankTableModel,
+)
 
 
 class _ClickableNameTableView(QTableView):
@@ -192,32 +199,19 @@ class RaidAnalysisWidget(QWidget):
         consumes_layout.addWidget(self._consumes_filter)
 
         self._consumes_model = HistoryTableModel()
-        consumes_table = QTableView()
-        consumes_table.setModel(self._consumes_model)
-        consumes_table.setAlternatingRowColors(True)
-        consumes_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        consumes_table.setSortingEnabled(True)
-        consumes_table.verticalHeader().setVisible(False)
-        consumes_table.horizontalHeader().setStretchLastSection(True)
-        consumes_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        consumes_table = self._make_table(self._consumes_model)
         consumes_layout.addWidget(consumes_table)
         self._tabs.addTab(consumes_widget, "Consumables")
 
         # ── Interrupts tab ──
-        int_widget = QWidget()
-        int_layout = QVBoxLayout(int_widget)
-        int_layout.setContentsMargins(0, 8, 0, 0)
         self._int_model = InterruptTableModel()
-        int_table = QTableView()
-        int_table.setModel(self._int_model)
-        int_table.setAlternatingRowColors(True)
-        int_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        int_table.setSortingEnabled(True)
-        int_table.verticalHeader().setVisible(False)
-        int_table.horizontalHeader().setStretchLastSection(True)
-        int_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        int_layout.addWidget(int_table)
-        self._int_tab_index = self._tabs.addTab(int_widget, "Interrupts")
+        int_table = self._make_table(self._int_model)
+        self._int_tab_index = self._tabs.addTab(int_table, "Interrupts")
+
+        # ── Cast Efficiency tab ──
+        self._cc_model = CancelledCastTableModel()
+        cc_table = self._make_table(self._cc_model)
+        self._cc_tab_index = self._tabs.addTab(cc_table, "Cast Efficiency")
 
         # ── Debuff Uptime tab ──
         du_widget = QWidget()
@@ -405,6 +399,12 @@ class RaidAnalysisWidget(QWidget):
             self._tabs.setTabVisible(self._int_tab_index, True)
         else:
             self._tabs.setTabVisible(self._int_tab_index, False)
+
+        if analysis.cancelled_casts:
+            self._cc_model.set_data(analysis.cancelled_casts)
+            self._tabs.setTabVisible(self._cc_tab_index, True)
+        else:
+            self._tabs.setTabVisible(self._cc_tab_index, False)
 
         self._all_aura_uptimes = analysis.aura_uptimes
         if analysis.aura_uptimes:
@@ -628,20 +628,22 @@ class RaidAnalysisWidget(QWidget):
     def _on_name_clicked(self, name: str):
         a = self._analysis
         player_consumes = [c for c in a.consumables if c.player_name == name]
+        player_cc = next((cc for cc in a.cancelled_casts if cc.player_name == name), None)
+        encounters = a.encounters or []
 
         for h in a.healers:
             if h.name == name:
-                self._detail_panel.show_healer(h, player_consumes)
+                self._detail_panel.show_healer(h, player_consumes, cancelled=player_cc, encounters=encounters)
                 self._splitter.setSizes([3, 1])
                 return
         for t in a.tanks:
             if t.name == name:
-                self._detail_panel.show_tank(t, player_consumes)
+                self._detail_panel.show_tank(t, player_consumes, cancelled=player_cc, encounters=encounters)
                 self._splitter.setSizes([3, 1])
                 return
         for d in a.dps:
             if d.name == name:
-                self._detail_panel.show_dps(d, player_consumes)
+                self._detail_panel.show_dps(d, player_consumes, cancelled=player_cc, encounters=encounters)
                 self._splitter.setSizes([3, 1])
                 return
 

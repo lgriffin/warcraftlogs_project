@@ -18,6 +18,8 @@ from .client import WarcraftLogsClient
 from .models import (
     AuraBand,
     AuraUptime,
+    CancelledCastDetail,
+    CancelledCastSummary,
     ConsumableUsage,
     DispelUsage,
     DPSPerformance,
@@ -107,6 +109,15 @@ def analyze_raid(
     _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
 
     try:
+        cancelled_casts, cc_warns = _analyze_cancelled_casts(client, report_id, composition)
+        all_warnings.extend(cc_warns)
+        logger.info("  cancelled casts analyzed: %d entries", len(cancelled_casts))
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("  cancelled cast analysis failed: %s", e)
+        cancelled_casts = []
+        all_warnings.append(f"Cancelled cast analysis failed: {e}")
+
+    try:
         aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters)
         all_warnings.extend(aura_warns)
         logger.info("  aura uptimes analyzed: %d entries", len(aura_uptimes))
@@ -138,6 +149,7 @@ def analyze_raid(
         dps=melee_dps + ranged_dps,
         consumables=consumables,
         interrupts=interrupts,
+        cancelled_casts=cancelled_casts,
         aura_uptimes=aura_uptimes,
         totem_uptimes=totem_uptimes,
         encounters=encounters,
@@ -710,6 +722,99 @@ def _analyze_interrupts(
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing interrupts for %s: %s", player.name, e)
             warnings.append(f"Failed to analyze interrupts for {player.name}: {e}")
+
+    return results, warnings
+
+
+def _analyze_cancelled_casts(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+) -> tuple[list[CancelledCastSummary], list[str]]:
+    results: list[CancelledCastSummary] = []
+    warnings: list[str] = []
+    spell_mgr = get_spell_manager()
+
+    for player in composition.all_players:
+        try:
+            cast_events = client.get_cast_events_paginated(report_id, player.source_id)
+
+            spell_names: dict[int, str] = {}
+            try:
+                cast_table = client.get_cast_table(report_id, player.source_id)
+                for entry in cast_table:
+                    gid = entry.get("guid")
+                    name = entry.get("name")
+                    if gid and name:
+                        spell_names[gid] = name
+            except (requests.RequestException, KeyError, TypeError, ValueError):
+                pass
+
+            pending: dict[int, int] = {}
+            completed = 0
+            cancelled = 0
+            spell_completed: dict[int, int] = {}
+            spell_cancelled: dict[int, int] = {}
+            spell_cancel_timestamps: dict[int, list[int]] = {}
+
+            for e in cast_events:
+                etype = e.get("type")
+                aid = e.get("abilityGameID")
+                if not aid:
+                    continue
+
+                if etype == "begincast":
+                    if aid in pending:
+                        cancelled += 1
+                        spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
+                        spell_cancel_timestamps.setdefault(aid, []).append(pending[aid])
+                    pending[aid] = e.get("timestamp", 0)
+                elif etype == "cast":
+                    if aid in pending:
+                        completed += 1
+                        spell_completed[aid] = spell_completed.get(aid, 0) + 1
+                        del pending[aid]
+
+            for aid, ts in pending.items():
+                cancelled += 1
+                spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
+                spell_cancel_timestamps.setdefault(aid, []).append(ts)
+
+            total = completed + cancelled
+            if total == 0:
+                continue
+
+            cancel_rate = round(cancelled / total * 100, 1)
+
+            details = []
+            for sid in set(spell_completed) | set(spell_cancelled):
+                sc = spell_completed.get(sid, 0)
+                sn = spell_cancelled.get(sid, 0)
+                st = sc + sn
+                details.append(CancelledCastDetail(
+                    spell_id=sid,
+                    spell_name=spell_names.get(sid, spell_mgr.get_spell_name(sid)),
+                    total_casts=sc,
+                    cancelled_casts=sn,
+                    cancel_rate=round(sn / st * 100, 1) if st else 0.0,
+                    timestamps=sorted(spell_cancel_timestamps.get(sid, [])),
+                ))
+            details.sort(key=lambda d: d.cancelled_casts, reverse=True)
+
+            results.append(
+                CancelledCastSummary(
+                    player_name=player.name,
+                    player_class=player.player_class,
+                    source_id=player.source_id,
+                    total_casts=completed,
+                    cancelled_casts=cancelled,
+                    cancel_rate=cancel_rate,
+                    spell_details=details,
+                )
+            )
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("Error analyzing cancelled casts for %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze cancelled casts for {player.name}: {e}")
 
     return results, warnings
 
