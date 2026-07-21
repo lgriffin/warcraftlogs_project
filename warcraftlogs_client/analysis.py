@@ -5,6 +5,8 @@ All analysis logic lives here, returning data model objects.
 No printing — presentation is handled by renderers (console, markdown, GUI).
 """
 
+import bisect
+import contextlib
 import json
 import logging
 import os
@@ -18,6 +20,8 @@ from .client import WarcraftLogsClient
 from .models import (
     AuraBand,
     AuraUptime,
+    BossEvent,
+    CancelledCastCorrelation,
     CancelledCastDetail,
     CancelledCastSummary,
     ConsumableUsage,
@@ -116,6 +120,14 @@ def analyze_raid(
         logger.error("  cancelled cast analysis failed: %s", e)
         cancelled_casts = []
         all_warnings.append(f"Cancelled cast analysis failed: {e}")
+
+    if cancelled_casts and encounters:
+        try:
+            _correlate_cancelled_casts(client, report_id, cancelled_casts, encounters)
+            logger.info("  cancelled cast correlations computed")
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("  cancelled cast correlation failed: %s", e)
+            all_warnings.append(f"Cancelled cast correlation failed: {e}")
 
     try:
         aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters)
@@ -817,6 +829,111 @@ def _analyze_cancelled_casts(
             warnings.append(f"Failed to analyze cancelled casts for {player.name}: {e}")
 
     return results, warnings
+
+
+_CORRELATION_WINDOW_MS = 3000
+
+
+def _correlate_cancelled_casts(
+    client: WarcraftLogsClient,
+    report_id: str,
+    cancelled_casts: list[CancelledCastSummary],
+    encounters: list[EncounterSummary],
+) -> None:
+    actor_names: dict[int, str] = {}
+    try:
+        all_actors = client.get_all_actors(report_id)
+        actor_names = {a["id"]: a["name"] for a in all_actors if "id" in a and "name" in a}
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        pass
+
+    for enc in encounters:
+        spell_names: dict[int, str] = {}
+        with contextlib.suppress(requests.RequestException, KeyError, TypeError, ValueError):
+            spell_names = client.get_enemy_ability_names(
+                report_id, enc.start_time, enc.end_time
+            )
+
+        try:
+            enemy_casts = client.get_enemy_cast_events(report_id, enc.start_time, enc.end_time)
+        except (requests.RequestException, KeyError, TypeError, ValueError):
+            enemy_casts = []
+        try:
+            dmg_events = client.get_raid_damage_taken_events(report_id, enc.start_time, enc.end_time)
+        except (requests.RequestException, KeyError, TypeError, ValueError):
+            dmg_events = []
+
+        def _ability_name(aid: int, _names: dict[int, str] = spell_names) -> str:
+            return _names.get(aid, f"(ID {aid})")
+
+        boss_events: list[BossEvent] = []
+
+        for e in enemy_casts:
+            ts = e.get("timestamp", 0)
+            aid = e.get("abilityGameID", 0)
+            src_id = e.get("sourceID", 0)
+            boss_events.append(BossEvent(
+                timestamp=ts,
+                event_type="boss_cast",
+                ability_name=_ability_name(aid),
+                ability_id=aid,
+                source_name=actor_names.get(src_id, "Boss"),
+            ))
+
+        seen_dmg: set[tuple[int, int]] = set()
+        for e in dmg_events:
+            ts = e.get("timestamp", 0)
+            aid = e.get("abilityGameID", 0)
+            key = (ts, aid)
+            if key in seen_dmg:
+                continue
+            seen_dmg.add(key)
+            src_id = e.get("sourceID", 0)
+            boss_events.append(BossEvent(
+                timestamp=ts,
+                event_type="damage",
+                ability_name=_ability_name(aid),
+                ability_id=aid,
+                source_name=actor_names.get(src_id, "Boss"),
+            ))
+
+        boss_events.append(BossEvent(
+            timestamp=enc.end_time,
+            event_type="boss_death",
+            ability_name="Boss Died",
+            ability_id=0,
+            source_name=enc.name,
+        ))
+
+        boss_events.sort(key=lambda b: b.timestamp)
+        boss_timestamps = [b.timestamp for b in boss_events]
+
+        for cc in cancelled_casts:
+            for detail in cc.spell_details:
+                for cancel_ts in detail.timestamps:
+                    if cancel_ts < enc.start_time or cancel_ts > enc.end_time:
+                        continue
+
+                    lo = bisect.bisect_left(boss_timestamps, cancel_ts - _CORRELATION_WINDOW_MS)
+                    hi = bisect.bisect_right(boss_timestamps, cancel_ts + _CORRELATION_WINDOW_MS)
+
+                    nearby = []
+                    for i in range(lo, hi):
+                        be = boss_events[i]
+                        nearby.append(BossEvent(
+                            timestamp=be.timestamp,
+                            event_type=be.event_type,
+                            ability_name=be.ability_name,
+                            ability_id=be.ability_id,
+                            source_name=be.source_name,
+                            offset_ms=be.timestamp - cancel_ts,
+                        ))
+
+                    if nearby:
+                        detail.correlations.append(CancelledCastCorrelation(
+                            cancel_timestamp=cancel_ts,
+                            nearby_events=nearby,
+                        ))
 
 
 def _load_debuff_config() -> dict[int, str]:

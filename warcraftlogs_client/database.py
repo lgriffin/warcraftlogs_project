@@ -16,6 +16,8 @@ from .cache import _cache_file, clear_response_cache
 from .models import (
     AuraBand,
     AuraUptime,
+    BossEvent,
+    CancelledCastCorrelation,
     CancelledCastDetail,
     CancelledCastSummary,
     CharacterHistory,
@@ -390,6 +392,7 @@ class PerformanceDB:
                     cancelled_casts INTEGER NOT NULL DEFAULT 0,
                     cancel_rate REAL NOT NULL DEFAULT 0.0,
                     timestamps TEXT DEFAULT NULL,
+                    correlations TEXT DEFAULT NULL,
                     UNIQUE(character_id, raid_id, spell_id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_ccs_char ON cancelled_cast_spells(character_id);
@@ -399,6 +402,8 @@ class PerformanceDB:
         ccs_cols = {row[1] for row in conn.execute("PRAGMA table_info(cancelled_cast_spells)").fetchall()}
         if "timestamps" not in ccs_cols:
             conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN timestamps TEXT DEFAULT NULL")
+        if "correlations" not in ccs_cols:
+            conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN correlations TEXT DEFAULT NULL")
 
     def close(self) -> None:
         if self._conn:
@@ -528,19 +533,22 @@ class PerformanceDB:
             )
             for detail in cc.spell_details:
                 ts_json = json.dumps(detail.timestamps) if detail.timestamps else None
+                corr_json = self._serialize_correlations(detail.correlations) if detail.correlations else None
                 conn.execute(
                     """INSERT INTO cancelled_cast_spells
                        (character_id, raid_id, spell_id, spell_name, total_casts,
-                        cancelled_casts, cancel_rate, timestamps)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        cancelled_casts, cancel_rate, timestamps, correlations)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(character_id, raid_id, spell_id) DO UPDATE SET
                            spell_name = excluded.spell_name,
                            total_casts = excluded.total_casts,
                            cancelled_casts = excluded.cancelled_casts,
                            cancel_rate = excluded.cancel_rate,
-                           timestamps = excluded.timestamps""",
+                           timestamps = excluded.timestamps,
+                           correlations = excluded.correlations""",
                     (char_id, raid_id, detail.spell_id, detail.spell_name,
-                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate, ts_json),
+                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate,
+                     ts_json, corr_json),
                 )
 
         if analysis.encounters:
@@ -2858,7 +2866,7 @@ class PerformanceDB:
         spell_rows = conn.execute(
             """SELECT ccs.character_id, ccs.spell_id, ccs.spell_name,
                       ccs.total_casts, ccs.cancelled_casts, ccs.cancel_rate,
-                      ccs.timestamps
+                      ccs.timestamps, ccs.correlations
                FROM cancelled_cast_spells ccs
                WHERE ccs.raid_id = ?""",
             (raid_id,),
@@ -2866,6 +2874,7 @@ class PerformanceDB:
         spells_by_char: dict[int, list[CancelledCastDetail]] = {}
         for sr in spell_rows:
             ts = json.loads(sr["timestamps"]) if sr["timestamps"] else []
+            corrs = self._deserialize_correlations(sr["correlations"]) if sr["correlations"] else []
             spells_by_char.setdefault(sr["character_id"], []).append(
                 CancelledCastDetail(
                     spell_id=sr["spell_id"],
@@ -2874,6 +2883,7 @@ class PerformanceDB:
                     cancelled_casts=sr["cancelled_casts"],
                     cancel_rate=sr["cancel_rate"],
                     timestamps=ts,
+                    correlations=corrs,
                 )
             )
 
@@ -2893,6 +2903,49 @@ class PerformanceDB:
             )
             for r in rows
         ]
+
+    @staticmethod
+    def _serialize_correlations(correlations: list[CancelledCastCorrelation]) -> str | None:
+        if not correlations:
+            return None
+        data = []
+        for c in correlations:
+            data.append({
+                "ts": c.cancel_timestamp,
+                "events": [
+                    {
+                        "type": e.event_type,
+                        "name": e.ability_name,
+                        "aid": e.ability_id,
+                        "src": e.source_name,
+                        "offset": e.offset_ms,
+                    }
+                    for e in c.nearby_events
+                ],
+            })
+        return json.dumps(data)
+
+    @staticmethod
+    def _deserialize_correlations(raw: str) -> list[CancelledCastCorrelation]:
+        data = json.loads(raw)
+        result = []
+        for entry in data:
+            events = [
+                BossEvent(
+                    timestamp=entry["ts"] + ev.get("offset", 0),
+                    event_type=ev["type"],
+                    ability_name=ev["name"],
+                    ability_id=ev.get("aid", 0),
+                    source_name=ev.get("src", "Boss"),
+                    offset_ms=ev.get("offset", 0),
+                )
+                for ev in entry.get("events", [])
+            ]
+            result.append(CancelledCastCorrelation(
+                cancel_timestamp=entry["ts"],
+                nearby_events=events,
+            ))
+        return result
 
     def _load_aura_uptimes_for_raid(
         self, conn: sqlite3.Connection, raid_id: int
