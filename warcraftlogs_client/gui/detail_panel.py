@@ -394,15 +394,41 @@ class CharacterDetailPanel(QWidget):
             enc = self._cc_encounters[boss_idx - 1]
             rows = []
             for d in cancelled.spell_details:
-                boss_ts = [t for t in d.timestamps if enc.start_time <= t <= enc.end_time]
-                if not boss_ts:
-                    continue
-                ts_strs = ", ".join(
-                    f"{(t - enc.start_time) // 60000}:{((t - enc.start_time) // 1000) % 60:02d}"
-                    for t in boss_ts
-                )
-                rows.append((d.spell_name, len(boss_ts), ts_strs))
-            self._populate_section("cancelled_casts", rows, ["Spell", "Cancelled", "Timestamps"])
+                for t in d.timestamps:
+                    if t < enc.start_time or t > enc.end_time:
+                        continue
+                    cancel_time = self._format_fight_time(t, enc.start_time)
+                    cause, cause_time = self._get_likely_cause_for_timestamp(d, t, enc)
+                    rows.append((d.spell_name, cancel_time, cause, cause_time))
+            self._populate_section(
+                "cancelled_casts", rows,
+                ["Spell", "Cancelled At", "Likely Cause", "Cause Time"],
+            )
+
+    @staticmethod
+    def _format_fight_time(timestamp_ms, fight_start_ms):
+        rel = timestamp_ms - fight_start_ms
+        minutes = rel // 60000
+        seconds = (rel // 1000) % 60
+        return f"{minutes}:{seconds:02d}"
+
+    @staticmethod
+    def _get_likely_cause_for_timestamp(detail, cancel_ts, enc):
+        corr = next(
+            (c for c in detail.correlations if c.cancel_timestamp == cancel_ts), None
+        )
+        if not corr or not corr.nearby_events:
+            return "", ""
+        closest = min(corr.nearby_events, key=lambda e: abs(e.offset_ms))
+        cause_time = CharacterDetailPanel._format_fight_time(
+            closest.timestamp, enc.start_time
+        )
+        if closest.event_type == "boss_death":
+            return "Boss Died", cause_time
+        elif closest.event_type == "boss_cast":
+            return f"{closest.ability_name} (cast)", cause_time
+        else:
+            return f"{closest.ability_name} (dmg)", cause_time
 
     def _show_consumables(
         self, consumables: list[ConsumableUsage] | None = None, resource_rows: list[tuple] | None = None

@@ -110,6 +110,22 @@ class InterruptUsage:
 
 
 @dataclass
+class BossEvent:
+    timestamp: int
+    event_type: str
+    ability_name: str
+    ability_id: int
+    source_name: str
+    offset_ms: int = 0
+
+
+@dataclass
+class CancelledCastCorrelation:
+    cancel_timestamp: int
+    nearby_events: list[BossEvent] = field(default_factory=list)
+
+
+@dataclass
 class CancelledCastDetail:
     spell_id: int
     spell_name: str
@@ -117,6 +133,7 @@ class CancelledCastDetail:
     cancelled_casts: int
     cancel_rate: float
     timestamps: list[int] = field(default_factory=list)
+    correlations: list[CancelledCastCorrelation] = field(default_factory=list)
 
 
 @dataclass

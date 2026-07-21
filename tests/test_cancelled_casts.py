@@ -4,10 +4,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from warcraftlogs_client.analysis import _analyze_cancelled_casts
+from warcraftlogs_client.analysis import _analyze_cancelled_casts, _correlate_cancelled_casts
 from warcraftlogs_client.models import (
+    BossEvent,
+    CancelledCastCorrelation,
     CancelledCastDetail,
     CancelledCastSummary,
+    EncounterSummary,
     HealerPerformance,
     PlayerIdentity,
     RaidAnalysis,
@@ -443,3 +446,202 @@ class TestCancelledCastTimestamps:
         assert fireball.timestamps == [1000, 3000, 5000]
         frostbolt = next(d for d in lcc.spell_details if d.spell_name == "Frostbolt")
         assert frostbolt.timestamps == []
+
+
+def _make_encounter(name="Boss", start=0, end=60000):
+    return EncounterSummary(
+        encounter_id=1, name=name, start_time=start, end_time=end,
+        duration_ms=end - start,
+    )
+
+
+def _make_cancelled_casts(timestamps, spell_id=100, spell_name="Fireball"):
+    detail = CancelledCastDetail(
+        spell_id=spell_id, spell_name=spell_name,
+        total_casts=10, cancelled_casts=len(timestamps),
+        cancel_rate=round(len(timestamps) / 10 * 100, 1),
+        timestamps=timestamps,
+    )
+    return [CancelledCastSummary(
+        player_name="Mage", player_class="Mage", source_id=1,
+        total_casts=10, cancelled_casts=len(timestamps),
+        cancel_rate=detail.cancel_rate, spell_details=[detail],
+    )]
+
+
+class TestCancelledCastCorrelation:
+    def test_boss_cast_within_window(self):
+        client = MagicMock()
+        client.get_all_actors.return_value = [
+            {"id": 50, "name": "Shade of Aran", "type": "Boss", "subType": "Boss"},
+        ]
+        client.get_enemy_ability_names.return_value = {9999: "Flame Wreath"}
+        client.get_enemy_cast_events.return_value = [
+            {"type": "cast", "abilityGameID": 9999, "timestamp": 4000, "sourceID": 50},
+        ]
+        client.get_raid_damage_taken_events.return_value = []
+
+        enc = _make_encounter(start=0, end=60000)
+        cc = _make_cancelled_casts([5000])
+
+        _correlate_cancelled_casts(client, "test", cc, [enc])
+
+        detail = cc[0].spell_details[0]
+        assert len(detail.correlations) == 1
+        assert detail.correlations[0].cancel_timestamp == 5000
+        events = detail.correlations[0].nearby_events
+        boss_casts = [e for e in events if e.event_type == "boss_cast"]
+        assert len(boss_casts) >= 1
+        assert boss_casts[0].ability_id == 9999
+        assert boss_casts[0].ability_name == "Flame Wreath"
+
+    def test_boss_cast_outside_window(self):
+        client = MagicMock()
+        client.get_all_actors.return_value = []
+        client.get_enemy_cast_events.return_value = [
+            {"type": "cast", "abilityGameID": 9999, "timestamp": 1000, "sourceID": 50},
+        ]
+        client.get_raid_damage_taken_events.return_value = []
+
+        enc = _make_encounter(start=0, end=60000)
+        cc = _make_cancelled_casts([5000])
+
+        _correlate_cancelled_casts(client, "test", cc, [enc])
+
+        detail = cc[0].spell_details[0]
+        corr = detail.correlations
+        if corr:
+            boss_casts = [e for e in corr[0].nearby_events if e.event_type == "boss_cast"]
+            assert len(boss_casts) == 0
+
+    def test_damage_event_correlation(self):
+        client = MagicMock()
+        client.get_all_actors.return_value = [
+            {"id": 50, "name": "Prince Malchezaar", "type": "Boss", "subType": "Boss"},
+        ]
+        client.get_enemy_ability_names.return_value = {8888: "Shadow Nova"}
+        client.get_enemy_cast_events.return_value = []
+        client.get_raid_damage_taken_events.return_value = [
+            {"type": "damage", "abilityGameID": 8888, "timestamp": 4500, "sourceID": 50, "amount": 5000},
+        ]
+
+        enc = _make_encounter(start=0, end=60000)
+        cc = _make_cancelled_casts([5000])
+
+        _correlate_cancelled_casts(client, "test", cc, [enc])
+
+        detail = cc[0].spell_details[0]
+        assert len(detail.correlations) == 1
+        dmg_events = [e for e in detail.correlations[0].nearby_events if e.event_type == "damage"]
+        assert len(dmg_events) == 1
+        assert dmg_events[0].ability_id == 8888
+        assert dmg_events[0].ability_name == "Shadow Nova"
+        assert dmg_events[0].source_name == "Prince Malchezaar"
+
+    def test_boss_death_correlation(self):
+        client = MagicMock()
+        client.get_all_actors.return_value = []
+        client.get_enemy_cast_events.return_value = []
+        client.get_raid_damage_taken_events.return_value = []
+
+        enc = _make_encounter(name="Curator", start=0, end=10000)
+        cc = _make_cancelled_casts([8000])
+
+        _correlate_cancelled_casts(client, "test", cc, [enc])
+
+        detail = cc[0].spell_details[0]
+        assert len(detail.correlations) == 1
+        death_events = [e for e in detail.correlations[0].nearby_events if e.event_type == "boss_death"]
+        assert len(death_events) == 1
+        assert death_events[0].source_name == "Curator"
+
+    def test_multiple_events_in_window(self):
+        client = MagicMock()
+        client.get_all_actors.return_value = [
+            {"id": 50, "name": "Boss", "type": "Boss", "subType": "Boss"},
+        ]
+        client.get_enemy_cast_events.return_value = [
+            {"type": "cast", "abilityGameID": 111, "timestamp": 4500, "sourceID": 50},
+            {"type": "cast", "abilityGameID": 222, "timestamp": 5500, "sourceID": 50},
+        ]
+        client.get_raid_damage_taken_events.return_value = [
+            {"type": "damage", "abilityGameID": 333, "timestamp": 4800, "sourceID": 50, "amount": 3000},
+        ]
+
+        enc = _make_encounter(start=0, end=60000)
+        cc = _make_cancelled_casts([5000])
+
+        _correlate_cancelled_casts(client, "test", cc, [enc])
+
+        detail = cc[0].spell_details[0]
+        assert len(detail.correlations) == 1
+        assert len(detail.correlations[0].nearby_events) == 3
+
+    def test_damage_deduplication(self):
+        client = MagicMock()
+        client.get_all_actors.return_value = []
+        client.get_enemy_cast_events.return_value = []
+        client.get_raid_damage_taken_events.return_value = [
+            {"type": "damage", "abilityGameID": 8888, "timestamp": 4500, "sourceID": 50, "amount": 3000},
+            {"type": "damage", "abilityGameID": 8888, "timestamp": 4500, "sourceID": 50, "amount": 2500},
+            {"type": "damage", "abilityGameID": 8888, "timestamp": 4500, "sourceID": 50, "amount": 2800},
+        ]
+
+        enc = _make_encounter(start=0, end=60000)
+        cc = _make_cancelled_casts([5000])
+
+        _correlate_cancelled_casts(client, "test", cc, [enc])
+
+        detail = cc[0].spell_details[0]
+        assert len(detail.correlations) == 1
+        dmg_events = [e for e in detail.correlations[0].nearby_events if e.event_type == "damage"]
+        assert len(dmg_events) == 1
+
+    def test_correlation_round_trip(self, db):
+        corr = CancelledCastCorrelation(
+            cancel_timestamp=5000,
+            nearby_events=[
+                BossEvent(
+                    timestamp=4000, event_type="boss_cast",
+                    ability_name="Flame Wreath", ability_id=9999,
+                    source_name="Shade of Aran", offset_ms=-1000,
+                ),
+            ],
+        )
+        details = [
+            CancelledCastDetail(
+                spell_id=100, spell_name="Fireball",
+                total_casts=10, cancelled_casts=1, cancel_rate=9.1,
+                timestamps=[5000], correlations=[corr],
+            ),
+        ]
+        cc = CancelledCastSummary(
+            player_name="Mage", player_class="Mage", source_id=1,
+            total_casts=10, cancelled_casts=1, cancel_rate=9.1,
+            spell_details=details,
+        )
+        raid = _make_raid("r1", cancelled_casts=[cc])
+        db.import_raid(raid)
+
+        loaded = db.get_raid_analysis("r1")
+        assert loaded is not None
+        lcc = loaded.cancelled_casts[0]
+        fireball = lcc.spell_details[0]
+        assert len(fireball.correlations) == 1
+        assert fireball.correlations[0].cancel_timestamp == 5000
+        ev = fireball.correlations[0].nearby_events[0]
+        assert ev.event_type == "boss_cast"
+        assert ev.ability_name == "Flame Wreath"
+        assert ev.ability_id == 9999
+        assert ev.source_name == "Shade of Aran"
+        assert ev.offset_ms == -1000
+
+    def test_no_correlation_when_no_encounters(self):
+        client = MagicMock()
+        cc = _make_cancelled_casts([5000])
+
+        _correlate_cancelled_casts(client, "test", cc, [])
+
+        detail = cc[0].spell_details[0]
+        assert detail.correlations == []
+        client.get_enemy_cast_events.assert_not_called()

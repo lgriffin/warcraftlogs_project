@@ -512,6 +512,118 @@ class WarcraftLogsClient:
         report = _extract_report(result)
         return (report.get("events") or {}).get("data") or []
 
+    def get_enemy_ability_names(
+        self, report_id: str, start_time: int, end_time: int
+    ) -> dict[int, str]:
+        names: dict[int, str] = {}
+        for data_type in ("Casts", "DamageDone"):
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  table(dataType: {data_type}, startTime: {start_time}, endTime: {end_time},
+                        hostilityType: Enemies)
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            raw_table = report.get("table")
+            if not isinstance(raw_table, dict):
+                continue
+            entries = []
+            if "data" in raw_table and "entries" in raw_table["data"]:
+                entries = raw_table["data"]["entries"]
+            elif "entries" in raw_table:
+                entries = raw_table["entries"]
+            for actor in entries:
+                for ability in actor.get("abilities", []):
+                    gid = ability.get("gameID") or ability.get("guid")
+                    name = ability.get("name")
+                    if gid and name:
+                        names[gid] = name
+        return names
+
+    def get_enemy_cast_events(
+        self, report_id: str, start_time: int, end_time: int
+    ) -> list[dict]:
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  events(startTime: {page_start}, endTime: {end_time},
+                         dataType: Casts, hostilityType: Enemies, limit: 10000) {{
+                    data
+                    nextPageTimestamp
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data", []))
+            next_page = events.get("nextPageTimestamp")
+            if not next_page:
+                break
+            page_start = next_page
+        return all_data
+
+    def get_raid_damage_taken_events(
+        self, report_id: str, start_time: int, end_time: int
+    ) -> list[dict]:
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  events(startTime: {page_start}, endTime: {end_time},
+                         dataType: DamageTaken, hostilityType: Friendlies, limit: 10000) {{
+                    data
+                    nextPageTimestamp
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data", []))
+            next_page = events.get("nextPageTimestamp")
+            if not next_page:
+                break
+            page_start = next_page
+        return all_data
+
+    def get_all_actors(self, report_id: str) -> list[dict]:
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              masterData {{
+                actors {{
+                  id
+                  name
+                  type
+                  subType
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        report = _extract_report(result)
+        return (report.get("masterData") or {}).get("actors") or []
+
     def get_threat_data(self, report_id: str, source_id: int) -> list[dict]:
         all_data = []
         start_time = 0
