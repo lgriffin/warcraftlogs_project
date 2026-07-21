@@ -738,22 +738,29 @@ def _analyze_cancelled_casts(
     for player in composition.all_players:
         try:
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
+
+            spell_names: dict[int, str] = {}
+            try:
+                cast_table = client.get_cast_table(report_id, player.source_id)
+                for entry in cast_table:
+                    gid = entry.get("guid")
+                    name = entry.get("name")
+                    if gid and name:
+                        spell_names[gid] = name
+            except (requests.RequestException, KeyError, TypeError, ValueError):
+                pass
+
             pending: dict[int, int] = {}
             completed = 0
             cancelled = 0
             spell_completed: dict[int, int] = {}
             spell_cancelled: dict[int, int] = {}
-            spell_names: dict[int, str] = {}
 
             for e in cast_events:
                 etype = e.get("type")
                 aid = e.get("abilityGameID")
                 if not aid:
                     continue
-
-                ability = e.get("ability")
-                if ability and ability.get("name"):
-                    spell_names[aid] = ability["name"]
 
                 if etype == "begincast":
                     if aid in pending:

@@ -172,11 +172,15 @@ class TestAnalyzeCancelledCasts:
     def test_spell_details_populated(self, simple_composition):
         client = MagicMock()
         client.get_cast_events_paginated.return_value = [
-            {"type": "begincast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 1000},
-            {"type": "cast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 2000},
-            {"type": "begincast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 3000},
-            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 4000},
-            {"type": "cast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 5000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 3000},
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 4000},
+            {"type": "cast", "abilityGameID": 200, "timestamp": 5000},
+        ]
+        client.get_cast_table.return_value = [
+            {"guid": 100, "name": "Fireball"},
+            {"guid": 200, "name": "Frostbolt"},
         ]
 
         results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
@@ -197,11 +201,15 @@ class TestAnalyzeCancelledCasts:
     def test_spell_details_sorted_by_cancelled_desc(self, simple_composition):
         client = MagicMock()
         client.get_cast_events_paginated.return_value = [
-            {"type": "begincast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 1000},
-            {"type": "cast", "abilityGameID": 100, "ability": {"name": "Fireball"}, "timestamp": 2000},
-            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 3000},
-            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 4000},
-            {"type": "begincast", "abilityGameID": 200, "ability": {"name": "Frostbolt"}, "timestamp": 5000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 3000},
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 4000},
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 5000},
+        ]
+        client.get_cast_table.return_value = [
+            {"guid": 100, "name": "Fireball"},
+            {"guid": 200, "name": "Frostbolt"},
         ]
 
         results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
