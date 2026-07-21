@@ -733,6 +733,7 @@ def _analyze_cancelled_casts(
 ) -> tuple[list[CancelledCastSummary], list[str]]:
     results: list[CancelledCastSummary] = []
     warnings: list[str] = []
+    spell_mgr = get_spell_manager()
 
     for player in composition.all_players:
         try:
@@ -782,7 +783,7 @@ def _analyze_cancelled_casts(
                 st = sc + sn
                 details.append(CancelledCastDetail(
                     spell_id=sid,
-                    spell_name=spell_names.get(sid, f"Unknown ({sid})"),
+                    spell_name=spell_names.get(sid, spell_mgr.get_spell_name(sid)),
                     total_casts=sc,
                     cancelled_casts=sn,
                     cancel_rate=round(sn / st * 100, 1) if st else 0.0,
