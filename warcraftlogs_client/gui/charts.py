@@ -296,6 +296,29 @@ def build_active_time_chart(trend_data: list[dict], role_avg: list[dict] | None 
     return make_chart_view(chart)
 
 
+def build_cancel_rate_chart(trend_data: list[dict]) -> QChartView:
+    chart = _make_chart("Cancel Rate %")
+
+    x_axis = QDateTimeAxis()
+    x_axis.setFormat("MM/dd")
+    x_axis.setTitleText("Raid Date")
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+
+    y_axis = QValueAxis()
+    y_axis.setTitleText("Cancel %")
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    pts = _parse_dates_and_values(trend_data, "cancel_rate")
+    _fit_axes(x_axis, y_axis, pts)
+    if pts:
+        y_axis.setRange(0, min(100, max(v for _, v in pts) * 1.2))
+    _add_series(chart, pts, "Cancel Rate %", 3, x_axis, y_axis)
+
+    return make_chart_view(chart)
+
+
 # ── Per-spell/ability multi-series charts ──
 
 

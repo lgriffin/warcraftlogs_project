@@ -18,6 +18,7 @@ from .client import WarcraftLogsClient
 from .models import (
     AuraBand,
     AuraUptime,
+    CancelledCastSummary,
     ConsumableUsage,
     DispelUsage,
     DPSPerformance,
@@ -97,6 +98,15 @@ def analyze_raid(
     logger.info("  interrupts analyzed: %d entries", len(interrupts))
 
     try:
+        cancelled_casts, cc_warns = _analyze_cancelled_casts(client, report_id, composition)
+        all_warnings.extend(cc_warns)
+        logger.info("  cancelled casts analyzed: %d entries", len(cancelled_casts))
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("  cancelled cast analysis failed: %s", e)
+        cancelled_casts = []
+        all_warnings.append(f"Cancelled cast analysis failed: {e}")
+
+    try:
         encounters = _analyze_encounters(client, report_id, composition)
         logger.info("  encounters analyzed: %d", len(encounters))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
@@ -138,6 +148,7 @@ def analyze_raid(
         dps=melee_dps + ranged_dps,
         consumables=consumables,
         interrupts=interrupts,
+        cancelled_casts=cancelled_casts,
         aura_uptimes=aura_uptimes,
         totem_uptimes=totem_uptimes,
         encounters=encounters,
@@ -710,6 +721,59 @@ def _analyze_interrupts(
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing interrupts for %s: %s", player.name, e)
             warnings.append(f"Failed to analyze interrupts for {player.name}: {e}")
+
+    return results, warnings
+
+
+def _analyze_cancelled_casts(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+) -> tuple[list[CancelledCastSummary], list[str]]:
+    results: list[CancelledCastSummary] = []
+    warnings: list[str] = []
+
+    for player in composition.all_players:
+        try:
+            cast_events = client.get_cast_events_paginated(report_id, player.source_id)
+            pending: dict[int, int] = {}
+            completed = 0
+            cancelled = 0
+
+            for e in cast_events:
+                etype = e.get("type")
+                aid = e.get("abilityGameID")
+                if not aid:
+                    continue
+
+                if etype == "begincast":
+                    if aid in pending:
+                        cancelled += 1
+                    pending[aid] = e.get("timestamp", 0)
+                elif etype == "cast":
+                    if aid in pending:
+                        completed += 1
+                        del pending[aid]
+
+            cancelled += len(pending)
+            total = completed + cancelled
+            if total == 0:
+                continue
+
+            cancel_rate = round(cancelled / total * 100, 1)
+            results.append(
+                CancelledCastSummary(
+                    player_name=player.name,
+                    player_class=player.player_class,
+                    source_id=player.source_id,
+                    total_casts=completed,
+                    cancelled_casts=cancelled,
+                    cancel_rate=cancel_rate,
+                )
+            )
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("Error analyzing cancelled casts for %s: %s", player.name, e)
+            warnings.append(f"Failed to analyze cancelled casts for {player.name}: {e}")
 
     return results, warnings
 
