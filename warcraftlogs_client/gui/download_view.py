@@ -35,7 +35,7 @@ class DownloadView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._guild_reports_raw: list[dict] = []
-        self._cached_codes: set[str] = set()
+        self._cached_codes: dict[str, str] = {}
         self._worker = None
         self._batch_queue: list[str] = []
         self._batch_total = 0
@@ -189,7 +189,7 @@ class DownloadView(QWidget):
             with PerformanceDB() as db:
                 self._cached_codes = db.get_imported_report_codes()
         except (sqlite3.Error, OSError):
-            self._cached_codes = set()
+            self._cached_codes = {}
 
     def _apply_day_filter(self):
         allowed_days = {i for i, cb in self._day_checkboxes.items() if cb.isChecked()}
@@ -207,6 +207,16 @@ class DownloadView(QWidget):
             is_saved = code in self._cached_codes
             if not is_saved:
                 new_count += 1
+            imported_raw = self._cached_codes.get(code, "")
+            if imported_raw:
+                try:
+                    dt_imp = datetime.fromisoformat(imported_raw)
+                    imported_display = dt_imp.strftime("%b %d %H:%M")
+                except (ValueError, TypeError):
+                    imported_display = imported_raw
+            else:
+                imported_display = ""
+
             display_rows.append(
                 {
                     "date": dt.strftime("%Y-%m-%d %H:%M"),
@@ -216,6 +226,7 @@ class DownloadView(QWidget):
                     "zone": r.get("zone", ""),
                     "code": code,
                     "status": "Downloaded" if is_saved else "",
+                    "imported": imported_display,
                 }
             )
             if len(display_rows) >= 50:
@@ -223,7 +234,7 @@ class DownloadView(QWidget):
 
         self._table_model.set_data(
             display_rows,
-            ["date", "day", "title", "owner", "zone", "code", "status"],
+            ["date", "day", "title", "owner", "zone", "code", "status", "imported"],
         )
         self._analyze_new_btn.setEnabled(new_count > 0)
         self._analyze_new_btn.setText(f"Analyze All New ({new_count})" if new_count else "Analyze All New")

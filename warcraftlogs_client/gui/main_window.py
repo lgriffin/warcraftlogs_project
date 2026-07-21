@@ -312,6 +312,7 @@ class MainWindow(QMainWindow):
         widget.request_back.connect(self.stack.pop_view)
         widget.navigate_to_character.connect(self._drill_into_character_history)
         widget.raid_deleted.connect(self._on_raid_deleted)
+        widget.raid_refreshed.connect(self._on_raid_refreshed)
         widget.cross_analyze.connect(self._drill_into_cross_analysis)
         self.stack.push_view(widget)
 
@@ -337,6 +338,10 @@ class MainWindow(QMainWindow):
 
     def _on_raid_deleted(self, report_id: str):
         pass
+
+    def _on_raid_refreshed(self, report_id: str):
+        self.stack.pop_view()
+        self._drill_into_raid(report_id)
 
     def _analyze_report(self, report_code: str):
         self.nav_list.setCurrentRow(0)

@@ -405,7 +405,8 @@ class PerformanceDB:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(report_id) DO UPDATE SET
                    title = excluded.title,
-                   zone = COALESCE(excluded.zone, raids.zone)""",
+                   zone = COALESCE(excluded.zone, raids.zone),
+                   imported_at = datetime('now')""",
             (
                 metadata.report_id,
                 metadata.title,
@@ -1453,17 +1454,25 @@ class PerformanceDB:
                 os.remove(cache_file)
         clear_response_cache()
 
+    def clear_raid_cache(self, report_id: str) -> None:
+        """Clear cached API data for a specific report."""
+        cache_file = _cache_file(report_id)
+        if os.path.exists(cache_file):
+            with contextlib.suppress(OSError):
+                os.remove(cache_file)
+        clear_response_cache()
+
     def is_raid_imported(self, report_id: str) -> bool:
         """Check if a raid has already been imported."""
         conn = self._get_conn()
         row = conn.execute("SELECT id FROM raids WHERE report_id = ?", (report_id,)).fetchone()
         return row is not None
 
-    def get_imported_report_codes(self) -> set[str]:
-        """Return the set of all report codes stored in the database."""
+    def get_imported_report_codes(self) -> dict[str, str]:
+        """Return a mapping of report_id -> imported_at for all stored raids."""
         conn = self._get_conn()
-        rows = conn.execute("SELECT report_id FROM raids").fetchall()
-        return {r["report_id"] for r in rows}
+        rows = conn.execute("SELECT report_id, imported_at FROM raids").fetchall()
+        return {r["report_id"]: r["imported_at"] for r in rows}
 
     # ── Raid Group operations ──
 

@@ -71,6 +71,7 @@ class RaidAnalysisWidget(QWidget):
     navigate_to_character = Signal(str)
     request_back = Signal()
     raid_deleted = Signal(str)
+    raid_refreshed = Signal(str)
     cross_analyze = Signal(str)
 
     def __init__(self, analysis: RaidAnalysis, show_back: bool = True, show_delete: bool = True, parent=None):
@@ -124,6 +125,21 @@ class RaidAnalysisWidget(QWidget):
         cross_btn.setFixedHeight(32)
         cross_btn.clicked.connect(lambda: self.cross_analyze.emit(self._analysis.metadata.report_id))
         header_layout.addWidget(cross_btn)
+
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setFixedHeight(32)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9;
+                color: white; border: none; border-radius: 4px;
+                padding: 8px 16px; font-size: 12px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3498db; }
+            QPushButton:disabled { background-color: #555; color: #888; }
+        """)
+        refresh_btn.clicked.connect(self._refresh_raid)
+        header_layout.addWidget(refresh_btn)
+        self._refresh_btn = refresh_btn
 
         if self._show_delete:
             delete_btn = QPushButton("Delete")
@@ -678,3 +694,56 @@ class RaidAnalysisWidget(QWidget):
             self.request_back.emit()
         except (sqlite3.Error, OSError) as e:
             QMessageBox.critical(self, "Delete Error", f"Failed to delete raid:\n{e}")
+
+    def _refresh_raid(self):
+        report_id = self._analysis.metadata.report_id
+        title = self._analysis.metadata.title
+        reply = QMessageBox.question(
+            self,
+            "Refresh Raid",
+            f'Re-download and re-analyze "{title}"?\n\n'
+            "This will fetch fresh data from WarcraftLogs.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self._refresh_btn.setEnabled(False)
+        self.status_message.emit(f"Refreshing {title}...")
+
+        try:
+            from ..database import PerformanceDB
+
+            with PerformanceDB() as db:
+                db.clear_raid_cache(report_id)
+        except (sqlite3.Error, OSError):
+            pass
+
+        from .worker import AnalysisWorker
+
+        self._refresh_worker = AnalysisWorker(report_id, parent=self)
+        self._refresh_worker.progress.connect(self.status_message.emit)
+        self._refresh_worker.finished.connect(self._on_refresh_finished)
+        self._refresh_worker.error.connect(self._on_refresh_error)
+        self._refresh_worker.start()
+
+    def _on_refresh_finished(self, analysis):
+        try:
+            from ..database import PerformanceDB
+
+            with PerformanceDB() as db:
+                db.import_raid(analysis)
+        except (sqlite3.Error, OSError) as e:
+            QMessageBox.critical(self, "Refresh Error", f"Failed to save refreshed data:\n{e}")
+            self._refresh_btn.setEnabled(True)
+            return
+
+        self.status_message.emit(f"Refreshed: {analysis.metadata.title}")
+        self._refresh_btn.setEnabled(True)
+        self.raid_refreshed.emit(analysis.metadata.report_id)
+
+    def _on_refresh_error(self, error_msg: str):
+        self._refresh_btn.setEnabled(True)
+        self.status_message.emit(f"Refresh failed: {error_msg}")
+        QMessageBox.critical(self, "Refresh Error", f"Failed to refresh raid:\n\n{error_msg}")
