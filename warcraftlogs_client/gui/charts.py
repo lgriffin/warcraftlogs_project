@@ -1768,8 +1768,8 @@ class CancelledCastTimelineWidget(QWidget):
             seen = set()
             deduped = []
             for ts, etype, aid in events:
-                if (ts, aid) not in seen:
-                    seen.add((ts, aid))
+                if (ts, etype, aid) not in seen:
+                    seen.add((ts, etype, aid))
                     deduped.append((ts, etype, aid))
             deduped.sort(key=lambda e: e[0])
             self._boss_lanes.append((ability_name, deduped[0][1], deduped))
@@ -1858,6 +1858,9 @@ class CancelledCastTimelineWidget(QWidget):
         if avail_w < 100:
             avail_w = 100
         duration_s = (self._fight_end - self._fight_start) / 1000
+        if duration_s <= 0:
+            painter.end()
+            return
 
         label_font = QFont("Segoe UI", 7)
         name_font = QFont("Segoe UI", 8)
