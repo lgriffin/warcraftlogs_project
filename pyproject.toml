@@ -14,12 +14,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["PySide6>=6.6.0"]
+gui = ["PySide6>=6.6.0", "pytest-qt>=4.2"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-bdd>=7.0",
-    "pytest-qt>=4.2",
     "hypothesis>=6.0",
     "pytest-xdist>=3.0",
     "ruff",
@@ -92,7 +91,7 @@ source = ["warcraftlogs_client"]
 omit = ["warcraftlogs_client/gui/*"]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 55
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

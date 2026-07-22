@@ -227,9 +227,7 @@ class RaidAnalysisWidget(QWidget):
 
         self._du_scroll = QScrollArea()
         self._du_scroll.setWidgetResizable(True)
-        self._du_scroll.setStyleSheet(
-            f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}"
-        )
+        self._du_scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
         du_layout.addWidget(self._du_scroll)
 
         self._du_timeline = DebuffTimelineWidget()
@@ -250,9 +248,7 @@ class RaidAnalysisWidget(QWidget):
 
         self._tu_scroll = QScrollArea()
         self._tu_scroll.setWidgetResizable(True)
-        self._tu_scroll.setStyleSheet(
-            f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}"
-        )
+        self._tu_scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {COLORS['bg_card']}; }}")
         tu_layout.addWidget(self._tu_scroll)
 
         self._tu_timeline = DebuffTimelineWidget()
@@ -608,8 +604,7 @@ class RaidAnalysisWidget(QWidget):
             return
         fight_name, fight_start, fight_end = self._du_fights[index]
         fight_uptimes = [
-            au for au in self._all_aura_uptimes
-            if au.fight_start == fight_start and au.fight_name == fight_name
+            au for au in self._all_aura_uptimes if au.fight_start == fight_start and au.fight_name == fight_name
         ]
         fight_uptimes.sort(key=lambda au: au.uptime_percent)
         self._du_timeline.set_data(fight_uptimes, fight_start, fight_end)
@@ -619,8 +614,7 @@ class RaidAnalysisWidget(QWidget):
             return
         fight_name, fight_start, fight_end = self._tu_fights[index]
         fight_uptimes = [
-            tu for tu in self._all_totem_uptimes
-            if tu.fight_start == fight_start and tu.fight_name == fight_name
+            tu for tu in self._all_totem_uptimes if tu.fight_start == fight_start and tu.fight_name == fight_name
         ]
         fight_uptimes.sort(key=lambda tu: tu.uptime_percent)
         self._tu_timeline.set_data(fight_uptimes, fight_start, fight_end)
@@ -703,8 +697,7 @@ class RaidAnalysisWidget(QWidget):
         reply = QMessageBox.question(
             self,
             "Refresh Raid",
-            f'Re-download and re-analyze "{title}"?\n\n'
-            "This will fetch fresh data from WarcraftLogs.",
+            f'Re-download and re-analyze "{title}"?\n\nThis will fetch fresh data from WarcraftLogs.',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

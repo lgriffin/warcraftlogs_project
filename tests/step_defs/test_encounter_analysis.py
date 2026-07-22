@@ -25,7 +25,14 @@ def _default_composition():
 @given(parsers.parse('the client returns fights with {count:d} boss kill named "{name}"'))
 def setup_boss_kill(wcl_client, count, name):
     fights = [
-        {"id": i + 1, "name": name, "startTime": i * 60000, "endTime": (i + 1) * 60000, "kill": True, "encounterID": 658 + i}
+        {
+            "id": i + 1,
+            "name": name,
+            "startTime": i * 60000,
+            "endTime": (i + 1) * 60000,
+            "kill": True,
+            "encounterID": 658 + i,
+        }
         for i in range(count)
     ]
     wcl_client.get_fights.return_value = fights
@@ -36,9 +43,27 @@ def setup_boss_kill(wcl_client, count, name):
 def setup_boss_and_trash(wcl_client, bosses, trash):
     fights = []
     for i in range(bosses):
-        fights.append({"id": i + 1, "name": f"Boss{i+1}", "startTime": i * 60000, "endTime": (i + 1) * 60000, "kill": True, "encounterID": 100 + i})
+        fights.append(
+            {
+                "id": i + 1,
+                "name": f"Boss{i + 1}",
+                "startTime": i * 60000,
+                "endTime": (i + 1) * 60000,
+                "kill": True,
+                "encounterID": 100 + i,
+            }
+        )
     for i in range(trash):
-        fights.append({"id": bosses + i + 1, "name": "Trash", "startTime": (bosses + i) * 60000, "endTime": (bosses + i + 1) * 60000, "kill": True, "encounterID": 0})
+        fights.append(
+            {
+                "id": bosses + i + 1,
+                "name": "Trash",
+                "startTime": (bosses + i) * 60000,
+                "endTime": (bosses + i + 1) * 60000,
+                "kill": True,
+                "encounterID": 0,
+            }
+        )
     wcl_client.get_fights.return_value = fights
     wcl_client.get_encounter_table.return_value = []
 
@@ -47,15 +72,35 @@ def setup_boss_and_trash(wcl_client, bosses, trash):
 def setup_boss_and_wipe(wcl_client, bosses, wipes):
     fights = []
     for i in range(bosses):
-        fights.append({"id": i + 1, "name": f"Boss{i+1}", "startTime": i * 60000, "endTime": (i + 1) * 60000, "kill": True, "encounterID": 100 + i})
+        fights.append(
+            {
+                "id": i + 1,
+                "name": f"Boss{i + 1}",
+                "startTime": i * 60000,
+                "endTime": (i + 1) * 60000,
+                "kill": True,
+                "encounterID": 100 + i,
+            }
+        )
     for i in range(wipes):
-        fights.append({"id": bosses + i + 1, "name": "WipeBoss", "startTime": (bosses + i) * 60000, "endTime": (bosses + i + 1) * 60000, "kill": False, "encounterID": 200 + i})
+        fights.append(
+            {
+                "id": bosses + i + 1,
+                "name": "WipeBoss",
+                "startTime": (bosses + i) * 60000,
+                "endTime": (bosses + i + 1) * 60000,
+                "kill": False,
+                "encounterID": 200 + i,
+            }
+        )
     wcl_client.get_fights.return_value = fights
     wcl_client.get_encounter_table.return_value = []
 
 
 @given(
-    parsers.parse('the client returns a boss fight with "{dps}" dealing {dmg:d} damage and "{healer}" doing {heal:d} healing')
+    parsers.parse(
+        'the client returns a boss fight with "{dps}" dealing {dmg:d} damage and "{healer}" doing {heal:d} healing'
+    )
 )
 def setup_boss_with_data(wcl_client, dps, dmg, healer, heal):
     wcl_client.get_fights.return_value = [
@@ -117,8 +162,13 @@ def analysis_with_encounter(build_analysis, name):
         duration_ms=168000,
         players=[
             EncounterPerformance(
-                name="StabbyRogue", player_class="Rogue", source_id=3, role="melee",
-                total_damage=150_000, total_healing=0, total_damage_taken=20_000,
+                name="StabbyRogue",
+                player_class="Rogue",
+                source_id=3,
+                role="melee",
+                total_damage=150_000,
+                total_healing=0,
+                total_damage_taken=20_000,
             ),
         ],
     )

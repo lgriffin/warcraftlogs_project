@@ -601,7 +601,9 @@ class CharacterView(QWidget):
         dps_bar = QHBoxLayout()
         dps_bar.addWidget(QLabel("Chart:"))
         self._dps_chart_combo = QComboBox()
-        self._dps_chart_combo.addItems(["Total Damage", "Ability Damage", "Ability Casts", "Active Time %", "Cancel Rate %"])
+        self._dps_chart_combo.addItems(
+            ["Total Damage", "Ability Damage", "Ability Casts", "Active Time %", "Cancel Rate %"]
+        )
         self._dps_chart_combo.setStyleSheet(combo_style)
         self._dps_chart_combo.currentIndexChanged.connect(self._rebuild_dps_chart)
         dps_bar.addWidget(self._dps_chart_combo)

@@ -85,7 +85,9 @@ def make_analysis(
                 source_id=3,
                 role="melee",
                 total_damage=dps_damage,
-                abilities=[SpellUsage(spell_id=26862, spell_name="Sinister Strike", casts=120, total_amount=dps_damage)],
+                abilities=[
+                    SpellUsage(spell_id=26862, spell_name="Sinister Strike", casts=120, total_amount=dps_damage)
+                ],
             )
         ],
         consumables=consumables or [],

@@ -122,9 +122,7 @@ class RaidDiffView(QWidget):
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        self._scroll.setStyleSheet(
-            f"QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}"
-        )
+        self._scroll.setStyleSheet(f"QScrollArea {{ border: none; background-color: {COLORS['bg_dark']}; }}")
         self._content = QWidget()
         self._content.setStyleSheet(f"background-color: {COLORS['bg_dark']};")
         self._content_layout = QVBoxLayout(self._content)
@@ -204,9 +202,7 @@ class RaidDiffView(QWidget):
             return
 
         self._display_comparison(analysis_a, analysis_b, stats_a or {}, stats_b or {})
-        self.status_message.emit(
-            f"Comparing '{analysis_a.metadata.title}' vs '{analysis_b.metadata.title}'"
-        )
+        self.status_message.emit(f"Comparing '{analysis_a.metadata.title}' vs '{analysis_b.metadata.title}'")
 
     def _clear_content(self):
         old = self._scroll.takeWidget()
@@ -222,9 +218,7 @@ class RaidDiffView(QWidget):
         lbl = QLabel(text)
         lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         lbl.setStyleSheet(
-            f"color: {COLORS['text_header']};"
-            f" border-bottom: 2px solid {COLORS['accent']};"
-            f" padding-bottom: 6px;"
+            f"color: {COLORS['text_header']}; border-bottom: 2px solid {COLORS['accent']}; padding-bottom: 6px;"
         )
         if isinstance(layout, QVBoxLayout):
             layout.addWidget(lbl)
@@ -315,9 +309,7 @@ class RaidDiffView(QWidget):
 
             sign = "+" if delta > 0 else ""
             d_color = COLORS["success"] if delta > 0 else (COLORS["error"] if delta < 0 else COLORS["text_dim"])
-            comp_grid.addWidget(
-                self._styled_label(f"{sign}{delta}" if delta != 0 else "=", d_color), i, 3
-            )
+            comp_grid.addWidget(self._styled_label(f"{sign}{delta}" if delta != 0 else "=", d_color), i, 3)
 
         layout.addLayout(comp_grid)
 
@@ -351,9 +343,7 @@ class RaidDiffView(QWidget):
 
                 sign = "+" if delta > 0 else ""
                 d_color = COLORS["success"] if delta > 0 else (COLORS["error"] if delta < 0 else COLORS["text_dim"])
-                cons_grid.addWidget(
-                    self._styled_label(f"{sign}{delta}" if delta != 0 else "=", d_color), i, 5
-                )
+                cons_grid.addWidget(self._styled_label(f"{sign}{delta}" if delta != 0 else "=", d_color), i, 5)
             layout.addLayout(cons_grid)
         else:
             layout.addWidget(self._styled_label("No consumable data available.", COLORS["text_dim"]))
@@ -384,9 +374,7 @@ class RaidDiffView(QWidget):
 
                 sign = "+" if delta > 0 else ""
                 d_color = COLORS["success"] if delta > 0 else (COLORS["error"] if delta < 0 else COLORS["text_dim"])
-                int_grid.addWidget(
-                    self._styled_label(f"{sign}{delta}" if delta != 0 else "=", d_color), i, 3
-                )
+                int_grid.addWidget(self._styled_label(f"{sign}{delta}" if delta != 0 else "=", d_color), i, 3)
             layout.addLayout(int_grid)
 
         # ── Encounter comparison ──
@@ -413,12 +401,8 @@ class RaidDiffView(QWidget):
                 dmg_b = sum(p.total_damage for p in eb.players)
 
                 enc_grid.addWidget(self._styled_label(boss, COLORS["text"]), i, 0)
-                enc_grid.addWidget(
-                    self._styled_label(f"{dur_a_s // 60}:{dur_a_s % 60:02d}", COLORS["accent"]), i, 1
-                )
-                enc_grid.addWidget(
-                    self._styled_label(f"{dur_b_s // 60}:{dur_b_s % 60:02d}", "#69CCF0"), i, 2
-                )
+                enc_grid.addWidget(self._styled_label(f"{dur_a_s // 60}:{dur_a_s % 60:02d}", COLORS["accent"]), i, 1)
+                enc_grid.addWidget(self._styled_label(f"{dur_b_s // 60}:{dur_b_s % 60:02d}", "#69CCF0"), i, 2)
                 enc_grid.addWidget(self._styled_label(f"{dmg_a:,}", COLORS["accent"]), i, 3)
                 enc_grid.addWidget(self._styled_label(f"{dmg_b:,}", "#69CCF0"), i, 4)
 
