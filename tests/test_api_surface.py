@@ -6,8 +6,6 @@ renames, removals, or field changes are caught during CI.
 
 import dataclasses
 
-import pytest
-
 
 class TestPublicExports:
     def test_models_exports(self):

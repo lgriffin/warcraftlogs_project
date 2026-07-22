@@ -4,12 +4,8 @@ import pytest
 
 from warcraftlogs_client.database import PerformanceDB
 from warcraftlogs_client.models import (
-    ConsumableUsage,
     DPSPerformance,
-    EncounterPerformance,
-    EncounterSummary,
     HealerPerformance,
-    InterruptUsage,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,

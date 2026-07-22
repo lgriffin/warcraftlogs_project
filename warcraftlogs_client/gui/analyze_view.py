@@ -303,44 +303,45 @@ class AnalyzeView(QWidget):
         if not self._current_analysis:
             return
 
+        a = self._current_analysis
         player_consumes = self._get_player_consumables(name)
+        player_cc = next((cc for cc in a.cancelled_casts if cc.player_name == name), None)
+        encounters = a.encounters or []
         tab_idx = self.tabs.currentIndex()
 
         found = False
 
-        # Prioritise the currently active tab so clicking a tank on the Tanks
-        # tab doesn't accidentally match the same name in the healers list.
         if tab_idx == 1:  # Tanks
-            for t in self._current_analysis.tanks:
+            for t in a.tanks:
                 if t.name == name:
-                    self.detail_panel.show_tank(t, player_consumes)
+                    self.detail_panel.show_tank(t, player_consumes, cancelled=player_cc, encounters=encounters)
                     found = True
                     break
         elif tab_idx in (2, 3):  # Melee / Ranged DPS
-            for d in self._current_analysis.dps:
+            for d in a.dps:
                 if d.name == name:
-                    self.detail_panel.show_dps(d, player_consumes)
+                    self.detail_panel.show_dps(d, player_consumes, cancelled=player_cc, encounters=encounters)
                     found = True
                     break
 
         if not found:
-            for h in self._current_analysis.healers:
+            for h in a.healers:
                 if h.name == name:
-                    self.detail_panel.show_healer(h, player_consumes)
+                    self.detail_panel.show_healer(h, player_consumes, cancelled=player_cc, encounters=encounters)
                     found = True
                     break
 
         if not found:
-            for t in self._current_analysis.tanks:
+            for t in a.tanks:
                 if t.name == name:
-                    self.detail_panel.show_tank(t, player_consumes)
+                    self.detail_panel.show_tank(t, player_consumes, cancelled=player_cc, encounters=encounters)
                     found = True
                     break
 
         if not found:
-            for d in self._current_analysis.dps:
+            for d in a.dps:
                 if d.name == name:
-                    self.detail_panel.show_dps(d, player_consumes)
+                    self.detail_panel.show_dps(d, player_consumes, cancelled=player_cc, encounters=encounters)
                     found = True
                     break
 

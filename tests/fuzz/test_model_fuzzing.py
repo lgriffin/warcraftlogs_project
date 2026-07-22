@@ -1,7 +1,8 @@
 """Property-based fuzz testing of data model constructors."""
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from warcraftlogs_client.models import (
     DPSPerformance,

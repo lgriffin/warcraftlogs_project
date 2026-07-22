@@ -15,7 +15,7 @@ class TestTokenLeakage:
         """Client secrets should never be written to cache files."""
         monkeypatch.setattr("warcraftlogs_client.cache.CACHE_DIR", str(tmp_path))
 
-        from warcraftlogs_client.cache import load_cached_data, save_cache
+        from warcraftlogs_client.cache import save_cache
 
         secret = "super_secret_client_credential_xyz789"
         cache_data = {"healers": [{"name": "TestHealer", "healing": 12345}]}
@@ -39,9 +39,8 @@ class TestTokenLeakage:
             "401 Client Error: Unauthorized", response=mock_response
         )
 
-        with patch("requests.post", return_value=mock_response):
-            with pytest.raises(AuthenticationError) as exc_info:
-                tm._get_new_token()
+        with patch("requests.post", return_value=mock_response), pytest.raises(AuthenticationError) as exc_info:
+            tm._get_new_token()
 
         error = exc_info.value
         assert secret not in str(error)

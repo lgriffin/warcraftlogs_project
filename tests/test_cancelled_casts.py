@@ -645,3 +645,105 @@ class TestCancelledCastCorrelation:
         detail = cc[0].spell_details[0]
         assert detail.correlations == []
         client.get_enemy_cast_events.assert_not_called()
+
+
+class TestCancelledCastTimelineWidget:
+    def test_timeline_widget_set_data(self, qtbot):
+        from warcraftlogs_client.gui.charts import CancelledCastTimelineWidget
+
+        widget = CancelledCastTimelineWidget()
+        qtbot.addWidget(widget)
+
+        corr = CancelledCastCorrelation(
+            cancel_timestamp=5000,
+            nearby_events=[
+                BossEvent(
+                    timestamp=4000, event_type="boss_cast",
+                    ability_name="Flame Wreath", ability_id=9999,
+                    source_name="Shade of Aran", offset_ms=-1000,
+                ),
+            ],
+        )
+        detail = CancelledCastDetail(
+            spell_id=100, spell_name="Fireball",
+            total_casts=10, cancelled_casts=1, cancel_rate=9.1,
+            timestamps=[5000], correlations=[corr],
+        )
+        enc = _make_encounter(start=0, end=60000)
+        enc.boss_events = [
+            BossEvent(timestamp=4000, event_type="boss_cast",
+                      ability_name="Flame Wreath", ability_id=9999,
+                      source_name="Shade of Aran"),
+            BossEvent(timestamp=30000, event_type="boss_cast",
+                      ability_name="Arcane Explosion", ability_id=8888,
+                      source_name="Shade of Aran"),
+            BossEvent(timestamp=60000, event_type="boss_death",
+                      ability_name="Boss Died", ability_id=0,
+                      source_name="Shade of Aran"),
+        ]
+
+        widget.set_data([detail], enc)
+
+        assert widget.height() > 60
+        assert len(widget._boss_lanes) == 3
+        assert len(widget._cancel_markers) == 1
+
+    def test_timeline_widget_empty_data(self, qtbot):
+        from warcraftlogs_client.gui.charts import CancelledCastTimelineWidget
+
+        widget = CancelledCastTimelineWidget()
+        qtbot.addWidget(widget)
+
+        enc = _make_encounter(start=0, end=60000)
+        widget.set_data([], enc)
+
+        assert widget.maximumHeight() == 60
+        assert len(widget._boss_lanes) == 0
+        assert len(widget._cancel_markers) == 0
+
+
+class TestBossEventsDatabase:
+    def test_boss_events_round_trip(self, db):
+        enc = EncounterSummary(
+            encounter_id=1, name="Shade of Aran",
+            start_time=1000, end_time=60000, duration_ms=59000,
+            boss_events=[
+                BossEvent(timestamp=4000, event_type="boss_cast",
+                          ability_name="Flame Wreath", ability_id=9999,
+                          source_name="Shade of Aran"),
+                BossEvent(timestamp=30000, event_type="damage",
+                          ability_name="Arcane Explosion", ability_id=8888,
+                          source_name="Shade of Aran"),
+                BossEvent(timestamp=60000, event_type="boss_death",
+                          ability_name="Boss Died", ability_id=0,
+                          source_name="Shade of Aran"),
+            ],
+        )
+        raid = _make_raid("r1")
+        raid.encounters = [enc]
+        db.import_raid(raid)
+
+        loaded = db.get_raid_analysis("r1")
+        assert loaded is not None
+        assert len(loaded.encounters) == 1
+        loaded_enc = loaded.encounters[0]
+        assert len(loaded_enc.boss_events) == 3
+        assert loaded_enc.boss_events[0].event_type == "boss_cast"
+        assert loaded_enc.boss_events[0].ability_name == "Flame Wreath"
+        assert loaded_enc.boss_events[0].ability_id == 9999
+        assert loaded_enc.boss_events[1].event_type == "damage"
+        assert loaded_enc.boss_events[2].event_type == "boss_death"
+
+    def test_boss_events_empty_round_trip(self, db):
+        enc = EncounterSummary(
+            encounter_id=1, name="Curator",
+            start_time=1000, end_time=60000, duration_ms=59000,
+        )
+        raid = _make_raid("r1")
+        raid.encounters = [enc]
+        db.import_raid(raid)
+
+        loaded = db.get_raid_analysis("r1")
+        assert loaded is not None
+        assert len(loaded.encounters) == 1
+        assert loaded.encounters[0].boss_events == []
