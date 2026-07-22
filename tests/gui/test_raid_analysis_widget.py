@@ -1,13 +1,12 @@
 """Tests for RaidAnalysisWidget using pytest-qt."""
 
-from unittest.mock import patch
 
 import pytest
 
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QTabWidget
+from PySide6.QtWidgets import QPushButton, QTabWidget
 
 from warcraftlogs_client.gui.raid_analysis_widget import RaidAnalysisWidget
 

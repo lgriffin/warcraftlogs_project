@@ -8,16 +8,14 @@ signal wiring, view attributes) through a lightweight proxy that
 reproduces the same layout and logic without triggering the crash.
 """
 
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,

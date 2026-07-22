@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QLineEdit, QPushButton, QWidget
+from PySide6.QtWidgets import QLineEdit, QWidget
 
 from warcraftlogs_client.gui.settings_view import SettingsView
 
