@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QPushButton,
+    QScrollArea,
     QTableView,
     QTabWidget,
     QVBoxLayout,
@@ -25,6 +26,7 @@ from ..models import (
     HealerPerformance,
     TankPerformance,
 )
+from .charts import CancelledCastTimelineWidget
 from .styles import COLORS
 
 
@@ -235,6 +237,23 @@ class CharacterDetailPanel(QWidget):
                 """)
                 self._cc_boss_combo.currentIndexChanged.connect(self._on_cc_boss_changed)
                 wrapper_layout.addWidget(self._cc_boss_combo)
+
+                self._cc_timeline = CancelledCastTimelineWidget()
+                cc_scroll = QScrollArea()
+                cc_scroll.setWidgetResizable(True)
+                cc_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                cc_scroll.setWidget(self._cc_timeline)
+                cc_scroll.setFixedHeight(300)
+                cc_scroll.setStyleSheet(f"""
+                    QScrollArea {{
+                        border: 1px solid {COLORS["border"]};
+                        background-color: {COLORS["bg_card"]};
+                    }}
+                """)
+                self._cc_timeline_scroll = cc_scroll
+                cc_scroll.setVisible(False)
+                wrapper_layout.addWidget(cc_scroll)
+
                 wrapper_layout.addWidget(table, 1)
 
                 tab_idx = self._detail_tabs.addTab(wrapper, label)
@@ -379,6 +398,7 @@ class CharacterDetailPanel(QWidget):
         cancelled = self._cc_data
         if not cancelled or not cancelled.spell_details:
             self._clear_section("cancelled_casts")
+            self._cc_timeline_scroll.setVisible(False)
             return
 
         boss_idx = self._cc_boss_combo.currentIndex()
@@ -390,20 +410,31 @@ class CharacterDetailPanel(QWidget):
                 if d.cancelled_casts > 0
             ]
             self._populate_section("cancelled_casts", rows, ["Spell", "Casts", "Cancelled", "Rate"])
+            self._cc_timeline_scroll.setVisible(False)
         else:
             enc = self._cc_encounters[boss_idx - 1]
             rows = []
+            fight_details = []
             for d in cancelled.spell_details:
+                has_fight_ts = False
                 for t in d.timestamps:
                     if t < enc.start_time or t > enc.end_time:
                         continue
+                    has_fight_ts = True
                     cancel_time = self._format_fight_time(t, enc.start_time)
                     cause, cause_time = self._get_likely_cause_for_timestamp(d, t, enc)
                     rows.append((d.spell_name, cancel_time, cause, cause_time))
+                if has_fight_ts:
+                    fight_details.append(d)
             self._populate_section(
                 "cancelled_casts", rows,
                 ["Spell", "Cancelled At", "Likely Cause", "Cause Time"],
             )
+            if fight_details or enc.boss_events:
+                self._cc_timeline.set_data(fight_details, enc)
+                self._cc_timeline_scroll.setVisible(True)
+            else:
+                self._cc_timeline_scroll.setVisible(False)
 
     @staticmethod
     def _format_fight_time(timestamp_ms, fight_start_ms):

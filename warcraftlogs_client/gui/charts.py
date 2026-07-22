@@ -15,8 +15,8 @@ from PySide6.QtCharts import (
     QValueAxis,
 )
 from PySide6.QtCore import QDateTime, QMargins, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QToolTip, QWidget
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from .styles import COLORS
 
@@ -1718,6 +1718,246 @@ class DebuffTimelineWidget(QWidget):
         for rect, name, pct in self._cells:
             if rect.contains(pos):
                 tip = f"{name}: {pct:.1f}% uptime"
+                tip_pos = (
+                    event.globalPosition().toPoint()
+                    if hasattr(event, "globalPosition")
+                    else event.globalPos()
+                )
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
+
+
+class CancelledCastTimelineWidget(QWidget):
+    """Timeline showing boss ability lanes with cancelled-cast markers overlaid."""
+
+    _MARKER_SIZE = 8
+    _NAME_COL_W = 160
+    _TOP_MARGIN = 30
+    _ROW_H = 22
+    _ROW_GAP = 2
+    _RIGHT_PAD = 20
+    _BOTTOM_PAD = 10
+
+    _CAST_COLOR = QColor("#3498db")
+    _DMG_COLOR = QColor("#f39c12")
+    _DEATH_COLOR = QColor("#e74c3c")
+    _CANCEL_COLOR = QColor("#e94560")
+    _CANCEL_LINE_COLOR = QColor(233, 69, 96, 140)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._boss_lanes: list[tuple[str, str, list[tuple[int, str, int]]]] = []
+        self._cancel_markers: list[tuple[str, int, str]] = []
+        self._fight_start: int = 0
+        self._fight_end: int = 0
+        self._hit_rects: list[tuple[QRectF, str]] = []
+        self.setMouseTracking(True)
+        self.setMinimumHeight(60)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, spell_details, encounter):
+        self._fight_start = encounter.start_time
+        self._fight_end = encounter.end_time
+        self._boss_lanes = []
+        self._cancel_markers = []
+
+        boss_events_by_ability: dict[str, list[tuple[int, str, int]]] = {}
+        for be in encounter.boss_events:
+            key = be.ability_name if be.event_type != "boss_death" else "Boss Death"
+            if key not in boss_events_by_ability:
+                boss_events_by_ability[key] = []
+            boss_events_by_ability[key].append(
+                (be.timestamp, be.event_type, be.ability_id)
+            )
+
+        for ability_name, events in boss_events_by_ability.items():
+            seen = set()
+            deduped = []
+            for ts, etype, aid in events:
+                if (ts, aid) not in seen:
+                    seen.add((ts, aid))
+                    deduped.append((ts, etype, aid))
+            deduped.sort(key=lambda e: e[0])
+            self._boss_lanes.append((ability_name, deduped[0][1], deduped))
+
+        self._boss_lanes.sort(key=lambda lane: (
+            0 if lane[1] == "boss_cast" else (2 if lane[1] == "boss_death" else 1),
+            lane[0],
+        ))
+
+        cancel_to_closest: dict[tuple[str, int], tuple[int, str]] = {}
+        for detail in spell_details:
+            for t in detail.timestamps:
+                if t < encounter.start_time or t > encounter.end_time:
+                    continue
+                tip = self._build_cancel_tip(detail, t, cancel_to_closest, encounter)
+                self._cancel_markers.append((detail.spell_name, t, tip))
+
+            for corr in detail.correlations:
+                if corr.cancel_timestamp < encounter.start_time:
+                    continue
+                if corr.cancel_timestamp > encounter.end_time:
+                    continue
+                if corr.nearby_events:
+                    closest = min(corr.nearby_events, key=lambda e: abs(e.offset_ms))
+                    boss_key = closest.ability_name if closest.event_type != "boss_death" else "Boss Death"
+                    cancel_to_closest[(detail.spell_name, corr.cancel_timestamp)] = (
+                        closest.timestamp, boss_key,
+                    )
+
+        self._cancel_markers = [
+            (name, ts, self._build_cancel_tip_final(name, ts, cancel_to_closest))
+            for name, ts, _ in self._cancel_markers
+        ]
+        self._cancel_markers.sort(key=lambda m: m[1])
+
+        n_lanes = len(self._boss_lanes)
+        if n_lanes == 0:
+            self.setFixedHeight(60)
+        else:
+            h = self._TOP_MARGIN + n_lanes * (self._ROW_H + self._ROW_GAP) + self._BOTTOM_PAD
+            self.setFixedHeight(max(h, 80))
+        self.update()
+
+    def _build_cancel_tip(self, detail, ts, _cache, _enc):
+        rel = (ts - self._fight_start) / 1000
+        m, s = int(rel) // 60, int(rel) % 60
+        return f"{detail.spell_name} cancelled at {m}:{s:02d}"
+
+    def _build_cancel_tip_final(self, spell_name, ts, cancel_to_closest):
+        rel = (ts - self._fight_start) / 1000
+        m, s = int(rel) // 60, int(rel) % 60
+        info = cancel_to_closest.get((spell_name, ts))
+        if info:
+            c_ts, c_name = info
+            c_rel = (c_ts - self._fight_start) / 1000
+            cm, cs = int(c_rel) // 60, int(c_rel) % 60
+            return f"{spell_name} cancelled at {m}:{s:02d}\nLikely cause: {c_name} at {cm}:{cs:02d}"
+        return f"{spell_name} cancelled at {m}:{s:02d}"
+
+    def _ts_to_x(self, ts, avail_w):
+        duration = self._fight_end - self._fight_start
+        if duration <= 0:
+            return self._NAME_COL_W
+        return self._NAME_COL_W + ((ts - self._fight_start) / duration) * avail_w
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        if not self._boss_lanes:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.drawText(
+                self.rect(), Qt.AlignmentFlag.AlignCenter,
+                "No timeline data for this fight",
+            )
+            painter.end()
+            return
+
+        avail_w = self.width() - self._NAME_COL_W - self._RIGHT_PAD
+        if avail_w < 100:
+            avail_w = 100
+        duration_s = (self._fight_end - self._fight_start) / 1000
+
+        label_font = QFont("Segoe UI", 7)
+        name_font = QFont("Segoe UI", 8)
+        cancel_label_font = QFont("Segoe UI", 6)
+
+        grid_bottom = self._TOP_MARGIN + len(self._boss_lanes) * (self._ROW_H + self._ROW_GAP)
+
+        # Time axis
+        painter.setFont(label_font)
+        interval = 30 if duration_s <= 300 else 60
+        t = 0
+        while t <= duration_s:
+            x = self._NAME_COL_W + (t / duration_s) * avail_w
+            m, s = int(t) // 60, int(t) % 60
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.drawText(int(x) - 10, self._TOP_MARGIN - 6, f"{m}:{s:02d}")
+            painter.setPen(QPen(QColor(COLORS["border"]), 1, Qt.PenStyle.DotLine))
+            painter.drawLine(int(x), self._TOP_MARGIN, int(x), grid_bottom)
+            t += interval
+
+        self._hit_rects = []
+        half = self._MARKER_SIZE / 2
+
+        # Boss ability lanes
+        for i, (ability_name, _primary_type, events) in enumerate(self._boss_lanes):
+            y = self._TOP_MARGIN + i * (self._ROW_H + self._ROW_GAP)
+            color = SERIES_COLORS[i % len(SERIES_COLORS)]
+
+            painter.setPen(QColor(COLORS["text"]))
+            painter.setFont(name_font)
+            painter.drawText(4, int(y + self._ROW_H - 5), ability_name[:22])
+
+            bg_rect = QRectF(self._NAME_COL_W, y, avail_w, self._ROW_H)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(COLORS["bg_dark"])))
+            painter.drawRoundedRect(bg_rect, 2, 2)
+
+            for ts, etype, _aid in events:
+                x = self._ts_to_x(ts, avail_w)
+                cy = y + self._ROW_H / 2
+
+                if etype == "boss_death":
+                    painter.setPen(QPen(self._DEATH_COLOR, 2))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawLine(QPointF(x - half, cy - half), QPointF(x + half, cy + half))
+                    painter.drawLine(QPointF(x - half, cy + half), QPointF(x + half, cy - half))
+                elif etype == "damage":
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(self._DMG_COLOR))
+                    painter.drawRect(QRectF(x - half + 1, cy - half + 1, self._MARKER_SIZE - 2, self._MARKER_SIZE - 2))
+                else:
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(color))
+                    tri = QPolygonF([
+                        QPointF(x, cy - half),
+                        QPointF(x - half, cy + half),
+                        QPointF(x + half, cy + half),
+                    ])
+                    painter.drawPolygon(tri)
+
+                hit = QRectF(x - half - 2, cy - half - 2, self._MARKER_SIZE + 4, self._MARKER_SIZE + 4)
+                rel = (ts - self._fight_start) / 1000
+                rm, rs = int(rel) // 60, int(rel) % 60
+                if etype == "boss_death":
+                    tip = f"Boss Death at {rm}:{rs:02d}"
+                elif etype == "damage":
+                    tip = f"{ability_name} (dmg) at {rm}:{rs:02d}"
+                else:
+                    tip = f"{ability_name} (cast) at {rm}:{rs:02d}"
+                self._hit_rects.append((hit, tip))
+
+        # Cancelled cast vertical markers spanning all boss lanes
+        for spell_name, ts, tip in self._cancel_markers:
+            x = self._ts_to_x(ts, avail_w)
+
+            painter.setPen(QPen(self._CANCEL_LINE_COLOR, 2, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawLine(QPointF(x, self._TOP_MARGIN), QPointF(x, grid_bottom))
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(self._CANCEL_COLOR))
+            painter.drawEllipse(QPointF(x, self._TOP_MARGIN - 2), 4, 4)
+
+            painter.setPen(self._CANCEL_COLOR)
+            painter.setFont(cancel_label_font)
+            painter.drawText(int(x) + 5, self._TOP_MARGIN - 4, spell_name[:15])
+
+            hit = QRectF(x - 6, self._TOP_MARGIN - 8, 12, grid_bottom - self._TOP_MARGIN + 8)
+            self._hit_rects.append((hit, tip))
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        for rect, tip in self._hit_rects:
+            if rect.contains(pos):
                 tip_pos = (
                     event.globalPosition().toPoint()
                     if hasattr(event, "globalPosition")

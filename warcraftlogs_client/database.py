@@ -405,6 +405,10 @@ class PerformanceDB:
         if "correlations" not in ccs_cols:
             conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN correlations TEXT DEFAULT NULL")
 
+        enc_cols = {row[1] for row in conn.execute("PRAGMA table_info(encounters)").fetchall()}
+        if "boss_events" not in enc_cols:
+            conn.execute("ALTER TABLE encounters ADD COLUMN boss_events TEXT DEFAULT NULL")
+
     def close(self) -> None:
         if self._conn:
             self._conn.close()
@@ -572,11 +576,23 @@ class PerformanceDB:
         conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
 
         for enc in encounters:
+            boss_events_json = None
+            if enc.boss_events:
+                boss_events_json = json.dumps([
+                    {
+                        "ts": be.timestamp,
+                        "type": be.event_type,
+                        "name": be.ability_name,
+                        "aid": be.ability_id,
+                        "src": be.source_name,
+                    }
+                    for be in enc.boss_events
+                ])
             conn.execute(
                 """INSERT INTO encounters
-                   (raid_id, encounter_id, name, start_time, end_time, duration_ms)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (raid_id, enc.encounter_id, enc.name, enc.start_time, enc.end_time, enc.duration_ms),
+                   (raid_id, encounter_id, name, start_time, end_time, duration_ms, boss_events)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (raid_id, enc.encounter_id, enc.name, enc.start_time, enc.end_time, enc.duration_ms, boss_events_json),
             )
             enc_row_id = conn.execute(
                 "SELECT id FROM encounters WHERE raid_id = ? AND encounter_id = ? AND start_time = ?",
@@ -3128,6 +3144,17 @@ class PerformanceDB:
                 )
                 for pr in perf_rows
             ]
+            boss_events_list = []
+            raw_be = er["boss_events"]
+            if raw_be:
+                for item in json.loads(raw_be):
+                    boss_events_list.append(BossEvent(
+                        timestamp=item["ts"],
+                        event_type=item["type"],
+                        ability_name=item["name"],
+                        ability_id=item.get("aid", 0),
+                        source_name=item.get("src", ""),
+                    ))
             results.append(
                 EncounterSummary(
                     encounter_id=er["encounter_id"],
@@ -3136,6 +3163,7 @@ class PerformanceDB:
                     end_time=er["end_time"],
                     duration_ms=er["duration_ms"],
                     players=players,
+                    boss_events=boss_events_list,
                 )
             )
         return results

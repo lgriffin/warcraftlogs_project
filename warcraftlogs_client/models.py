@@ -263,6 +263,7 @@ class EncounterSummary:
     end_time: int
     duration_ms: int
     players: list[EncounterPerformance] = field(default_factory=list)
+    boss_events: list[BossEvent] = field(default_factory=list)
 
 
 @dataclass

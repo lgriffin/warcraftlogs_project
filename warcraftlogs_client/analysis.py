@@ -121,7 +121,7 @@ def analyze_raid(
         cancelled_casts = []
         all_warnings.append(f"Cancelled cast analysis failed: {e}")
 
-    if cancelled_casts and encounters:
+    if encounters:
         try:
             _correlate_cancelled_casts(client, report_id, cancelled_casts, encounters)
             logger.info("  cancelled cast correlations computed")
@@ -906,6 +906,7 @@ def _correlate_cancelled_casts(
         ))
 
         boss_events.sort(key=lambda b: b.timestamp)
+        enc.boss_events = boss_events
         boss_timestamps = [b.timestamp for b in boss_events]
 
         for cc in cancelled_casts:
