@@ -719,6 +719,11 @@ class TestCancelledCastCorrelation:
         client.get_enemy_cast_events.assert_not_called()
 
 
+_has_pyside6 = bool(__import__("importlib").util.find_spec("PySide6"))
+
+
+@pytest.mark.gui
+@pytest.mark.skipif(not _has_pyside6, reason="PySide6 not installed")
 class TestCancelledCastTimelineWidget:
     def test_timeline_widget_set_data(self, qtbot):
         from warcraftlogs_client.gui.charts import CancelledCastTimelineWidget
