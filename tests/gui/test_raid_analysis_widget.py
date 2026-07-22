@@ -1,6 +1,5 @@
 """Tests for RaidAnalysisWidget using pytest-qt."""
 
-
 import pytest
 
 pytest.importorskip("PySide6")
@@ -27,37 +26,25 @@ class TestRaidAnalysisWidget:
     def test_back_button_exists_when_show_back_true(self, qtbot, sample_analysis):
         widget = RaidAnalysisWidget(sample_analysis, show_back=True)
         qtbot.addWidget(widget)
-        back_buttons = [
-            btn for btn in widget.findChildren(QPushButton)
-            if btn.text() == "< Back"
-        ]
+        back_buttons = [btn for btn in widget.findChildren(QPushButton) if btn.text() == "< Back"]
         assert len(back_buttons) == 1
 
     def test_back_button_absent_when_show_back_false(self, qtbot, sample_analysis):
         widget = RaidAnalysisWidget(sample_analysis, show_back=False)
         qtbot.addWidget(widget)
-        back_buttons = [
-            btn for btn in widget.findChildren(QPushButton)
-            if btn.text() == "< Back"
-        ]
+        back_buttons = [btn for btn in widget.findChildren(QPushButton) if btn.text() == "< Back"]
         assert len(back_buttons) == 0
 
     def test_delete_button_exists_when_show_delete_true(self, qtbot, sample_analysis):
         widget = RaidAnalysisWidget(sample_analysis, show_delete=True)
         qtbot.addWidget(widget)
-        delete_buttons = [
-            btn for btn in widget.findChildren(QPushButton)
-            if btn.text() == "Delete"
-        ]
+        delete_buttons = [btn for btn in widget.findChildren(QPushButton) if btn.text() == "Delete"]
         assert len(delete_buttons) == 1
 
     def test_delete_button_hidden_when_show_delete_false(self, qtbot, sample_analysis):
         widget = RaidAnalysisWidget(sample_analysis, show_delete=False)
         qtbot.addWidget(widget)
-        delete_buttons = [
-            btn for btn in widget.findChildren(QPushButton)
-            if btn.text() == "Delete"
-        ]
+        delete_buttons = [btn for btn in widget.findChildren(QPushButton) if btn.text() == "Delete"]
         assert len(delete_buttons) == 0
 
     def test_refresh_button_exists_and_enabled(self, qtbot, sample_analysis):
@@ -86,10 +73,7 @@ class TestRaidAnalysisWidget:
     def test_request_back_signal_on_back_click(self, qtbot, sample_analysis):
         widget = RaidAnalysisWidget(sample_analysis, show_back=True)
         qtbot.addWidget(widget)
-        back_btn = next(
-            btn for btn in widget.findChildren(QPushButton)
-            if btn.text() == "< Back"
-        )
+        back_btn = next(btn for btn in widget.findChildren(QPushButton) if btn.text() == "< Back")
         with qtbot.waitSignal(widget.request_back, timeout=1000):
             qtbot.mouseClick(back_btn, Qt.MouseButton.LeftButton)
 

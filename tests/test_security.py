@@ -75,17 +75,13 @@ class TestSQLInjection:
 
         # Verify DB is intact: raids table still exists and has the row
         conn = db._get_conn()
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         table_names = [r["name"] for r in tables]
         assert "raids" in table_names
         assert "characters" in table_names
 
         # Verify the adversarial name was stored correctly
-        char = conn.execute(
-            "SELECT name FROM characters WHERE name = ?", (adversarial_name,)
-        ).fetchone()
+        char = conn.execute("SELECT name FROM characters WHERE name = ?", (adversarial_name,)).fetchone()
         assert char is not None
         assert char["name"] == adversarial_name
 
@@ -96,9 +92,7 @@ class TestSQLInjection:
         db.import_raid(analysis)
 
         conn = db._get_conn()
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         table_names = [r["name"] for r in tables]
         assert "characters" in table_names
         assert "raids" in table_names
@@ -130,9 +124,7 @@ class TestSQLInjection:
         db.import_raid(analysis)
 
         conn = db._get_conn()
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         table_names = [r["name"] for r in tables]
         assert "consumable_usage" in table_names
 
@@ -153,9 +145,7 @@ class TestSQLInjection:
         db.import_raid(analysis)
 
         conn = db._get_conn()
-        raid = conn.execute(
-            "SELECT title FROM raids WHERE report_id = ?", ("sqli_title",)
-        ).fetchone()
+        raid = conn.execute("SELECT title FROM raids WHERE report_id = ?", ("sqli_title",)).fetchone()
         assert raid is not None
         assert raid["title"] == adversarial_title
 
@@ -178,15 +168,11 @@ class TestPathTraversal:
         for rid in dangerous_ids:
             safe = _safe_filename(rid)
             # Forward slashes must be neutralized
-            assert "/" not in safe, (
-                f"Forward slashes not removed for {rid!r}"
-            )
+            assert "/" not in safe, f"Forward slashes not removed for {rid!r}"
             # The resulting cache file path should stay inside cache_dir
             cache_path = _cache_file(rid)
             resolved = os.path.normpath(cache_path)
-            assert resolved.startswith(cache_dir), (
-                f"Cache file {resolved} escaped cache dir for report_id={rid!r}"
-            )
+            assert resolved.startswith(cache_dir), f"Cache file {resolved} escaped cache dir for report_id={rid!r}"
 
     def test_safe_filename_neutralizes_slashes(self):
         """_safe_filename must remove all forward slashes."""

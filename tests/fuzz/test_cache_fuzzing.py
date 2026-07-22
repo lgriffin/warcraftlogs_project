@@ -18,11 +18,7 @@ class TestCacheFuzzing:
         assert "/" not in result
 
     @settings(max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture])
-    @given(
-        report_id=st.text(min_size=1, max_size=100).filter(
-            lambda s: all(c.isalnum() or c in "-_" for c in s)
-        )
-    )
+    @given(report_id=st.text(min_size=1, max_size=100).filter(lambda s: all(c.isalnum() or c in "-_" for c in s)))
     def test_cache_roundtrip(self, report_id, tmp_path, monkeypatch):
         """save_cache followed by load_cached_data should return the same data."""
         monkeypatch.setattr("warcraftlogs_client.cache.CACHE_DIR", str(tmp_path))

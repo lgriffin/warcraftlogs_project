@@ -19,10 +19,24 @@ from warcraftlogs_client.models import (
 def _make_raid(report_id, healers=None, tanks=None, dps=None, encounters=None):
     """Build a minimal RaidAnalysis for import."""
     comp = RaidComposition(
-        healers=[PlayerIdentity(name=h.name, player_class=h.player_class, source_id=h.source_id, role="healer") for h in (healers or [])],
-        tanks=[PlayerIdentity(name=t.name, player_class=t.player_class, source_id=t.source_id, role="tank") for t in (tanks or [])],
-        melee=[PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role=d.role) for d in (dps or []) if d.role == "melee"],
-        ranged=[PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role=d.role) for d in (dps or []) if d.role == "ranged"],
+        healers=[
+            PlayerIdentity(name=h.name, player_class=h.player_class, source_id=h.source_id, role="healer")
+            for h in (healers or [])
+        ],
+        tanks=[
+            PlayerIdentity(name=t.name, player_class=t.player_class, source_id=t.source_id, role="tank")
+            for t in (tanks or [])
+        ],
+        melee=[
+            PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role=d.role)
+            for d in (dps or [])
+            if d.role == "melee"
+        ],
+        ranged=[
+            PlayerIdentity(name=d.name, player_class=d.player_class, source_id=d.source_id, role=d.role)
+            for d in (dps or [])
+            if d.role == "ranged"
+        ],
     )
     return RaidAnalysis(
         metadata=RaidMetadata(
@@ -146,16 +160,28 @@ class TestGetCharacterPrimaryRole:
 
 class TestGetCharacterBossComparison:
     def test_returns_comparison_data(self, db, healer, healer2):
-        enc = _encounter([
-            EncounterPerformance(
-                name="HolyPriest", player_class="Priest", source_id=1,
-                role="healer", total_damage=5000, total_healing=120_000, total_damage_taken=10_000,
-            ),
-            EncounterPerformance(
-                name="TreeDruid", player_class="Druid", source_id=7,
-                role="healer", total_damage=2000, total_healing=80_000, total_damage_taken=8000,
-            ),
-        ])
+        enc = _encounter(
+            [
+                EncounterPerformance(
+                    name="HolyPriest",
+                    player_class="Priest",
+                    source_id=1,
+                    role="healer",
+                    total_damage=5000,
+                    total_healing=120_000,
+                    total_damage_taken=10_000,
+                ),
+                EncounterPerformance(
+                    name="TreeDruid",
+                    player_class="Druid",
+                    source_id=7,
+                    role="healer",
+                    total_damage=2000,
+                    total_healing=80_000,
+                    total_damage_taken=8000,
+                ),
+            ]
+        )
         db.import_raid(_make_raid("r1", healers=[healer, healer2], encounters=[enc]))
 
         results = db.get_character_boss_comparison("HolyPriest")
@@ -172,16 +198,28 @@ class TestGetCharacterBossComparison:
         assert db.get_character_boss_comparison("Nobody") == []
 
     def test_delta_pct_computed(self, db, healer, healer2):
-        enc = _encounter([
-            EncounterPerformance(
-                name="HolyPriest", player_class="Priest", source_id=1,
-                role="healer", total_damage=0, total_healing=100_000, total_damage_taken=0,
-            ),
-            EncounterPerformance(
-                name="TreeDruid", player_class="Druid", source_id=7,
-                role="healer", total_damage=0, total_healing=100_000, total_damage_taken=0,
-            ),
-        ])
+        enc = _encounter(
+            [
+                EncounterPerformance(
+                    name="HolyPriest",
+                    player_class="Priest",
+                    source_id=1,
+                    role="healer",
+                    total_damage=0,
+                    total_healing=100_000,
+                    total_damage_taken=0,
+                ),
+                EncounterPerformance(
+                    name="TreeDruid",
+                    player_class="Druid",
+                    source_id=7,
+                    role="healer",
+                    total_damage=0,
+                    total_healing=100_000,
+                    total_damage_taken=0,
+                ),
+            ]
+        )
         db.import_raid(_make_raid("r1", healers=[healer, healer2], encounters=[enc]))
 
         results = db.get_character_boss_comparison("HolyPriest")

@@ -47,8 +47,11 @@ def _make_raid(report_id, cancelled_casts=None):
         composition=RaidComposition(),
         healers=[
             HealerPerformance(
-                name="Priest", player_class="Priest", source_id=10,
-                total_healing=100_000, total_overhealing=10_000,
+                name="Priest",
+                player_class="Priest",
+                source_id=10,
+                total_healing=100_000,
+                total_overhealing=10_000,
                 spells=[SpellUsage(spell_id=2060, spell_name="Greater Heal", casts=20, total_amount=100_000)],
             ),
         ],
@@ -226,8 +229,12 @@ class TestAnalyzeCancelledCasts:
 class TestCancelledCastDatabase:
     def test_import_and_load_round_trip(self, db):
         cc = CancelledCastSummary(
-            player_name="Mage", player_class="Mage", source_id=1,
-            total_casts=50, cancelled_casts=5, cancel_rate=9.1,
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=50,
+            cancelled_casts=5,
+            cancel_rate=9.1,
         )
         raid = _make_raid("r1", cancelled_casts=[cc])
         db.import_raid(raid)
@@ -244,8 +251,12 @@ class TestCancelledCastDatabase:
     def test_cancelled_cast_trend(self, db):
         for i, rate in enumerate([10.0, 8.0, 5.0]):
             cc = CancelledCastSummary(
-                player_name="Mage", player_class="Mage", source_id=1,
-                total_casts=100, cancelled_casts=int(rate), cancel_rate=rate,
+                player_name="Mage",
+                player_class="Mage",
+                source_id=1,
+                total_casts=100,
+                cancelled_casts=int(rate),
+                cancel_rate=rate,
             )
             raid = _make_raid(f"r{i}", cancelled_casts=[cc])
             db.import_raid(raid)
@@ -261,12 +272,20 @@ class TestCancelledCastDatabase:
     def test_raid_summary(self, db):
         ccs = [
             CancelledCastSummary(
-                player_name="Mage", player_class="Mage", source_id=1,
-                total_casts=100, cancelled_casts=10, cancel_rate=10.0,
+                player_name="Mage",
+                player_class="Mage",
+                source_id=1,
+                total_casts=100,
+                cancelled_casts=10,
+                cancel_rate=10.0,
             ),
             CancelledCastSummary(
-                player_name="Rogue", player_class="Rogue", source_id=2,
-                total_casts=50, cancelled_casts=2, cancel_rate=4.0,
+                player_name="Rogue",
+                player_class="Rogue",
+                source_id=2,
+                total_casts=50,
+                cancelled_casts=2,
+                cancel_rate=4.0,
             ),
         ]
         raid = _make_raid("r1", cancelled_casts=ccs)
@@ -283,17 +302,27 @@ class TestCancelledCastDatabase:
     def test_spell_details_round_trip(self, db):
         details = [
             CancelledCastDetail(
-                spell_id=100, spell_name="Fireball",
-                total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+                spell_id=100,
+                spell_name="Fireball",
+                total_casts=10,
+                cancelled_casts=3,
+                cancel_rate=23.1,
             ),
             CancelledCastDetail(
-                spell_id=200, spell_name="Frostbolt",
-                total_casts=20, cancelled_casts=1, cancel_rate=4.8,
+                spell_id=200,
+                spell_name="Frostbolt",
+                total_casts=20,
+                cancelled_casts=1,
+                cancel_rate=4.8,
             ),
         ]
         cc = CancelledCastSummary(
-            player_name="Mage", player_class="Mage", source_id=1,
-            total_casts=30, cancelled_casts=4, cancel_rate=11.8,
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=30,
+            cancelled_casts=4,
+            cancel_rate=11.8,
             spell_details=details,
         )
         raid = _make_raid("r1", cancelled_casts=[cc])
@@ -312,13 +341,20 @@ class TestCancelledCastDatabase:
     def test_delete_raid_cleans_up_spell_details(self, db):
         details = [
             CancelledCastDetail(
-                spell_id=100, spell_name="Fireball",
-                total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+                spell_id=100,
+                spell_name="Fireball",
+                total_casts=10,
+                cancelled_casts=3,
+                cancel_rate=23.1,
             ),
         ]
         cc = CancelledCastSummary(
-            player_name="Mage", player_class="Mage", source_id=1,
-            total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=10,
+            cancelled_casts=3,
+            cancel_rate=23.1,
             spell_details=details,
         )
         raid = _make_raid("r1", cancelled_casts=[cc])
@@ -331,8 +367,12 @@ class TestCancelledCastDatabase:
 
     def test_delete_raid_cleans_up(self, db):
         cc = CancelledCastSummary(
-            player_name="Mage", player_class="Mage", source_id=1,
-            total_casts=50, cancelled_casts=5, cancel_rate=9.1,
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=50,
+            cancelled_casts=5,
+            cancel_rate=9.1,
         )
         raid = _make_raid("r1", cancelled_casts=[cc])
         db.import_raid(raid)
@@ -421,19 +461,29 @@ class TestCancelledCastTimestamps:
     def test_timestamps_round_trip(self, db):
         details = [
             CancelledCastDetail(
-                spell_id=100, spell_name="Fireball",
-                total_casts=10, cancelled_casts=3, cancel_rate=23.1,
+                spell_id=100,
+                spell_name="Fireball",
+                total_casts=10,
+                cancelled_casts=3,
+                cancel_rate=23.1,
                 timestamps=[1000, 3000, 5000],
             ),
             CancelledCastDetail(
-                spell_id=200, spell_name="Frostbolt",
-                total_casts=20, cancelled_casts=0, cancel_rate=0.0,
+                spell_id=200,
+                spell_name="Frostbolt",
+                total_casts=20,
+                cancelled_casts=0,
+                cancel_rate=0.0,
                 timestamps=[],
             ),
         ]
         cc = CancelledCastSummary(
-            player_name="Mage", player_class="Mage", source_id=1,
-            total_casts=30, cancelled_casts=3, cancel_rate=9.1,
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=30,
+            cancelled_casts=3,
+            cancel_rate=9.1,
             spell_details=details,
         )
         raid = _make_raid("r1", cancelled_casts=[cc])
@@ -450,23 +500,34 @@ class TestCancelledCastTimestamps:
 
 def _make_encounter(name="Boss", start=0, end=60000):
     return EncounterSummary(
-        encounter_id=1, name=name, start_time=start, end_time=end,
+        encounter_id=1,
+        name=name,
+        start_time=start,
+        end_time=end,
         duration_ms=end - start,
     )
 
 
 def _make_cancelled_casts(timestamps, spell_id=100, spell_name="Fireball"):
     detail = CancelledCastDetail(
-        spell_id=spell_id, spell_name=spell_name,
-        total_casts=10, cancelled_casts=len(timestamps),
+        spell_id=spell_id,
+        spell_name=spell_name,
+        total_casts=10,
+        cancelled_casts=len(timestamps),
         cancel_rate=round(len(timestamps) / 10 * 100, 1),
         timestamps=timestamps,
     )
-    return [CancelledCastSummary(
-        player_name="Mage", player_class="Mage", source_id=1,
-        total_casts=10, cancelled_casts=len(timestamps),
-        cancel_rate=detail.cancel_rate, spell_details=[detail],
-    )]
+    return [
+        CancelledCastSummary(
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=10,
+            cancelled_casts=len(timestamps),
+            cancel_rate=detail.cancel_rate,
+            spell_details=[detail],
+        )
+    ]
 
 
 class TestCancelledCastCorrelation:
@@ -602,22 +663,33 @@ class TestCancelledCastCorrelation:
             cancel_timestamp=5000,
             nearby_events=[
                 BossEvent(
-                    timestamp=4000, event_type="boss_cast",
-                    ability_name="Flame Wreath", ability_id=9999,
-                    source_name="Shade of Aran", offset_ms=-1000,
+                    timestamp=4000,
+                    event_type="boss_cast",
+                    ability_name="Flame Wreath",
+                    ability_id=9999,
+                    source_name="Shade of Aran",
+                    offset_ms=-1000,
                 ),
             ],
         )
         details = [
             CancelledCastDetail(
-                spell_id=100, spell_name="Fireball",
-                total_casts=10, cancelled_casts=1, cancel_rate=9.1,
-                timestamps=[5000], correlations=[corr],
+                spell_id=100,
+                spell_name="Fireball",
+                total_casts=10,
+                cancelled_casts=1,
+                cancel_rate=9.1,
+                timestamps=[5000],
+                correlations=[corr],
             ),
         ]
         cc = CancelledCastSummary(
-            player_name="Mage", player_class="Mage", source_id=1,
-            total_casts=10, cancelled_casts=1, cancel_rate=9.1,
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=10,
+            cancelled_casts=1,
+            cancel_rate=9.1,
             spell_details=details,
         )
         raid = _make_raid("r1", cancelled_casts=[cc])
@@ -658,28 +730,47 @@ class TestCancelledCastTimelineWidget:
             cancel_timestamp=5000,
             nearby_events=[
                 BossEvent(
-                    timestamp=4000, event_type="boss_cast",
-                    ability_name="Flame Wreath", ability_id=9999,
-                    source_name="Shade of Aran", offset_ms=-1000,
+                    timestamp=4000,
+                    event_type="boss_cast",
+                    ability_name="Flame Wreath",
+                    ability_id=9999,
+                    source_name="Shade of Aran",
+                    offset_ms=-1000,
                 ),
             ],
         )
         detail = CancelledCastDetail(
-            spell_id=100, spell_name="Fireball",
-            total_casts=10, cancelled_casts=1, cancel_rate=9.1,
-            timestamps=[5000], correlations=[corr],
+            spell_id=100,
+            spell_name="Fireball",
+            total_casts=10,
+            cancelled_casts=1,
+            cancel_rate=9.1,
+            timestamps=[5000],
+            correlations=[corr],
         )
         enc = _make_encounter(start=0, end=60000)
         enc.boss_events = [
-            BossEvent(timestamp=4000, event_type="boss_cast",
-                      ability_name="Flame Wreath", ability_id=9999,
-                      source_name="Shade of Aran"),
-            BossEvent(timestamp=30000, event_type="boss_cast",
-                      ability_name="Arcane Explosion", ability_id=8888,
-                      source_name="Shade of Aran"),
-            BossEvent(timestamp=60000, event_type="boss_death",
-                      ability_name="Boss Died", ability_id=0,
-                      source_name="Shade of Aran"),
+            BossEvent(
+                timestamp=4000,
+                event_type="boss_cast",
+                ability_name="Flame Wreath",
+                ability_id=9999,
+                source_name="Shade of Aran",
+            ),
+            BossEvent(
+                timestamp=30000,
+                event_type="boss_cast",
+                ability_name="Arcane Explosion",
+                ability_id=8888,
+                source_name="Shade of Aran",
+            ),
+            BossEvent(
+                timestamp=60000,
+                event_type="boss_death",
+                ability_name="Boss Died",
+                ability_id=0,
+                source_name="Shade of Aran",
+            ),
         ]
 
         widget.set_data([detail], enc)
@@ -705,18 +796,33 @@ class TestCancelledCastTimelineWidget:
 class TestBossEventsDatabase:
     def test_boss_events_round_trip(self, db):
         enc = EncounterSummary(
-            encounter_id=1, name="Shade of Aran",
-            start_time=1000, end_time=60000, duration_ms=59000,
+            encounter_id=1,
+            name="Shade of Aran",
+            start_time=1000,
+            end_time=60000,
+            duration_ms=59000,
             boss_events=[
-                BossEvent(timestamp=4000, event_type="boss_cast",
-                          ability_name="Flame Wreath", ability_id=9999,
-                          source_name="Shade of Aran"),
-                BossEvent(timestamp=30000, event_type="damage",
-                          ability_name="Arcane Explosion", ability_id=8888,
-                          source_name="Shade of Aran"),
-                BossEvent(timestamp=60000, event_type="boss_death",
-                          ability_name="Boss Died", ability_id=0,
-                          source_name="Shade of Aran"),
+                BossEvent(
+                    timestamp=4000,
+                    event_type="boss_cast",
+                    ability_name="Flame Wreath",
+                    ability_id=9999,
+                    source_name="Shade of Aran",
+                ),
+                BossEvent(
+                    timestamp=30000,
+                    event_type="damage",
+                    ability_name="Arcane Explosion",
+                    ability_id=8888,
+                    source_name="Shade of Aran",
+                ),
+                BossEvent(
+                    timestamp=60000,
+                    event_type="boss_death",
+                    ability_name="Boss Died",
+                    ability_id=0,
+                    source_name="Shade of Aran",
+                ),
             ],
         )
         raid = _make_raid("r1")
@@ -736,8 +842,11 @@ class TestBossEventsDatabase:
 
     def test_boss_events_empty_round_trip(self, db):
         enc = EncounterSummary(
-            encounter_id=1, name="Curator",
-            start_time=1000, end_time=60000, duration_ms=59000,
+            encounter_id=1,
+            name="Curator",
+            start_time=1000,
+            end_time=60000,
+            duration_ms=59000,
         )
         raid = _make_raid("r1")
         raid.encounters = [enc]

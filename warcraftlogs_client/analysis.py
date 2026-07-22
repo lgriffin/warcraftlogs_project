@@ -139,9 +139,7 @@ def analyze_raid(
         all_warnings.append(f"Aura uptime analysis failed: {e}")
 
     try:
-        totem_uptimes, totem_warns = _analyze_totem_uptimes(
-            client, report_id, composition, encounters
-        )
+        totem_uptimes, totem_warns = _analyze_totem_uptimes(client, report_id, composition, encounters)
         all_warnings.extend(totem_warns)
         logger.info("  totem uptimes analyzed: %d entries", len(totem_uptimes))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
@@ -803,14 +801,16 @@ def _analyze_cancelled_casts(
                 sc = spell_completed.get(sid, 0)
                 sn = spell_cancelled.get(sid, 0)
                 st = sc + sn
-                details.append(CancelledCastDetail(
-                    spell_id=sid,
-                    spell_name=spell_names.get(sid, spell_mgr.get_spell_name(sid)),
-                    total_casts=sc,
-                    cancelled_casts=sn,
-                    cancel_rate=round(sn / st * 100, 1) if st else 0.0,
-                    timestamps=sorted(spell_cancel_timestamps.get(sid, [])),
-                ))
+                details.append(
+                    CancelledCastDetail(
+                        spell_id=sid,
+                        spell_name=spell_names.get(sid, spell_mgr.get_spell_name(sid)),
+                        total_casts=sc,
+                        cancelled_casts=sn,
+                        cancel_rate=round(sn / st * 100, 1) if st else 0.0,
+                        timestamps=sorted(spell_cancel_timestamps.get(sid, [])),
+                    )
+                )
             details.sort(key=lambda d: d.cancelled_casts, reverse=True)
 
             results.append(
@@ -850,9 +850,7 @@ def _correlate_cancelled_casts(
     for enc in encounters:
         spell_names: dict[int, str] = {}
         with contextlib.suppress(requests.RequestException, KeyError, TypeError, ValueError):
-            spell_names = client.get_enemy_ability_names(
-                report_id, enc.start_time, enc.end_time
-            )
+            spell_names = client.get_enemy_ability_names(report_id, enc.start_time, enc.end_time)
 
         try:
             enemy_casts = client.get_enemy_cast_events(report_id, enc.start_time, enc.end_time)
@@ -872,13 +870,15 @@ def _correlate_cancelled_casts(
             ts = e.get("timestamp", 0)
             aid = e.get("abilityGameID", 0)
             src_id = e.get("sourceID", 0)
-            boss_events.append(BossEvent(
-                timestamp=ts,
-                event_type="boss_cast",
-                ability_name=_ability_name(aid),
-                ability_id=aid,
-                source_name=actor_names.get(src_id, "Boss"),
-            ))
+            boss_events.append(
+                BossEvent(
+                    timestamp=ts,
+                    event_type="boss_cast",
+                    ability_name=_ability_name(aid),
+                    ability_id=aid,
+                    source_name=actor_names.get(src_id, "Boss"),
+                )
+            )
 
         seen_dmg: set[tuple[int, int]] = set()
         for e in dmg_events:
@@ -889,21 +889,25 @@ def _correlate_cancelled_casts(
                 continue
             seen_dmg.add(key)
             src_id = e.get("sourceID", 0)
-            boss_events.append(BossEvent(
-                timestamp=ts,
-                event_type="damage",
-                ability_name=_ability_name(aid),
-                ability_id=aid,
-                source_name=actor_names.get(src_id, "Boss"),
-            ))
+            boss_events.append(
+                BossEvent(
+                    timestamp=ts,
+                    event_type="damage",
+                    ability_name=_ability_name(aid),
+                    ability_id=aid,
+                    source_name=actor_names.get(src_id, "Boss"),
+                )
+            )
 
-        boss_events.append(BossEvent(
-            timestamp=enc.end_time,
-            event_type="boss_death",
-            ability_name="Boss Died",
-            ability_id=0,
-            source_name=enc.name,
-        ))
+        boss_events.append(
+            BossEvent(
+                timestamp=enc.end_time,
+                event_type="boss_death",
+                ability_name="Boss Died",
+                ability_id=0,
+                source_name=enc.name,
+            )
+        )
 
         boss_events.sort(key=lambda b: b.timestamp)
         enc.boss_events = boss_events
@@ -921,20 +925,24 @@ def _correlate_cancelled_casts(
                     nearby = []
                     for i in range(lo, hi):
                         be = boss_events[i]
-                        nearby.append(BossEvent(
-                            timestamp=be.timestamp,
-                            event_type=be.event_type,
-                            ability_name=be.ability_name,
-                            ability_id=be.ability_id,
-                            source_name=be.source_name,
-                            offset_ms=be.timestamp - cancel_ts,
-                        ))
+                        nearby.append(
+                            BossEvent(
+                                timestamp=be.timestamp,
+                                event_type=be.event_type,
+                                ability_name=be.ability_name,
+                                ability_id=be.ability_id,
+                                source_name=be.source_name,
+                                offset_ms=be.timestamp - cancel_ts,
+                            )
+                        )
 
                     if nearby:
-                        detail.correlations.append(CancelledCastCorrelation(
-                            cancel_timestamp=cancel_ts,
-                            nearby_events=nearby,
-                        ))
+                        detail.correlations.append(
+                            CancelledCastCorrelation(
+                                cancel_timestamp=cancel_ts,
+                                nearby_events=nearby,
+                            )
+                        )
 
 
 def _load_debuff_config() -> dict[int, str]:
@@ -963,9 +971,7 @@ def _analyze_aura_uptimes(
 
     for enc in encounters:
         try:
-            table_data = client.get_debuffs_table(
-                report_id, enc.start_time, enc.end_time
-            )
+            table_data = client.get_debuffs_table(report_id, enc.start_time, enc.end_time)
             if isinstance(table_data, str):
                 table_data = json.loads(table_data)
 
@@ -1061,8 +1067,7 @@ def _analyze_totem_uptimes(
         try:
             casts = client.get_cast_events_paginated(report_id, shaman.source_id)
             shaman_casts[shaman.source_id] = [
-                c for c in casts
-                if c.get("type") == "cast" and c.get("abilityGameID") in totem_config
+                c for c in casts if c.get("type") == "cast" and c.get("abilityGameID") in totem_config
             ]
         except requests.RequestException as e:
             warnings.append(f"Failed to get casts for {shaman.name}: {e}")
@@ -1085,9 +1090,7 @@ def _analyze_totem_uptimes(
                 band_end = min(totem_expires, enc.end_time)
                 band_start = max(ts, enc.start_time)
                 if band_end > band_start:
-                    totem_bands.setdefault(spell_id, []).append(
-                        AuraBand(start_time=band_start, end_time=band_end)
-                    )
+                    totem_bands.setdefault(spell_id, []).append(AuraBand(start_time=band_start, end_time=band_end))
 
         for spell_id, raw_bands in totem_bands.items():
             merged = _merge_bands(raw_bands)

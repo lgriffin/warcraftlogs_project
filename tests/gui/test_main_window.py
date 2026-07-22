@@ -8,7 +8,6 @@ signal wiring, view attributes) through a lightweight proxy that
 reproduces the same layout and logic without triggering the crash.
 """
 
-
 import pytest
 
 pytest.importorskip("PySide6")
@@ -55,9 +54,17 @@ class _ProxyMainWindow(QMainWindow):
 
         self.nav_list = QListWidget()
         nav_items = [
-            "Download", "Raids", "Find Character", "Raid Groups",
-            "My Character", "Compare", "GM/RL Insights", "Boss Insights",
-            "Reference Reports", "Raid Diff", "Settings",
+            "Download",
+            "Raids",
+            "Find Character",
+            "Raid Groups",
+            "My Character",
+            "Compare",
+            "GM/RL Insights",
+            "Boss Insights",
+            "Reference Reports",
+            "Raid Diff",
+            "Settings",
         ]
         for name in nav_items:
             item = QListWidgetItem(name)

@@ -427,7 +427,8 @@ class CharacterDetailPanel(QWidget):
                 if has_fight_ts:
                     fight_details.append(d)
             self._populate_section(
-                "cancelled_casts", rows,
+                "cancelled_casts",
+                rows,
                 ["Spell", "Cancelled At", "Likely Cause", "Cause Time"],
             )
             if fight_details or enc.boss_events:
@@ -445,15 +446,11 @@ class CharacterDetailPanel(QWidget):
 
     @staticmethod
     def _get_likely_cause_for_timestamp(detail, cancel_ts, enc):
-        corr = next(
-            (c for c in detail.correlations if c.cancel_timestamp == cancel_ts), None
-        )
+        corr = next((c for c in detail.correlations if c.cancel_timestamp == cancel_ts), None)
         if not corr or not corr.nearby_events:
             return "", ""
         closest = min(corr.nearby_events, key=lambda e: abs(e.offset_ms))
-        cause_time = CharacterDetailPanel._format_fight_time(
-            closest.timestamp, enc.start_time
-        )
+        cause_time = CharacterDetailPanel._format_fight_time(closest.timestamp, enc.start_time)
         if closest.event_type == "boss_death":
             return "Boss Died", cause_time
         elif closest.event_type == "boss_cast":

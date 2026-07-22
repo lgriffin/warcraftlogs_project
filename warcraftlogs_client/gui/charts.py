@@ -1635,9 +1635,7 @@ class DebuffTimelineWidget(QWidget):
         if not self._uptimes or self._fight_end <= self._fight_start:
             painter.setPen(QColor(COLORS["text_dim"]))
             painter.setFont(QFont("Segoe UI", 11))
-            painter.drawText(
-                self.rect(), Qt.AlignmentFlag.AlignCenter, "No debuff data for this fight"
-            )
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No debuff data for this fight")
             painter.end()
             return
 
@@ -1718,11 +1716,7 @@ class DebuffTimelineWidget(QWidget):
         for rect, name, pct in self._cells:
             if rect.contains(pos):
                 tip = f"{name}: {pct:.1f}% uptime"
-                tip_pos = (
-                    event.globalPosition().toPoint()
-                    if hasattr(event, "globalPosition")
-                    else event.globalPos()
-                )
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
                 QToolTip.showText(tip_pos, tip, self)
                 return
         QToolTip.hideText()
@@ -1768,9 +1762,7 @@ class CancelledCastTimelineWidget(QWidget):
             key = be.ability_name if be.event_type != "boss_death" else "Boss Death"
             if key not in boss_events_by_ability:
                 boss_events_by_ability[key] = []
-            boss_events_by_ability[key].append(
-                (be.timestamp, be.event_type, be.ability_id)
-            )
+            boss_events_by_ability[key].append((be.timestamp, be.event_type, be.ability_id))
 
         for ability_name, events in boss_events_by_ability.items():
             seen = set()
@@ -1782,10 +1774,12 @@ class CancelledCastTimelineWidget(QWidget):
             deduped.sort(key=lambda e: e[0])
             self._boss_lanes.append((ability_name, deduped[0][1], deduped))
 
-        self._boss_lanes.sort(key=lambda lane: (
-            0 if lane[1] == "boss_cast" else (2 if lane[1] == "boss_death" else 1),
-            lane[0],
-        ))
+        self._boss_lanes.sort(
+            key=lambda lane: (
+                0 if lane[1] == "boss_cast" else (2 if lane[1] == "boss_death" else 1),
+                lane[0],
+            )
+        )
 
         cancel_to_closest: dict[tuple[str, int], tuple[int, str]] = {}
         for detail in spell_details:
@@ -1804,7 +1798,8 @@ class CancelledCastTimelineWidget(QWidget):
                     closest = min(corr.nearby_events, key=lambda e: abs(e.offset_ms))
                     boss_key = closest.ability_name if closest.event_type != "boss_death" else "Boss Death"
                     cancel_to_closest[(detail.spell_name, corr.cancel_timestamp)] = (
-                        closest.timestamp, boss_key,
+                        closest.timestamp,
+                        boss_key,
                     )
 
         self._cancel_markers = [
@@ -1852,7 +1847,8 @@ class CancelledCastTimelineWidget(QWidget):
             painter.setPen(QColor(COLORS["text_dim"]))
             painter.setFont(QFont("Segoe UI", 10))
             painter.drawText(
-                self.rect(), Qt.AlignmentFlag.AlignCenter,
+                self.rect(),
+                Qt.AlignmentFlag.AlignCenter,
                 "No timeline data for this fight",
             )
             painter.end()
@@ -1915,11 +1911,13 @@ class CancelledCastTimelineWidget(QWidget):
                 else:
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.setBrush(QBrush(color))
-                    tri = QPolygonF([
-                        QPointF(x, cy - half),
-                        QPointF(x - half, cy + half),
-                        QPointF(x + half, cy + half),
-                    ])
+                    tri = QPolygonF(
+                        [
+                            QPointF(x, cy - half),
+                            QPointF(x - half, cy + half),
+                            QPointF(x + half, cy + half),
+                        ]
+                    )
                     painter.drawPolygon(tri)
 
                 hit = QRectF(x - half - 2, cy - half - 2, self._MARKER_SIZE + 4, self._MARKER_SIZE + 4)
@@ -1958,11 +1956,7 @@ class CancelledCastTimelineWidget(QWidget):
         pos = event.position() if hasattr(event, "position") else event.pos()
         for rect, tip in self._hit_rects:
             if rect.contains(pos):
-                tip_pos = (
-                    event.globalPosition().toPoint()
-                    if hasattr(event, "globalPosition")
-                    else event.globalPos()
-                )
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
                 QToolTip.showText(tip_pos, tip, self)
                 return
         QToolTip.hideText()

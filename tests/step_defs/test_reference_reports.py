@@ -43,8 +43,13 @@ def analysis_with_encounter(build_analysis, report_id, enc_name, enc_id, ref_ana
         duration_ms=168000,
         players=[
             EncounterPerformance(
-                name="StabbyRogue", player_class="Rogue", source_id=3, role="melee",
-                total_damage=150_000, total_healing=0, total_damage_taken=20_000,
+                name="StabbyRogue",
+                player_class="Rogue",
+                source_id=3,
+                role="melee",
+                total_damage=150_000,
+                total_healing=0,
+                total_damage_taken=20_000,
             ),
         ],
     )

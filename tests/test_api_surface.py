@@ -123,9 +123,7 @@ class TestPublicExports:
     def test_database_tables(self, db):
         """Snapshot of database schema tables."""
         conn = db._get_conn()
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
         tables = sorted(r["name"] for r in rows if r["name"] != "sqlite_sequence")
         expected = [
             "aura_uptime",
@@ -205,9 +203,7 @@ class TestPublicExports:
         from warcraftlogs_client.config import ConfigManager
 
         public_methods = sorted(
-            name
-            for name in dir(ConfigManager)
-            if not name.startswith("_") and callable(getattr(ConfigManager, name))
+            name for name in dir(ConfigManager) if not name.startswith("_") and callable(getattr(ConfigManager, name))
         )
         assert "load" in public_methods
         assert "get_role_thresholds" in public_methods
@@ -217,9 +213,7 @@ class TestPublicExports:
         from warcraftlogs_client.database import PerformanceDB
 
         public_methods = sorted(
-            name
-            for name in dir(PerformanceDB)
-            if not name.startswith("_") and callable(getattr(PerformanceDB, name))
+            name for name in dir(PerformanceDB) if not name.startswith("_") and callable(getattr(PerformanceDB, name))
         )
         # Verify critical methods exist
         critical_methods = [
@@ -235,6 +229,4 @@ class TestPublicExports:
             "close",
         ]
         for method in critical_methods:
-            assert method in public_methods, (
-                f"Critical method {method!r} missing from PerformanceDB"
-            )
+            assert method in public_methods, f"Critical method {method!r} missing from PerformanceDB"
