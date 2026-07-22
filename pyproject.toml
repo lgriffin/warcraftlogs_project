@@ -14,12 +14,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["PySide6>=6.6.0"]
+gui = ["PySide6>=6.6.0", "pytest-qt>=4.2"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-bdd>=7.0",
-    "pytest-qt>=4.2",
     "hypothesis>=6.0",
     "pytest-xdist>=3.0",
     "ruff",

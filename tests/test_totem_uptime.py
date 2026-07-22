@@ -142,7 +142,8 @@ class TestAnalyzeTotemUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_totem_config",
+            analysis_mod,
+            "_load_totem_config",
             lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
@@ -155,9 +156,7 @@ class TestAnalyzeTotemUptimes:
             [],
         ]
 
-        results, warnings = _analyze_totem_uptimes(
-            mock_client, "test_report", shaman_composition, sample_encounters
-        )
+        results, warnings = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
 
         assert len(warnings) == 0
         assert len(results) == 1
@@ -170,7 +169,8 @@ class TestAnalyzeTotemUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_totem_config",
+            analysis_mod,
+            "_load_totem_config",
             lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
@@ -181,9 +181,7 @@ class TestAnalyzeTotemUptimes:
             [],
         ]
 
-        results, _ = _analyze_totem_uptimes(
-            mock_client, "test_report", shaman_composition, sample_encounters
-        )
+        results, _ = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
 
         assert len(results) == 1
         assert results[0].uptime_percent == 50.0
@@ -192,7 +190,8 @@ class TestAnalyzeTotemUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_totem_config",
+            analysis_mod,
+            "_load_totem_config",
             lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
@@ -201,9 +200,7 @@ class TestAnalyzeTotemUptimes:
             [{"type": "cast", "abilityGameID": 25587, "timestamp": 200000}],
         ]
 
-        results, _ = _analyze_totem_uptimes(
-            mock_client, "test_report", shaman_composition, sample_encounters
-        )
+        results, _ = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
 
         assert len(results) == 1
         assert results[0].uptime_percent > 50.0
@@ -212,9 +209,7 @@ class TestAnalyzeTotemUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(analysis_mod, "_load_totem_config", lambda: {})
-        results, warnings = _analyze_totem_uptimes(
-            mock_client, "test_report", shaman_composition, sample_encounters
-        )
+        results, warnings = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
         assert results == []
         assert warnings == []
 
@@ -222,7 +217,8 @@ class TestAnalyzeTotemUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_totem_config",
+            analysis_mod,
+            "_load_totem_config",
             lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
         comp = RaidComposition(
@@ -235,7 +231,8 @@ class TestAnalyzeTotemUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_totem_config",
+            analysis_mod,
+            "_load_totem_config",
             lambda: {25587: {"name": "Windfury Totem", "duration": 10}},
         )
 
@@ -247,16 +244,15 @@ class TestAnalyzeTotemUptimes:
             [],
         ]
 
-        results, _ = _analyze_totem_uptimes(
-            mock_client, "test_report", shaman_composition, sample_encounters
-        )
+        results, _ = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
         assert results == []
 
     def test_prepull_totem_counts(self, mock_client, shaman_composition, sample_encounters, monkeypatch):
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_totem_config",
+            analysis_mod,
+            "_load_totem_config",
             lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
@@ -267,9 +263,7 @@ class TestAnalyzeTotemUptimes:
             [],
         ]
 
-        results, _ = _analyze_totem_uptimes(
-            mock_client, "test_report", shaman_composition, sample_encounters
-        )
+        results, _ = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
         assert len(results) == 1
         assert results[0].uptime_percent > 0
         assert results[0].bands[0].start_time == 100000

@@ -550,9 +550,17 @@ class PerformanceDB:
                            cancel_rate = excluded.cancel_rate,
                            timestamps = excluded.timestamps,
                            correlations = excluded.correlations""",
-                    (char_id, raid_id, detail.spell_id, detail.spell_name,
-                     detail.total_casts, detail.cancelled_casts, detail.cancel_rate,
-                     ts_json, corr_json),
+                    (
+                        char_id,
+                        raid_id,
+                        detail.spell_id,
+                        detail.spell_name,
+                        detail.total_casts,
+                        detail.cancelled_casts,
+                        detail.cancel_rate,
+                        ts_json,
+                        corr_json,
+                    ),
                 )
 
         if analysis.encounters:
@@ -578,16 +586,18 @@ class PerformanceDB:
         for enc in encounters:
             boss_events_json = None
             if enc.boss_events:
-                boss_events_json = json.dumps([
-                    {
-                        "ts": be.timestamp,
-                        "type": be.event_type,
-                        "name": be.ability_name,
-                        "aid": be.ability_id,
-                        "src": be.source_name,
-                    }
-                    for be in enc.boss_events
-                ])
+                boss_events_json = json.dumps(
+                    [
+                        {
+                            "ts": be.timestamp,
+                            "type": be.event_type,
+                            "name": be.ability_name,
+                            "aid": be.ability_id,
+                            "src": be.source_name,
+                        }
+                        for be in enc.boss_events
+                    ]
+                )
             conn.execute(
                 """INSERT INTO encounters
                    (raid_id, encounter_id, name, start_time, end_time, duration_ms, boss_events)
@@ -623,9 +633,7 @@ class PerformanceDB:
                     ),
                 )
 
-    def _import_aura_uptimes(
-        self, conn: sqlite3.Connection, raid_id: int, aura_uptimes: list[AuraUptime]
-    ) -> None:
+    def _import_aura_uptimes(self, conn: sqlite3.Connection, raid_id: int, aura_uptimes: list[AuraUptime]) -> None:
         conn.execute("DELETE FROM aura_uptime WHERE raid_id = ?", (raid_id,))
         for au in aura_uptimes:
             enc_row = conn.execute(
@@ -635,9 +643,9 @@ class PerformanceDB:
             if not enc_row:
                 continue
 
-            bands_json = json.dumps(
-                [{"start": b.start_time, "end": b.end_time} for b in au.bands]
-            ) if au.bands else None
+            bands_json = (
+                json.dumps([{"start": b.start_time, "end": b.end_time} for b in au.bands]) if au.bands else None
+            )
 
             conn.execute(
                 """INSERT INTO aura_uptime
@@ -650,9 +658,7 @@ class PerformanceDB:
                 (raid_id, enc_row["id"], au.spell_id, au.spell_name, au.uptime_percent, bands_json),
             )
 
-    def _import_totem_uptimes(
-        self, conn: sqlite3.Connection, raid_id: int, totem_uptimes: list[AuraUptime]
-    ) -> None:
+    def _import_totem_uptimes(self, conn: sqlite3.Connection, raid_id: int, totem_uptimes: list[AuraUptime]) -> None:
         conn.execute("DELETE FROM totem_uptime WHERE raid_id = ?", (raid_id,))
         for tu in totem_uptimes:
             enc_row = conn.execute(
@@ -662,9 +668,9 @@ class PerformanceDB:
             if not enc_row:
                 continue
 
-            bands_json = json.dumps(
-                [{"start": b.start_time, "end": b.end_time} for b in tu.bands]
-            ) if tu.bands else None
+            bands_json = (
+                json.dumps([{"start": b.start_time, "end": b.end_time} for b in tu.bands]) if tu.bands else None
+            )
 
             conn.execute(
                 """INSERT INTO totem_uptime
@@ -2111,17 +2117,19 @@ class PerformanceDB:
 
             delta_pct = ((my_value - role_avg) / role_avg * 100) if role_avg else 0.0
 
-            results.append({
-                "boss_name": boss["name"],
-                "encounter_id": enc_id,
-                "role": my_role,
-                "kills": my_row["kills"],
-                "my_value": my_value,
-                "role_avg": round(role_avg),
-                "delta_pct": round(delta_pct, 1),
-                "rank": rank,
-                "peer_count": peer_count,
-            })
+            results.append(
+                {
+                    "boss_name": boss["name"],
+                    "encounter_id": enc_id,
+                    "role": my_role,
+                    "kills": my_row["kills"],
+                    "my_value": my_value,
+                    "role_avg": round(role_avg),
+                    "delta_pct": round(delta_pct, 1),
+                    "rank": rank,
+                    "peer_count": peer_count,
+                }
+            )
 
         return results
 
@@ -2843,9 +2851,7 @@ class PerformanceDB:
             for r in rows
         ]
 
-    def _load_interrupts_for_raid(
-        self, conn: sqlite3.Connection, raid_id: int
-    ) -> list[InterruptUsage]:
+    def _load_interrupts_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[InterruptUsage]:
         rows = conn.execute(
             """SELECT iu.spell_id, iu.spell_name, iu.count, iu.timestamps,
                       c.name as player_name, c.player_class
@@ -2867,9 +2873,7 @@ class PerformanceDB:
             for r in rows
         ]
 
-    def _load_cancelled_casts_for_raid(
-        self, conn: sqlite3.Connection, raid_id: int
-    ) -> list[CancelledCastSummary]:
+    def _load_cancelled_casts_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[CancelledCastSummary]:
         rows = conn.execute(
             """SELECT cc.total_casts, cc.cancelled_casts, cc.cancel_rate,
                       cc.character_id, c.name as player_name, c.player_class
@@ -2926,19 +2930,21 @@ class PerformanceDB:
             return None
         data = []
         for c in correlations:
-            data.append({
-                "ts": c.cancel_timestamp,
-                "events": [
-                    {
-                        "type": e.event_type,
-                        "name": e.ability_name,
-                        "aid": e.ability_id,
-                        "src": e.source_name,
-                        "offset": e.offset_ms,
-                    }
-                    for e in c.nearby_events
-                ],
-            })
+            data.append(
+                {
+                    "ts": c.cancel_timestamp,
+                    "events": [
+                        {
+                            "type": e.event_type,
+                            "name": e.ability_name,
+                            "aid": e.ability_id,
+                            "src": e.source_name,
+                            "offset": e.offset_ms,
+                        }
+                        for e in c.nearby_events
+                    ],
+                }
+            )
         return json.dumps(data)
 
     @staticmethod
@@ -2957,15 +2963,15 @@ class PerformanceDB:
                 )
                 for ev in entry.get("events", [])
             ]
-            result.append(CancelledCastCorrelation(
-                cancel_timestamp=entry["ts"],
-                nearby_events=events,
-            ))
+            result.append(
+                CancelledCastCorrelation(
+                    cancel_timestamp=entry["ts"],
+                    nearby_events=events,
+                )
+            )
         return result
 
-    def _load_aura_uptimes_for_raid(
-        self, conn: sqlite3.Connection, raid_id: int
-    ) -> list[AuraUptime]:
+    def _load_aura_uptimes_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[AuraUptime]:
         rows = conn.execute(
             """SELECT au.spell_id, au.spell_name, au.uptime_percent, au.bands_json,
                       e.name as fight_name, e.start_time as fight_start, e.end_time as fight_end
@@ -2993,9 +2999,7 @@ class PerformanceDB:
             )
         return results
 
-    def _load_totem_uptimes_for_raid(
-        self, conn: sqlite3.Connection, raid_id: int
-    ) -> list[AuraUptime]:
+    def _load_totem_uptimes_for_raid(self, conn: sqlite3.Connection, raid_id: int) -> list[AuraUptime]:
         rows = conn.execute(
             """SELECT tu.spell_id, tu.spell_name, tu.uptime_percent, tu.bands_json,
                       e.name as fight_name, e.start_time as fight_start, e.end_time as fight_end
@@ -3148,13 +3152,15 @@ class PerformanceDB:
             raw_be = er["boss_events"]
             if raw_be:
                 for item in json.loads(raw_be):
-                    boss_events_list.append(BossEvent(
-                        timestamp=item["ts"],
-                        event_type=item["type"],
-                        ability_name=item["name"],
-                        ability_id=item.get("aid", 0),
-                        source_name=item.get("src", ""),
-                    ))
+                    boss_events_list.append(
+                        BossEvent(
+                            timestamp=item["ts"],
+                            event_type=item["type"],
+                            ability_name=item["name"],
+                            ability_id=item.get("aid", 0),
+                            source_name=item.get("src", ""),
+                        )
+                    )
             results.append(
                 EncounterSummary(
                     encounter_id=er["encounter_id"],

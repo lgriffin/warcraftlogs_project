@@ -460,9 +460,7 @@ class WarcraftLogsClient:
         report = _extract_report(result)
         return report.get("table") or {}
 
-    def get_debuffs_table(
-        self, report_id: str, start_time: int, end_time: int
-    ) -> dict:
+    def get_debuffs_table(self, report_id: str, start_time: int, end_time: int) -> dict:
         """Fetch debuff table for enemies in a fight time window."""
         query = f"""
         {{
@@ -512,9 +510,7 @@ class WarcraftLogsClient:
         report = _extract_report(result)
         return (report.get("events") or {}).get("data") or []
 
-    def get_enemy_ability_names(
-        self, report_id: str, start_time: int, end_time: int
-    ) -> dict[int, str]:
+    def get_enemy_ability_names(self, report_id: str, start_time: int, end_time: int) -> dict[int, str]:
         names: dict[int, str] = {}
         for data_type in ("Casts", "DamageDone"):
             query = f"""
@@ -545,9 +541,7 @@ class WarcraftLogsClient:
                         names[gid] = name
         return names
 
-    def get_enemy_cast_events(
-        self, report_id: str, start_time: int, end_time: int
-    ) -> list[dict]:
+    def get_enemy_cast_events(self, report_id: str, start_time: int, end_time: int) -> list[dict]:
         all_data: list[dict] = []
         page_start = start_time
         while True:
@@ -574,9 +568,7 @@ class WarcraftLogsClient:
             page_start = next_page
         return all_data
 
-    def get_raid_damage_taken_events(
-        self, report_id: str, start_time: int, end_time: int
-    ) -> list[dict]:
+    def get_raid_damage_taken_events(self, report_id: str, start_time: int, end_time: int) -> list[dict]:
         all_data: list[dict] = []
         page_start = start_time
         while True:

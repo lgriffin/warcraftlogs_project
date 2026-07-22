@@ -81,7 +81,8 @@ class TestAnalyzeAuraUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_debuff_config",
+            analysis_mod,
+            "_load_debuff_config",
             lambda: {11597: "Sunder Armor", 22959: "Fire Vulnerability"},
         )
 
@@ -114,7 +115,8 @@ class TestAnalyzeAuraUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_debuff_config",
+            analysis_mod,
+            "_load_debuff_config",
             lambda: {11597: "Sunder Armor"},
         )
 
@@ -142,7 +144,8 @@ class TestAnalyzeAuraUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_debuff_config",
+            analysis_mod,
+            "_load_debuff_config",
             lambda: {11597: "Sunder Armor"},
         )
 
@@ -181,7 +184,8 @@ class TestAnalyzeAuraUptimes:
         import warcraftlogs_client.analysis as analysis_mod
 
         monkeypatch.setattr(
-            analysis_mod, "_load_debuff_config",
+            analysis_mod,
+            "_load_debuff_config",
             lambda: {11597: "Sunder Armor"},
         )
         mock_client.get_debuffs_table.side_effect = requests.RequestException("timeout")
