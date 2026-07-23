@@ -15,7 +15,7 @@ from typing import Any
 class RoleThresholds:
     """Configuration for role detection thresholds."""
 
-    healer_min_healing: int = 40000
+    healer_min_healing: int = 900000
     tank_min_taken: int = 150000
     tank_min_mitigation: int = 40
     healer_min_healing_10: int = 400000
@@ -129,7 +129,7 @@ class ConfigManager:
         # Parse role thresholds with defaults
         role_thresholds_data = raw_config.get("role_thresholds", {})
         role_thresholds = RoleThresholds(
-            healer_min_healing=role_thresholds_data.get("healer_min_healing", 40000),
+            healer_min_healing=role_thresholds_data.get("healer_min_healing", 900000),
             tank_min_taken=role_thresholds_data.get("tank_min_taken", 150000),
             tank_min_mitigation=role_thresholds_data.get("tank_min_mitigation", 40),
             healer_min_healing_10=role_thresholds_data.get("healer_min_healing_10", 400000),

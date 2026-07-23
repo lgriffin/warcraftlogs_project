@@ -41,7 +41,7 @@ class AnalysisWorker(QThread):
             result = analyze_raid(
                 client,
                 self.report_id,
-                healer_threshold=role_thresholds.get("healer_min_healing", 40000),
+                healer_threshold=role_thresholds.get("healer_min_healing", 900000),
                 tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
                 tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
                 healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
@@ -92,7 +92,7 @@ class ReferenceAnalysisWorker(QThread):
             result = analyze_raid(
                 client,
                 self.report_id,
-                healer_threshold=role_thresholds.get("healer_min_healing", 40000),
+                healer_threshold=role_thresholds.get("healer_min_healing", 900000),
                 tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
                 tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
                 healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),

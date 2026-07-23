@@ -40,6 +40,7 @@ class TestPublicExports:
             "GearItem",
             "HealerPerformance",
             "InterruptUsage",
+            "NextCastInfo",
             "PlayerIdentity",
             "PotionSpike",
             "RaidAnalysis",
