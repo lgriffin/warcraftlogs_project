@@ -27,6 +27,7 @@ from .models import (
     EncounterSummary,
     HealerPerformance,
     InterruptUsage,
+    NextCastInfo,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
@@ -404,6 +405,8 @@ class PerformanceDB:
             conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN timestamps TEXT DEFAULT NULL")
         if "correlations" not in ccs_cols:
             conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN correlations TEXT DEFAULT NULL")
+        if "next_casts" not in ccs_cols:
+            conn.execute("ALTER TABLE cancelled_cast_spells ADD COLUMN next_casts TEXT DEFAULT NULL")
 
         enc_cols = {row[1] for row in conn.execute("PRAGMA table_info(encounters)").fetchall()}
         if "boss_events" not in enc_cols:
@@ -538,18 +541,29 @@ class PerformanceDB:
             for detail in cc.spell_details:
                 ts_json = json.dumps(detail.timestamps) if detail.timestamps else None
                 corr_json = self._serialize_correlations(detail.correlations) if detail.correlations else None
+                nc_json = (
+                    json.dumps(
+                        [
+                            {"id": n.spell_id, "name": n.spell_name, "ts": n.timestamp} if n else None
+                            for n in detail.next_casts
+                        ]
+                    )
+                    if detail.next_casts
+                    else None
+                )
                 conn.execute(
                     """INSERT INTO cancelled_cast_spells
                        (character_id, raid_id, spell_id, spell_name, total_casts,
-                        cancelled_casts, cancel_rate, timestamps, correlations)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        cancelled_casts, cancel_rate, timestamps, correlations, next_casts)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                        ON CONFLICT(character_id, raid_id, spell_id) DO UPDATE SET
                            spell_name = excluded.spell_name,
                            total_casts = excluded.total_casts,
                            cancelled_casts = excluded.cancelled_casts,
                            cancel_rate = excluded.cancel_rate,
                            timestamps = excluded.timestamps,
-                           correlations = excluded.correlations""",
+                           correlations = excluded.correlations,
+                           next_casts = excluded.next_casts""",
                     (
                         char_id,
                         raid_id,
@@ -560,6 +574,7 @@ class PerformanceDB:
                         detail.cancel_rate,
                         ts_json,
                         corr_json,
+                        nc_json,
                     ),
                 )
 
@@ -2886,7 +2901,7 @@ class PerformanceDB:
         spell_rows = conn.execute(
             """SELECT ccs.character_id, ccs.spell_id, ccs.spell_name,
                       ccs.total_casts, ccs.cancelled_casts, ccs.cancel_rate,
-                      ccs.timestamps, ccs.correlations
+                      ccs.timestamps, ccs.correlations, ccs.next_casts
                FROM cancelled_cast_spells ccs
                WHERE ccs.raid_id = ?""",
             (raid_id,),
@@ -2895,6 +2910,15 @@ class PerformanceDB:
         for sr in spell_rows:
             ts = json.loads(sr["timestamps"]) if sr["timestamps"] else []
             corrs = self._deserialize_correlations(sr["correlations"]) if sr["correlations"] else []
+            nc_raw = sr["next_casts"]
+            nc = []
+            if nc_raw:
+                for item in json.loads(nc_raw):
+                    nc.append(
+                        NextCastInfo(spell_id=item["id"], spell_name=item["name"], timestamp=item["ts"])
+                        if item
+                        else None
+                    )
             spells_by_char.setdefault(sr["character_id"], []).append(
                 CancelledCastDetail(
                     spell_id=sr["spell_id"],
@@ -2904,6 +2928,7 @@ class PerformanceDB:
                     cancel_rate=sr["cancel_rate"],
                     timestamps=ts,
                     correlations=corrs,
+                    next_casts=nc,
                 )
             )
 

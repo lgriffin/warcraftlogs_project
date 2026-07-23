@@ -31,6 +31,7 @@ from .models import (
     EncounterSummary,
     HealerPerformance,
     InterruptUsage,
+    NextCastInfo,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
@@ -736,6 +737,19 @@ def _analyze_interrupts(
     return results, warnings
 
 
+def _find_next_cast(cast_events, from_idx, spell_names, spell_mgr):
+    for j in range(from_idx + 1, len(cast_events)):
+        nxt = cast_events[j]
+        nxt_aid = nxt.get("abilityGameID")
+        if nxt_aid and nxt.get("type") in ("begincast", "cast"):
+            return NextCastInfo(
+                spell_id=nxt_aid,
+                spell_name=spell_names.get(nxt_aid, spell_mgr.get_spell_name(nxt_aid)),
+                timestamp=nxt.get("timestamp", 0),
+            )
+    return None
+
+
 def _analyze_cancelled_casts(
     client: WarcraftLogsClient,
     report_id: str,
@@ -761,13 +775,15 @@ def _analyze_cancelled_casts(
                 pass
 
             pending: dict[int, int] = {}
+            pending_idx: dict[int, int] = {}
             completed = 0
             cancelled = 0
             spell_completed: dict[int, int] = {}
             spell_cancelled: dict[int, int] = {}
             spell_cancel_timestamps: dict[int, list[int]] = {}
+            spell_cancel_next_casts: dict[int, list[NextCastInfo | None]] = {}
 
-            for e in cast_events:
+            for idx, e in enumerate(cast_events):
                 etype = e.get("type")
                 aid = e.get("abilityGameID")
                 if not aid:
@@ -778,17 +794,23 @@ def _analyze_cancelled_casts(
                         cancelled += 1
                         spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
                         spell_cancel_timestamps.setdefault(aid, []).append(pending[aid])
+                        next_info = _find_next_cast(cast_events, pending_idx[aid], spell_names, spell_mgr)
+                        spell_cancel_next_casts.setdefault(aid, []).append(next_info)
                     pending[aid] = e.get("timestamp", 0)
+                    pending_idx[aid] = idx
                 elif etype == "cast":
                     if aid in pending:
                         completed += 1
                         spell_completed[aid] = spell_completed.get(aid, 0) + 1
                         del pending[aid]
+                        pending_idx.pop(aid, None)
 
             for aid, ts in pending.items():
                 cancelled += 1
                 spell_cancelled[aid] = spell_cancelled.get(aid, 0) + 1
                 spell_cancel_timestamps.setdefault(aid, []).append(ts)
+                next_info = _find_next_cast(cast_events, pending_idx[aid], spell_names, spell_mgr)
+                spell_cancel_next_casts.setdefault(aid, []).append(next_info)
 
             total = completed + cancelled
             if total == 0:
@@ -801,6 +823,11 @@ def _analyze_cancelled_casts(
                 sc = spell_completed.get(sid, 0)
                 sn = spell_cancelled.get(sid, 0)
                 st = sc + sn
+                raw_ts = spell_cancel_timestamps.get(sid, [])
+                raw_nc = spell_cancel_next_casts.get(sid, [None] * len(raw_ts))
+                paired = sorted(zip(raw_ts, raw_nc, strict=True), key=lambda p: p[0])
+                sorted_ts = [p[0] for p in paired]
+                sorted_nc = [p[1] for p in paired]
                 details.append(
                     CancelledCastDetail(
                         spell_id=sid,
@@ -808,7 +835,8 @@ def _analyze_cancelled_casts(
                         total_casts=sc,
                         cancelled_casts=sn,
                         cancel_rate=round(sn / st * 100, 1) if st else 0.0,
-                        timestamps=sorted(spell_cancel_timestamps.get(sid, [])),
+                        timestamps=sorted_ts,
+                        next_casts=sorted_nc,
                     )
                 )
             details.sort(key=lambda d: d.cancelled_casts, reverse=True)
