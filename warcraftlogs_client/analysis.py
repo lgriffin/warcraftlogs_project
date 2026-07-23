@@ -180,7 +180,9 @@ def _identify_composition(
     tanks = _identify_tanks(client, report_id, master_actors, tank_min_taken, tank_min_mitigation)
     tank_names = {t.name for t in tanks}
 
-    healers = _identify_healers(client, report_id, master_actors, healer_threshold)
+    healers = [
+        h for h in _identify_healers(client, report_id, master_actors, healer_threshold) if h.name not in tank_names
+    ]
     healer_names = {h.name for h in healers}
 
     excluded = tank_names | healer_names
