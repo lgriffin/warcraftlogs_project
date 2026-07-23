@@ -487,14 +487,22 @@ class PerformanceDB:
         if raid_size > 0:
             conn.execute("UPDATE raids SET raid_size = ? WHERE id = ?", (raid_size, raid_id))
 
+        conn.execute(
+            "DELETE FROM healer_spells WHERE healer_performance_id IN "
+            "(SELECT id FROM healer_performance WHERE raid_id = ?)",
+            (raid_id,),
+        )
+        conn.execute("DELETE FROM healer_performance WHERE raid_id = ?", (raid_id,))
         for healer in analysis.healers:
             char_id = self._upsert_character(healer.name, healer.player_class, raid_date)
             self._import_healer(conn, char_id, raid_id, healer)
 
+        conn.execute("DELETE FROM tank_performance WHERE raid_id = ?", (raid_id,))
         for tank in analysis.tanks:
             char_id = self._upsert_character(tank.name, tank.player_class, raid_date)
             self._import_tank(conn, char_id, raid_id, tank)
 
+        conn.execute("DELETE FROM dps_performance WHERE raid_id = ?", (raid_id,))
         for dps in analysis.dps:
             char_id = self._upsert_character(dps.name, dps.player_class, raid_date)
             self._import_dps(conn, char_id, raid_id, dps)
