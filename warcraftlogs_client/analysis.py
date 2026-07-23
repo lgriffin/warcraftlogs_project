@@ -47,7 +47,7 @@ _TEN_MAN_ZONES = {"Karazhan", "Zul'Aman"}
 def analyze_raid(
     client: WarcraftLogsClient,
     report_id: str,
-    healer_threshold: int = 40000,
+    healer_threshold: int = 900000,
     tank_min_taken: int = 150000,
     tank_min_mitigation: int = 40,
     healer_threshold_10: int = 400000,
@@ -185,9 +185,8 @@ def _identify_composition(
 
     excluded = tank_names | healer_names
     always_ranged = {"Mage", "Warlock", "Hunter"}
-    always_melee = {"Rogue"}
-    # Hybrid classes need damage profile check to determine melee vs ranged
-    hybrid_classes = {"Warrior", "Paladin", "Druid", "Shaman", "Priest"}
+    always_melee = {"Rogue", "Warrior"}
+    hybrid_classes = {"Paladin", "Druid", "Shaman", "Priest"}
 
     melee = []
     ranged = []

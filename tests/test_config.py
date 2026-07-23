@@ -85,7 +85,7 @@ class TestDefaults:
     def test_default_role_thresholds(self, config_file):
         mgr = ConfigManager(config_file)
         cfg = mgr.load()
-        assert cfg.role_thresholds.healer_min_healing == 40000
+        assert cfg.role_thresholds.healer_min_healing == 900000
         assert cfg.role_thresholds.tank_min_taken == 150000
         assert cfg.role_thresholds.tank_min_mitigation == 40
 
@@ -133,7 +133,7 @@ class TestLegacyFormat:
         mgr = ConfigManager(config_file)
         mgr.load()
         thresholds = mgr.get_role_thresholds()
-        assert thresholds["healer_min_healing"] == 40000
+        assert thresholds["healer_min_healing"] == 900000
 
 
 class TestSingleton:

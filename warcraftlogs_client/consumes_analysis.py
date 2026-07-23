@@ -168,7 +168,7 @@ class ConsumesAnalyzer:
                 except (requests.RequestException, KeyError, TypeError):
                     healing_totals[actor["name"]] = 0
 
-        healers = dynamic_role_parser.identify_healers(master_actors, healing_totals, threshold=50000)
+        healers = dynamic_role_parser.identify_healers(master_actors, healing_totals, threshold=900000)
         roles["healers"] = [h["name"] for h in healers]
 
         # Identify melee and ranged
