@@ -120,6 +120,13 @@ class BossEvent:
 
 
 @dataclass
+class NextCastInfo:
+    spell_id: int
+    spell_name: str
+    timestamp: int
+
+
+@dataclass
 class CancelledCastCorrelation:
     cancel_timestamp: int
     nearby_events: list[BossEvent] = field(default_factory=list)
@@ -134,6 +141,7 @@ class CancelledCastDetail:
     cancel_rate: float
     timestamps: list[int] = field(default_factory=list)
     correlations: list[CancelledCastCorrelation] = field(default_factory=list)
+    next_casts: list[NextCastInfo | None] = field(default_factory=list)
 
 
 @dataclass

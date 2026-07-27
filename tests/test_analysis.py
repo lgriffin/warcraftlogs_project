@@ -256,7 +256,7 @@ class TestAnalyzeRaid:
         ]
         # First call succeeds (for _identify_healers), second fails (during _analyze_healers)
         mock_client.get_healing_data.side_effect = [
-            [{"type": "heal", "amount": 500_000, "overheal": 0, "abilityGameID": 2060}],
+            [{"type": "heal", "amount": 1_000_000, "overheal": 0, "abilityGameID": 2060}],
             requests.RequestException("timeout"),
         ]
         mock_client.get_damage_done_data.return_value = []

@@ -20,7 +20,7 @@ Feature: Configuration Management
   Scenario: The system shall apply default role thresholds when none are specified
     Given a config file with minimal required fields
     When the configuration is loaded
-    Then healer_min_healing should be 40000
+    Then healer_min_healing should be 900000
     And tank_min_taken should be 150000
     And tank_min_mitigation should be 40
 

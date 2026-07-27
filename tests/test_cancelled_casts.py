@@ -12,6 +12,7 @@ from warcraftlogs_client.models import (
     CancelledCastSummary,
     EncounterSummary,
     HealerPerformance,
+    NextCastInfo,
     PlayerIdentity,
     RaidAnalysis,
     RaidComposition,
@@ -398,6 +399,9 @@ class TestCancelledCastTimestamps:
         assert fireball.spell_name == "Fireball"
         assert fireball.cancelled_casts == 1
         assert fireball.timestamps == [3000]
+        assert len(fireball.next_casts) == 1
+        assert fireball.next_casts[0].spell_id == 100
+        assert fireball.next_casts[0].timestamp == 5000
 
     def test_timestamps_match_cancelled_not_completed(self, simple_composition):
         client = MagicMock()
@@ -496,6 +500,100 @@ class TestCancelledCastTimestamps:
         assert fireball.timestamps == [1000, 3000, 5000]
         frostbolt = next(d for d in lcc.spell_details if d.spell_name == "Frostbolt")
         assert frostbolt.timestamps == []
+
+
+class TestNextCastAfterCancel:
+    def test_next_cast_different_spell(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 3000},
+            {"type": "begincast", "abilityGameID": 200, "timestamp": 4000},
+            {"type": "cast", "abilityGameID": 200, "timestamp": 5000},
+        ]
+        client.get_cast_table.return_value = [
+            {"guid": 100, "name": "Fireball"},
+            {"guid": 200, "name": "Frostbolt"},
+        ]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = next(d for d in results[0].spell_details if d.spell_name == "Fireball")
+        assert fireball.cancelled_casts == 1
+        assert len(fireball.next_casts) == 1
+        nc = fireball.next_casts[0]
+        assert nc.spell_id == 100
+        assert nc.spell_name == "Fireball"
+        assert nc.timestamp == 2000
+
+    def test_trailing_cancel_next_cast_is_none(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 3000},
+        ]
+        client.get_cast_table.return_value = [{"guid": 100, "name": "Fireball"}]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = results[0].spell_details[0]
+        assert fireball.cancelled_casts == 1
+        assert len(fireball.next_casts) == 1
+        assert fireball.next_casts[0] is None
+
+    def test_next_casts_parallel_to_timestamps(self, simple_composition):
+        client = MagicMock()
+        client.get_cast_events_paginated.return_value = [
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 1000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 2000},
+            {"type": "begincast", "abilityGameID": 100, "timestamp": 3000},
+            {"type": "cast", "abilityGameID": 100, "timestamp": 4000},
+        ]
+        client.get_cast_table.return_value = [{"guid": 100, "name": "Fireball"}]
+
+        results, _ = _analyze_cancelled_casts(client, "test", simple_composition)
+        fireball = results[0].spell_details[0]
+        assert len(fireball.timestamps) == len(fireball.next_casts)
+        assert fireball.timestamps == [1000, 2000]
+        assert fireball.next_casts[0].timestamp == 2000
+        assert fireball.next_casts[1].timestamp == 3000
+
+    def test_next_casts_db_round_trip(self, db):
+        nc = [
+            NextCastInfo(spell_id=200, spell_name="Frostbolt", timestamp=2000),
+            None,
+        ]
+        details = [
+            CancelledCastDetail(
+                spell_id=100,
+                spell_name="Fireball",
+                total_casts=10,
+                cancelled_casts=2,
+                cancel_rate=16.7,
+                timestamps=[1000, 3000],
+                next_casts=nc,
+            ),
+        ]
+        cc = CancelledCastSummary(
+            player_name="Mage",
+            player_class="Mage",
+            source_id=1,
+            total_casts=10,
+            cancelled_casts=2,
+            cancel_rate=16.7,
+            spell_details=details,
+        )
+        raid = _make_raid("r1", cancelled_casts=[cc])
+        db.import_raid(raid)
+
+        loaded = db.get_raid_analysis("r1")
+        assert loaded is not None
+        fireball = loaded.cancelled_casts[0].spell_details[0]
+        assert len(fireball.next_casts) == 2
+        assert fireball.next_casts[0].spell_id == 200
+        assert fireball.next_casts[0].spell_name == "Frostbolt"
+        assert fireball.next_casts[0].timestamp == 2000
+        assert fireball.next_casts[1] is None
 
 
 def _make_encounter(name="Boss", start=0, end=60000):

@@ -417,19 +417,26 @@ class CharacterDetailPanel(QWidget):
             fight_details = []
             for d in cancelled.spell_details:
                 has_fight_ts = False
-                for t in d.timestamps:
+                for ts_idx, t in enumerate(d.timestamps):
                     if t < enc.start_time or t > enc.end_time:
                         continue
                     has_fight_ts = True
                     cancel_time = self._format_fight_time(t, enc.start_time)
+                    next_info = d.next_casts[ts_idx] if ts_idx < len(d.next_casts) else None
+                    if next_info:
+                        next_str = (
+                            f"{next_info.spell_name} @ {self._format_fight_time(next_info.timestamp, enc.start_time)}"
+                        )
+                    else:
+                        next_str = "—"
                     cause, cause_time = self._get_likely_cause_for_timestamp(d, t, enc)
-                    rows.append((d.spell_name, cancel_time, cause, cause_time))
+                    rows.append((d.spell_name, cancel_time, next_str, cause, cause_time))
                 if has_fight_ts:
                     fight_details.append(d)
             self._populate_section(
                 "cancelled_casts",
                 rows,
-                ["Spell", "Cancelled At", "Likely Cause", "Cause Time"],
+                ["Spell", "Cancelled At", "Next Cast", "Likely Cause", "Cause Time"],
             )
             if fight_details or enc.boss_events:
                 self._cc_timeline.set_data(fight_details, enc)

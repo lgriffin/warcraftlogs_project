@@ -43,6 +43,7 @@ class TestPublicExports:
             "HealerPerformance",
             "HeroismWindow",
             "InterruptUsage",
+            "NextCastInfo",
             "PlayerCastEvent",
             "PlayerCastTimeline",
             "PlayerCooldownSynergy",

@@ -308,7 +308,7 @@ class SettingsView(QWidget):
 
     def _load_current_config(self):
         if not os.path.exists(self.CONFIG_PATH):
-            self.healer_threshold.setValue(40000)
+            self.healer_threshold.setValue(900000)
             self.tank_min_taken.setValue(150000)
             self.tank_min_mitigation.setValue(40)
             self.healer_threshold_10.setValue(400000)
@@ -328,7 +328,7 @@ class SettingsView(QWidget):
             self.guild_server_input.setText(config.get("guild_server", ""))
 
             thresholds = config.get("role_thresholds", {})
-            self.healer_threshold.setValue(thresholds.get("healer_min_healing", 40000))
+            self.healer_threshold.setValue(thresholds.get("healer_min_healing", 900000))
             self.tank_min_taken.setValue(thresholds.get("tank_min_taken", 150000))
             self.tank_min_mitigation.setValue(thresholds.get("tank_min_mitigation", 40))
             self.healer_threshold_10.setValue(thresholds.get("healer_min_healing_10", 400000))
