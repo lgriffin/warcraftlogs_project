@@ -472,3 +472,96 @@ class CharacterProfile:
     @property
     def class_name(self) -> str:
         return WOW_CLASS_NAMES.get(self.class_id, "Unknown")
+
+
+# ── Encounter Deep Dive models ──
+
+RESOURCE_TYPES = {
+    0: "Mana",
+    1: "Rage",
+    3: "Energy",
+    4: "Combo Points",
+}
+
+
+@dataclass
+class PlayerCastEvent:
+    timestamp: int
+    ability_id: int
+    ability_name: str
+    event_type: str  # "begincast" or "cast"
+    duration_ms: int = 0
+
+
+@dataclass
+class PlayerCastTimeline:
+    player_name: str
+    player_class: str
+    source_id: int
+    casts: list[PlayerCastEvent] = field(default_factory=list)
+    spells: dict[int, str] = field(default_factory=dict)
+
+
+@dataclass
+class ResourceSnapshot:
+    timestamp: int
+    amount: int
+    max_amount: int
+    resource_type: int
+
+
+@dataclass
+class ResourceWasteEvent:
+    timestamp: int
+    waste_type: str  # "mana_potion_wasted", "rage_overcap", "low_cp_finisher"
+    resource_type: int
+    resource_amount: int
+    resource_max: int
+    ability_id: int = 0
+    ability_name: str = ""
+    description: str = ""
+
+
+@dataclass
+class PlayerResourceAnalysis:
+    player_name: str
+    player_class: str
+    source_id: int
+    resource_type: int
+    snapshots: list[ResourceSnapshot] = field(default_factory=list)
+    waste_events: list[ResourceWasteEvent] = field(default_factory=list)
+
+
+@dataclass
+class CooldownActivation:
+    spell_id: int
+    spell_name: str
+    category: str  # "raid_cd", "personal_cd", "trinket", "potion"
+    start_time: int
+    end_time: int
+    player_name: str
+    during_heroism: bool = False
+
+
+@dataclass
+class HeroismWindow:
+    start_time: int
+    end_time: int
+    caster_name: str = ""
+
+
+@dataclass
+class PlayerCooldownSynergy:
+    player_name: str
+    player_class: str
+    source_id: int
+    activations: list[CooldownActivation] = field(default_factory=list)
+    heroism_overlap_count: int = 0
+    total_cd_count: int = 0
+    synergy_score: float = 0.0
+
+
+@dataclass
+class CooldownSynergyAnalysis:
+    heroism_windows: list[HeroismWindow] = field(default_factory=list)
+    player_synergies: list[PlayerCooldownSynergy] = field(default_factory=list)

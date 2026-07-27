@@ -314,6 +314,44 @@ class MainWindow(QMainWindow):
         widget.raid_deleted.connect(self._on_raid_deleted)
         widget.raid_refreshed.connect(self._on_raid_refreshed)
         widget.cross_analyze.connect(self._drill_into_cross_analysis)
+        widget.deep_dive.connect(self._drill_into_deep_dive)
+        self.stack.push_view(widget)
+
+    def _drill_into_deep_dive(self, report_id: str, encounter_index: int):
+        from ..auth import TokenManager
+        from ..client import WarcraftLogsClient
+        from ..config import load_config
+        from .encounter_deep_dive_view import EncounterDeepDiveView
+
+        try:
+            with PerformanceDB() as db:
+                analysis = db.get_raid_analysis(report_id)
+        except (sqlite3.Error, OSError) as e:
+            self.status_bar.showMessage(f"Failed to load raid: {e}")
+            return
+
+        if not analysis or not analysis.encounters:
+            self.status_bar.showMessage("No encounter data available for deep dive")
+            return
+
+        try:
+            config = load_config()
+            token_mgr = TokenManager(config["client_id"], config["client_secret"])
+            client = WarcraftLogsClient(token_mgr)
+        except Exception as e:
+            self.status_bar.showMessage(f"Failed to create API client: {e}")
+            return
+
+        widget = EncounterDeepDiveView(
+            client=client,
+            report_id=report_id,
+            encounters=analysis.encounters,
+            composition=analysis.composition,
+            consumable_usage=analysis.consumables,
+            initial_index=encounter_index,
+        )
+        widget.status_message.connect(self.status_bar.showMessage)
+        widget.request_back.connect(self.stack.pop_view)
         self.stack.push_view(widget)
 
     def _drill_into_cross_analysis(self, report_id: str):

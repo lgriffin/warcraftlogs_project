@@ -213,6 +213,26 @@ class WarcraftLogsClient:
         actors = (report.get("masterData") or {}).get("actors") or []
         return [a for a in actors if a["type"] == "Player"]
 
+    def get_ability_names(self, report_id: str) -> dict[int, str]:
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              masterData {{
+                abilities {{
+                  gameID
+                  name
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        report = _extract_report(result)
+        abilities = (report.get("masterData") or {}).get("abilities") or []
+        return {a["gameID"]: a["name"] for a in abilities if a.get("gameID") and a.get("name")}
+
     def get_fights(self, report_id: str) -> list[dict]:
         query = f"""
         {{
@@ -322,6 +342,91 @@ class WarcraftLogsClient:
                 break
             start_time = next_page
         return all_data
+
+    def get_cast_events_for_encounter(
+        self, report_id: str, source_id: int, start_time: int, end_time: int
+    ) -> list[dict]:
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  events(startTime: {page_start}, endTime: {end_time}, sourceID: {source_id},
+                         dataType: Casts, hostilityType: Friendlies, limit: 10000) {{
+                    data
+                    nextPageTimestamp
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data", []))
+            next_page = events.get("nextPageTimestamp")
+            if not next_page:
+                break
+            page_start = next_page
+        return all_data
+
+    def get_resource_events_paginated(
+        self, report_id: str, source_id: int, start_time: int, end_time: int
+    ) -> list[dict]:
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  events(startTime: {page_start}, endTime: {end_time}, sourceID: {source_id},
+                         dataType: Resources, hostilityType: Friendlies, limit: 10000) {{
+                    data
+                    nextPageTimestamp
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data", []))
+            next_page = events.get("nextPageTimestamp")
+            if not next_page:
+                break
+            page_start = next_page
+        return all_data
+
+    def get_buffs_table_for_encounter(
+        self,
+        report_id: str,
+        start_time: int,
+        end_time: int,
+        source_id: int = 0,
+        target_id: int = 0,
+    ) -> dict:
+        filters = "hostilityType: Friendlies"
+        if source_id:
+            filters += f", sourceID: {source_id}"
+        if target_id:
+            filters += f", targetID: {target_id}"
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              table(dataType: Buffs, startTime: {start_time}, endTime: {end_time},
+                    {filters})
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        report = _extract_report(result)
+        return report.get("table") or {}
 
     def get_cast_table(self, report_id: str, source_id: int) -> list[dict]:
         query = f"""

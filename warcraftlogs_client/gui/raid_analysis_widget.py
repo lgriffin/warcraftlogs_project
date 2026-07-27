@@ -80,6 +80,7 @@ class RaidAnalysisWidget(QWidget):
     raid_deleted = Signal(str)
     raid_refreshed = Signal(str)
     cross_analyze = Signal(str)
+    deep_dive = Signal(str, int)  # report_id, encounter_index
 
     def __init__(self, analysis: RaidAnalysis, show_back: bool = True, show_delete: bool = True, parent=None):
         super().__init__(parent)
@@ -300,6 +301,14 @@ class RaidAnalysisWidget(QWidget):
         self._enc_summary = QLabel()
         self._enc_summary.setStyleSheet(f"color: {COLORS['text']}; padding: 0 8px;")
         enc_header.addWidget(self._enc_summary)
+
+        self._deep_dive_btn = QPushButton("Deep Dive")
+        self._deep_dive_btn.setProperty("secondary", True)
+        self._deep_dive_btn.setFixedHeight(28)
+        self._deep_dive_btn.setToolTip("Open encounter deep dive: cast timeline, resource waste, cooldown synergy")
+        self._deep_dive_btn.clicked.connect(self._on_deep_dive_clicked)
+        enc_header.addWidget(self._deep_dive_btn)
+
         enc_layout.addLayout(enc_header)
 
         self._enc_table = QTableWidget()
@@ -598,6 +607,12 @@ class RaidAnalysisWidget(QWidget):
             at_item = QTableWidgetItem(f"{p.active_time_percent:.1f}%")
             at_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._enc_table.setItem(i, 6, at_item)
+
+    def _on_deep_dive_clicked(self):
+        index = self._enc_combo.currentIndex()
+        if index < 0 or index >= len(self._encounters):
+            return
+        self.deep_dive.emit(self._analysis.metadata.report_id, index)
 
     def _on_debuff_fight_changed(self, index: int):
         if not hasattr(self, "_du_fights") or index < 0 or index >= len(self._du_fights):
