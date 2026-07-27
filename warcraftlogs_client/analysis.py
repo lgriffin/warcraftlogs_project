@@ -25,16 +25,26 @@ from .models import (
     CancelledCastDetail,
     CancelledCastSummary,
     ConsumableUsage,
+    CooldownActivation,
+    CooldownSynergyAnalysis,
     DispelUsage,
     DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
     HealerPerformance,
+    HeroismWindow,
     InterruptUsage,
+    PlayerCastEvent,
+    PlayerCastTimeline,
+    PlayerCooldownSynergy,
     PlayerIdentity,
+    PlayerResourceAnalysis,
+    RESOURCE_TYPES,
     RaidAnalysis,
     RaidComposition,
+    ResourceSnapshot,
     ResourceUsage,
+    ResourceWasteEvent,
     SpellUsage,
     TankPerformance,
 )
@@ -1215,3 +1225,389 @@ def _apply_active_time(encounters, healers, tanks, dps):
             times = player_times.get(perf.name)
             if times:
                 perf.active_time_percent = round(sum(times) / len(times), 1)
+
+
+def build_class_cast_timelines(
+    client: WarcraftLogsClient,
+    report_id: str,
+    encounter: EncounterSummary,
+    composition: RaidComposition,
+    player_class: str,
+    progress_callback=None,
+) -> list[PlayerCastTimeline]:
+    """Build cast timelines for all players of a given class within an encounter."""
+    class_players = [p for p in composition.all_players if p.player_class == player_class]
+    timelines: list[PlayerCastTimeline] = []
+
+    for player in class_players:
+        if progress_callback:
+            progress_callback(f"Loading casts for {player.name}...")
+
+        try:
+            cast_events = client.get_cast_events_for_encounter(
+                report_id, player.source_id, encounter.start_time, encounter.end_time
+            )
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("Error fetching cast events for %s: %s", player.name, e)
+            continue
+
+        # Build spell name lookup from cast table
+        spell_names: dict[int, str] = {}
+        try:
+            cast_table = client.get_cast_table(report_id, player.source_id)
+            for entry in cast_table:
+                gid = entry.get("guid")
+                name = entry.get("name")
+                if gid and name:
+                    spell_names[gid] = name
+        except (requests.RequestException, KeyError, TypeError, ValueError):
+            pass
+
+        if not cast_events:
+            continue
+
+        # Track pending begincast events to compute cast durations
+        pending: dict[int, int] = {}  # abilityGameID -> begincast timestamp
+        casts: list[PlayerCastEvent] = []
+
+        for event in cast_events:
+            etype = event.get("type")
+            aid = event.get("abilityGameID")
+            ts = event.get("timestamp", 0)
+            if not aid:
+                continue
+
+            if etype == "begincast":
+                pending[aid] = ts
+            elif etype == "cast":
+                if aid in pending:
+                    duration_ms = ts - pending[aid]
+                    del pending[aid]
+                else:
+                    duration_ms = 0  # instant cast
+
+                casts.append(
+                    PlayerCastEvent(
+                        timestamp=ts,
+                        ability_id=aid,
+                        ability_name=spell_names.get(aid, f"(ID {aid})"),
+                        event_type="cast",
+                        duration_ms=duration_ms,
+                    )
+                )
+
+        timelines.append(
+            PlayerCastTimeline(
+                player_name=player.name,
+                player_class=player.player_class,
+                source_id=player.source_id,
+                casts=casts,
+                spells=spell_names,
+            )
+        )
+
+    return timelines
+
+
+def analyze_resource_waste(
+    client: WarcraftLogsClient,
+    report_id: str,
+    encounter: EncounterSummary,
+    composition: RaidComposition,
+    consumable_usage: list,  # list[ConsumableUsage]
+    progress_callback=None,
+) -> list[PlayerResourceAnalysis]:
+    """Detect resource waste patterns for each player in an encounter."""
+    # Primary resource type by class
+    _CLASS_RESOURCE = {
+        "Priest": 0, "Paladin": 0, "Druid": 0, "Shaman": 0,
+        "Mage": 0, "Warlock": 0, "Hunter": 0,
+        "Warrior": 1,
+        "Rogue": 3,
+    }
+
+    _ROGUE_FINISHERS = {
+        26865: "Eviscerate",
+        26867: "Rupture",
+        6774: "Slice and Dice",
+        26866: "Expose Armor",
+        8643: "Kidney Shot",
+        32684: "Envenom",
+    }
+
+    results: list[PlayerResourceAnalysis] = []
+    all_players = composition.all_players
+
+    try:
+        api_ability_names = client.get_ability_names(report_id)
+    except Exception:
+        api_ability_names = {}
+
+    for player in all_players:
+        if progress_callback:
+            progress_callback(f"Analyzing resources for {player.name}...")
+
+        resource_type = _CLASS_RESOURCE.get(player.player_class)
+        if resource_type is None:
+            continue
+
+        # Fetch resource-change events (gains with waste info)
+        try:
+            resource_events = client.get_resource_events_paginated(
+                report_id, player.source_id, encounter.start_time, encounter.end_time
+            )
+        except (requests.RequestException, KeyError, TypeError, ValueError):
+            resource_events = []
+
+        # Filter to matching resource type and build snapshots.
+        # WCL resource events have: resourceChange, resourceChangeType,
+        # maxResourceAmount, waste — but no current amount.
+        # We estimate current amount by tracking a running total.
+        _INITIAL = {0: "max", 1: "zero", 2: "max", 3: "max"}
+        matched_events = [
+            e for e in resource_events
+            if e.get("resourceChangeType") == resource_type
+        ]
+
+        snapshots: list[ResourceSnapshot] = []
+        if matched_events:
+            max_amt = matched_events[0].get("maxResourceAmount", 0)
+            current = max_amt if _INITIAL.get(resource_type) == "max" else 0
+
+            for event in matched_events:
+                gain = event.get("resourceChange", 0)
+                waste = event.get("waste", 0)
+                max_amt = event.get("maxResourceAmount", max_amt)
+                current = min(max_amt, max(0, current + gain - waste))
+                snapshots.append(
+                    ResourceSnapshot(
+                        timestamp=event.get("timestamp", 0),
+                        amount=current,
+                        max_amount=max_amt,
+                        resource_type=resource_type,
+                    )
+                )
+
+        waste_events: list[ResourceWasteEvent] = []
+        spell_mgr = get_spell_manager()
+
+        # --- Direct overcap waste from the API's waste field ---
+        for event in matched_events:
+            waste_val = event.get("waste", 0)
+            if waste_val > 0:
+                max_amt = event.get("maxResourceAmount", 0)
+                ability_id = event.get("abilityGameID", 0)
+                ability_name = spell_mgr.get_spell_name(ability_id)
+                if ability_name.startswith("(ID "):
+                    ability_name = api_ability_names.get(ability_id, ability_name)
+                resource_name = RESOURCE_TYPES.get(resource_type, "Resource")
+                waste_events.append(
+                    ResourceWasteEvent(
+                        timestamp=event.get("timestamp", 0),
+                        waste_type=f"{resource_name.lower()}_overcap",
+                        resource_type=resource_type,
+                        resource_amount=max_amt,
+                        resource_max=max_amt,
+                        ability_id=ability_id,
+                        ability_name=ability_name,
+                        description=f"{waste_val} {resource_name.lower()} wasted from {ability_name}",
+                    )
+                )
+
+        # --- Mana users: check for potion/rune use at high mana ---
+        if resource_type == 0 and snapshots:
+            snapshot_timestamps = [s.timestamp for s in snapshots]
+            mana_consume_names = {"Mana Potion", "Dark Rune", "Demonic Rune"}
+            for cu in consumable_usage:
+                if cu.player_name != player.name:
+                    continue
+                if not any(mn in cu.consumable_name for mn in mana_consume_names):
+                    continue
+                for ts in cu.timestamps:
+                    if ts < encounter.start_time or ts > encounter.end_time:
+                        continue
+                    idx = bisect.bisect_right(snapshot_timestamps, ts) - 1
+                    if idx < 0:
+                        idx = 0
+                    snap = snapshots[idx]
+                    if snap.max_amount > 0:
+                        pct = snap.amount / snap.max_amount * 100
+                        if pct > 70:
+                            waste_events.append(
+                                ResourceWasteEvent(
+                                    timestamp=ts,
+                                    waste_type="mana_potion_wasted",
+                                    resource_type=resource_type,
+                                    resource_amount=snap.amount,
+                                    resource_max=snap.max_amount,
+                                    description=f"Used {cu.consumable_name} at {pct:.0f}% mana",
+                                )
+                            )
+
+        results.append(
+            PlayerResourceAnalysis(
+                player_name=player.name,
+                player_class=player.player_class,
+                source_id=player.source_id,
+                resource_type=resource_type,
+                snapshots=snapshots,
+                waste_events=waste_events,
+            )
+        )
+
+    logger.info("analyze_resource_waste: returning %d players with data", len(results))
+    return results
+
+
+def analyze_cooldown_synergy(
+    client: WarcraftLogsClient,
+    report_id: str,
+    encounter: EncounterSummary,
+    composition: RaidComposition,
+    progress_callback=None,
+) -> CooldownSynergyAnalysis:
+    """Analyze how well players align personal cooldowns with Heroism/Bloodlust."""
+    from .paths import get_cooldowns_config_path
+
+    config_path = get_cooldowns_config_path()
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            cd_config = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error("Failed to load cooldowns config: %s", e)
+        return CooldownSynergyAnalysis()
+
+    # Build per-class personal CD lookup: spell_id -> (name, duration, "personal_cd")
+    personal_cd_by_class: dict[str, dict[int, tuple[str, int]]] = {}
+    for spell_id_str, info in cd_config.get("personal_cooldowns", {}).items():
+        cls = info.get("class", "")
+        if cls:
+            personal_cd_by_class.setdefault(cls, {})[int(spell_id_str)] = (
+                info["name"], info.get("duration", 0),
+            )
+
+    # Trinket and potion lookups (class-agnostic)
+    trinket_lookup: dict[int, tuple[str, int]] = {}
+    for spell_id_str, info in cd_config.get("trinket_buffs", {}).items():
+        trinket_lookup[int(spell_id_str)] = (info["name"], info.get("duration", 0))
+
+    potion_lookup: dict[int, tuple[str, int]] = {}
+    for spell_id_str, info in cd_config.get("potion_buffs", {}).items():
+        potion_lookup[int(spell_id_str)] = (info["name"], info.get("duration", 0))
+
+    heroism_ids = {32182, 2825}
+
+    # --- Find Heroism/Bloodlust windows using targetID (buffs received) ---
+    heroism_windows: list[HeroismWindow] = []
+
+    try:
+        buffs_data = client.get_buffs_table_for_encounter(
+            report_id,
+            encounter.start_time, encounter.end_time,
+        )
+        if isinstance(buffs_data, str):
+            buffs_data = json.loads(buffs_data)
+
+        auras = buffs_data.get("data", {}).get("auras", [])
+        if not auras:
+            auras = buffs_data.get("auras", [])
+
+        for aura in auras:
+            if aura.get("guid") in heroism_ids:
+                for band in aura.get("bands", []):
+                    heroism_windows.append(
+                        HeroismWindow(
+                            start_time=band.get("startTime", 0),
+                            end_time=band.get("endTime", 0),
+                            caster_name=aura.get("name", "Unknown"),
+                        )
+                    )
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("Error fetching heroism windows: %s", e)
+
+    # --- Find each player's cooldown activations ---
+    player_synergies: list[PlayerCooldownSynergy] = []
+
+    for player in composition.all_players:
+        if progress_callback:
+            progress_callback(f"Analyzing cooldowns for {player.name}...")
+
+        activations: list[CooldownActivation] = []
+
+        # Build this player's spell lookup: personal CDs filtered by class + trinkets + potions
+        player_spell_lookup: dict[int, tuple[str, int, str]] = {}
+        for sid, (name, dur) in personal_cd_by_class.get(player.player_class, {}).items():
+            player_spell_lookup[sid] = (name, dur, "personal_cd")
+        for sid, (name, dur) in trinket_lookup.items():
+            player_spell_lookup[sid] = (name, dur, "trinket")
+        for sid, (name, dur) in potion_lookup.items():
+            player_spell_lookup[sid] = (name, dur, "potion")
+
+        try:
+            # Use targetID to get buffs ON this player (CDs, trinket procs, potions)
+            buffs_data = client.get_buffs_table_for_encounter(
+                report_id,
+                encounter.start_time, encounter.end_time,
+                target_id=player.source_id,
+            )
+            if isinstance(buffs_data, str):
+                buffs_data = json.loads(buffs_data)
+
+            auras = buffs_data.get("data", {}).get("auras", [])
+            if not auras:
+                auras = buffs_data.get("auras", [])
+
+            for aura in auras:
+                spell_id = aura.get("guid")
+                if spell_id not in player_spell_lookup:
+                    continue
+
+                cd_name, cd_duration, cd_category = player_spell_lookup[spell_id]
+
+                for band in aura.get("bands", []):
+                    start = band.get("startTime", 0)
+                    end = band.get("endTime", 0)
+
+                    during_heroism = False
+                    for hw in heroism_windows:
+                        if start >= hw.start_time - 2000 and start <= hw.end_time:
+                            during_heroism = True
+                            break
+
+                    activations.append(
+                        CooldownActivation(
+                            spell_id=spell_id,
+                            spell_name=cd_name,
+                            category=cd_category,
+                            start_time=start,
+                            end_time=end,
+                            player_name=player.name,
+                            during_heroism=during_heroism,
+                        )
+                    )
+        except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+            logger.error("Error analyzing cooldowns for %s: %s", player.name, e)
+            continue
+
+        # Score: only count personal_cd, trinket, potion (not raid CDs)
+        scorable = [a for a in activations if a.category != "raid_cd"]
+        total_cd_count = len(scorable)
+        heroism_overlap_count = sum(1 for a in scorable if a.during_heroism)
+        synergy_score = (heroism_overlap_count / total_cd_count * 100) if total_cd_count > 0 else 0.0
+
+        player_synergies.append(
+            PlayerCooldownSynergy(
+                player_name=player.name,
+                player_class=player.player_class,
+                source_id=player.source_id,
+                activations=activations,
+                heroism_overlap_count=heroism_overlap_count,
+                total_cd_count=total_cd_count,
+                synergy_score=round(synergy_score, 1),
+            )
+        )
+
+    return CooldownSynergyAnalysis(
+        heroism_windows=heroism_windows,
+        player_synergies=player_synergies,
+    )
