@@ -62,13 +62,20 @@ def analyze_raid(
     tank_min_mitigation: int = 40,
     healer_threshold_10: int = 400000,
     tank_min_taken_10: int = 300000,
+    progress_callback=None,
 ) -> RaidAnalysis:
     """Run a full raid analysis and return structured results."""
     logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.API_URL)
 
+    def _progress(msg):
+        if progress_callback:
+            progress_callback(msg)
+
+    _progress("Fetching report metadata...")
     metadata = client.get_report_metadata(report_id)
     logger.info("  metadata: title=%s zone=%s", metadata.title, metadata.zone)
 
+    _progress("Fetching master data...")
     master_actors = client.get_master_data(report_id)
     logger.info("  master_actors: %d entries", len(master_actors) if master_actors else 0)
 
@@ -76,6 +83,7 @@ def analyze_raid(
         healer_threshold = healer_threshold_10
         tank_min_taken = tank_min_taken_10
 
+    _progress("Identifying raid composition...")
     composition = _identify_composition(
         client,
         report_id,
@@ -94,27 +102,30 @@ def analyze_raid(
 
     all_warnings: list[str] = []
 
-    healers, healer_warns = _analyze_healers(client, report_id, composition.healers)
+    healers, healer_warns = _analyze_healers(client, report_id, composition.healers, progress_callback)
     all_warnings.extend(healer_warns)
     logger.info("  healers analyzed: %d", len(healers))
-    tanks, tank_warns = _analyze_tanks(client, report_id, composition.tanks)
+    tanks, tank_warns = _analyze_tanks(client, report_id, composition.tanks, progress_callback)
     all_warnings.extend(tank_warns)
     logger.info("  tanks analyzed: %d", len(tanks))
-    melee_dps, melee_warns = _analyze_dps(client, report_id, composition.melee, "melee")
+    melee_dps, melee_warns = _analyze_dps(client, report_id, composition.melee, "melee", progress_callback)
     all_warnings.extend(melee_warns)
-    ranged_dps, ranged_warns = _analyze_dps(client, report_id, composition.ranged, "ranged")
+    ranged_dps, ranged_warns = _analyze_dps(client, report_id, composition.ranged, "ranged", progress_callback)
     all_warnings.extend(ranged_warns)
     logger.info("  dps analyzed: %d melee, %d ranged", len(melee_dps), len(ranged_dps))
 
+    _progress("Analyzing consumables...")
     consumables, consume_warns = _analyze_consumables(client, report_id, composition)
     all_warnings.extend(consume_warns)
 
+    _progress("Analyzing interrupts...")
     interrupts, interrupt_warns = _analyze_interrupts(client, report_id, composition)
     all_warnings.extend(interrupt_warns)
     logger.info("  interrupts analyzed: %d entries", len(interrupts))
 
     try:
-        encounters = _analyze_encounters(client, report_id, composition)
+        _progress("Analyzing encounters...")
+        encounters = _analyze_encounters(client, report_id, composition, progress_callback)
         logger.info("  encounters analyzed: %d", len(encounters))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
         logger.error("  encounter analysis failed: %s", e)
@@ -124,6 +135,7 @@ def analyze_raid(
     _apply_active_time(encounters, healers, tanks, melee_dps + ranged_dps)
 
     try:
+        _progress("Analyzing cancelled casts...")
         cancelled_casts, cc_warns = _analyze_cancelled_casts(client, report_id, composition)
         all_warnings.extend(cc_warns)
         logger.info("  cancelled casts analyzed: %d entries", len(cancelled_casts))
@@ -134,6 +146,7 @@ def analyze_raid(
 
     if encounters:
         try:
+            _progress("Correlating cancelled casts with encounters...")
             _correlate_cancelled_casts(client, report_id, cancelled_casts, encounters)
             logger.info("  cancelled cast correlations computed")
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
@@ -141,6 +154,7 @@ def analyze_raid(
             all_warnings.append(f"Cancelled cast correlation failed: {e}")
 
     try:
+        _progress("Analyzing aura uptimes...")
         aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters)
         all_warnings.extend(aura_warns)
         logger.info("  aura uptimes analyzed: %d entries", len(aura_uptimes))
@@ -150,6 +164,7 @@ def analyze_raid(
         all_warnings.append(f"Aura uptime analysis failed: {e}")
 
     try:
+        _progress("Analyzing totem uptimes...")
         totem_uptimes, totem_warns = _analyze_totem_uptimes(client, report_id, composition, encounters)
         all_warnings.extend(totem_warns)
         logger.info("  totem uptimes analyzed: %d entries", len(totem_uptimes))
@@ -395,13 +410,17 @@ def _analyze_healers(
     client: WarcraftLogsClient,
     report_id: str,
     healer_ids: list[PlayerIdentity],
+    progress_callback=None,
 ) -> tuple[list[HealerPerformance], list[str]]:
     results = []
     warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
     spell_mgr = get_spell_manager()
+    total = len(healer_ids)
 
-    for player in healer_ids:
+    for i, player in enumerate(healer_ids, 1):
+        if progress_callback:
+            progress_callback(f"Analyzing healers ({i}/{total}): {player.name}...")
         try:
             healing_events = client.get_healing_data(report_id, player.source_id)
 
@@ -457,14 +476,18 @@ def _analyze_tanks(
     client: WarcraftLogsClient,
     report_id: str,
     tank_ids: list[PlayerIdentity],
+    progress_callback=None,
 ) -> tuple[list[TankPerformance], list[str]]:
     results = []
     warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
 
     spell_mgr = get_spell_manager()
+    total = len(tank_ids)
 
-    for player in tank_ids:
+    for i, player in enumerate(tank_ids, 1):
+        if progress_callback:
+            progress_callback(f"Analyzing tanks ({i}/{total}): {player.name}...")
         try:
             taken_events = client.get_damage_taken_data(report_id, player.source_id)
 
@@ -543,14 +566,18 @@ def _analyze_dps(
     report_id: str,
     player_ids: list[PlayerIdentity],
     role: str,
+    progress_callback=None,
 ) -> tuple[list[DPSPerformance], list[str]]:
     results = []
     warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
 
     spell_mgr = get_spell_manager()
+    total = len(player_ids)
 
-    for player in player_ids:
+    for i, player in enumerate(player_ids, 1):
+        if progress_callback:
+            progress_callback(f"Analyzing {role} DPS ({i}/{total}): {player.name}...")
         try:
             events = client.get_damage_done_data(report_id, player.source_id)
             spell_map, spell_casts, _ = SpellBreakdown.get_spell_id_to_name_map(client, report_id, player.source_id)
@@ -1155,6 +1182,7 @@ def _analyze_encounters(
     client: WarcraftLogsClient,
     report_id: str,
     composition: RaidComposition,
+    progress_callback=None,
 ) -> list[EncounterSummary]:
     """Analyze per-boss-kill performance using time-windowed table queries."""
     fights = client.get_fights(report_id)
@@ -1163,9 +1191,12 @@ def _analyze_encounters(
         return []
 
     role_lookup = {p.name: p for p in composition.all_players}
+    total = len(boss_kills)
 
     results = []
-    for fight in boss_kills:
+    for idx, fight in enumerate(boss_kills, 1):
+        if progress_callback:
+            progress_callback(f"Analyzing encounters ({idx}/{total}): {fight.get('name', 'Unknown')}...")
         start = fight["startTime"]
         end = fight["endTime"]
 
