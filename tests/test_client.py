@@ -43,6 +43,28 @@ class TestRunQuery:
         call_kwargs = mock_post.call_args
         assert call_kwargs[1]["json"] == {"query": "{ myQuery }"}
 
+    @patch("warcraftlogs_client.client.requests.post")
+    def test_uses_configured_api_url(self, mock_post):
+        mock_post.return_value = MagicMock(
+            json=lambda: {"data": {}},
+            status_code=200,
+            raise_for_status=lambda: None,
+        )
+        tm = MagicMock()
+        tm.get_token.return_value = "test_token"
+        fresh = "https://fresh.warcraftlogs.com/api/v2/client"
+        c = WarcraftLogsClient(tm, cache_enabled=False, api_url=fresh)
+        assert c.api_url == fresh
+        c.run_query("{ test }")
+        assert mock_post.call_args[0][0] == fresh
+
+    def test_api_url_property_compat(self):
+        tm = MagicMock()
+        c = WarcraftLogsClient(tm, cache_enabled=False)
+        c.API_URL = "https://example.com/api/v2/user/"
+        assert c.api_url == "https://example.com/api/v2/user"
+        assert c.API_URL == "https://example.com/api/v2/user"
+
 
 class TestGetReportMetadata:
     @patch("warcraftlogs_client.client.requests.post")

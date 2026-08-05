@@ -18,7 +18,7 @@ def run_unified_report(args):
     role_thresholds = config.get("role_thresholds", {})
 
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr)
+    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
     logger.info("Pulling data from the report")
     logger.info("Initially going to try identify roles dynamically")

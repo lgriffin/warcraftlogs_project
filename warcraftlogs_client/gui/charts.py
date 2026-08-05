@@ -18,13 +18,13 @@ from PySide6.QtCore import QDateTime, QMargins, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
-from .styles import COLORS
 from ..models import (
+    RESOURCE_TYPES,
     CooldownSynergyAnalysis,
     PlayerCastTimeline,
     PlayerResourceAnalysis,
-    RESOURCE_TYPES,
 )
+from .styles import COLORS
 
 SERIES_COLORS = [
     QColor("#e94560"),
@@ -2072,9 +2072,7 @@ class ClassCastTimelineWidget(QWidget):
 
         # Draw player sections
         cur_y = self._TOP_MARGIN
-        for tl_idx, (tl, (player_name, spell_list)) in enumerate(
-            zip(self._timelines, self._layout_map, strict=False)
-        ):
+        for _tl_idx, (tl, (player_name, spell_list)) in enumerate(zip(self._timelines, self._layout_map, strict=False)):
             # Player header
             painter.setPen(QColor(COLORS["text_header"] if "text_header" in COLORS else COLORS["text"]))
             painter.setFont(header_font)
@@ -2494,7 +2492,7 @@ class CooldownSynergyWidget(QWidget):
                     painter.drawText(
                         text_rect,
                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                        act.spell_name[:int(act_w / 6)],
+                        act.spell_name[: int(act_w / 6)],
                     )
 
                 heroism_str = "Yes" if act.during_heroism else "No"

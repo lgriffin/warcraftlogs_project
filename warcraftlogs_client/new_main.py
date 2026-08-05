@@ -181,7 +181,7 @@ def run_full_report(markdown=False, use_dynamic_roles=False):
     report_id = config["report_id"]
 
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr)
+    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
     metadata = get_report_metadata(client, report_id)
     master_actors = get_master_data(client, report_id)
