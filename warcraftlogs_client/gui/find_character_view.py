@@ -22,19 +22,7 @@ from PySide6.QtWidgets import (
 
 from ..database import PerformanceDB
 from ..models import CharacterHistory
-from .styles import COLORS, COMMON_STYLES
-
-CLASS_COLORS = {
-    "Warrior": "#C79C6E",
-    "Paladin": "#F58CBA",
-    "Priest": "#FFFFFF",
-    "Shaman": "#0070DE",
-    "Druid": "#FF7D0A",
-    "Rogue": "#FFF569",
-    "Mage": "#69CCF0",
-    "Warlock": "#9482C9",
-    "Hunter": "#ABD473",
-}
+from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
 
 class FindCharacterView(QWidget):

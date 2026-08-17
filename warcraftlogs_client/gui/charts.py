@@ -27,16 +27,16 @@ from ..models import (
 )
 
 SERIES_COLORS = [
-    QColor("#e94560"),
-    QColor("#69CCF0"),
-    QColor("#2ecc71"),
-    QColor("#f39c12"),
-    QColor("#9b59b6"),
-    QColor("#ABD473"),
-    QColor("#F58CBA"),
-    QColor("#C79C6E"),
-    QColor("#FFF569"),
-    QColor("#0070DE"),
+    QColor("#c9a42c"),  # WoW gold
+    QColor("#69CCF0"),  # Mage blue
+    QColor("#1eff00"),  # Uncommon green
+    QColor("#ff8000"),  # Legendary orange
+    QColor("#a335ee"),  # Epic purple
+    QColor("#ABD473"),  # Hunter green
+    QColor("#F58CBA"),  # Paladin pink
+    QColor("#C79C6E"),  # Warrior tan
+    QColor("#FFF569"),  # Rogue yellow
+    QColor("#0070DE"),  # Rare blue
 ]
 
 
@@ -49,7 +49,7 @@ def _make_chart(title: str) -> QChart:
     chart.legend().setLabelColor(QColor(COLORS["text"]))
     chart.legend().setFont(QFont("Segoe UI", 9))
     chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)
-    chart.setMargins(QMargins(8, 8, 8, 8))
+    chart.setMargins(QMargins(12, 12, 12, 12))
     return chart
 
 
@@ -114,7 +114,7 @@ def make_chart_view(chart: QChart) -> QChartView:
     view = QChartView(chart)
     view.setRenderHint(QPainter.RenderHint.Antialiasing)
     view.setStyleSheet(f"background-color: {COLORS['bg_card']}; border: none;")
-    view.setMinimumHeight(220)
+    view.setMinimumHeight(260)
     return view
 
 
@@ -789,7 +789,7 @@ class CalendarHeatmapWidget(QWidget):
                     elif intensity > 0.25:
                         color = QColor("#f39c12")
                     else:
-                        color = QColor("#e94560")
+                        color = QColor(COLORS["error"])
 
                     self._cells.append((rect, key, raid))
                 else:
@@ -942,8 +942,8 @@ def build_raid_trend_chart(
         scatter = QScatterSeries()
         scatter.setName("This Raid")
         scatter.setMarkerSize(12)
-        scatter.setColor(QColor("#e94560"))
-        scatter.setBorderColor(QColor("#e94560"))
+        scatter.setColor(QColor(COLORS["accent"]))
+        scatter.setBorderColor(QColor(COLORS["accent"]))
         ms = QDateTime(sel_point[0]).toMSecsSinceEpoch()
         scatter.append(QPointF(ms, sel_point[1]))
         chart.addSeries(scatter)
@@ -1743,8 +1743,8 @@ class CancelledCastTimelineWidget(QWidget):
     _CAST_COLOR = QColor("#3498db")
     _DMG_COLOR = QColor("#f39c12")
     _DEATH_COLOR = QColor("#e74c3c")
-    _CANCEL_COLOR = QColor("#e94560")
-    _CANCEL_LINE_COLOR = QColor(233, 69, 96, 140)
+    _CANCEL_COLOR = QColor(COLORS["error"])
+    _CANCEL_LINE_COLOR = QColor(231, 76, 60, 140)
 
     def __init__(self, parent=None):
         super().__init__(parent)
