@@ -3,7 +3,7 @@ Command palette — Ctrl+K quick navigation overlay.
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QKeyEvent
+from PySide6.QtGui import QFont, QKeyEvent, QPainter, QColor
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from .styles import COLORS
@@ -32,43 +33,63 @@ COMMANDS = [
 ]
 
 
+class _Backdrop(QWidget):
+    """Semi-transparent overlay behind the palette."""
+
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("background: transparent;")
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(0, 0, 0, 140))
+        p.end()
+
+    def mousePressEvent(self, _event):
+        self.clicked.emit()
+
+
 class CommandPalette(QDialog):
     navigate = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowFlags(
-            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
-        )
-        self.setFixedWidth(520)
-        self.setMaximumHeight(420)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setModal(True)
+        self.setFixedWidth(560)
         self._build_ui()
         self._populate()
 
     def _build_ui(self):
         self.setStyleSheet(f"""
             CommandPalette {{
-                background-color: {COLORS['bg_card']};
-                border: 2px solid {COLORS['accent_dim']};
-                border-radius: 8px;
+                background-color: {COLORS['bg_mid']};
+                border: 2px solid {COLORS['accent']};
+                border-radius: 10px;
             }}
         """)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(16, 16, 16, 12)
+        layout.setSpacing(10)
+
+        title = QLabel("Command Palette")
+        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {COLORS['text_gold']}; padding: 0 2px;")
+        layout.addWidget(title)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Type to search...")
+        self._input.setPlaceholderText("Type to search views...")
         self._input.setFont(QFont("Segoe UI", 14))
         self._input.setStyleSheet(f"""
             QLineEdit {{
-                background-color: {COLORS['bg_input']};
+                background-color: {COLORS['bg_dark']};
                 color: {COLORS['text_header']};
-                border: 1px solid {COLORS['border']};
+                border: 2px solid {COLORS['border']};
                 border-radius: 6px;
-                padding: 10px 14px;
+                padding: 12px 16px;
                 font-size: 14px;
             }}
             QLineEdit:focus {{
@@ -78,35 +99,39 @@ class CommandPalette(QDialog):
         self._input.textChanged.connect(self._filter)
         layout.addWidget(self._input)
 
-        hint = QLabel("Navigate to...")
-        hint.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 11px; padding: 0 4px;"
-        )
-        layout.addWidget(hint)
-
         self._list = QListWidget()
         self._list.setStyleSheet(f"""
             QListWidget {{
-                background-color: transparent;
-                border: none;
+                background-color: {COLORS['bg_dark']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 6px;
                 outline: none;
                 font-size: 13px;
+                padding: 4px;
             }}
             QListWidget::item {{
-                padding: 10px 12px;
+                padding: 10px 14px;
                 border-radius: 4px;
                 color: {COLORS['text']};
+                margin: 1px 2px;
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_hover']};
+                background-color: {COLORS['accent_dim']};
                 color: {COLORS['text_gold']};
             }}
             QListWidget::item:hover:!selected {{
-                background-color: {COLORS['bg_input']};
+                background-color: {COLORS['bg_hover']};
             }}
         """)
         self._list.itemActivated.connect(self._on_activated)
         layout.addWidget(self._list)
+
+        footer = QLabel("↑↓ navigate    Enter select    Esc close")
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        footer.setStyleSheet(
+            f"color: {COLORS['text_dim']}; font-size: 10px; padding: 2px;"
+        )
+        layout.addWidget(footer)
 
     def _populate(self, query: str = ""):
         self._list.clear()
@@ -124,9 +149,7 @@ class CommandPalette(QDialog):
 
         if self._list.count() > 0:
             self._list.setCurrentRow(0)
-        self._list.setFixedHeight(
-            min(self._list.count() * 42, 320)
-        )
+        self._list.setFixedHeight(min(self._list.count() * 42 + 10, 340))
         self.adjustSize()
 
     def _filter(self, text: str):
@@ -136,6 +159,16 @@ class CommandPalette(QDialog):
         key = item.data(Qt.ItemDataRole.UserRole)
         self.navigate.emit(key)
         self.accept()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        parent = self.parentWidget()
+        if parent:
+            parent_rect = parent.geometry()
+            x = parent_rect.x() + (parent_rect.width() - self.width()) // 2
+            y = parent_rect.y() + 100
+            self.move(x, y)
+        self._input.setFocus()
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Escape:

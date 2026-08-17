@@ -281,10 +281,6 @@ class MainWindow(QMainWindow):
     def _open_command_palette(self):
         palette = CommandPalette(self)
         palette.navigate.connect(self._handle_palette_command)
-        palette.move(
-            self.geometry().center().x() - palette.width() // 2,
-            self.geometry().top() + 120,
-        )
         palette.exec()
 
     def _handle_palette_command(self, key: str):
