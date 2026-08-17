@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from ..database import PerformanceDB
 from ..version import __version__
 from .characters_hub import CharactersHub
+from .command_palette import CommandPalette
 from .dashboard_view import DashboardView
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
@@ -275,6 +276,36 @@ class MainWindow(QMainWindow):
             shortcut.activated.connect(lambda idx=i: self.nav_list.setCurrentRow(idx))
         QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._show_settings)
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
+        QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self._open_command_palette)
+
+    def _open_command_palette(self):
+        palette = CommandPalette(self)
+        palette.navigate.connect(self._handle_palette_command)
+        palette.move(
+            self.geometry().center().x() - palette.width() // 2,
+            self.geometry().top() + 120,
+        )
+        palette.exec()
+
+    def _handle_palette_command(self, key: str):
+        commands = {
+            "dashboard": lambda: self.nav_list.setCurrentRow(0),
+            "raids": lambda: self.nav_list.setCurrentRow(1),
+            "raids.download": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(0)),
+            "raids.browse": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(1)),
+            "raids.diff": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(2)),
+            "raids.reference": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(3)),
+            "characters": lambda: self.nav_list.setCurrentRow(2),
+            "characters.my": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_my_character()),
+            "characters.compare": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_compare()),
+            "insights": lambda: self.nav_list.setCurrentRow(3),
+            "raid_groups": lambda: self.nav_list.setCurrentRow(4),
+            "settings": self._show_settings,
+            "toggle_sidebar": self._toggle_sidebar,
+        }
+        action = commands.get(key)
+        if action:
+            action()
 
     def _toggle_sidebar(self):
         self._sidebar_expanded = not self._sidebar_expanded
