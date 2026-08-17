@@ -276,7 +276,7 @@ class MainWindow(QMainWindow):
             shortcut.activated.connect(lambda idx=i: self.nav_list.setCurrentRow(idx))
         QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._show_settings)
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
-        QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self._open_command_palette)
+        QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self._open_command_palette)
 
     def _open_command_palette(self):
         palette = CommandPalette(self)

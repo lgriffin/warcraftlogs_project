@@ -123,10 +123,10 @@ class CommandPalette(QDialog):
                 background-color: {COLORS['bg_hover']};
             }}
         """)
-        self._list.itemActivated.connect(self._on_activated)
+        self._list.itemClicked.connect(self._on_activated)
         layout.addWidget(self._list)
 
-        footer = QLabel("↑↓ navigate    Enter select    Esc close")
+        footer = QLabel("↑↓ navigate    Enter / Click to select    Esc close")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setStyleSheet(
             f"color: {COLORS['text_dim']}; font-size: 10px; padding: 2px;"
