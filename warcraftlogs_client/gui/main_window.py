@@ -6,13 +6,14 @@ import os
 import sqlite3
 
 from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QCursor, QFont, QPixmap
+from PySide6.QtGui import QCursor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QPushButton,
     QStatusBar,
     QVBoxLayout,
     QWidget,
@@ -20,19 +21,16 @@ from PySide6.QtWidgets import (
 
 from ..database import PerformanceDB
 from ..version import __version__
-from .boss_insights_view import BossInsightsView
-from .character_view import CharacterView
-from .compare_view import CompareView
-from .download_view import DownloadView
-from .find_character_view import FindCharacterView
+from .characters_hub import CharactersHub
+from .command_palette import CommandPalette
+from .dashboard_view import DashboardView
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
-from .raid_diff_view import RaidDiffView
 from .raid_group_view import RaidGroupView
-from .raids_view import RaidsView
-from .reference_view import ReferenceView
+from .raids_hub import RaidsHub
 from .settings_view import SettingsView
+from .styles import COLORS
 
 
 class _UpdateCheckWorker(QThread):
@@ -66,64 +64,81 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         # ── Sidebar ──
-        sidebar = QWidget()
-        sidebar.setFixedWidth(200)
-        sidebar.setStyleSheet("QWidget { background-color: #1a1a2e; }")
-        sidebar_layout = QVBoxLayout(sidebar)
+        self._sidebar = QWidget()
+        self._sidebar.setFixedWidth(200)
+        self._sidebar.setStyleSheet(f"QWidget {{ background-color: {COLORS['bg_mid']}; }}")
+        self._sidebar_expanded = True
+        sidebar_layout = QVBoxLayout(self._sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
-        title = QLabel("WCL Analyzer")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setFixedHeight(60)
-        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        title.setStyleSheet("""
-            QLabel {
-                color: #e94560;
-                background-color: #16213e;
-                padding: 10px;
-            }
+        title_row = QWidget()
+        title_row.setFixedHeight(60)
+        title_row.setStyleSheet(f"background-color: {COLORS['bg_card']};")
+        title_row_layout = QHBoxLayout(title_row)
+        title_row_layout.setContentsMargins(0, 0, 4, 0)
+        title_row_layout.setSpacing(0)
+
+        self._sidebar_title = QLabel("WCL Analyzer")
+        self._sidebar_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._sidebar_title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self._sidebar_title.setStyleSheet(f"color: {COLORS['text_gold']}; background: transparent; padding: 10px;")
+        title_row_layout.addWidget(self._sidebar_title, 1)
+
+        self._sidebar_toggle = QPushButton("«")
+        self._sidebar_toggle.setFixedSize(28, 28)
+        self._sidebar_toggle.setToolTip("Toggle sidebar (Ctrl+B)")
+        self._sidebar_toggle.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {COLORS['text_dim']};
+                border: 1px solid {COLORS['border']};
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['bg_hover']};
+                color: {COLORS['text']};
+            }}
         """)
-        sidebar_layout.addWidget(title)
+        self._sidebar_toggle.clicked.connect(self._toggle_sidebar)
+        title_row_layout.addWidget(self._sidebar_toggle)
+
+        sidebar_layout.addWidget(title_row)
 
         self.nav_list = QListWidget()
         self.nav_list.setIconSize(QSize(20, 20))
         self.nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.nav_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1a1a2e;
-                color: #eee;
+        self.nav_list.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {COLORS['bg_mid']};
+                color: {COLORS['text']};
                 border: none;
                 font-size: 13px;
                 padding-top: 10px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 14px 20px;
                 border-left: 3px solid transparent;
-            }
-            QListWidget::item:selected {
-                background-color: #16213e;
-                border-left: 3px solid #e94560;
-                color: #fff;
-            }
-            QListWidget::item:hover:!selected {
-                background-color: #16213e;
-            }
+            }}
+            QListWidget::item:selected {{
+                background-color: {COLORS['bg_card']};
+                border-left: 3px solid {COLORS['accent']};
+                color: {COLORS['text_gold']};
+            }}
+            QListWidget::item:hover:!selected {{
+                background-color: {COLORS['bg_card']};
+            }}
         """)
 
         nav_items = [
-            ("Download", "Fetch guild reports and analyze raids"),
-            ("Raids", "Browse analyzed raids"),
-            ("Find Character", "Search and browse all tracked characters"),
-            ("Raid Groups", "Manage raid groups and compare classes"),
-            ("My Character", "View your character profile and rankings"),
-            ("Compare", "Compare character stats and radar overlays"),
-            ("GM/RL Insights", "Explore performance trends and comparisons"),
-            ("Boss Insights", "Aggregate boss encounter performance"),
-            ("Reference Reports", "Import and compare reference reports"),
-            ("Raid Diff", "Compare two guild raids side-by-side"),
-            ("Settings", "Configure credentials and thresholds"),
+            ("Dashboard", "Overview and quick stats (Ctrl+1)"),
+            ("Raids", "Download, browse, diff, and compare raids (Ctrl+2)"),
+            ("Characters", "Search, profile, and compare characters (Ctrl+3)"),
+            ("Insights", "Performance trends and boss analytics (Ctrl+4)"),
+            ("Raid Groups", "Manage raid groups and members (Ctrl+5)"),
         ]
         for name, tooltip in nav_items:
             item = QListWidgetItem(name)
@@ -133,12 +148,34 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addWidget(self.nav_list, 1)
 
-        version_label = QLabel(f"v{__version__}")
-        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        version_label.setStyleSheet("color: #555; padding: 10px; font-size: 11px;")
-        sidebar_layout.addWidget(version_label)
+        self._settings_btn = QPushButton("Settings")
+        self._settings_btn.setToolTip("Settings (Ctrl+,)")
+        self._settings_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text_dim']};
+                border: none;
+                border-top: 1px solid {COLORS['border']};
+                padding: 14px 20px;
+                font-size: 13px;
+                font-weight: normal;
+                text-align: left;
+                border-radius: 0;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['bg_hover']};
+                color: {COLORS['text']};
+            }}
+        """)
+        self._settings_btn.clicked.connect(self._show_settings)
+        sidebar_layout.addWidget(self._settings_btn)
 
-        layout.addWidget(sidebar)
+        self._version_label = QLabel(f"v{__version__}")
+        self._version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._version_label.setStyleSheet(f"color: {COLORS['text_dim']}; padding: 10px; font-size: 11px;")
+        sidebar_layout.addWidget(self._version_label)
+
+        layout.addWidget(self._sidebar)
 
         # ── Content area ──
         content_wrapper = QWidget()
@@ -148,14 +185,14 @@ class MainWindow(QMainWindow):
 
         top_bar = QWidget()
         top_bar.setFixedHeight(60)
-        top_bar.setStyleSheet("background-color: #16213e;")
+        top_bar.setStyleSheet(f"background-color: {COLORS['bg_card']};")
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(16, 8, 16, 8)
 
         self._guild_name_label = QLabel()
         self._guild_name_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         self._guild_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._guild_name_label.setStyleSheet("color: #e94560; background: transparent;")
+        self._guild_name_label.setStyleSheet(f"color: {COLORS['text_gold']}; background: transparent;")
         top_bar_layout.addWidget(self._guild_name_label, 1)
 
         self.guild_logo_label = QLabel()
@@ -169,45 +206,37 @@ class MainWindow(QMainWindow):
 
         # ── Navigation stack (replaces plain QStackedWidget) ──
         self.stack = NavigationStack()
-        self.stack.setStyleSheet("QStackedWidget { background-color: #0f3460; }")
+        self.stack.setStyleSheet(f"QStackedWidget {{ background-color: {COLORS['bg_dark']}; }}")
 
-        self.download_view = DownloadView()
-        self.raids_view = RaidsView()
-        self.find_character_view = FindCharacterView()
-        self.raid_group_view = RaidGroupView()
-        self.character_view = CharacterView()
-        self.compare_view = CompareView()
+        self.dashboard_view = DashboardView()
+        self.raids_hub = RaidsHub()
+        self.characters_hub = CharactersHub()
         self.insights_view = InsightsView()
-        self.boss_insights_view = BossInsightsView()
-        self.reference_view = ReferenceView()
-        self.raid_diff_view = RaidDiffView()
+        self.raid_group_view = RaidGroupView()
         self.settings_view = SettingsView()
 
-        self.stack.addWidget(self.download_view)
-        self.stack.addWidget(self.raids_view)
-        self.stack.addWidget(self.find_character_view)
-        self.stack.addWidget(self.raid_group_view)
-        self.stack.addWidget(self.character_view)
-        self.stack.addWidget(self.compare_view)
+        self.stack.addWidget(self.dashboard_view)
+        self.stack.addWidget(self.raids_hub)
+        self.stack.addWidget(self.characters_hub)
         self.stack.addWidget(self.insights_view)
-        self.stack.addWidget(self.boss_insights_view)
-        self.stack.addWidget(self.reference_view)
-        self.stack.addWidget(self.raid_diff_view)
+        self.stack.addWidget(self.raid_group_view)
+        self.stack.set_base_count(5)
+
+        # Settings is outside the main nav — shown via _show_settings
         self.stack.addWidget(self.settings_view)
-        self.stack.set_base_count(11)
 
         content_layout.addWidget(self.stack, 1)
         layout.addWidget(content_wrapper, 1)
 
         # ── Status bar ──
         self.status_bar = QStatusBar()
-        self.status_bar.setStyleSheet("""
-            QStatusBar {
-                background-color: #16213e;
-                color: #aaa;
+        self.status_bar.setStyleSheet(f"""
+            QStatusBar {{
+                background-color: {COLORS['bg_card']};
+                color: {COLORS['text_dim']};
                 font-size: 11px;
                 padding: 2px 10px;
-            }
+            }}
         """)
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
@@ -216,24 +245,22 @@ class MainWindow(QMainWindow):
         self.nav_list.currentRowChanged.connect(self._on_nav_changed)
         self.nav_list.setCurrentRow(0)
 
-        self.download_view.status_message.connect(self.status_bar.showMessage)
-        self.download_view.raid_downloaded.connect(self._on_raid_downloaded)
-        self.download_view.open_raid.connect(self._drill_into_raid)
-        self.raids_view.status_message.connect(self.status_bar.showMessage)
-        self.raids_view.open_raid.connect(self._drill_into_raid)
+        self.dashboard_view.status_message.connect(self.status_bar.showMessage)
+        self.dashboard_view.open_raid.connect(self._drill_into_raid)
+        self.dashboard_view.navigate_to_raids.connect(lambda: self.nav_list.setCurrentRow(1))
+
+        self.raids_hub.status_message.connect(self.status_bar.showMessage)
+        self.raids_hub.open_raid.connect(self._drill_into_raid)
+        self.raids_hub.raid_downloaded.connect(self._on_raid_downloaded)
+
+        self.characters_hub.status_message.connect(self.status_bar.showMessage)
+        self.characters_hub.analyze_report.connect(self._analyze_report)
+
+        self.insights_view.status_message.connect(self.status_bar.showMessage)
+
         self.raid_group_view.status_message.connect(self.status_bar.showMessage)
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
-        self.find_character_view.status_message.connect(self.status_bar.showMessage)
-        self.find_character_view.view_character_history.connect(self._drill_into_character_history)
-        self.character_view.status_message.connect(self.status_bar.showMessage)
-        self.character_view.analyze_report.connect(self._analyze_report)
-        self.character_view.view_character_history.connect(self._drill_into_character_history)
-        self.compare_view.status_message.connect(self.status_bar.showMessage)
-        self.insights_view.status_message.connect(self.status_bar.showMessage)
-        self.boss_insights_view.status_message.connect(self.status_bar.showMessage)
-        self.reference_view.status_message.connect(self.status_bar.showMessage)
-        self.reference_view.open_raid.connect(self._drill_into_raid)
-        self.raid_diff_view.status_message.connect(self.status_bar.showMessage)
+
         self.settings_view.status_message.connect(self._on_settings_saved)
 
         self._load_guild_info()
@@ -241,6 +268,55 @@ class MainWindow(QMainWindow):
         self._pending_update = None
         self._update_label = None
         self._auto_check_updates()
+        self._setup_shortcuts()
+
+    def _setup_shortcuts(self):
+        for i in range(5):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{i + 1}"), self)
+            shortcut.activated.connect(lambda idx=i: self.nav_list.setCurrentRow(idx))
+        QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._show_settings)
+        QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
+        QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self._open_command_palette)
+
+    def _open_command_palette(self):
+        palette = CommandPalette(self)
+        palette.navigate.connect(self._handle_palette_command)
+        palette.exec()
+
+    def _handle_palette_command(self, key: str):
+        commands = {
+            "dashboard": lambda: self.nav_list.setCurrentRow(0),
+            "raids": lambda: self.nav_list.setCurrentRow(1),
+            "raids.download": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(0)),
+            "raids.browse": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(1)),
+            "raids.diff": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(2)),
+            "raids.reference": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(3)),
+            "characters": lambda: self.nav_list.setCurrentRow(2),
+            "characters.my": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_my_character()),
+            "characters.compare": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_compare()),
+            "insights": lambda: self.nav_list.setCurrentRow(3),
+            "raid_groups": lambda: self.nav_list.setCurrentRow(4),
+            "settings": self._show_settings,
+            "toggle_sidebar": self._toggle_sidebar,
+        }
+        action = commands.get(key)
+        if action:
+            action()
+
+    def _toggle_sidebar(self):
+        self._sidebar_expanded = not self._sidebar_expanded
+        if self._sidebar_expanded:
+            self._sidebar.setFixedWidth(200)
+            self._sidebar_toggle.setText("«")
+            self._sidebar_title.setVisible(True)
+            self._settings_btn.setText("Settings")
+            self._version_label.setVisible(True)
+        else:
+            self._sidebar.setFixedWidth(48)
+            self._sidebar_toggle.setText("»")
+            self._sidebar_title.setVisible(False)
+            self._settings_btn.setText("")
+            self._version_label.setVisible(False)
 
     def _auto_check_updates(self):
         try:
@@ -267,18 +343,18 @@ class MainWindow(QMainWindow):
             self._update_label.deleteLater()
 
         self._update_label = QLabel(f"  Update available: v{info.version} — click to update  ")
-        self._update_label.setStyleSheet("""
-            QLabel {
-                color: #e94560;
+        self._update_label.setStyleSheet(f"""
+            QLabel {{
+                color: {COLORS['accent']};
                 font-size: 11px;
                 font-weight: bold;
                 padding: 2px 8px;
                 background: transparent;
-            }
-            QLabel:hover {
-                color: #ff6b81;
+            }}
+            QLabel:hover {{
+                color: {COLORS['accent_hover']};
                 text-decoration: underline;
-            }
+            }}
         """)
         self._update_label.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self._update_label.mousePressEvent = lambda _: self._show_update_dialog()
@@ -381,10 +457,14 @@ class MainWindow(QMainWindow):
         self.stack.pop_view()
         self._drill_into_raid(report_id)
 
+    def _show_settings(self):
+        self.nav_list.clearSelection()
+        self.stack.show_base_page(5)
+
     def _analyze_report(self, report_code: str):
-        self.nav_list.setCurrentRow(0)
-        self.download_view._report_input.setText(report_code)
-        self.download_view._analyze_single()
+        self.nav_list.setCurrentRow(1)
+        self.raids_hub.download_view._report_input.setText(report_code)
+        self.raids_hub.download_view._analyze_single()
 
     def _load_guild_logo(self):
         from .. import paths
@@ -427,9 +507,9 @@ class MainWindow(QMainWindow):
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
-            self.download_view,
-            self.character_view,
-            self.reference_view,
+            self.raids_hub.download_view,
+            self.characters_hub.character_view,
+            self.raids_hub.reference_view,
             self.settings_view,
         ]
         workers = []

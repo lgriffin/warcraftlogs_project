@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 from .. import paths
 from ..version import __version__
 from .main_window import MainWindow
+from .styles import COLORS
 
 
 def run():
@@ -19,14 +20,14 @@ def run():
     app.setApplicationName("WarcraftLogs Analyzer")
     app.setApplicationVersion(__version__)
 
-    app.setStyleSheet("""
-        QToolTip {
-            background-color: #16213e;
-            color: #eee;
-            border: 1px solid #2a2a4a;
+    app.setStyleSheet(f"""
+        QToolTip {{
+            background-color: {COLORS['bg_card']};
+            color: {COLORS['text']};
+            border: 1px solid {COLORS['border']};
             padding: 4px 8px;
             font-size: 12px;
-        }
+        }}
     """)
 
     window = MainWindow()

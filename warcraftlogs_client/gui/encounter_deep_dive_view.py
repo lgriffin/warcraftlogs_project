@@ -374,7 +374,7 @@ class EncounterDeepDiveView(QWidget):
         banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         banner.setFixedHeight(40)
         banner.setStyleSheet(
-            f"background-color: {COLORS['warning']}; color: #1a1a2e;"
+            f"background-color: {COLORS['warning']}; color: {COLORS['bg_dark']};"
             " font-weight: bold; font-size: 13px; border-radius: 4px;"
             " padding: 8px 16px;"
         )

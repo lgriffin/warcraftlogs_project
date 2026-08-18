@@ -415,7 +415,9 @@ class GearTableModel(QAbstractTableModel):
 
 
 def _link_color() -> QColor:
-    return QColor("#e94560")
+    from .styles import COLORS
+
+    return QColor(COLORS["accent"])
 
 
 def _link_font() -> QFont:
