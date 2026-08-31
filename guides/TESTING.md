@@ -294,6 +294,7 @@ GUI-dependent tests use `pytest.importorskip("PySide6")` at the top of each file
 ```python
 # Standard pattern for GUI test files
 import pytest
+
 pytest.importorskip("PySide6")
 # PySide6 imports follow
 ```

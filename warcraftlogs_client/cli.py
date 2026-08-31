@@ -107,7 +107,7 @@ def run_unified_analysis(args) -> int:
     role_thresholds = config.get("role_thresholds", {})
 
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr)
+    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
     analysis = analyze_raid(
         client,

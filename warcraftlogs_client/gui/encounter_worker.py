@@ -11,8 +11,6 @@ from ..client import WarcraftLogsClient
 from ..models import (
     CooldownSynergyAnalysis,
     EncounterSummary,
-    PlayerCastTimeline,
-    PlayerResourceAnalysis,
     RaidComposition,
 )
 

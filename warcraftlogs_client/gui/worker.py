@@ -35,7 +35,7 @@ class AnalysisWorker(QThread):
 
             self.progress.emit("Authenticating with WarcraftLogs API...")
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
             result = analyze_raid(
                 client,
@@ -85,8 +85,11 @@ class ReferenceAnalysisWorker(QThread):
             role_thresholds = config.get("role_thresholds", {})
 
             self.progress.emit("Connecting with user credentials...")
-            client = WarcraftLogsClient(user_tm, cache_enabled=False)
-            client.API_URL = f"{_get_base_url()}/api/v2/user"
+            client = WarcraftLogsClient(
+                user_tm,
+                cache_enabled=False,
+                api_url=f"{_get_base_url()}/api/v2/user",
+            )
 
             result = analyze_raid(
                 client,
@@ -120,7 +123,7 @@ class GuildInfoWorker(QThread):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
             info = client.get_guild_info(self.guild_id)
             self.finished.emit(info)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
@@ -141,7 +144,7 @@ class GuildReportsWorker(QThread):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
             reports = client.get_guild_reports(self.guild_id)
             self.finished.emit(reports)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
@@ -165,7 +168,7 @@ class CharacterProfileWorker(QThread):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
             profile = client.get_character_profile(
                 self.char_name,
                 self.server,

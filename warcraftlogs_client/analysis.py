@@ -18,6 +18,7 @@ import requests
 
 from .client import WarcraftLogsClient
 from .models import (
+    RESOURCE_TYPES,
     AuraBand,
     AuraUptime,
     BossEvent,
@@ -40,7 +41,6 @@ from .models import (
     PlayerCooldownSynergy,
     PlayerIdentity,
     PlayerResourceAnalysis,
-    RESOURCE_TYPES,
     RaidAnalysis,
     RaidComposition,
     ResourceSnapshot,
@@ -65,7 +65,7 @@ def analyze_raid(
     progress_callback=None,
 ) -> RaidAnalysis:
     """Run a full raid analysis and return structured results."""
-    logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.API_URL)
+    logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.api_url)
 
     def _progress(msg):
         if progress_callback:
@@ -1380,8 +1380,13 @@ def analyze_resource_waste(
     """Detect resource waste patterns for each player in an encounter."""
     # Primary resource type by class
     _CLASS_RESOURCE = {
-        "Priest": 0, "Paladin": 0, "Druid": 0, "Shaman": 0,
-        "Mage": 0, "Warlock": 0, "Hunter": 0,
+        "Priest": 0,
+        "Paladin": 0,
+        "Druid": 0,
+        "Shaman": 0,
+        "Mage": 0,
+        "Warlock": 0,
+        "Hunter": 0,
         "Warrior": 1,
         "Rogue": 3,
     }
@@ -1424,10 +1429,7 @@ def analyze_resource_waste(
         # maxResourceAmount, waste — but no current amount.
         # We estimate current amount by tracking a running total.
         _INITIAL = {0: "max", 1: "zero", 2: "max", 3: "max"}
-        matched_events = [
-            e for e in resource_events
-            if e.get("resourceChangeType") == resource_type
-        ]
+        matched_events = [e for e in resource_events if e.get("resourceChangeType") == resource_type]
 
         snapshots: list[ResourceSnapshot] = []
         if matched_events:
@@ -1543,7 +1545,8 @@ def analyze_cooldown_synergy(
         cls = info.get("class", "")
         if cls:
             personal_cd_by_class.setdefault(cls, {})[int(spell_id_str)] = (
-                info["name"], info.get("duration", 0),
+                info["name"],
+                info.get("duration", 0),
             )
 
     # Trinket and potion lookups (class-agnostic)
@@ -1563,7 +1566,8 @@ def analyze_cooldown_synergy(
     try:
         buffs_data = client.get_buffs_table_for_encounter(
             report_id,
-            encounter.start_time, encounter.end_time,
+            encounter.start_time,
+            encounter.end_time,
         )
         if isinstance(buffs_data, str):
             buffs_data = json.loads(buffs_data)
@@ -1607,7 +1611,8 @@ def analyze_cooldown_synergy(
             # Use targetID to get buffs ON this player (CDs, trinket procs, potions)
             buffs_data = client.get_buffs_table_for_encounter(
                 report_id,
-                encounter.start_time, encounter.end_time,
+                encounter.start_time,
+                encounter.end_time,
                 target_id=player.source_id,
             )
             if isinstance(buffs_data, str):
@@ -1622,7 +1627,7 @@ def analyze_cooldown_synergy(
                 if spell_id not in player_spell_lookup:
                     continue
 
-                cd_name, cd_duration, cd_category = player_spell_lookup[spell_id]
+                cd_name, _cd_duration, cd_category = player_spell_lookup[spell_id]
 
                 for band in aura.get("bands", []):
                     start = band.get("startTime", 0)

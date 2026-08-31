@@ -266,10 +266,14 @@ Markdown reports are saved to the `reports/` directory.
 
 | File | Purpose |
 |------|---------|
-| `config.json` | API credentials, guild ID, role thresholds, character settings |
+| `config.example.json` | Template for local setup (committed) |
+| `config.json` | Local API credentials and settings (**gitignored** — copy from example) |
+| `user_token.json` | OAuth user token for reference reports (**gitignored**) |
 | `consumes_config.json` | Consumable spell ID mappings (buff-based and cast-based) |
 | `spell_data/spell_names.json` | Spell ID to name mappings by category |
 | `spell_data/spell_aliases.json` | Spell rank/variant merging rules |
+
+Copy `config.example.json` to `config.json` and fill in your Warcraft Logs API credentials. Prefer `WARCRAFTLOGS_CLIENT_ID` / `WARCRAFTLOGS_CLIENT_SECRET` env vars when possible. Set `wcl_api_url` to the Fresh or retail GraphQL endpoint your guild uses.
 
 ---
 

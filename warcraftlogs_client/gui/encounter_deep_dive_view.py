@@ -16,9 +16,9 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -79,6 +79,7 @@ class EncounterDeepDiveView(QWidget):
             actors = self._client.get_master_data(self._report_id)
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Failed to resolve source IDs: %s", e)
             return False
 
@@ -101,6 +102,7 @@ class EncounterDeepDiveView(QWidget):
         patched = sum(1 for p in self._composition.all_players if p.source_id != 0)
         total = len(self._composition.all_players)
         import logging
+
         logging.getLogger(__name__).info("Resolved %d/%d source IDs", patched, total)
         return patched > 0
 
@@ -113,9 +115,7 @@ class EncounterDeepDiveView(QWidget):
         # ── Header bar ──
         header = QWidget()
         header.setFixedHeight(52)
-        header.setStyleSheet(
-            f"background-color: {COLORS['bg_card']}; border-bottom: 1px solid {COLORS['border']};"
-        )
+        header.setStyleSheet(f"background-color: {COLORS['bg_card']}; border-bottom: 1px solid {COLORS['border']};")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 0, 16, 0)
 
@@ -165,8 +165,7 @@ class EncounterDeepDiveView(QWidget):
         # ── Tabs ──
         self._tabs = QTabWidget()
         self._tabs.setStyleSheet(
-            f"QTabWidget::pane {{ border: 1px solid {COLORS['border']}; }}"
-            f"QTabBar::tab {{ padding: 8px 16px; }}"
+            f"QTabWidget::pane {{ border: 1px solid {COLORS['border']}; }}QTabBar::tab {{ padding: 8px 16px; }}"
         )
         layout.addWidget(self._tabs)
 
@@ -233,9 +232,7 @@ class EncounterDeepDiveView(QWidget):
         # Raid summary table (shown for "All Raid")
         self._raid_waste_summary = QTableWidget()
         self._raid_waste_summary.setColumnCount(4)
-        self._raid_waste_summary.setHorizontalHeaderLabels(
-            ["Player", "Class", "Total Wasted", "Top Sources"]
-        )
+        self._raid_waste_summary.setHorizontalHeaderLabels(["Player", "Class", "Total Wasted", "Top Sources"])
         self._raid_waste_summary.horizontalHeader().setStretchLastSection(True)
         self._raid_waste_summary.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._raid_waste_summary.setAlternatingRowColors(True)
@@ -283,9 +280,7 @@ class EncounterDeepDiveView(QWidget):
 
         self._synergy_table = QTableWidget()
         self._synergy_table.setColumnCount(5)
-        self._synergy_table.setHorizontalHeaderLabels(
-            ["Player", "Class", "CDs Used", "During Heroism", "Synergy"]
-        )
+        self._synergy_table.setHorizontalHeaderLabels(["Player", "Class", "CDs Used", "During Heroism", "Synergy"])
         self._synergy_table.horizontalHeader().setStretchLastSection(True)
         self._synergy_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._synergy_table.setAlternatingRowColors(True)
@@ -305,7 +300,6 @@ class EncounterDeepDiveView(QWidget):
     def _on_tab_changed(self, index: int):
         if not self._encounters:
             return
-        enc = self._encounters[self._enc_combo.currentIndex()]
 
         if index == 0:
             self._load_cast_data()
@@ -350,9 +344,7 @@ class EncounterDeepDiveView(QWidget):
         if combo_index < self._resource_player_combo.count():
             self._resource_player_combo.setCurrentIndex(combo_index)
 
-    def _populate_player_waste_table(
-        self, analysis: PlayerResourceAnalysis, encounter: EncounterSummary
-    ):
+    def _populate_player_waste_table(self, analysis: PlayerResourceAnalysis, encounter: EncounterSummary):
         sorted_waste = sorted(analysis.waste_events, key=lambda w: w.timestamp)
         events = []
         for w in sorted_waste:
@@ -408,9 +400,7 @@ class EncounterDeepDiveView(QWidget):
 
         self._cast_loading_banner.setVisible(True)
         self._show_loading(f"Loading cast data for {player_class} players...")
-        worker = EncounterCastWorker(
-            self._client, self._report_id, enc, self._composition, player_class, parent=self
-        )
+        worker = EncounterCastWorker(self._client, self._report_id, enc, self._composition, player_class, parent=self)
         worker.progress.connect(lambda msg: self._status_label.setText(msg))
         worker.finished.connect(lambda data, k=cache_key, e=enc: self._on_cast_data_ready(data, k, e))
         worker.error.connect(self._on_worker_error)
@@ -454,9 +444,7 @@ class EncounterDeepDiveView(QWidget):
         self._hide_loading()
         self._display_resource_data(data, encounter)
 
-    def _display_resource_data(
-        self, analyses: list[PlayerResourceAnalysis], encounter: EncounterSummary
-    ):
+    def _display_resource_data(self, analyses: list[PlayerResourceAnalysis], encounter: EncounterSummary):
         self._current_resource_data = analyses
 
         # Populate combo: "All Raid" + individual players
@@ -471,9 +459,7 @@ class EncounterDeepDiveView(QWidget):
 
         # Build raid summary table
         players_with_waste = [a for a in analyses if a.waste_events]
-        players_with_waste.sort(
-            key=lambda a: sum(self._parse_waste_amount(w) for w in a.waste_events), reverse=True
-        )
+        players_with_waste.sort(key=lambda a: sum(self._parse_waste_amount(w) for w in a.waste_events), reverse=True)
 
         self._raid_waste_summary.setRowCount(len(players_with_waste))
         for i, a in enumerate(players_with_waste):
@@ -481,13 +467,9 @@ class EncounterDeepDiveView(QWidget):
             source_counts: Counter[str] = Counter()
             for w in a.waste_events:
                 source_counts[w.ability_name or "Unknown"] += self._parse_waste_amount(w)
-            top_sources = ", ".join(
-                f"{name} ({amt})" for name, amt in source_counts.most_common(3)
-            )
+            top_sources = ", ".join(f"{name} ({amt})" for name, amt in source_counts.most_common(3))
 
-            resource_name = {0: "mana", 1: "rage", 3: "energy"}.get(
-                a.waste_events[0].resource_type, "resource"
-            )
+            resource_name = {0: "mana", 1: "rage", 3: "energy"}.get(a.waste_events[0].resource_type, "resource")
 
             self._raid_waste_summary.setItem(i, 0, QTableWidgetItem(a.player_name))
             self._raid_waste_summary.setItem(i, 1, QTableWidgetItem(a.player_class))
@@ -523,26 +505,20 @@ class EncounterDeepDiveView(QWidget):
 
         self._cooldown_loading_banner.setVisible(True)
         self._show_loading("Analyzing cooldown management...")
-        worker = EncounterCooldownWorker(
-            self._client, self._report_id, enc, self._composition, parent=self
-        )
+        worker = EncounterCooldownWorker(self._client, self._report_id, enc, self._composition, parent=self)
         worker.progress.connect(lambda msg: self._status_label.setText(msg))
         worker.finished.connect(lambda data, k=cache_key, e=enc: self._on_cooldown_data_ready(data, k, e))
         worker.error.connect(self._on_worker_error)
         self._workers.append(worker)
         worker.start()
 
-    def _on_cooldown_data_ready(
-        self, data: CooldownSynergyAnalysis, cache_key: int, encounter: EncounterSummary
-    ):
+    def _on_cooldown_data_ready(self, data: CooldownSynergyAnalysis, cache_key: int, encounter: EncounterSummary):
         self._cooldown_cache[cache_key] = data
         self._cooldown_loading_banner.setVisible(False)
         self._hide_loading()
         self._display_cooldown_data(data, encounter)
 
-    def _display_cooldown_data(
-        self, analysis: CooldownSynergyAnalysis, encounter: EncounterSummary
-    ):
+    def _display_cooldown_data(self, analysis: CooldownSynergyAnalysis, encounter: EncounterSummary):
         self._cooldown_widget.set_data(analysis, encounter.start_time, encounter.end_time)
 
         # Populate summary table

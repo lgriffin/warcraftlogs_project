@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
         except Exception as e:
             self.status_bar.showMessage(f"Failed to create API client: {e}")
             return

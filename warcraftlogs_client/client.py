@@ -34,15 +34,34 @@ def _extract_report(result: dict) -> dict:
     return report
 
 
+DEFAULT_API_URL = "https://www.warcraftlogs.com/api/v2/client"
+
+
 class WarcraftLogsClient:
-    API_URL = "https://www.warcraftlogs.com/api/v2/client"
+    """GraphQL client for Warcraft Logs.
+
+    Pass ``api_url`` from config (``wcl_api_url``) so Fresh vs retail hosts stay
+    consistent. Temporary per-call overrides (e.g. character profile) still work
+    via the ``api_url`` argument on those methods.
+    """
+
     MIN_REQUEST_INTERVAL = 0.25
     MAX_RETRIES = 3
 
-    def __init__(self, token_manager, cache_enabled: bool = True):
+    def __init__(self, token_manager, cache_enabled: bool = True, api_url: str | None = None):
         self.token_manager = token_manager
         self._last_request_time = 0.0
         self.cache_enabled = cache_enabled
+        self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
+
+    # Back-compat for callers that read/assign API_URL on the instance.
+    @property
+    def API_URL(self) -> str:
+        return self.api_url
+
+    @API_URL.setter
+    def API_URL(self, value: str) -> None:
+        self.api_url = value.rstrip("/")
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_time
@@ -60,14 +79,14 @@ class WarcraftLogsClient:
         token = self.token_manager.get_token()
         headers = {"Authorization": f"Bearer {token}"}
 
-        logger.info("API request: POST %s", self.API_URL)
+        logger.info("API request: POST %s", self.api_url)
         logger.debug("Query: %s", query[:200])
 
         for attempt in range(self.MAX_RETRIES):
             self._throttle()
             self._last_request_time = time.monotonic()
 
-            response = requests.post(self.API_URL, headers=headers, json={"query": query}, timeout=30)
+            response = requests.post(self.api_url, headers=headers, json={"query": query}, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
@@ -754,9 +773,9 @@ class WarcraftLogsClient:
         self, name: str, server_slug: str, server_region: str, api_url: str | None = None
     ) -> CharacterProfile:
         """Fetch a full character profile from the WCL API."""
-        original_url = self.API_URL
+        original_url = self.api_url
         if api_url:
-            self.API_URL = api_url
+            self.api_url = api_url.rstrip("/")
 
         try:
             query = f"""
@@ -819,7 +838,7 @@ class WarcraftLogsClient:
 
             return profile
         finally:
-            self.API_URL = original_url
+            self.api_url = original_url
 
     def _fetch_gear_from_report(self, report_code: str, char_name: str) -> list[GearItem]:
         """Pull equipped gear from CombatantInfo events in a report."""
@@ -902,9 +921,9 @@ class WarcraftLogsClient:
         api_url: str | None = None,
     ) -> ZoneRankingResult | None:
         """Fetch zone rankings for a specific zone."""
-        original_url = self.API_URL
+        original_url = self.api_url
         if api_url:
-            self.API_URL = api_url
+            self.api_url = api_url.rstrip("/")
 
         try:
             query = f"""
@@ -926,7 +945,7 @@ class WarcraftLogsClient:
                 return self._parse_zone_rankings(zr)
             return None
         finally:
-            self.API_URL = original_url
+            self.api_url = original_url
 
     def _parse_zone_rankings(self, zr: dict) -> ZoneRankingResult:
         all_stars = []

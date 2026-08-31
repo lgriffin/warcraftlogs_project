@@ -2,9 +2,19 @@
     "client_id": "YOUR_CLIENT_ID_HERE",
     "client_secret": "YOUR_CLIENT_SECRET_HERE",
     "report_id": "YOUR_DEFAULT_REPORT_ID",
+    "guild_id": 0,
+    "guild_logo": "logo.png",
+    "guild_name": "",
+    "guild_server": "",
+    "character_name": "",
+    "character_server": "",
+    "character_region": "eu",
+    "wcl_api_url": "https://fresh.warcraftlogs.com/api/v2/client",
     "role_thresholds": {
         "healer_min_healing": 900000,
         "tank_min_taken": 150000,
-        "tank_min_mitigation": 40
+        "tank_min_mitigation": 40,
+        "healer_min_healing_10": 400000,
+        "tank_min_taken_10": 300000
     }
 }
