@@ -25,7 +25,6 @@ jobs:
       - name: Codespell
         run: codespell warcraftlogs_client/ tests/
       - name: Vulture dead code check
-        continue-on-error: true
         run: vulture warcraftlogs_client/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
 
   test:
