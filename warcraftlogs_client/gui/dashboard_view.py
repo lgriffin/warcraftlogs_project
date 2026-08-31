@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
-from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
+from .styles import COLORS, COMMON_STYLES
 
 
 class _StatCard(QFrame):
@@ -30,9 +30,9 @@ class _StatCard(QFrame):
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet(f"""
             _StatCard {{
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
-                border-top: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
+                border-top: 3px solid {COLORS["accent"]};
                 border-radius: 6px;
                 padding: 16px;
             }}
@@ -110,8 +110,8 @@ class DashboardView(QWidget):
         self._last_raid_summary = QFrame()
         self._last_raid_summary.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 6px;
                 padding: 16px;
             }}
@@ -160,21 +160,21 @@ class DashboardView(QWidget):
         self._recent_list.setMaximumHeight(320)
         self._recent_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 6px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 10px 16px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_hover']};
-                color: {COLORS['text_gold']};
+                background-color: {COLORS["bg_hover"]};
+                color: {COLORS["text_gold"]};
             }}
             QListWidget::item:hover:!selected {{
-                background-color: {COLORS['bg_input']};
+                background-color: {COLORS["bg_input"]};
             }}
         """)
         self._recent_list.itemDoubleClicked.connect(self._on_raid_double_clicked)
