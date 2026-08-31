@@ -52,7 +52,7 @@ class CharactersHub(QWidget):
         left = QWidget()
         left.setFixedWidth(280)
         left.setStyleSheet(f"""
-            QWidget {{ background-color: {COLORS['bg_mid']}; }}
+            QWidget {{ background-color: {COLORS["bg_mid"]}; }}
             QLineEdit {{ margin: 0; }}
         """)
         left_layout = QVBoxLayout(left)
@@ -86,19 +86,19 @@ class CharactersHub(QWidget):
         self._list = QListWidget()
         self._list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 13px;
             }}
             QListWidget::item {{
                 padding: 8px 12px;
-                border-bottom: 1px solid {COLORS['border']};
+                border-bottom: 1px solid {COLORS["border"]};
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_dark']};
-                border-left: 3px solid {COLORS['accent']};
+                background-color: {COLORS["bg_dark"]};
+                border-left: 3px solid {COLORS["accent"]};
             }}
         """)
         self._list.currentItemChanged.connect(self._on_character_selected)
@@ -148,9 +148,7 @@ class CharactersHub(QWidget):
     def _connect_signals(self):
         self.character_view.status_message.connect(self.status_message)
         self.character_view.analyze_report.connect(self.analyze_report)
-        self.character_view.view_character_history.connect(
-            self._select_character_by_name
-        )
+        self.character_view.view_character_history.connect(self._select_character_by_name)
 
         self.compare_view.status_message.connect(self.status_message)
 
@@ -180,9 +178,7 @@ class CharactersHub(QWidget):
             item.setForeground(QColor(class_color))
             self._list.addItem(item)
             visible += 1
-        self._count_label.setText(
-            f"{visible} character{'s' if visible != 1 else ''}"
-        )
+        self._count_label.setText(f"{visible} character{'s' if visible != 1 else ''}")
         self._list.blockSignals(False)
 
     def _filter(self):

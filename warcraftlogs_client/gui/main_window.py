@@ -91,15 +91,15 @@ class MainWindow(QMainWindow):
         self._sidebar_toggle.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {COLORS['text_dim']};
-                border: 1px solid {COLORS['border']};
+                color: {COLORS["text_dim"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 4px;
                 font-size: 14px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['bg_hover']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_hover"]};
+                color: {COLORS["text"]};
             }}
         """)
         self._sidebar_toggle.clicked.connect(self._toggle_sidebar)
@@ -113,8 +113,8 @@ class MainWindow(QMainWindow):
         self.nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.nav_list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_mid']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_mid"]};
+                color: {COLORS["text"]};
                 border: none;
                 font-size: 13px;
                 padding-top: 10px;
@@ -124,12 +124,12 @@ class MainWindow(QMainWindow):
                 border-left: 3px solid transparent;
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['bg_card']};
-                border-left: 3px solid {COLORS['accent']};
-                color: {COLORS['text_gold']};
+                background-color: {COLORS["bg_card"]};
+                border-left: 3px solid {COLORS["accent"]};
+                color: {COLORS["text_gold"]};
             }}
             QListWidget::item:hover:!selected {{
-                background-color: {COLORS['bg_card']};
+                background-color: {COLORS["bg_card"]};
             }}
         """)
 
@@ -152,10 +152,10 @@ class MainWindow(QMainWindow):
         self._settings_btn.setToolTip("Settings (Ctrl+,)")
         self._settings_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text_dim']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text_dim"]};
                 border: none;
-                border-top: 1px solid {COLORS['border']};
+                border-top: 1px solid {COLORS["border"]};
                 padding: 14px 20px;
                 font-size: 13px;
                 font-weight: normal;
@@ -163,8 +163,8 @@ class MainWindow(QMainWindow):
                 border-radius: 0;
             }}
             QPushButton:hover {{
-                background-color: {COLORS['bg_hover']};
-                color: {COLORS['text']};
+                background-color: {COLORS["bg_hover"]};
+                color: {COLORS["text"]};
             }}
         """)
         self._settings_btn.clicked.connect(self._show_settings)
@@ -232,8 +232,8 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet(f"""
             QStatusBar {{
-                background-color: {COLORS['bg_card']};
-                color: {COLORS['text_dim']};
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text_dim"]};
                 font-size: 11px;
                 padding: 2px 10px;
             }}
@@ -345,14 +345,14 @@ class MainWindow(QMainWindow):
         self._update_label = QLabel(f"  Update available: v{info.version} — click to update  ")
         self._update_label.setStyleSheet(f"""
             QLabel {{
-                color: {COLORS['accent']};
+                color: {COLORS["accent"]};
                 font-size: 11px;
                 font-weight: bold;
                 padding: 2px 8px;
                 background: transparent;
             }}
             QLabel:hover {{
-                color: {COLORS['accent_hover']};
+                color: {COLORS["accent_hover"]};
                 text-decoration: underline;
             }}
         """)

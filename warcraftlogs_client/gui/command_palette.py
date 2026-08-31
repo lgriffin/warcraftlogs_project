@@ -3,7 +3,7 @@ Command palette — Ctrl+K quick navigation overlay.
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QPainter, QColor
+from PySide6.QtGui import QColor, QFont, QKeyEvent, QPainter
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -22,10 +22,25 @@ COMMANDS = [
     {"key": "raids.download", "label": "Raids > Download", "hint": "", "desc": "Fetch and analyze guild reports"},
     {"key": "raids.browse", "label": "Raids > Browse", "hint": "", "desc": "Browse analyzed raids"},
     {"key": "raids.diff", "label": "Raids > Raid Diff", "hint": "", "desc": "Compare two raids side-by-side"},
-    {"key": "raids.reference", "label": "Raids > Reference", "hint": "", "desc": "Import and compare reference reports"},
+    {
+        "key": "raids.reference",
+        "label": "Raids > Reference",
+        "hint": "",
+        "desc": "Import and compare reference reports",
+    },
     {"key": "characters", "label": "Characters", "hint": "Ctrl+3", "desc": "Search and view character history"},
-    {"key": "characters.my", "label": "Characters > My Character", "hint": "", "desc": "View your character profile and WCL data"},
-    {"key": "characters.compare", "label": "Characters > Compare", "hint": "", "desc": "Compare multiple characters side-by-side"},
+    {
+        "key": "characters.my",
+        "label": "Characters > My Character",
+        "hint": "",
+        "desc": "View your character profile and WCL data",
+    },
+    {
+        "key": "characters.compare",
+        "label": "Characters > Compare",
+        "hint": "",
+        "desc": "Compare multiple characters side-by-side",
+    },
     {"key": "insights", "label": "Insights", "hint": "Ctrl+4", "desc": "Performance trends and boss analytics"},
     {"key": "raid_groups", "label": "Raid Groups", "hint": "Ctrl+5", "desc": "Manage raid groups and members"},
     {"key": "settings", "label": "Settings", "hint": "Ctrl+,", "desc": "Application settings"},
@@ -65,8 +80,8 @@ class CommandPalette(QDialog):
     def _build_ui(self):
         self.setStyleSheet(f"""
             CommandPalette {{
-                background-color: {COLORS['bg_mid']};
-                border: 2px solid {COLORS['accent']};
+                background-color: {COLORS["bg_mid"]};
+                border: 2px solid {COLORS["accent"]};
                 border-radius: 10px;
             }}
         """)
@@ -85,15 +100,15 @@ class CommandPalette(QDialog):
         self._input.setFont(QFont("Segoe UI", 14))
         self._input.setStyleSheet(f"""
             QLineEdit {{
-                background-color: {COLORS['bg_dark']};
-                color: {COLORS['text_header']};
-                border: 2px solid {COLORS['border']};
+                background-color: {COLORS["bg_dark"]};
+                color: {COLORS["text_header"]};
+                border: 2px solid {COLORS["border"]};
                 border-radius: 6px;
                 padding: 12px 16px;
                 font-size: 14px;
             }}
             QLineEdit:focus {{
-                border-color: {COLORS['accent']};
+                border-color: {COLORS["accent"]};
             }}
         """)
         self._input.textChanged.connect(self._filter)
@@ -102,8 +117,8 @@ class CommandPalette(QDialog):
         self._list = QListWidget()
         self._list.setStyleSheet(f"""
             QListWidget {{
-                background-color: {COLORS['bg_dark']};
-                border: 1px solid {COLORS['border']};
+                background-color: {COLORS["bg_dark"]};
+                border: 1px solid {COLORS["border"]};
                 border-radius: 6px;
                 outline: none;
                 font-size: 13px;
@@ -112,15 +127,15 @@ class CommandPalette(QDialog):
             QListWidget::item {{
                 padding: 10px 14px;
                 border-radius: 4px;
-                color: {COLORS['text']};
+                color: {COLORS["text"]};
                 margin: 1px 2px;
             }}
             QListWidget::item:selected {{
-                background-color: {COLORS['accent_dim']};
-                color: {COLORS['text_gold']};
+                background-color: {COLORS["accent_dim"]};
+                color: {COLORS["text_gold"]};
             }}
             QListWidget::item:hover:!selected {{
-                background-color: {COLORS['bg_hover']};
+                background-color: {COLORS["bg_hover"]};
             }}
         """)
         self._list.itemClicked.connect(self._on_activated)
@@ -128,9 +143,7 @@ class CommandPalette(QDialog):
 
         footer = QLabel("↑↓ navigate    Enter / Click to select    Esc close")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        footer.setStyleSheet(
-            f"color: {COLORS['text_dim']}; font-size: 10px; padding: 2px;"
-        )
+        footer.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 10px; padding: 2px;")
         layout.addWidget(footer)
 
     def _populate(self, query: str = ""):

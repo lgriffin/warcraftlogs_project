@@ -22,9 +22,9 @@ def run():
 
     app.setStyleSheet(f"""
         QToolTip {{
-            background-color: {COLORS['bg_card']};
-            color: {COLORS['text']};
-            border: 1px solid {COLORS['border']};
+            background-color: {COLORS["bg_card"]};
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["border"]};
             padding: 4px 8px;
             font-size: 12px;
         }}

@@ -10,7 +10,7 @@ from .download_view import DownloadView
 from .raid_diff_view import RaidDiffView
 from .raids_view import RaidsView
 from .reference_view import ReferenceView
-from .styles import COLORS, COMMON_STYLES
+from .styles import COMMON_STYLES
 
 
 class RaidsHub(QWidget):
