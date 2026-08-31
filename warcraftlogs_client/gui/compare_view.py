@@ -23,22 +23,9 @@ from PySide6.QtWidgets import (
 
 from ..database import PerformanceDB
 from .charts import SERIES_COLORS, ComparisonSpiderChart
-from .styles import COLORS, COMMON_STYLES
+from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
 MAX_CHARACTERS = 5
-
-CLASS_COLORS = {
-    "Warrior": "#C79C6E",
-    "Paladin": "#F58CBA",
-    "Priest": "#FFFFFF",
-    "Shaman": "#0070DE",
-    "Druid": "#FF7D0A",
-    "Rogue": "#FFF569",
-    "Mage": "#69CCF0",
-    "Warlock": "#9482C9",
-    "Hunter": "#ABD473",
-    "Death Knight": "#C41E3A",
-}
 
 
 ROLE_METRIC_KEYS = {

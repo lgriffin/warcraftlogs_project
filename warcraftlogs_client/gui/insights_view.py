@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .boss_insights_view import BossInsightsView
 from .charts import (
     ConsumableHeatmapWidget,
     build_dps_progression_chart,
@@ -113,6 +114,9 @@ class InsightsView(QWidget):
         self._tabs.addTab(self._build_raid_overview_tab(), "Raid Overview")
         self._tabs.addTab(self._build_heatmap_tab(), "Consumable Heatmap")
         self._tabs.addTab(self._build_usage_tab(), "Consumable Usage")
+        self._boss_insights = BossInsightsView()
+        self._boss_insights.status_message.connect(self.status_message)
+        self._tabs.addTab(self._boss_insights, "Boss Analysis")
         outer.addWidget(self._tabs, 1)
 
     # ── Tab builders ──

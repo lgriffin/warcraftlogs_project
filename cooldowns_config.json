@@ -1,0 +1,36 @@
+{
+    "raid_cooldowns": {
+        "32182": {"name": "Heroism", "duration": 40},
+        "2825": {"name": "Bloodlust", "duration": 40}
+    },
+    "personal_cooldowns": {
+        "12472": {"name": "Icy Veins", "duration": 20, "class": "Mage"},
+        "12042": {"name": "Arcane Power", "duration": 15, "class": "Mage"},
+        "12043": {"name": "Presence of Mind", "duration": 0, "class": "Mage"},
+        "13750": {"name": "Adrenaline Rush", "duration": 15, "class": "Rogue"},
+        "13877": {"name": "Blade Flurry", "duration": 15, "class": "Rogue"},
+        "31884": {"name": "Avenging Wrath", "duration": 20, "class": "Paladin"},
+        "34692": {"name": "The Beast Within", "duration": 18, "class": "Hunter"},
+        "3045": {"name": "Rapid Fire", "duration": 15, "class": "Hunter"},
+        "12292": {"name": "Death Wish", "duration": 30, "class": "Warrior"},
+        "1719": {"name": "Recklessness", "duration": 15, "class": "Warrior"},
+        "29166": {"name": "Innervate", "duration": 20, "class": "Druid"},
+        "33702": {"name": "Shadowform Bonus", "duration": 15, "class": "Priest"},
+        "28682": {"name": "Combustion", "duration": 0, "class": "Mage"}
+    },
+    "trinket_buffs": {
+        "33649": {"name": "Madness of the Betrayer"},
+        "34775": {"name": "Shard of Contempt", "duration": 20},
+        "35166": {"name": "Bloodlust Brooch", "duration": 20},
+        "33648": {"name": "Hex Shrunken Head", "duration": 20},
+        "34321": {"name": "Shattered Sun Pendant (Aldor)", "duration": 10},
+        "34322": {"name": "Shattered Sun Pendant (Scryer)", "duration": 10},
+        "38346": {"name": "Tsunami Talisman", "duration": 10},
+        "34106": {"name": "Icon of the Silver Crescent", "duration": 20},
+        "35163": {"name": "Ashtongue Talisman of Shadows", "duration": 5}
+    },
+    "potion_buffs": {
+        "28508": {"name": "Destruction Potion", "duration": 15},
+        "28507": {"name": "Haste Potion", "duration": 15}
+    }
+}

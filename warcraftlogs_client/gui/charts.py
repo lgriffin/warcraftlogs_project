@@ -18,19 +18,25 @@ from PySide6.QtCore import QDateTime, QMargins, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
+from ..models import (
+    RESOURCE_TYPES,
+    CooldownSynergyAnalysis,
+    PlayerCastTimeline,
+    PlayerResourceAnalysis,
+)
 from .styles import COLORS
 
 SERIES_COLORS = [
-    QColor("#e94560"),
-    QColor("#69CCF0"),
-    QColor("#2ecc71"),
-    QColor("#f39c12"),
-    QColor("#9b59b6"),
-    QColor("#ABD473"),
-    QColor("#F58CBA"),
-    QColor("#C79C6E"),
-    QColor("#FFF569"),
-    QColor("#0070DE"),
+    QColor("#c9a42c"),  # WoW gold
+    QColor("#69CCF0"),  # Mage blue
+    QColor("#1eff00"),  # Uncommon green
+    QColor("#ff8000"),  # Legendary orange
+    QColor("#a335ee"),  # Epic purple
+    QColor("#ABD473"),  # Hunter green
+    QColor("#F58CBA"),  # Paladin pink
+    QColor("#C79C6E"),  # Warrior tan
+    QColor("#FFF569"),  # Rogue yellow
+    QColor("#0070DE"),  # Rare blue
 ]
 
 
@@ -43,7 +49,7 @@ def _make_chart(title: str) -> QChart:
     chart.legend().setLabelColor(QColor(COLORS["text"]))
     chart.legend().setFont(QFont("Segoe UI", 9))
     chart.legend().setAlignment(Qt.AlignmentFlag.AlignBottom)
-    chart.setMargins(QMargins(8, 8, 8, 8))
+    chart.setMargins(QMargins(12, 12, 12, 12))
     return chart
 
 
@@ -108,7 +114,7 @@ def make_chart_view(chart: QChart) -> QChartView:
     view = QChartView(chart)
     view.setRenderHint(QPainter.RenderHint.Antialiasing)
     view.setStyleSheet(f"background-color: {COLORS['bg_card']}; border: none;")
-    view.setMinimumHeight(220)
+    view.setMinimumHeight(260)
     return view
 
 
@@ -783,7 +789,7 @@ class CalendarHeatmapWidget(QWidget):
                     elif intensity > 0.25:
                         color = QColor("#f39c12")
                     else:
-                        color = QColor("#e94560")
+                        color = QColor(COLORS["error"])
 
                     self._cells.append((rect, key, raid))
                 else:
@@ -936,8 +942,8 @@ def build_raid_trend_chart(
         scatter = QScatterSeries()
         scatter.setName("This Raid")
         scatter.setMarkerSize(12)
-        scatter.setColor(QColor("#e94560"))
-        scatter.setBorderColor(QColor("#e94560"))
+        scatter.setColor(QColor(COLORS["accent"]))
+        scatter.setBorderColor(QColor(COLORS["accent"]))
         ms = QDateTime(sel_point[0]).toMSecsSinceEpoch()
         scatter.append(QPointF(ms, sel_point[1]))
         chart.addSeries(scatter)
@@ -1737,8 +1743,8 @@ class CancelledCastTimelineWidget(QWidget):
     _CAST_COLOR = QColor("#3498db")
     _DMG_COLOR = QColor("#f39c12")
     _DEATH_COLOR = QColor("#e74c3c")
-    _CANCEL_COLOR = QColor("#e94560")
-    _CANCEL_LINE_COLOR = QColor(233, 69, 96, 140)
+    _CANCEL_COLOR = QColor(COLORS["error"])
+    _CANCEL_LINE_COLOR = QColor(231, 76, 60, 140)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1952,6 +1958,572 @@ class CancelledCastTimelineWidget(QWidget):
 
             hit = QRectF(x - 6, self._TOP_MARGIN - 8, 12, grid_bottom - self._TOP_MARGIN + 8)
             self._hit_rects.append((hit, tip))
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        for rect, tip in self._hit_rects:
+            if rect.contains(pos):
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
+
+
+# ── Class Cast Timeline (Gantt chart of spell casts per player) ──
+
+
+class ClassCastTimelineWidget(QWidget):
+    """Multi-lane Gantt chart showing spell casts per player."""
+
+    _NAME_COL_W = 160
+    _PLAYER_HEADER_H = 24
+    _SPELL_ROW_H = 18
+    _PLAYER_GAP = 8
+    _TOP_MARGIN = 24
+    _BOTTOM_MARGIN = 30
+    _RIGHT_PAD = 20
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._timelines: list[PlayerCastTimeline] = []
+        self._fight_start: int = 0
+        self._fight_end: int = 0
+        self._hit_rects: list[tuple[QRectF, str]] = []
+        self._layout_map: list[tuple[str, list[tuple[int, str]]]] = []
+        self.setMouseTracking(True)
+        self.setMinimumHeight(60)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, timelines: list[PlayerCastTimeline], fight_start: int, fight_end: int):
+        self._timelines = timelines
+        self._fight_start = fight_start
+        self._fight_end = fight_end
+
+        # Pre-compute layout: for each player, gather distinct spells in order
+        self._layout_map = []
+        for tl in timelines:
+            seen_spells: dict[int, str] = {}
+            for cast in tl.casts:
+                if cast.ability_id not in seen_spells:
+                    seen_spells[cast.ability_id] = cast.ability_name
+            spell_list = list(seen_spells.items())  # [(id, name), ...]
+            self._layout_map.append((tl.player_name, spell_list))
+
+        # Calculate total height
+        total_h = self._TOP_MARGIN
+        for _, spell_list in self._layout_map:
+            total_h += self._PLAYER_HEADER_H
+            total_h += len(spell_list) * self._SPELL_ROW_H
+            total_h += self._PLAYER_GAP
+        total_h += self._BOTTOM_MARGIN
+        self.setMinimumHeight(max(total_h, 60))
+        self.update()
+
+    def sizeHint(self):
+        from PySide6.QtCore import QSize
+
+        return QSize(600, self.minimumHeight())
+
+    def _ts_to_x(self, ts: int, avail_w: float) -> float:
+        duration = self._fight_end - self._fight_start
+        if duration <= 0:
+            return self._NAME_COL_W
+        return self._NAME_COL_W + ((ts - self._fight_start) / duration) * avail_w
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        if not self._timelines or self._fight_end <= self._fight_start:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No cast data")
+            painter.end()
+            return
+
+        avail_w = self.width() - self._NAME_COL_W - self._RIGHT_PAD
+        if avail_w < 100:
+            avail_w = 100
+        duration_s = (self._fight_end - self._fight_start) / 1000
+
+        label_font = QFont("Segoe UI", 7)
+        header_font = QFont("Segoe UI", 9, QFont.Weight.Bold)
+        spell_font = QFont("Segoe UI", 8)
+
+        self._hit_rects = []
+
+        # Time axis at bottom - draw grid lines first
+        interval = 30 if duration_s <= 240 else 60
+        t = 0.0
+        content_bottom = self._TOP_MARGIN
+        for _, spell_list in self._layout_map:
+            content_bottom += self._PLAYER_HEADER_H + len(spell_list) * self._SPELL_ROW_H + self._PLAYER_GAP
+
+        while t <= duration_s:
+            x = self._NAME_COL_W + (t / duration_s) * avail_w
+            # Vertical grid line
+            painter.setPen(QPen(QColor(COLORS["border"]), 1, Qt.PenStyle.DotLine))
+            painter.drawLine(int(x), self._TOP_MARGIN, int(x), int(content_bottom))
+            t += interval
+
+        # Draw player sections
+        cur_y = self._TOP_MARGIN
+        for _tl_idx, (tl, (player_name, spell_list)) in enumerate(zip(self._timelines, self._layout_map, strict=False)):
+            # Player header
+            painter.setPen(QColor(COLORS["text_header"] if "text_header" in COLORS else COLORS["text"]))
+            painter.setFont(header_font)
+            painter.drawText(4, int(cur_y + self._PLAYER_HEADER_H - 6), player_name[:20])
+            cur_y += self._PLAYER_HEADER_H
+
+            # Spell rows
+            for spell_idx, (spell_id, spell_name) in enumerate(spell_list):
+                row_y = cur_y + spell_idx * self._SPELL_ROW_H
+                color = SERIES_COLORS[spell_idx % len(SERIES_COLORS)]
+
+                # Spell name label
+                painter.setPen(QColor(COLORS["text"]))
+                painter.setFont(spell_font)
+                painter.drawText(16, int(row_y + self._SPELL_ROW_H - 4), spell_name[:18])
+
+                # Background lane
+                bg_rect = QRectF(self._NAME_COL_W, row_y, avail_w, self._SPELL_ROW_H)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(QColor(COLORS["bg_dark"])))
+                painter.drawRoundedRect(bg_rect, 2, 2)
+
+                # Draw casts for this spell
+                for cast in tl.casts:
+                    if cast.ability_id != spell_id:
+                        continue
+                    x = self._ts_to_x(cast.timestamp, avail_w)
+                    rel_s = (cast.timestamp - self._fight_start) / 1000
+                    m, s = int(rel_s) // 60, int(rel_s) % 60
+
+                    if cast.duration_ms > 0:
+                        # Cast-time spell: colored rectangle
+                        w_px = (cast.duration_ms / 1000) / (duration_s) * avail_w
+                        w_px = max(w_px, 3)
+                        cast_rect = QRectF(x, row_y + 2, w_px, self._SPELL_ROW_H - 4)
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.setBrush(QBrush(color))
+                        painter.drawRoundedRect(cast_rect, 2, 2)
+                        cast_s = cast.duration_ms / 1000
+                        tip = f"{player_name} - {spell_name} at {m}:{s:02d} ({cast_s:.1f}s cast)"
+                        self._hit_rects.append((cast_rect, tip))
+                    else:
+                        # Instant cast: thin tick
+                        tick_rect = QRectF(x - 1, row_y + 1, 2, self._SPELL_ROW_H - 2)
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.setBrush(QBrush(color))
+                        painter.drawRect(tick_rect)
+                        tip = f"{player_name} - {spell_name} at {m}:{s:02d} (instant)"
+                        hit = QRectF(x - 4, row_y, 8, self._SPELL_ROW_H)
+                        self._hit_rects.append((hit, tip))
+
+            cur_y += len(spell_list) * self._SPELL_ROW_H + self._PLAYER_GAP
+
+        # Time axis labels at bottom
+        painter.setFont(label_font)
+        t = 0.0
+        while t <= duration_s:
+            x = self._NAME_COL_W + (t / duration_s) * avail_w
+            m, s = int(t) // 60, int(t) % 60
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.drawText(int(x) - 10, int(cur_y + 14), f"{m}:{s:02d}")
+            t += interval
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        for rect, tip in self._hit_rects:
+            if rect.contains(pos):
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
+
+
+# ── Resource Timeline (area chart with waste markers) ──
+
+
+class ResourceTimelineWidget(QWidget):
+    """Filled area chart of resource level over time with waste event markers."""
+
+    _LEFT_MARGIN = 60
+    _RIGHT_MARGIN = 20
+    _TOP_MARGIN = 20
+    _BOTTOM_MARGIN = 30
+    _MARKER_SIZE = 10
+
+    _RESOURCE_COLORS = {
+        0: QColor("#3498db"),  # Mana - blue
+        1: QColor("#e74c3c"),  # Rage - red
+        3: QColor("#f1c40f"),  # Energy - yellow
+        4: QColor("#e67e22"),  # Combo Points - orange
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._analysis: PlayerResourceAnalysis | None = None
+        self._fight_start: int = 0
+        self._fight_end: int = 0
+        self._hit_rects: list[tuple[QRectF, str]] = []
+        self.setMouseTracking(True)
+        self.setFixedHeight(200)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, analysis: PlayerResourceAnalysis, fight_start: int, fight_end: int):
+        self._analysis = analysis
+        self._fight_start = fight_start
+        self._fight_end = fight_end
+        self.setMinimumHeight(200)
+        self.update()
+
+    def _ts_to_x(self, ts: int) -> float:
+        duration = self._fight_end - self._fight_start
+        avail_w = self.width() - self._LEFT_MARGIN - self._RIGHT_MARGIN
+        if duration <= 0 or avail_w <= 0:
+            return self._LEFT_MARGIN
+        return self._LEFT_MARGIN + ((ts - self._fight_start) / duration) * avail_w
+
+    def _val_to_y(self, val: float, max_val: float) -> float:
+        chart_h = self.height() - self._TOP_MARGIN - self._BOTTOM_MARGIN
+        if max_val <= 0 or chart_h <= 0:
+            return self._TOP_MARGIN + chart_h
+        return self._TOP_MARGIN + chart_h - (val / max_val) * chart_h
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        if not self._analysis or not self._analysis.snapshots or self._fight_end <= self._fight_start:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No resource data")
+            painter.end()
+            return
+
+        avail_w = self.width() - self._LEFT_MARGIN - self._RIGHT_MARGIN
+        chart_h = self.height() - self._TOP_MARGIN - self._BOTTOM_MARGIN
+        duration_s = (self._fight_end - self._fight_start) / 1000
+
+        res_type = self._analysis.resource_type
+        line_color = self._RESOURCE_COLORS.get(res_type, QColor("#3498db"))
+        fill_color = QColor(line_color)
+        fill_color.setAlpha(60)
+
+        # Determine max resource
+        max_resource = max((s.max_amount for s in self._analysis.snapshots), default=100)
+        if max_resource <= 0:
+            max_resource = 100
+
+        label_font = QFont("Segoe UI", 7)
+        axis_font = QFont("Segoe UI", 8)
+
+        # Y-axis labels
+        painter.setFont(axis_font)
+        painter.setPen(QColor(COLORS["text_dim"]))
+        num_y_ticks = 5
+        for i in range(num_y_ticks + 1):
+            val = (max_resource * i) / num_y_ticks
+            y = self._val_to_y(val, max_resource)
+            painter.drawText(2, int(y) + 4, f"{int(val):,}")
+            # Horizontal grid line
+            painter.setPen(QPen(QColor(COLORS["border"]), 1, Qt.PenStyle.DotLine))
+            painter.drawLine(self._LEFT_MARGIN, int(y), self.width() - self._RIGHT_MARGIN, int(y))
+            painter.setPen(QColor(COLORS["text_dim"]))
+
+        # Build polygon for area fill
+        points = []
+        for snap in self._analysis.snapshots:
+            x = self._ts_to_x(snap.timestamp)
+            y = self._val_to_y(snap.amount, max_resource)
+            points.append(QPointF(x, y))
+
+        if points:
+            # Area fill: polygon closing to the bottom
+            bottom_y = self._TOP_MARGIN + chart_h
+            fill_polygon = QPolygonF()
+            fill_polygon.append(QPointF(points[0].x(), bottom_y))
+            for p in points:
+                fill_polygon.append(p)
+            fill_polygon.append(QPointF(points[-1].x(), bottom_y))
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(fill_color))
+            painter.drawPolygon(fill_polygon)
+
+            # Line on top
+            pen = QPen(line_color, 2)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            path = QPainterPath()
+            path.moveTo(points[0])
+            for p in points[1:]:
+                path.lineTo(p)
+            painter.drawPath(path)
+
+        # Time axis
+        painter.setFont(label_font)
+        interval = 30 if duration_s <= 240 else 60
+        t = 0.0
+        time_y = self.height() - self._BOTTOM_MARGIN + 14
+        while t <= duration_s:
+            x = self._LEFT_MARGIN + (t / duration_s) * avail_w
+            m, s = int(t) // 60, int(t) % 60
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.drawText(int(x) - 10, int(time_y), f"{m}:{s:02d}")
+            # Vertical grid line
+            painter.setPen(QPen(QColor(COLORS["border"]), 1, Qt.PenStyle.DotLine))
+            painter.drawLine(int(x), self._TOP_MARGIN, int(x), self._TOP_MARGIN + chart_h)
+            t += interval
+
+        # Waste event markers (red diamonds)
+        self._hit_rects = []
+        waste_color = QColor("#e74c3c")
+        half = self._MARKER_SIZE / 2
+        for waste in self._analysis.waste_events:
+            wx = self._ts_to_x(waste.timestamp)
+            # Find resource level at this timestamp
+            wy = self._val_to_y(waste.resource_amount, max_resource)
+
+            diamond = QPolygonF(
+                [
+                    QPointF(wx, wy - half),
+                    QPointF(wx + half, wy),
+                    QPointF(wx, wy + half),
+                    QPointF(wx - half, wy),
+                ]
+            )
+            painter.setPen(QPen(waste_color, 1))
+            painter.setBrush(QBrush(waste_color))
+            painter.drawPolygon(diamond)
+
+            hit = QRectF(wx - half - 2, wy - half - 2, self._MARKER_SIZE + 4, self._MARKER_SIZE + 4)
+            self._hit_rects.append((hit, waste.description or f"Waste at {waste.timestamp}"))
+
+        # Resource type label
+        res_name = RESOURCE_TYPES.get(res_type, "Resource")
+        painter.setPen(line_color)
+        painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        painter.drawText(self._LEFT_MARGIN + 4, self._TOP_MARGIN - 4, f"{self._analysis.player_name} - {res_name}")
+
+        painter.end()
+
+    def mouseMoveEvent(self, event):
+        pos = event.position() if hasattr(event, "position") else event.pos()
+        for rect, tip in self._hit_rects:
+            if rect.contains(pos):
+                tip_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+                QToolTip.showText(tip_pos, tip, self)
+                return
+        QToolTip.hideText()
+        super().mouseMoveEvent(event)
+
+
+# ── Cooldown Synergy Timeline (Gantt chart with Heroism overlay) ──
+
+
+class CooldownSynergyWidget(QWidget):
+    """Gantt chart showing cooldown activations relative to Heroism windows."""
+
+    _NAME_COL_W = 160
+    _SCORE_COL_W = 50
+    _ROW_H = 26
+    _ROW_GAP = 2
+    _TOP_MARGIN = 30
+    _HEROISM_H = 20
+    _BOTTOM_MARGIN = 30
+    _RIGHT_PAD = 20
+
+    _HEROISM_COLOR = QColor(255, 193, 37, 80)  # Gold/orange, semi-transparent
+    _HEROISM_BORDER = QColor(255, 193, 37)
+    _GREEN = QColor("#2ecc71")
+    _RED = QColor("#e74c3c")
+    _GRAY = QColor("#7f8c8d")
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._analysis: CooldownSynergyAnalysis | None = None
+        self._fight_start: int = 0
+        self._fight_end: int = 0
+        self._hit_rects: list[tuple[QRectF, str]] = []
+        self._has_heroism: bool = False
+        self.setMouseTracking(True)
+        self.setMinimumHeight(60)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, analysis: CooldownSynergyAnalysis, fight_start: int, fight_end: int):
+        self._analysis = analysis
+        self._fight_start = fight_start
+        self._fight_end = fight_end
+        self._has_heroism = bool(analysis.heroism_windows)
+
+        # Calculate height
+        n_players = len(analysis.player_synergies)
+        rows_start = self._TOP_MARGIN + self._HEROISM_H + 4
+        total_h = rows_start + n_players * (self._ROW_H + self._ROW_GAP) + self._BOTTOM_MARGIN
+        self.setMinimumHeight(max(total_h, 60))
+        self.update()
+
+    def sizeHint(self):
+        from PySide6.QtCore import QSize
+
+        return QSize(600, self.minimumHeight())
+
+    def _ts_to_x(self, ts: int, avail_w: float) -> float:
+        duration = self._fight_end - self._fight_start
+        if duration <= 0:
+            return self._NAME_COL_W
+        return self._NAME_COL_W + ((ts - self._fight_start) / duration) * avail_w
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
+
+        if not self._analysis or self._fight_end <= self._fight_start:
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.setFont(QFont("Segoe UI", 10))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No cooldown data")
+            painter.end()
+            return
+
+        timeline_end = self.width() - self._SCORE_COL_W - self._RIGHT_PAD
+        avail_w = timeline_end - self._NAME_COL_W
+        if avail_w < 100:
+            avail_w = 100
+        duration_s = (self._fight_end - self._fight_start) / 1000
+
+        label_font = QFont("Segoe UI", 7)
+        name_font = QFont("Segoe UI", 9)
+        score_font = QFont("Segoe UI", 8, QFont.Weight.Bold)
+        spell_font = QFont("Segoe UI", 7)
+
+        self._hit_rects = []
+        heroism_band_y = self._TOP_MARGIN
+
+        # Heroism band at the top
+        painter.setPen(QColor(COLORS["text_dim"]))
+        painter.setFont(name_font)
+        painter.drawText(4, int(heroism_band_y + self._HEROISM_H - 5), "Heroism")
+
+        # Heroism band background
+        bg_rect = QRectF(self._NAME_COL_W, heroism_band_y, avail_w, self._HEROISM_H)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(COLORS["bg_dark"])))
+        painter.drawRoundedRect(bg_rect, 2, 2)
+
+        for hw in self._analysis.heroism_windows:
+            hx1 = self._ts_to_x(hw.start_time, avail_w)
+            hx2 = self._ts_to_x(hw.end_time, avail_w)
+            hero_rect = QRectF(hx1, heroism_band_y, max(hx2 - hx1, 3), self._HEROISM_H)
+            painter.setPen(QPen(self._HEROISM_BORDER, 1))
+            painter.setBrush(QBrush(self._HEROISM_COLOR))
+            painter.drawRoundedRect(hero_rect, 2, 2)
+
+            rel_s = (hw.start_time - self._fight_start) / 1000
+            m, s = int(rel_s) // 60, int(rel_s) % 60
+            caster = hw.caster_name or "Unknown"
+            tip = f"Heroism by {caster} at {m}:{s:02d}"
+            self._hit_rects.append((hero_rect, tip))
+
+        rows_start = heroism_band_y + self._HEROISM_H + 4
+
+        # Time axis grid lines
+        interval = 30 if duration_s <= 240 else 60
+        n_players = len(self._analysis.player_synergies)
+        grid_bottom = rows_start + n_players * (self._ROW_H + self._ROW_GAP)
+
+        painter.setFont(label_font)
+        t = 0.0
+        while t <= duration_s:
+            x = self._NAME_COL_W + (t / duration_s) * avail_w
+            painter.setPen(QPen(QColor(COLORS["border"]), 1, Qt.PenStyle.DotLine))
+            painter.drawLine(int(x), self._TOP_MARGIN, int(x), int(grid_bottom))
+            t += interval
+
+        # Player rows
+        for i, ps in enumerate(self._analysis.player_synergies):
+            y = rows_start + i * (self._ROW_H + self._ROW_GAP)
+
+            # Player name
+            painter.setPen(QColor(COLORS["text"]))
+            painter.setFont(name_font)
+            painter.drawText(4, int(y + self._ROW_H - 7), ps.player_name[:20])
+
+            # Row background
+            row_bg = QRectF(self._NAME_COL_W, y, avail_w, self._ROW_H)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(COLORS["bg_dark"])))
+            painter.drawRoundedRect(row_bg, 2, 2)
+
+            # Cooldown activation rectangles
+            for act in ps.activations:
+                ax1 = self._ts_to_x(act.start_time, avail_w)
+                ax2 = self._ts_to_x(act.end_time, avail_w)
+                act_w = max(ax2 - ax1, 4)
+                act_rect = QRectF(ax1, y + 2, act_w, self._ROW_H - 4)
+
+                # Color based on heroism overlap
+                if act.during_heroism:
+                    act_color = self._GREEN
+                elif self._has_heroism:
+                    act_color = self._RED
+                else:
+                    act_color = self._GRAY
+
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(act_color))
+                painter.drawRoundedRect(act_rect, 2, 2)
+
+                # Spell name inside if wide enough
+                if act_w > 40:
+                    painter.setPen(QColor("#ffffff"))
+                    painter.setFont(spell_font)
+                    text_rect = QRectF(ax1 + 2, y + 2, act_w - 4, self._ROW_H - 4)
+                    painter.drawText(
+                        text_rect,
+                        Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                        act.spell_name[: int(act_w / 6)],
+                    )
+
+                heroism_str = "Yes" if act.during_heroism else "No"
+                tip = f"{act.spell_name} ({act.category}) - during Heroism: {heroism_str}"
+                self._hit_rects.append((act_rect, tip))
+
+            # Synergy score to the right
+            score_x = self._NAME_COL_W + avail_w + 8
+            score_pct = ps.synergy_score * 100 if ps.synergy_score <= 1 else ps.synergy_score
+            if self._has_heroism:
+                if score_pct >= 75:
+                    score_color = self._GREEN
+                elif score_pct >= 50:
+                    score_color = QColor("#f39c12")
+                else:
+                    score_color = self._RED
+            else:
+                score_color = QColor(COLORS["text_dim"])
+            painter.setPen(score_color)
+            painter.setFont(score_font)
+            painter.drawText(int(score_x), int(y + self._ROW_H - 7), f"{score_pct:.0f}%")
+
+        # Time axis labels at bottom
+        painter.setFont(label_font)
+        t = 0.0
+        while t <= duration_s:
+            x = self._NAME_COL_W + (t / duration_s) * avail_w
+            m, s = int(t) // 60, int(t) % 60
+            painter.setPen(QColor(COLORS["text_dim"]))
+            painter.drawText(int(x) - 10, int(grid_bottom + 14), f"{m}:{s:02d}")
+            t += interval
 
         painter.end()
 

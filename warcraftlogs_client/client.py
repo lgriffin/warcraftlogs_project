@@ -34,15 +34,34 @@ def _extract_report(result: dict) -> dict:
     return report
 
 
+DEFAULT_API_URL = "https://www.warcraftlogs.com/api/v2/client"
+
+
 class WarcraftLogsClient:
-    API_URL = "https://www.warcraftlogs.com/api/v2/client"
+    """GraphQL client for Warcraft Logs.
+
+    Pass ``api_url`` from config (``wcl_api_url``) so Fresh vs retail hosts stay
+    consistent. Temporary per-call overrides (e.g. character profile) still work
+    via the ``api_url`` argument on those methods.
+    """
+
     MIN_REQUEST_INTERVAL = 0.25
     MAX_RETRIES = 3
 
-    def __init__(self, token_manager, cache_enabled: bool = True):
+    def __init__(self, token_manager, cache_enabled: bool = True, api_url: str | None = None):
         self.token_manager = token_manager
         self._last_request_time = 0.0
         self.cache_enabled = cache_enabled
+        self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
+
+    # Back-compat for callers that read/assign API_URL on the instance.
+    @property
+    def API_URL(self) -> str:
+        return self.api_url
+
+    @API_URL.setter
+    def API_URL(self, value: str) -> None:
+        self.api_url = value.rstrip("/")
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_time
@@ -60,14 +79,14 @@ class WarcraftLogsClient:
         token = self.token_manager.get_token()
         headers = {"Authorization": f"Bearer {token}"}
 
-        logger.info("API request: POST %s", self.API_URL)
+        logger.info("API request: POST %s", self.api_url)
         logger.debug("Query: %s", query[:200])
 
         for attempt in range(self.MAX_RETRIES):
             self._throttle()
             self._last_request_time = time.monotonic()
 
-            response = requests.post(self.API_URL, headers=headers, json={"query": query}, timeout=30)
+            response = requests.post(self.api_url, headers=headers, json={"query": query}, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
@@ -213,6 +232,26 @@ class WarcraftLogsClient:
         actors = (report.get("masterData") or {}).get("actors") or []
         return [a for a in actors if a["type"] == "Player"]
 
+    def get_ability_names(self, report_id: str) -> dict[int, str]:
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              masterData {{
+                abilities {{
+                  gameID
+                  name
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        report = _extract_report(result)
+        abilities = (report.get("masterData") or {}).get("abilities") or []
+        return {a["gameID"]: a["name"] for a in abilities if a.get("gameID") and a.get("name")}
+
     def get_fights(self, report_id: str) -> list[dict]:
         query = f"""
         {{
@@ -322,6 +361,91 @@ class WarcraftLogsClient:
                 break
             start_time = next_page
         return all_data
+
+    def get_cast_events_for_encounter(
+        self, report_id: str, source_id: int, start_time: int, end_time: int
+    ) -> list[dict]:
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  events(startTime: {page_start}, endTime: {end_time}, sourceID: {source_id},
+                         dataType: Casts, hostilityType: Friendlies, limit: 10000) {{
+                    data
+                    nextPageTimestamp
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data", []))
+            next_page = events.get("nextPageTimestamp")
+            if not next_page:
+                break
+            page_start = next_page
+        return all_data
+
+    def get_resource_events_paginated(
+        self, report_id: str, source_id: int, start_time: int, end_time: int
+    ) -> list[dict]:
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            query = f"""
+            {{
+              reportData {{
+                report(code: "{report_id}") {{
+                  events(startTime: {page_start}, endTime: {end_time}, sourceID: {source_id},
+                         dataType: Resources, hostilityType: Friendlies, limit: 10000) {{
+                    data
+                    nextPageTimestamp
+                  }}
+                }}
+              }}
+            }}
+            """
+            result = self.run_query(query)
+            report = _extract_report(result)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data", []))
+            next_page = events.get("nextPageTimestamp")
+            if not next_page:
+                break
+            page_start = next_page
+        return all_data
+
+    def get_buffs_table_for_encounter(
+        self,
+        report_id: str,
+        start_time: int,
+        end_time: int,
+        source_id: int = 0,
+        target_id: int = 0,
+    ) -> dict:
+        filters = "hostilityType: Friendlies"
+        if source_id:
+            filters += f", sourceID: {source_id}"
+        if target_id:
+            filters += f", targetID: {target_id}"
+        query = f"""
+        {{
+          reportData {{
+            report(code: "{report_id}") {{
+              table(dataType: Buffs, startTime: {start_time}, endTime: {end_time},
+                    {filters})
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query)
+        report = _extract_report(result)
+        return report.get("table") or {}
 
     def get_cast_table(self, report_id: str, source_id: int) -> list[dict]:
         query = f"""
@@ -649,9 +773,9 @@ class WarcraftLogsClient:
         self, name: str, server_slug: str, server_region: str, api_url: str | None = None
     ) -> CharacterProfile:
         """Fetch a full character profile from the WCL API."""
-        original_url = self.API_URL
+        original_url = self.api_url
         if api_url:
-            self.API_URL = api_url
+            self.api_url = api_url.rstrip("/")
 
         try:
             query = f"""
@@ -714,7 +838,7 @@ class WarcraftLogsClient:
 
             return profile
         finally:
-            self.API_URL = original_url
+            self.api_url = original_url
 
     def _fetch_gear_from_report(self, report_code: str, char_name: str) -> list[GearItem]:
         """Pull equipped gear from CombatantInfo events in a report."""
@@ -797,9 +921,9 @@ class WarcraftLogsClient:
         api_url: str | None = None,
     ) -> ZoneRankingResult | None:
         """Fetch zone rankings for a specific zone."""
-        original_url = self.API_URL
+        original_url = self.api_url
         if api_url:
-            self.API_URL = api_url
+            self.api_url = api_url.rstrip("/")
 
         try:
             query = f"""
@@ -821,7 +945,7 @@ class WarcraftLogsClient:
                 return self._parse_zone_rankings(zr)
             return None
         finally:
-            self.API_URL = original_url
+            self.api_url = original_url
 
     def _parse_zone_rankings(self, zr: dict) -> ZoneRankingResult:
         all_stars = []

@@ -584,7 +584,7 @@ def run_consumes_analysis(
 
     config = load_config()
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr)
+    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
     analyzer = ConsumesAnalyzer(include_healers=include_healers)
 

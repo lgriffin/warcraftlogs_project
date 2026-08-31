@@ -44,9 +44,10 @@ class CharacterHistoryWidget(QWidget):
     status_message = Signal(str)
     request_back = Signal()
 
-    def __init__(self, character_name: str, parent=None):
+    def __init__(self, character_name: str, inline: bool = False, parent=None):
         super().__init__(parent)
         self._name = character_name
+        self._inline = inline
         self._chart_widgets: dict[str, QWidget] = {}
         self._all_healer_trend = []
         self._all_healer_spell_trend = []
@@ -71,24 +72,29 @@ class CharacterHistoryWidget(QWidget):
         layout.setSpacing(0)
         self.setStyleSheet(COMMON_STYLES)
 
-        header = QWidget()
-        header.setFixedHeight(52)
-        header.setStyleSheet(f"background-color: {COLORS['bg_card']}; border-bottom: 1px solid {COLORS['border']};")
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(16, 0, 16, 0)
-
-        back_btn = QPushButton("< Back")
-        back_btn.setProperty("secondary", True)
-        back_btn.setFixedHeight(32)
-        back_btn.clicked.connect(self.request_back.emit)
-        header_layout.addWidget(back_btn)
-
         self._title_label = QLabel()
-        self._title_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        self._title_label.setStyleSheet(f"color: {COLORS['text_header']};")
-        header_layout.addWidget(self._title_label)
-        header_layout.addStretch()
-        layout.addWidget(header)
+        if self._inline:
+            self._title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+            self._title_label.setStyleSheet(f"color: {COLORS['text_gold']}; padding: 12px 24px 4px 24px;")
+            layout.addWidget(self._title_label)
+        else:
+            header = QWidget()
+            header.setFixedHeight(52)
+            header.setStyleSheet(f"background-color: {COLORS['bg_card']}; border-bottom: 1px solid {COLORS['border']};")
+            header_layout = QHBoxLayout(header)
+            header_layout.setContentsMargins(16, 0, 16, 0)
+
+            back_btn = QPushButton("< Back")
+            back_btn.setProperty("secondary", True)
+            back_btn.setFixedHeight(32)
+            back_btn.clicked.connect(self.request_back.emit)
+            header_layout.addWidget(back_btn)
+
+            self._title_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+            self._title_label.setStyleSheet(f"color: {COLORS['text_header']};")
+            header_layout.addWidget(self._title_label)
+            header_layout.addStretch()
+            layout.addWidget(header)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)

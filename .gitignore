@@ -74,6 +74,7 @@ consumes_report*.csv
 
 # Configuration files with sensitive data
 config.json
+user_token.json
 
 # Local database
 *.db

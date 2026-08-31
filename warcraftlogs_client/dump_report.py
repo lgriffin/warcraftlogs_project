@@ -61,7 +61,7 @@ def run():
     report_id = config["report_id"]
 
     token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr)
+    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
     print("📥 Fetching report time range...")
     start, end = get_report_time_range(client, report_id)

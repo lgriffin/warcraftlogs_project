@@ -89,6 +89,10 @@ def get_totem_config_path() -> Path:
     return get_app_dir() / "totem_config.json"
 
 
+def get_cooldowns_config_path() -> Path:
+    return get_app_dir() / "cooldowns_config.json"
+
+
 def get_update_dir() -> Path:
     """Temp directory for downloading and staging updates."""
     base = os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))

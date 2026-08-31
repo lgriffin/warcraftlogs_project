@@ -43,6 +43,8 @@ include = ["warcraftlogs_client*"]
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+# Ruff 0.16+ formats Markdown code fences experimentally; keep lint/format on Python only.
+extend-exclude = ["guides", "*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP", "SIM", "C4", "RUF"]

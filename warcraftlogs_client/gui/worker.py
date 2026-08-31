@@ -35,9 +35,8 @@ class AnalysisWorker(QThread):
 
             self.progress.emit("Authenticating with WarcraftLogs API...")
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
-            self.progress.emit("Analyzing raid data (this may take a minute)...")
             result = analyze_raid(
                 client,
                 self.report_id,
@@ -46,6 +45,7 @@ class AnalysisWorker(QThread):
                 tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
                 healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
                 tank_min_taken_10=role_thresholds.get("tank_min_taken_10", 300000),
+                progress_callback=self.progress.emit,
             )
 
             self.progress.emit("Analysis complete!")
@@ -85,10 +85,12 @@ class ReferenceAnalysisWorker(QThread):
             role_thresholds = config.get("role_thresholds", {})
 
             self.progress.emit("Connecting with user credentials...")
-            client = WarcraftLogsClient(user_tm, cache_enabled=False)
-            client.API_URL = f"{_get_base_url()}/api/v2/user"
+            client = WarcraftLogsClient(
+                user_tm,
+                cache_enabled=False,
+                api_url=f"{_get_base_url()}/api/v2/user",
+            )
 
-            self.progress.emit("Downloading and analyzing raid data (this may take a minute)...")
             result = analyze_raid(
                 client,
                 self.report_id,
@@ -97,6 +99,7 @@ class ReferenceAnalysisWorker(QThread):
                 tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
                 healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
                 tank_min_taken_10=role_thresholds.get("tank_min_taken_10", 300000),
+                progress_callback=self.progress.emit,
             )
 
             self.progress.emit("Analysis complete!")
@@ -120,7 +123,7 @@ class GuildInfoWorker(QThread):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
             info = client.get_guild_info(self.guild_id)
             self.finished.emit(info)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
@@ -141,7 +144,7 @@ class GuildReportsWorker(QThread):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
             reports = client.get_guild_reports(self.guild_id)
             self.finished.emit(reports)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
@@ -165,7 +168,7 @@ class CharacterProfileWorker(QThread):
         try:
             config = load_config()
             token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr)
+            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
             profile = client.get_character_profile(
                 self.char_name,
                 self.server,
