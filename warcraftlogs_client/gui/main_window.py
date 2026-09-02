@@ -23,6 +23,7 @@ from ..database import PerformanceDB
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
+from .console_widget import ConsoleDock
 from .dashboard_view import DashboardView
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
@@ -241,6 +242,32 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
 
+        # ── Console dock ──
+        self._console_dock = ConsoleDock(self)
+        self._console_dock.setVisible(False)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._console_dock)
+
+        self._console_btn = QPushButton("Console")
+        self._console_btn.setFixedSize(70, 20)
+        self._console_btn.setToolTip("Toggle console log (Ctrl+`)")
+        self._console_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS["bg_input"]};
+                color: {COLORS["text_dim"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: 3px;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 0;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS["bg_hover"]};
+                color: {COLORS["text"]};
+            }}
+        """)
+        self._console_btn.clicked.connect(self._toggle_console)
+        self.status_bar.addPermanentWidget(self._console_btn)
+
         # ── Connect signals ──
         self.nav_list.currentRowChanged.connect(self._on_nav_changed)
         self.nav_list.setCurrentRow(0)
@@ -277,6 +304,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._show_settings)
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self._open_command_palette)
+        QShortcut(QKeySequence("Ctrl+`"), self).activated.connect(self._toggle_console)
 
     def _open_command_palette(self):
         palette = CommandPalette(self)
@@ -457,6 +485,10 @@ class MainWindow(QMainWindow):
         self.stack.pop_view()
         self._drill_into_raid(report_id)
 
+    def _toggle_console(self):
+        visible = not self._console_dock.isVisible()
+        self._console_dock.setVisible(visible)
+
     def _show_settings(self):
         self.nav_list.clearSelection()
         self.stack.show_base_page(5)
@@ -504,6 +536,7 @@ class MainWindow(QMainWindow):
         self._guild_info_worker.start()
 
     def closeEvent(self, event):
+        self._console_dock.cleanup()
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
