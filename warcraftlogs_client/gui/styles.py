@@ -228,4 +228,38 @@ COMMON_STYLES = f"""
     QMessageBox QPushButton {{
         min-width: 80px;
     }}
+    QScrollBar:horizontal {{
+        background-color: {COLORS["bg_mid"]};
+        height: 12px;
+        border: none;
+    }}
+    QScrollBar::handle:horizontal {{
+        background-color: {COLORS["accent_dim"]};
+        border-radius: 4px;
+        min-width: 30px;
+        margin: 2px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background-color: {COLORS["accent"]};
+    }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+        width: 0;
+    }}
+    QScrollBar:vertical {{
+        background-color: {COLORS["bg_mid"]};
+        width: 12px;
+        border: none;
+    }}
+    QScrollBar::handle:vertical {{
+        background-color: {COLORS["accent_dim"]};
+        border-radius: 4px;
+        min-height: 30px;
+        margin: 2px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background-color: {COLORS["accent"]};
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0;
+    }}
 """
