@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -121,6 +121,56 @@ class SettingsView(QWidget):
         env_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
         env_note.setWordWrap(True)
         creds_layout.addRow(env_note)
+
+        creds_btn_row = QHBoxLayout()
+
+        save_creds_btn = QPushButton("Save Settings")
+        save_creds_btn.setFixedWidth(160)
+        save_creds_btn.setFixedHeight(36)
+        save_creds_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS["accent"]};
+                color: #121214;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS["accent_hover"]};
+            }}
+        """)
+        save_creds_btn.clicked.connect(self._save_config)
+        creds_btn_row.addWidget(save_creds_btn)
+
+        self._test_auth_btn = QPushButton("Test Connection")
+        self._test_auth_btn.setFixedWidth(160)
+        self._test_auth_btn.setFixedHeight(36)
+        self._test_auth_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS["bg_card"]};
+                color: {COLORS["text"]};
+                border: 1px solid {COLORS["border"]};
+                border-radius: 4px;
+                padding: 8px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS["border"]};
+            }}
+        """)
+        self._test_auth_btn.clicked.connect(self._test_connection)
+        creds_btn_row.addWidget(self._test_auth_btn)
+
+        self._test_result_label = QLabel("")
+        self._test_result_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        self._test_result_label.setVisible(False)
+        creds_btn_row.addWidget(self._test_result_label)
+
+        creds_btn_row.addStretch()
+        creds_layout.addRow(creds_btn_row)
 
         layout.addWidget(creds_group)
 
@@ -286,16 +336,6 @@ class SettingsView(QWidget):
 
         layout.addWidget(update_group)
 
-        # ── Save button ──
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        save_btn = QPushButton("Save Settings")
-        save_btn.setFixedWidth(160)
-        save_btn.clicked.connect(self._save_config)
-        btn_layout.addWidget(save_btn)
-
-        layout.addLayout(btn_layout)
         layout.addStretch()
 
     def _toggle_secret_visibility(self):
@@ -523,3 +563,58 @@ class SettingsView(QWidget):
         self._settings_auth_btn.setEnabled(True)
         self._refresh_auth_status()
         QMessageBox.warning(self, "Authentication Failed", error)
+
+    def _test_connection(self):
+        client_id = self.client_id_input.text().strip()
+        client_secret = self.client_secret_input.text().strip()
+        if not client_id or not client_secret:
+            QMessageBox.warning(self, "Missing Credentials", "Enter Client ID and Client Secret before testing.")
+            return
+
+        self._test_auth_btn.setEnabled(False)
+        self._test_auth_btn.setText("Testing...")
+        self._test_result_label.setText("Connecting to WarcraftLogs...")
+        self._test_result_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        self._test_result_label.setVisible(True)
+
+        self._test_thread = _TestAuthThread(client_id, client_secret)
+        self._test_thread.success.connect(self._on_test_success)
+        self._test_thread.failed.connect(self._on_test_failed)
+        self._test_thread.start()
+
+    def _on_test_success(self):
+        self._test_auth_btn.setEnabled(True)
+        self._test_auth_btn.setText("Test Connection")
+        self._test_result_label.setText("Connection successful")
+        self._test_result_label.setStyleSheet(f"color: {COLORS['success']}; font-size: 12px; font-weight: bold;")
+        self.status_message.emit("API connection test passed")
+
+    def _on_test_failed(self, error: str):
+        self._test_auth_btn.setEnabled(True)
+        self._test_auth_btn.setText("Test Connection")
+        self._test_result_label.setText(f"Failed: {error}")
+        self._test_result_label.setStyleSheet(f"color: {COLORS['error']}; font-size: 12px; font-weight: bold;")
+        self.status_message.emit("API connection test failed")
+
+
+class _TestAuthThread(QThread):
+    success = Signal()
+    failed = Signal(str)
+
+    def __init__(self, client_id: str, client_secret: str):
+        super().__init__()
+        self._client_id = client_id
+        self._client_secret = client_secret
+
+    def run(self):
+        from ..auth import TokenManager
+        from ..common.errors import AuthenticationError
+
+        try:
+            tm = TokenManager(self._client_id, self._client_secret)
+            tm.get_token()
+            self.success.emit()
+        except AuthenticationError as e:
+            self.failed.emit(str(e))
+        except Exception as e:
+            self.failed.emit(str(e))
