@@ -167,8 +167,10 @@ class RaidAnalysisWidget(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background-color: {COLORS["bg_dark"]}; }}
+            QScrollArea {{ background: transparent; }}
+            QScrollArea > QWidget {{ background: transparent; }}
         """)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
