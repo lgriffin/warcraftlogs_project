@@ -165,23 +165,16 @@ class RaidAnalysisWidget(QWidget):
 
         layout.addWidget(header)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setStyleSheet(f"""
-            QScrollArea {{ background: transparent; }}
-            QScrollArea > QWidget {{ background: transparent; }}
-        """)
-
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self._splitter = splitter
-        splitter.setMinimumHeight(600)
 
         tabs_container = QWidget()
         tabs_layout = QVBoxLayout(tabs_container)
         tabs_layout.setContentsMargins(16, 12, 8, 16)
 
         self._tabs = QTabWidget()
+        self._tabs.setUsesScrollButtons(True)
+        self._tabs.setElideMode(Qt.TextElideMode.ElideNone)
 
         self._healer_model = HealerTableModel()
         healer_table = self._make_table(self._healer_model)
@@ -361,8 +354,7 @@ class RaidAnalysisWidget(QWidget):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([1, 0])
 
-        scroll.setWidget(splitter)
-        layout.addWidget(scroll, 1)
+        layout.addWidget(splitter, 1)
 
     def _make_table(self, model) -> _ClickableNameTableView:
         table = _ClickableNameTableView()
