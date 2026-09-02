@@ -40,9 +40,7 @@ class ConsoleDock(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Console", parent)
         self.setObjectName("ConsoleDock")
-        self.setAllowedAreas(
-            Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea
-        )
+        self.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.TopDockWidgetArea)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -108,7 +106,8 @@ class ConsoleDock(QDockWidget):
         """)
 
         self._handler = GuiLogHandler()
-        self._handler.setFormatter(logging.Formatter("%(asctime)s  %(name)s  %(levelname)s: %(message)s", datefmt="%H:%M:%S"))
+        fmt = "%(asctime)s  %(name)s  %(levelname)s: %(message)s"
+        self._handler.setFormatter(logging.Formatter(fmt, datefmt="%H:%M:%S"))
         logging.getLogger().addHandler(self._handler)
         self._handler.log_message.connect(self._append_log)
 
