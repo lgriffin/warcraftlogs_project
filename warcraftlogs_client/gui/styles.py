@@ -158,6 +158,18 @@ COMMON_STYLES = f"""
     QTabBar::tab:hover:!selected {{
         background-color: {COLORS["bg_hover"]};
     }}
+    QTabBar QToolButton {{
+        background-color: {COLORS["bg_input"]};
+        color: {COLORS["text_gold"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 3px;
+        padding: 4px;
+        margin: 2px;
+    }}
+    QTabBar QToolButton:hover {{
+        background-color: {COLORS["bg_hover"]};
+        color: {COLORS["accent"]};
+    }}
     QTableView {{
         background-color: {COLORS["bg_card"]};
         color: {COLORS["text"]};
@@ -215,5 +227,39 @@ COMMON_STYLES = f"""
     }}
     QMessageBox QPushButton {{
         min-width: 80px;
+    }}
+    QScrollBar:horizontal {{
+        background-color: {COLORS["bg_mid"]};
+        height: 12px;
+        border: none;
+    }}
+    QScrollBar::handle:horizontal {{
+        background-color: {COLORS["accent_dim"]};
+        border-radius: 4px;
+        min-width: 30px;
+        margin: 2px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background-color: {COLORS["accent"]};
+    }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+        width: 0;
+    }}
+    QScrollBar:vertical {{
+        background-color: {COLORS["bg_mid"]};
+        width: 12px;
+        border: none;
+    }}
+    QScrollBar::handle:vertical {{
+        background-color: {COLORS["accent_dim"]};
+        border-radius: 4px;
+        min-height: 30px;
+        margin: 2px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background-color: {COLORS["accent"]};
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0;
     }}
 """

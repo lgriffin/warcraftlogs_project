@@ -173,6 +173,8 @@ class RaidAnalysisWidget(QWidget):
         tabs_layout.setContentsMargins(16, 12, 8, 16)
 
         self._tabs = QTabWidget()
+        self._tabs.setUsesScrollButtons(True)
+        self._tabs.setElideMode(Qt.TextElideMode.ElideNone)
 
         self._healer_model = HealerTableModel()
         healer_table = self._make_table(self._healer_model)
