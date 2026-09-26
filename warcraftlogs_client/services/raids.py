@@ -47,7 +47,15 @@ class RaidService:
                 raise ReferenceAuthRequired("Sign in to Warcraft Logs to analyse reference reports")
         else:
             client = self.ctx.wcl_client
-        return analyze_raid(client, report_id, progress_callback=progress, **self.ctx.thresholds.as_kwargs())
+        with self.ctx.db() as db:
+            overrides = db.get_role_overrides_for_report(report_id)
+        return analyze_raid(
+            client,
+            report_id,
+            progress_callback=progress,
+            role_overrides=overrides or None,
+            **self.ctx.thresholds.as_kwargs(),
+        )
 
     def save(self, analysis: RaidAnalysis, source: str = "guild") -> None:
         with self.ctx.db() as db:

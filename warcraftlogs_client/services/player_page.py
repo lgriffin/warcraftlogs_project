@@ -22,6 +22,7 @@ import requests
 
 from ..common.errors import WarcraftLogsError
 from .context import AnalysisThresholds, AppContext, validate_report_code
+from .lineage import CharacterLineage, character_lineage
 
 if TYPE_CHECKING:
     from ..client import WarcraftLogsClient
@@ -139,12 +140,16 @@ class PlayerPageData:
     player: PlayerRef
     logs: list[PlayerLog] = field(default_factory=list)
     history: dict[str, Any] | None = None
+    lineage: CharacterLineage | None = None
+    role_overrides: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "player": asdict(self.player),
             "logs": [log.to_dict() for log in self.logs],
             "history": self.history,
+            "lineage": self.lineage.to_dict() if self.lineage else None,
+            "role_overrides": self.role_overrides,
         }
 
 
@@ -200,6 +205,8 @@ class PlayerPageService:
             player=player,
             logs=logs,
             history=_history_summary(history) if history else None,
+            lineage=character_lineage(self.db, player.name),
+            role_overrides=self.db.get_role_overrides(player.name),
         )
 
     # ── Discovery ──
@@ -354,7 +361,8 @@ class PlayerPageService:
             raise WarcraftLogsError("Warcraft Logs API access is needed to import new reports")
         from ..analysis import analyze_raid
 
-        return analyze_raid(self.client, code, **AnalysisThresholds().as_kwargs())
+        overrides = self.db.get_role_overrides_for_report(code) or None
+        return analyze_raid(self.client, code, role_overrides=overrides, **AnalysisThresholds().as_kwargs())
 
     def dismiss(self, player: PlayerRef, codes: list[str]) -> int:
         """Hide reports from future discovery results without importing them."""
