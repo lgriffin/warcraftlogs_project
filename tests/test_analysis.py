@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 import requests
 
 from warcraftlogs_client.analysis import (
@@ -274,3 +275,30 @@ class TestAnalyzeRaid:
         analysis = analyze_raid(mock_client, "r1")
         assert len(analysis.warnings) > 0
         assert any("Healer" in w for w in analysis.warnings)
+
+
+class TestTenManDetection:
+    def test_fight_size_wins_over_zone_name(self):
+        from warcraftlogs_client.analysis import _is_ten_man
+
+        fights = [{"encounterID": 0, "size": 25}, {"encounterID": 652, "size": 10}]
+        assert _is_ten_man("Some Future Zone Name", fights) is True
+        assert _is_ten_man("Karazhan", [{"encounterID": 649, "size": 25}]) is False
+
+    @pytest.mark.parametrize("zone", ["Karazhan", "karazhan", "Zul'Aman", "Karazhan (Raid)", "Zul Aman"])
+    def test_zone_name_fallback_is_case_and_suffix_tolerant(self, zone):
+        from warcraftlogs_client.analysis import _is_ten_man
+
+        assert _is_ten_man(zone, []) is True
+
+    @pytest.mark.parametrize("zone", ["Gruul's Lair", "Serpentshrine Cavern", "", None])
+    def test_other_zones_are_25_man(self, zone):
+        from warcraftlogs_client.analysis import _is_ten_man
+
+        assert _is_ten_man(zone, [{"encounterID": 0, "size": 10}]) is False
+
+    def test_unexpected_fights_payload_falls_back_to_zone(self):
+        from warcraftlogs_client.analysis import _is_ten_man
+
+        assert _is_ten_man("Karazhan", None) is True
+        assert _is_ten_man("Karazhan", [{"encounterID": 1, "size": None}]) is True

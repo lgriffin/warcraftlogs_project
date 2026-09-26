@@ -306,9 +306,15 @@ class TestClientCharacterReports:
                 "zone": "Karazhan",
             }
         ]
-        query = mock_post.call_args.kwargs["json"]["query"]
-        assert 'name: "Evil\\"Name"' in query  # quotes are escaped, not injected
-        assert "limit: 10, page: 2" in query
+        payload = mock_post.call_args.kwargs["json"]
+        assert "Evil" not in payload["query"]  # user input travels as a variable, never in the query text
+        assert payload["variables"] == {
+            "name": 'Evil"Name',
+            "serverSlug": "server",
+            "serverRegion": "eu",
+            "limit": 10,
+            "page": 2,
+        }
 
     @patch("warcraftlogs_client.client.requests.post")
     def test_unknown_character_raises(self, mock_post):

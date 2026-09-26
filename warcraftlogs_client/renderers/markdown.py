@@ -16,24 +16,32 @@ from ..models import (
     TankPerformance,
 )
 
+ROLES = ("tank", "healer", "melee", "ranged")
 
-def render_raid_analysis(analysis: RaidAnalysis) -> str:
-    """Render a complete raid analysis to a markdown string."""
+
+def render_raid_analysis(analysis: RaidAnalysis, role: str | None = None) -> str:
+    """Render a raid analysis to a markdown string, optionally limited to one role."""
+    if role is not None and role not in ROLES:
+        raise ValueError(f"Unknown role {role!r}; expected one of {', '.join(ROLES)}")
+
+    def _wanted(r: str) -> bool:
+        return role is None or role == r
+
     sections = [
         _render_metadata(analysis),
         _render_composition(analysis),
-        _render_healer_summary_tables(analysis.healers),
-        _render_tank_summary_tables(analysis.tanks),
-        _render_dps_summary_tables(analysis.dps, "melee"),
-        _render_dps_summary_tables(analysis.dps, "ranged"),
+        _render_healer_summary_tables(analysis.healers) if _wanted("healer") else "",
+        _render_tank_summary_tables(analysis.tanks) if _wanted("tank") else "",
+        _render_dps_summary_tables(analysis.dps, "melee") if _wanted("melee") else "",
+        _render_dps_summary_tables(analysis.dps, "ranged") if _wanted("ranged") else "",
         _render_consumables(analysis.consumables),
     ]
     return "\n".join(s for s in sections if s)
 
 
-def export_raid_analysis(analysis: RaidAnalysis, output_path: str | None = None) -> str:
+def export_raid_analysis(analysis: RaidAnalysis, output_path: str | None = None, role: str | None = None) -> str:
     """Render and write a raid analysis markdown file. Returns the path written."""
-    content = render_raid_analysis(analysis)
+    content = render_raid_analysis(analysis, role=role)
 
     if not output_path:
         safe_title = (

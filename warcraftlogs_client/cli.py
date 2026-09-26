@@ -4,10 +4,7 @@ Unified CLI for Warcraft Logs Analysis Tool.
 
 This module provides a single entry point for all analysis modes:
 - unified: Complete role-based analysis (default)
-- healer: Healer-focused analysis
-- tank: Tank mitigation analysis
-- melee: Melee DPS analysis
-- ranged: Ranged DPS analysis
+- healer / tank / melee / ranged: The same analysis, limited to one role
 - consumes: Consumables analysis across multiple raids
 - history: Query historical character performance
 - player: Discover the reports a character is in and collect them on a player page
@@ -32,7 +29,7 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   %(prog)s unified --md                    # Full analysis with markdown export
   %(prog)s unified --save                  # Full analysis + save to database
-  %(prog)s healer --use-dynamic-roles      # Healer analysis with auto-detection
+  %(prog)s healer                          # Healer section of the analysis
   %(prog)s tank                            # Tank mitigation analysis
   %(prog)s melee                           # Melee DPS analysis
   %(prog)s ranged                          # Ranged DPS analysis
@@ -60,21 +57,21 @@ Examples:
     unified_parser.add_argument("--save", action="store_true", help="Save results to local database")
     unified_parser.add_argument("--report-id", type=str, help="Override report ID from config")
 
-    # Healer analysis
-    healer_parser = subparsers.add_parser("healer", help="Healer-focused analysis")
-    healer_parser.add_argument("--md", action="store_true", help="Export results as Markdown report")
-    healer_parser.add_argument(
-        "--use-dynamic-roles", action="store_true", help="Use dynamic healer classification (ignore characters.json)"
-    )
-
-    # Tank analysis
-    subparsers.add_parser("tank", help="Tank mitigation analysis")
-
-    # Melee analysis
-    subparsers.add_parser("melee", help="Melee DPS analysis")
-
-    # Ranged analysis
-    subparsers.add_parser("ranged", help="Ranged DPS analysis")
+    # Role-focused views over the same unified analysis
+    role_help = {
+        "healer": "Healer-focused analysis",
+        "tank": "Tank mitigation analysis",
+        "melee": "Melee DPS analysis",
+        "ranged": "Ranged DPS analysis",
+    }
+    for role, help_text in role_help.items():
+        role_parser = subparsers.add_parser(role, help=help_text)
+        role_parser.add_argument("--md", action="store_true", help="Export this role's analysis as a Markdown report")
+        role_parser.add_argument("--save", action="store_true", help="Save results to local database")
+        role_parser.add_argument("--report-id", type=str, help="Override report ID from config")
+        if role == "healer":
+            # Kept so existing scripts don't break; healers are always detected dynamically now.
+            role_parser.add_argument("--use-dynamic-roles", action="store_true", help=argparse.SUPPRESS)
 
     # Consumes analysis
     consumes_parser = subparsers.add_parser("consumes", help="Consumables analysis across raids")
@@ -150,7 +147,7 @@ Examples:
     return parser
 
 
-def run_unified_analysis(args) -> int:
+def run_unified_analysis(args, role: str | None = None) -> int:
     from .renderers.console import render_raid_analysis
     from .services import AppContext, RaidService
     from .spell_manager import reset_spell_manager
@@ -162,12 +159,12 @@ def run_unified_analysis(args) -> int:
 
     analysis = raids.analyze(report_id)
 
-    render_raid_analysis(analysis)
+    render_raid_analysis(analysis, role=role)
 
     if hasattr(args, "md") and args.md:
         from .renderers.markdown import export_raid_analysis
 
-        path = export_raid_analysis(analysis)
+        path = export_raid_analysis(analysis, role=role)
         print(f"\nMarkdown report exported to: {path}")
 
     if hasattr(args, "save") and args.save:
@@ -177,48 +174,8 @@ def run_unified_analysis(args) -> int:
     return 0
 
 
-def run_healer_analysis(args) -> int:
-    try:
-        from .new_main import run_full_report
-
-        run_full_report(markdown=args.md, use_dynamic_roles=args.use_dynamic_roles)
-        return 0
-    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-        print(f"Error running healer analysis: {e}")
-        return 1
-
-
-def run_tank_analysis(args) -> int:
-    try:
-        from .tank_main import run_tank_report
-
-        run_tank_report()
-        return 0
-    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-        print(f"Error running tank analysis: {e}")
-        return 1
-
-
-def run_melee_analysis(args) -> int:
-    try:
-        from .melee_main import run_melee_report
-
-        run_melee_report()
-        return 0
-    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-        print(f"Error running melee analysis: {e}")
-        return 1
-
-
-def run_ranged_analysis(args) -> int:
-    try:
-        from .ranged_main import run_ranged_report
-
-        run_ranged_report()
-        return 0
-    except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-        print(f"Error running ranged analysis: {e}")
-        return 1
+def run_role_analysis(args) -> int:
+    return run_unified_analysis(args, role=args.command)
 
 
 def run_consumes_analysis(args) -> int:
@@ -525,10 +482,10 @@ def main() -> int:
 
     commands = {
         "unified": run_unified_analysis,
-        "healer": run_healer_analysis,
-        "tank": run_tank_analysis,
-        "melee": run_melee_analysis,
-        "ranged": run_ranged_analysis,
+        "healer": run_role_analysis,
+        "tank": run_role_analysis,
+        "melee": run_role_analysis,
+        "ranged": run_role_analysis,
         "consumes": run_consumes_analysis,
         "history": run_history_query,
         "player": run_player_command,

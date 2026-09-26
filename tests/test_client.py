@@ -266,3 +266,28 @@ class TestLegacyShims:
         mock_client.get_damage_taken_data.return_value = [{"type": "damage"}]
         result = get_damage_taken_data(mock_client, "r1", 1)
         assert result == [{"type": "damage"}]
+
+
+class TestPerPlayerEventsFollowPagination:
+    """The events endpoint returns one page at a time; totals must include every page."""
+
+    @staticmethod
+    def _page(data, next_ts):
+        return MagicMock(
+            json=lambda: {"data": {"reportData": {"report": {"events": {"data": data, "nextPageTimestamp": next_ts}}}}},
+            status_code=200,
+            raise_for_status=lambda: None,
+        )
+
+    @pytest.mark.parametrize(
+        "method",
+        ["get_healing_data", "get_cast_data", "get_aura_data", "get_damage_done_data", "get_damage_taken_data"],
+    )
+    @patch("warcraftlogs_client.client.requests.post")
+    def test_all_pages_returned(self, mock_post, client, method):
+        mock_post.side_effect = [self._page([{"amount": 1}], 5000), self._page([{"amount": 2}], None)]
+        result = getattr(client, method)("r1", 7)
+        assert [e["amount"] for e in result] == [1, 2]
+        first, second = (c[1]["json"]["variables"] for c in mock_post.call_args_list)
+        assert first["startTime"] == 0 and first["limit"] == 10000
+        assert second["startTime"] == 5000

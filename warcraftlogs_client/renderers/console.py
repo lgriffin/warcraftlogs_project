@@ -13,18 +13,33 @@ from ..models import (
     TankPerformance,
 )
 
+ROLES = ("tank", "healer", "melee", "ranged")
 
-def render_raid_analysis(analysis: RaidAnalysis) -> None:
-    """Render a complete raid analysis to the console."""
+
+def render_raid_analysis(analysis: RaidAnalysis, role: str | None = None) -> None:
+    """Render a raid analysis to the console, optionally limited to one role."""
+    if role is not None and role not in ROLES:
+        raise ValueError(f"Unknown role {role!r}; expected one of {', '.join(ROLES)}")
+
+    def _wanted(r: str) -> bool:
+        return role is None or role == r
+
     _render_metadata(analysis)
     _render_composition(analysis)
-    _render_tanks(analysis.tanks)
-    _render_healers(analysis.healers)
-    _render_dps(analysis.dps, "melee")
-    _render_dps(analysis.dps, "ranged")
-    _render_healer_summary_tables(analysis.healers)
-    _render_dps_summary_tables(analysis.dps)
-    _render_tank_summary_tables(analysis.tanks)
+    if _wanted("tank"):
+        _render_tanks(analysis.tanks)
+    if _wanted("healer"):
+        _render_healers(analysis.healers)
+    for dps_role in ("melee", "ranged"):
+        if _wanted(dps_role):
+            _render_dps(analysis.dps, dps_role)
+    if _wanted("healer"):
+        _render_healer_summary_tables(analysis.healers)
+    dps = [d for d in analysis.dps if _wanted(d.role)]
+    if dps:
+        _render_dps_summary_tables(dps)
+    if _wanted("tank"):
+        _render_tank_summary_tables(analysis.tanks)
 
 
 def _render_metadata(analysis: RaidAnalysis) -> None:

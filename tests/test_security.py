@@ -181,3 +181,87 @@ class TestPathTraversal:
         assert "/" not in _safe_filename("abc/def/ghi")
         assert _safe_filename("a/b") == "a_b"
         assert "/" not in _safe_filename("../../../../etc/shadow")
+
+
+def _graphql_client():
+    from warcraftlogs_client.client import WarcraftLogsClient
+
+    token_mgr = MagicMock()
+    token_mgr.get_token.return_value = "fake_token"
+    return WarcraftLogsClient(token_mgr, cache_enabled=False)
+
+
+def _ok(payload):
+    return MagicMock(status_code=200, raise_for_status=lambda: None, json=lambda: payload)
+
+
+@pytest.mark.security
+class TestGraphQLInjection:
+    """User- and report-supplied values must travel as GraphQL variables, never in the query text."""
+
+    HOSTILE = 'x") { __typename } hack: reportData { report(code: "y'
+
+    def test_report_code_sent_as_variable(self):
+        client = _graphql_client()
+        response = _ok({"data": {"reportData": {"report": {"title": "t", "owner": {"name": "o"}, "startTime": 1}}}})
+        with patch("warcraftlogs_client.client.requests.post", return_value=response) as mock_post:
+            client.get_report_metadata(self.HOSTILE)
+        payload = mock_post.call_args[1]["json"]
+        assert self.HOSTILE not in payload["query"]
+        assert payload["variables"]["code"] == self.HOSTILE
+
+    def test_character_name_sent_as_variable(self):
+        client = _graphql_client()
+        response = _ok({"data": {"characterData": {"character": None}}})
+        with (
+            patch("warcraftlogs_client.client.requests.post", return_value=response) as mock_post,
+            pytest.raises(ValueError, match="not found"),
+        ):
+            client.get_character_profile(self.HOSTILE, "server", "EU")
+        payload = mock_post.call_args[1]["json"]
+        assert self.HOSTILE not in payload["query"]
+        assert payload["variables"]["name"] == self.HOSTILE
+
+    def test_event_filters_sent_as_variables(self):
+        client = _graphql_client()
+        response = _ok({"data": {"reportData": {"report": {"events": {"data": []}}}}})
+        with patch("warcraftlogs_client.client.requests.post", return_value=response) as mock_post:
+            client.get_cast_events_for_encounter("abc", 7, 1000, 2000)
+        payload = mock_post.call_args[1]["json"]
+        assert payload["variables"] == {
+            "code": "abc",
+            "startTime": 1000,
+            "endTime": 2000,
+            "sourceID": 7,
+            "limit": 10000,
+        }
+        assert "sourceID: $sourceID" in payload["query"]
+
+    @pytest.mark.parametrize("bad", ["DamageDone) { x }", "Healing, sourceID: 1", "healing"])
+    def test_data_type_enum_is_allow_listed(self, bad):
+        client = _graphql_client()
+        with patch("warcraftlogs_client.client.requests.post") as mock_post, pytest.raises(ValueError):
+            client.get_encounter_table("abc", 0, 1, bad)
+        mock_post.assert_not_called()
+
+    def test_ranking_metric_is_allow_listed(self):
+        client = _graphql_client()
+        with patch("warcraftlogs_client.client.requests.post") as mock_post, pytest.raises(ValueError):
+            client.get_character_zone_rankings("n", "s", "EU", 1, metric="dps) { x }")
+        mock_post.assert_not_called()
+
+    def test_response_cache_key_includes_variables(self, tmp_path, monkeypatch):
+        from warcraftlogs_client import cache
+        from warcraftlogs_client.client import WarcraftLogsClient
+
+        monkeypatch.setattr(cache, "QUERY_CACHE_DIR", str(tmp_path))
+        token_mgr = MagicMock()
+        token_mgr.get_token.return_value = "fake_token"
+        client = WarcraftLogsClient(token_mgr, cache_enabled=True)
+
+        def reply(code):
+            return _ok({"data": {"reportData": {"report": {"title": code, "owner": {"name": "o"}, "startTime": 1}}}})
+
+        with patch("warcraftlogs_client.client.requests.post", side_effect=[reply("A"), reply("B")]):
+            assert client.get_report_metadata("A").title == "A"
+            assert client.get_report_metadata("B").title == "B"

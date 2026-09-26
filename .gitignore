@@ -81,3 +81,5 @@ user_token.json
 
 # Log files
 hadur_log_*.txt
+# Local Claude Code settings (machine-specific paths and permissions)
+.claude/settings.local.json

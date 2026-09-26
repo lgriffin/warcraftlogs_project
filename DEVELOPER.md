@@ -378,8 +378,6 @@ The CLI provides subcommands: `unified`, `healer`, `tank`, `melee`, `ranged`, `c
 | `consumes_analysis.py` | Multi-raid consumable usage tracking with spike detection |
 | `cache.py` | SHA256-keyed JSON file cache for API query results (`cache/responses/`) |
 | `paths.py` | Path resolution for dev vs PyInstaller frozen environments |
-| `character_api.py` | WarcraftLogs character profile API integration |
-| `characters.py` | Character utility functions |
 | `updater.py` | Auto-update checker — polls GitHub Releases, downloads and stages updates |
 | `common/errors.py` | Exception hierarchy: `WarcraftLogsError`, `ApiError`, `ConfigurationError`, `DataProcessingError` |
 | `cli.py` | Argument parser and CLI subcommand dispatch |

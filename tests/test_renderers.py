@@ -1,5 +1,7 @@
 """Tests for console renderer — output correctness via capsys."""
 
+import pytest
+
 from warcraftlogs_client.models import (
     HealerPerformance,
     RaidAnalysis,
@@ -43,6 +45,41 @@ class TestRenderRaidAnalysis:
         render_raid_analysis(sample_raid_analysis)
         output = capsys.readouterr().out
         assert "Healer Summary" in output
+
+
+class TestRoleFilter:
+    def test_healer_only(self, sample_raid_analysis, capsys):
+        render_raid_analysis(sample_raid_analysis, role="healer")
+        output = capsys.readouterr().out
+        assert "Individual Healer Reports" in output
+        assert "Healer Summary" in output
+        assert "Individual Tank Reports" not in output
+        assert "Individual Melee Reports" not in output
+        assert "Tank Summary" not in output
+
+    def test_tank_only(self, sample_raid_analysis, capsys):
+        render_raid_analysis(sample_raid_analysis, role="tank")
+        output = capsys.readouterr().out
+        assert "Individual Tank Reports" in output
+        assert "Individual Healer Reports" not in output
+        assert "Healer Summary" not in output
+
+    def test_melee_only(self, sample_raid_analysis, capsys):
+        render_raid_analysis(sample_raid_analysis, role="melee")
+        output = capsys.readouterr().out
+        assert "StabbyRogue" in output
+        assert "Individual Ranged Reports" not in output
+        assert "Individual Healer Reports" not in output
+
+    def test_metadata_always_shown(self, sample_raid_analysis, capsys):
+        render_raid_analysis(sample_raid_analysis, role="ranged")
+        output = capsys.readouterr().out
+        assert "Karazhan Clear" in output
+        assert "Raid Makeup" in output
+
+    def test_unknown_role_rejected(self, sample_raid_analysis):
+        with pytest.raises(ValueError, match="Unknown role"):
+            render_raid_analysis(sample_raid_analysis, role="bard")
 
 
 class TestEmptyAnalysis:
