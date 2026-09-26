@@ -7,13 +7,10 @@ Keeps the UI responsive while fetching data from WarcraftLogs.
 import requests
 from PySide6.QtCore import QThread, Signal
 
-from ..analysis import analyze_raid
-from ..auth import TokenManager
 from ..cache import load_wowhead_cache, save_wowhead_cache
-from ..client import WarcraftLogsClient
 from ..common.errors import WarcraftLogsError
-from ..config import load_config
 from ..models import CharacterProfile, RaidAnalysis
+from ..services import AppContext, PlayerService, RaidService, ReferenceAuthRequired
 
 
 class AnalysisWorker(QThread):
@@ -30,32 +27,16 @@ class AnalysisWorker(QThread):
     def run(self):
         try:
             self.progress.emit("Loading configuration...")
-            config = load_config()
-            role_thresholds = config.get("role_thresholds", {})
+            ctx = AppContext.from_config_file()
 
             self.progress.emit("Authenticating with WarcraftLogs API...")
-            token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
-
-            result = analyze_raid(
-                client,
-                self.report_id,
-                healer_threshold=role_thresholds.get("healer_min_healing", 900000),
-                tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
-                tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
-                healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
-                tank_min_taken_10=role_thresholds.get("tank_min_taken_10", 300000),
-                progress_callback=self.progress.emit,
-            )
+            result = RaidService(ctx).analyze(self.report_id, progress=self.progress.emit)
 
             self.progress.emit("Analysis complete!")
             self.finished.emit(result)
 
         except Exception as e:
             self.error.emit(f"{type(e).__name__}: {e}")
-
-
-from ..user_auth import _get_base_url
 
 
 class ReferenceAnalysisWorker(QThread):
@@ -72,39 +53,17 @@ class ReferenceAnalysisWorker(QThread):
 
     def run(self):
         try:
-            from ..user_auth import UserTokenManager
-
-            self.progress.emit("Checking authentication...")
-            user_tm = UserTokenManager()
-            if not user_tm.is_authenticated():
-                self.auth_required.emit()
-                return
-
             self.progress.emit("Loading configuration...")
-            config = load_config()
-            role_thresholds = config.get("role_thresholds", {})
+            ctx = AppContext.from_config_file()
 
             self.progress.emit("Connecting with user credentials...")
-            client = WarcraftLogsClient(
-                user_tm,
-                cache_enabled=False,
-                api_url=f"{_get_base_url()}/api/v2/user",
-            )
-
-            result = analyze_raid(
-                client,
-                self.report_id,
-                healer_threshold=role_thresholds.get("healer_min_healing", 900000),
-                tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
-                tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
-                healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
-                tank_min_taken_10=role_thresholds.get("tank_min_taken_10", 300000),
-                progress_callback=self.progress.emit,
-            )
+            result = RaidService(ctx).analyze(self.report_id, reference=True, progress=self.progress.emit)
 
             self.progress.emit("Analysis complete!")
             self.finished.emit(result)
 
+        except ReferenceAuthRequired:
+            self.auth_required.emit()
         except Exception as e:
             self.error.emit(f"{type(e).__name__}: {e}")
 
@@ -121,10 +80,7 @@ class GuildInfoWorker(QThread):
 
     def run(self):
         try:
-            config = load_config()
-            token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
-            info = client.get_guild_info(self.guild_id)
+            info = RaidService(AppContext.from_config_file()).guild_info(self.guild_id)
             self.finished.emit(info)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
@@ -142,10 +98,7 @@ class GuildReportsWorker(QThread):
 
     def run(self):
         try:
-            config = load_config()
-            token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
-            reports = client.get_guild_reports(self.guild_id)
+            reports = RaidService(AppContext.from_config_file()).guild_reports(self.guild_id)
             self.finished.emit(reports)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
@@ -166,10 +119,7 @@ class CharacterProfileWorker(QThread):
 
     def run(self):
         try:
-            config = load_config()
-            token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
-            profile = client.get_character_profile(
+            profile = PlayerService(AppContext.from_config_file()).profile(
                 self.char_name,
                 self.server,
                 self.region,
