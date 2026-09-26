@@ -95,7 +95,8 @@ class RaidService:
     ) -> list[str]:
         """Analyse and store every code not already in the database; return the codes imported."""
         already = self.imported_codes()
-        todo = [validate_report_code(c) for c in codes if c not in already]
+        normalized = list(dict.fromkeys(validate_report_code(c) for c in codes))
+        todo = [c for c in normalized if c not in already]
         for i, code in enumerate(todo, 1):
             if progress:
                 progress(f"Importing {code} ({i}/{len(todo)})...")

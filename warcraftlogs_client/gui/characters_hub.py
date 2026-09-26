@@ -24,12 +24,14 @@ from ..models import CharacterHistory
 from .character_history_widget import CharacterHistoryWidget
 from .character_view import CharacterView
 from .compare_view import CompareView
+from .player_page_view import PlayerPageView
 from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
 
 class CharactersHub(QWidget):
     status_message = Signal(str)
     analyze_report = Signal(str)
+    open_raid = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -38,6 +40,7 @@ class CharactersHub(QWidget):
 
         self.character_view = CharacterView()
         self.compare_view = CompareView()
+        self.player_page_view = PlayerPageView()
 
         self._build_ui()
         self._connect_signals()
@@ -119,6 +122,13 @@ class CharactersHub(QWidget):
         self._compare_btn.clicked.connect(self._show_compare)
         mode_row.addWidget(self._compare_btn)
 
+        self._player_page_btn = QPushButton("Player Page")
+        self._player_page_btn.setProperty("secondary", True)
+        self._player_page_btn.setFixedHeight(34)
+        self._player_page_btn.setToolTip("Find the reports a character is in and add them to their page")
+        self._player_page_btn.clicked.connect(self._show_player_page)
+        mode_row.addWidget(self._player_page_btn)
+
         left_layout.addLayout(mode_row)
         layout.addWidget(left)
 
@@ -142,6 +152,7 @@ class CharactersHub(QWidget):
 
         self._right_stack.addWidget(self.character_view)  # index 2
         self._right_stack.addWidget(self.compare_view)  # index 3
+        self._right_stack.addWidget(self.player_page_view)  # index 4
 
         layout.addWidget(self._right_stack, 1)
 
@@ -151,6 +162,9 @@ class CharactersHub(QWidget):
         self.character_view.view_character_history.connect(self._select_character_by_name)
 
         self.compare_view.status_message.connect(self.status_message)
+
+        self.player_page_view.status_message.connect(self.status_message)
+        self.player_page_view.open_report.connect(self.open_raid)
 
     def _load_characters(self):
         try:
@@ -217,6 +231,10 @@ class CharactersHub(QWidget):
     def _show_compare(self):
         self._list.clearSelection()
         self._right_stack.setCurrentIndex(3)
+
+    def _show_player_page(self):
+        self._list.clearSelection()
+        self._right_stack.setCurrentIndex(4)
 
     def showEvent(self, event):
         super().showEvent(event)

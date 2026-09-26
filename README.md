@@ -161,6 +161,14 @@ Import reports from other guilds for benchmarking:
 - Consumable data is automatically scoped to shared encounters when the guild raid covers more bosses than the reference
 - Requires OAuth2 user authorization (the app opens a browser for WarcraftLogs login)
 
+### Player Page
+
+A standalone page for one character (**Characters > Player Page**, or `player` on the CLI):
+
+- **Find My Logs** — look a character up by name, server and region; lists every Warcraft Logs report they appear in, plus any already in your local database, marked New / On page / Dismissed.
+- **Add to your page** — add selected reports, all new ones, or paste any report URL (the character's presence in the report is checked first). Reports not yet imported are analysed and saved, so they feed the character's history and trends.
+- **Remove / Dismiss** — unlink a report from the page (its raid data stays), or hide it from future discovery.
+
 ### Raid Groups
 
 Create named groups of characters to track your raid roster over time:
@@ -256,6 +264,10 @@ python -m warcraftlogs_client.cli tank             # Tank mitigation analysis
 python -m warcraftlogs_client.cli melee            # Melee DPS analysis
 python -m warcraftlogs_client.cli ranged           # Ranged DPS analysis
 python -m warcraftlogs_client.cli consumes raid1 raid2 --csv report.csv  # Consumables
+python -m warcraftlogs_client.cli player discover Hadur -s spineshatter -r eu  # Reports Hadur is in
+python -m warcraftlogs_client.cli player add Hadur --new              # Import + add every new one
+python -m warcraftlogs_client.cli player add Hadur <url-or-code>      # Add one report by URL/code
+python -m warcraftlogs_client.cli player show Hadur --json            # The page, as JSON
 ```
 
 Markdown reports are saved to the `reports/` directory.

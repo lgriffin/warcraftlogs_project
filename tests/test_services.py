@@ -114,6 +114,16 @@ class TestRaidService:
         assert imported == [CODE_B]
         save.assert_called_once()
 
+    def test_import_missing_normalizes_and_dedupes(self, ctx):
+        raids = RaidService(ctx)
+        with (
+            patch.object(RaidService, "imported_codes", return_value={CODE_A}),
+            patch.object(RaidService, "analyze_and_save") as save,
+        ):
+            imported = raids.import_missing([f" {CODE_A} ", CODE_B, f"{CODE_B}\n", CODE_B])
+        assert imported == [CODE_B]
+        save.assert_called_once_with(CODE_B, progress=None)
+
 
 class TestPlayerService:
     def test_discover_reports_flags_imported(self, ctx):
