@@ -217,22 +217,19 @@ class WarcraftLogsClient:
         end_time: float = FULL_REPORT_END,
         *,
         hostility: str | None = "Friendlies",
-        paginate: bool = True,
         **filters,
     ) -> list[dict]:
-        """Fetch ``events`` for a data type, following ``nextPageTimestamp`` when *paginate* is set.
+        """Fetch every ``events`` page for a data type, following ``nextPageTimestamp``.
 
         *filters* take sourceID/abilityID/fightIDs/limit; falsy values are omitted.
         """
-        base: dict = {k: v for k, v in filters.items() if v}
-        if paginate:
-            base.setdefault("limit", EVENTS_PAGE_LIMIT)
+        base: dict = {"limit": EVENTS_PAGE_LIMIT, **{k: v for k, v in filters.items() if v}}
         call = [f"dataType: {_enum(data_type, _EVENT_DATA_TYPES)}"]
         if hostility:
             call.append(f"hostilityType: {_enum(hostility, _HOSTILITY_TYPES)}")
         call += ["startTime: $startTime", "endTime: $endTime"]
         call += [f"{name}: ${name}" for name in base]
-        body = f"events({', '.join(call)}) {{ data{' nextPageTimestamp' if paginate else ''} }}"
+        body = f"events({', '.join(call)}) {{ data nextPageTimestamp }}"
 
         all_data: list[dict] = []
         page_start = start_time
@@ -241,7 +238,7 @@ class WarcraftLogsClient:
             report = self._query_report(report_id, body, args)
             events = report.get("events") or {}
             all_data.extend(events.get("data") or [])
-            next_page = events.get("nextPageTimestamp") if paginate else None
+            next_page = events.get("nextPageTimestamp")
             if not next_page:
                 return all_data
             page_start = next_page
@@ -349,10 +346,10 @@ class WarcraftLogsClient:
     # ── Player event queries ──
 
     def get_healing_data(self, report_id: str, source_id: int) -> list[dict]:
-        return self._events(report_id, "Healing", sourceID=source_id, paginate=False)
+        return self._events(report_id, "Healing", sourceID=source_id)
 
     def get_cast_data(self, report_id: str, source_id: int) -> list[dict]:
-        return self._events(report_id, "Casts", sourceID=source_id, paginate=False)
+        return self._events(report_id, "Casts", sourceID=source_id)
 
     def get_cast_events_paginated(self, report_id: str, source_id: int) -> list[dict]:
         return self._events(report_id, "Casts", sourceID=source_id)
@@ -398,13 +395,13 @@ class WarcraftLogsClient:
         return self._table_entries(report_id, "DamageDone", 0, FULL_REPORT_END, sourceID=source_id)
 
     def get_aura_data(self, report_id: str, source_id: int) -> list[dict]:
-        return self._events(report_id, "Buffs", sourceID=source_id, paginate=False)
+        return self._events(report_id, "Buffs", sourceID=source_id)
 
     def get_auras_paginated(self, report_id: str, source_id: int) -> list[dict]:
         return self._events(report_id, "Buffs", sourceID=source_id)
 
     def get_aura_data_by_ability(self, report_id: str, source_id: int, ability_id: int) -> list[dict]:
-        return self._events(report_id, "Buffs", sourceID=source_id, abilityID=ability_id, paginate=False)
+        return self._events(report_id, "Buffs", sourceID=source_id, abilityID=ability_id)
 
     def get_buffs_table(self, report_id: str, source_id: int) -> dict:
         table = self._table(report_id, "Buffs", 0, FULL_REPORT_END, hostilityType="Friendlies", sourceID=source_id)
@@ -416,10 +413,10 @@ class WarcraftLogsClient:
         return table or {}
 
     def get_damage_done_data(self, report_id: str, source_id: int) -> list[dict]:
-        return self._events(report_id, "DamageDone", sourceID=source_id, paginate=False)
+        return self._events(report_id, "DamageDone", sourceID=source_id)
 
     def get_damage_taken_data(self, report_id: str, source_id: int) -> list[dict]:
-        return self._events(report_id, "DamageTaken", sourceID=source_id, paginate=False)
+        return self._events(report_id, "DamageTaken", sourceID=source_id)
 
     def get_enemy_ability_names(self, report_id: str, start_time: int, end_time: int) -> dict[int, str]:
         names: dict[int, str] = {}
