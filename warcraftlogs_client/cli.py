@@ -15,8 +15,8 @@ import logging
 import sys
 
 import requests
+from wcl_core.common.errors import WarcraftLogsError
 
-from .common.errors import WarcraftLogsError
 from .version import __version__
 
 
@@ -148,9 +148,10 @@ Examples:
 
 
 def run_unified_analysis(args, role: str | None = None) -> int:
+    from wcl_core.spell_manager import reset_spell_manager
+
     from .renderers.console import render_raid_analysis
     from .services import AppContext, RaidService
-    from .spell_manager import reset_spell_manager
 
     reset_spell_manager()
     ctx = AppContext.from_config_file()
@@ -180,7 +181,7 @@ def run_role_analysis(args) -> int:
 
 def run_consumes_analysis(args) -> int:
     try:
-        from .consumes_analysis import run_consumes_analysis as _run
+        from wcl_core.consumes_analysis import run_consumes_analysis as _run
 
         md_path = getattr(args, "md", None)
         _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path)

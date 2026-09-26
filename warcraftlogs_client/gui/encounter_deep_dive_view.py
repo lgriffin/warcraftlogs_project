@@ -22,9 +22,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..client import WarcraftLogsClient
-from ..models import (
+from wcl_core.client import WarcraftLogsClient
+from wcl_core.models import (
     ConsumableUsage,
     CooldownSynergyAnalysis,
     EncounterSummary,
@@ -33,6 +32,7 @@ from ..models import (
     PlayerResourceAnalysis,
     RaidComposition,
 )
+
 from .charts import ClassCastTimelineWidget, CooldownSynergyWidget
 from .encounter_worker import EncounterCastWorker, EncounterCooldownWorker, EncounterResourceWorker
 from .styles import COLORS, COMMON_STYLES

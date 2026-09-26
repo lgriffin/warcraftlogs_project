@@ -23,7 +23,7 @@ pytest                                          # unit + BDD tests (no GUI)
 pytest tests/gui/ -v                            # GUI widget tests (needs PySide6)
 pytest tests/fuzz/ -v                           # property-based fuzz tests
 pytest tests/test_security.py -v                # security tests
-pytest --cov=warcraftlogs_client --cov-report=term-missing  # with coverage
+pytest --cov=warcraftlogs_client --cov=wcl_core --cov-report=term-missing  # with coverage
 ```
 
 ## Linting & Quality
@@ -32,10 +32,11 @@ pytest --cov=warcraftlogs_client --cov-report=term-missing  # with coverage
 ruff check .                    # lint
 ruff format --check .           # format check
 ruff check --fix . && ruff format .  # auto-fix
-mypy warcraftlogs_client/ --exclude 'gui/'
-vulture warcraftlogs_client/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
+mypy warcraftlogs_client/ packages/wcl-core/src/ --exclude 'gui/'
+lint-imports                    # wcl-core imports no Qt/SQLite/desktop code
+vulture warcraftlogs_client/ packages/wcl-core/src/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
 bandit -c pyproject.toml -r warcraftlogs_client/
-codespell warcraftlogs_client/ tests/
+codespell warcraftlogs_client/ packages/wcl-core/src/ tests/
 ```
 
 ## Project Structure
@@ -43,7 +44,8 @@ codespell warcraftlogs_client/ tests/
 - `warcraftlogs_client/` — main package (client, analysis, database, models, renderers)
 - `warcraftlogs_client/gui/` — PySide6 desktop app (excluded from mypy/vulture/coverage)
 - `tests/` — unit, BDD (`tests/features/` + `tests/step_defs/`), fuzz (`tests/fuzz/`), GUI (`tests/gui/`)
-- `spell_data/` — spell name mappings
+- `packages/wcl-core/` — `wcl_core`: WCL client, analysis, models, spell data and role configs (no Qt, no SQLite). `warcraftlogs_client/<module>.py` files for moved modules are import aliases
+- `packages/wcl-core/src/wcl_core/data/` — spell name mappings and consumes/interrupt/debuff/totem/cooldown configs
 - `guides/` — project documentation
 
 ## Conventions

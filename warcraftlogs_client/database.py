@@ -12,8 +12,8 @@ import os
 import sqlite3
 from datetime import datetime
 
-from .cache import _cache_file, clear_response_cache
-from .models import (
+from wcl_core.cache import _cache_file, clear_response_cache
+from wcl_core.models import (
     AuraBand,
     AuraUptime,
     BossEvent,
@@ -36,7 +36,7 @@ from .models import (
     SpellUsage,
     TankPerformance,
 )
-from .spell_manager import get_spell_manager
+from wcl_core.spell_manager import get_spell_manager
 
 SCHEMA_VERSION = 2
 
@@ -254,7 +254,7 @@ class PerformanceDB:
     """SQLite database for storing and querying historical character performance."""
 
     def __init__(self, db_path: str | None = None):
-        from . import paths
+        from wcl_core import paths
 
         self.db_path = db_path or str(paths.get_db_path())
         self._conn: sqlite3.Connection | None = None

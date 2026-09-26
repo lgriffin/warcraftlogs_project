@@ -6,9 +6,8 @@ and buff/cooldown data without blocking the UI.
 """
 
 from PySide6.QtCore import QThread, Signal
-
-from ..client import WarcraftLogsClient
-from ..models import (
+from wcl_core.client import WarcraftLogsClient
+from wcl_core.models import (
     CooldownSynergyAnalysis,
     EncounterSummary,
     RaidComposition,
@@ -38,7 +37,7 @@ class EncounterCastWorker(QThread):
 
     def run(self):
         try:
-            from ..analysis import build_class_cast_timelines
+            from wcl_core.analysis import build_class_cast_timelines
 
             def on_progress(msg):
                 self.progress.emit(msg)
@@ -79,7 +78,7 @@ class EncounterResourceWorker(QThread):
 
     def run(self):
         try:
-            from ..analysis import analyze_resource_waste
+            from wcl_core.analysis import analyze_resource_waste
 
             def on_progress(msg):
                 self.progress.emit(msg)
@@ -118,7 +117,7 @@ class EncounterCooldownWorker(QThread):
 
     def run(self):
         try:
-            from ..analysis import analyze_cooldown_synergy
+            from wcl_core.analysis import analyze_cooldown_synergy
 
             def on_progress(msg):
                 self.progress.emit(msg)

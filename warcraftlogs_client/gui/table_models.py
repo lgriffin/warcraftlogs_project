@@ -4,8 +4,14 @@ Qt table models for displaying analysis results.
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor, QFont
-
-from ..models import CancelledCastSummary, DPSPerformance, GearItem, HealerPerformance, InterruptUsage, TankPerformance
+from wcl_core.models import (
+    CancelledCastSummary,
+    DPSPerformance,
+    GearItem,
+    HealerPerformance,
+    InterruptUsage,
+    TankPerformance,
+)
 
 
 class HealerTableModel(QAbstractTableModel):

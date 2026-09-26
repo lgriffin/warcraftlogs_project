@@ -19,9 +19,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core.models import CharacterHistory
 
 from ..database import PerformanceDB
-from ..models import CharacterHistory
 from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
 

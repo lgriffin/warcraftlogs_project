@@ -11,8 +11,8 @@ from dataclasses import dataclass
 
 import requests
 from PySide6.QtCore import QThread, Signal
+from wcl_core import paths
 
-from . import paths
 from .version import __version__
 
 REPO = "lgriffin/warcraftlogs_project"

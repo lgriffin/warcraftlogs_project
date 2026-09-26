@@ -17,8 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..models import (
+from wcl_core.models import (
     CancelledCastSummary,
     ConsumableUsage,
     DPSPerformance,
@@ -26,6 +25,7 @@ from ..models import (
     HealerPerformance,
     TankPerformance,
 )
+
 from .charts import CancelledCastTimelineWidget
 from .styles import COLORS
 

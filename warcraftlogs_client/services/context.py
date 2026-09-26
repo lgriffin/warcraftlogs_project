@@ -13,8 +13,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..client import WarcraftLogsClient
-from ..common.errors import ConfigurationError
+from wcl_core.client import WarcraftLogsClient
+from wcl_core.common.errors import ConfigurationError
+
 from ..database import PerformanceDB
 
 ProgressCallback = Callable[[str], None]
@@ -73,7 +74,7 @@ class AppContext:
 
     @classmethod
     def from_config_file(cls, config_file: str | None = None, db_path: str | None = None) -> "AppContext":
-        from ..config import load_config
+        from wcl_core.config import load_config
 
         return cls(config=load_config(config_file), db_path=db_path)
 
@@ -85,7 +86,7 @@ class AppContext:
     def wcl_client(self) -> WarcraftLogsClient:
         """Client-credentials WCL client, created on first use."""
         if self._client is None:
-            from ..auth import TokenManager
+            from wcl_core.auth import TokenManager
 
             try:
                 token_mgr = TokenManager(self.config["client_id"], self.config["client_secret"])

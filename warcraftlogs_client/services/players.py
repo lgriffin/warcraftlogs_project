@@ -6,7 +6,8 @@ character's reports on Warcraft Logs, mark which ones are already stored, and
 import the rest so the character's history fills in.
 """
 
-from ..models import CharacterHistory, CharacterProfile
+from wcl_core.models import CharacterHistory, CharacterProfile
+
 from .context import AppContext, ProgressCallback
 from .raids import RaidService, ReportRef
 

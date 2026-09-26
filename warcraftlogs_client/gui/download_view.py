@@ -140,7 +140,7 @@ class DownloadView(QWidget):
             self._apply_day_filter()
         elif not self._auto_fetched:
             try:
-                from ..config import load_config
+                from wcl_core.config import load_config
 
                 config = load_config()
                 guild_id = config.get("guild_id", 0)
@@ -153,7 +153,7 @@ class DownloadView(QWidget):
 
     def _fetch_guild_reports(self):
         try:
-            from ..config import load_config
+            from wcl_core.config import load_config
 
             config = load_config()
             guild_id = config.get("guild_id", 774065)
@@ -252,7 +252,7 @@ class DownloadView(QWidget):
             code = rows[index.row()].get("code", "")
             if code:
                 try:
-                    from ..config import load_config
+                    from wcl_core.config import load_config
 
                     api_url = load_config().get("wcl_api_url", "")
                 except (FileNotFoundError, json.JSONDecodeError, KeyError):

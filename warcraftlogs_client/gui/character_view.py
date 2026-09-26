@@ -29,9 +29,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core.models import CharacterProfile, EncounterRanking
 
 from ..database import PerformanceDB
-from ..models import CharacterProfile, EncounterRanking
 from .charts import (
     CalendarHeatmapWidget,
     SpiderChartWidget,
@@ -241,7 +241,7 @@ class _BossComparisonTableModel(QAbstractTableModel):
         return None
 
 
-from .. import paths as _paths
+from wcl_core import paths as _paths
 
 CONFIG_PATH = str(_paths.get_config_path())
 

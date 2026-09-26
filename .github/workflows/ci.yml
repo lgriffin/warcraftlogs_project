@@ -23,9 +23,11 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
       - name: Codespell
-        run: codespell warcraftlogs_client/ tests/
+        run: codespell warcraftlogs_client/ packages/wcl-core/src/ tests/
       - name: Vulture dead code check
-        run: vulture warcraftlogs_client/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
+        run: vulture warcraftlogs_client/ packages/wcl-core/src/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
+      - name: Import contracts (wcl-core stays headless)
+        run: lint-imports
 
   test:
     runs-on: ubuntu-latest
@@ -43,7 +45,27 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -e ".[dev]"
       - name: Run tests with coverage
-        run: pytest --tb=short -q --cov=warcraftlogs_client --cov-report=term-missing --cov-config=pyproject.toml --ignore=tests/gui --ignore=tests/integration/test_live_api.py
+        run: pytest --tb=short -q --cov=warcraftlogs_client --cov=wcl_core --cov-report=term-missing --cov-config=pyproject.toml --ignore=tests/gui --ignore=tests/integration/test_live_api.py
+
+  wcl-core-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the wcl-core wheel on its own
+        run: |
+          pip install --upgrade pip build
+          python -m build --wheel packages/wcl-core -o dist
+      - name: Import it without the desktop app (as the Toads Hub worker does)
+        working-directory: ${{ runner.temp }}
+        env:
+          WCL_APP_DIR: ${{ runner.temp }}
+        run: |
+          python -m venv core-only
+          core-only/bin/pip install "$GITHUB_WORKSPACE"/dist/*.whl
+          core-only/bin/python -c "import sys; from wcl_core import analysis, paths; assert 'warcraftlogs_client' not in sys.modules; assert paths.get_consumes_config_path().is_file()"
 
   gui-test:
     runs-on: ubuntu-latest

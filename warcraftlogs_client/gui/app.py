@@ -6,8 +6,8 @@ import logging
 import sys
 
 from PySide6.QtWidgets import QApplication
+from wcl_core import paths
 
-from .. import paths
 from ..version import __version__
 from .main_window import MainWindow
 from .styles import COLORS

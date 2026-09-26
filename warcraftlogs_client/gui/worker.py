@@ -6,10 +6,10 @@ Keeps the UI responsive while fetching data from WarcraftLogs.
 
 import requests
 from PySide6.QtCore import QThread, Signal
+from wcl_core.cache import load_wowhead_cache, save_wowhead_cache
+from wcl_core.common.errors import WarcraftLogsError
+from wcl_core.models import CharacterProfile, RaidAnalysis
 
-from ..cache import load_wowhead_cache, save_wowhead_cache
-from ..common.errors import WarcraftLogsError
-from ..models import CharacterProfile, RaidAnalysis
 from ..services import AppContext, PlayerService, RaidService, ReferenceAuthRequired
 
 

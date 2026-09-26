@@ -632,7 +632,7 @@ class ReferenceView(QWidget):
             return
 
         try:
-            from ..config import load_config
+            from wcl_core.config import load_config
 
             config = load_config()
             client_id = config["client_id"]
@@ -656,7 +656,7 @@ class ReferenceView(QWidget):
 
     def _on_auth_complete(self, code: str):
         try:
-            from ..config import load_config
+            from wcl_core.config import load_config
 
             config = load_config()
             user_tm = UserTokenManager()

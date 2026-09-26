@@ -28,7 +28,7 @@ from .styles import COLORS, COMMON_STYLES
 class SettingsView(QWidget):
     status_message = Signal(str)
 
-    from .. import paths as _paths
+    from wcl_core import paths as _paths
 
     CONFIG_PATH = str(_paths.get_config_path())
 
@@ -419,7 +419,7 @@ class SettingsView(QWidget):
                 json.dump(config, f, indent=4)
 
             # Reset the config manager so changes take effect immediately
-            from ..config import get_config_manager
+            from wcl_core.config import get_config_manager
 
             get_config_manager(self.CONFIG_PATH)
 
@@ -461,7 +461,7 @@ class SettingsView(QWidget):
             with PerformanceDB() as db:
                 db.clear_all()
 
-            from ..cache import clear_response_cache
+            from wcl_core.cache import clear_response_cache
 
             cache_count = clear_response_cache()
 
@@ -607,8 +607,8 @@ class _TestAuthThread(QThread):
         self._client_secret = client_secret
 
     def run(self):
-        from ..auth import TokenManager
-        from ..common.errors import AuthenticationError
+        from wcl_core.auth import TokenManager
+        from wcl_core.common.errors import AuthenticationError
 
         try:
             tm = TokenManager(self._client_id, self._client_secret)

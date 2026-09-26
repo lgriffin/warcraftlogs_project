@@ -16,9 +16,8 @@ from threading import Thread
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
-
-from . import paths
-from .common.errors import AuthenticationError
+from wcl_core import paths
+from wcl_core.common.errors import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ DEFAULT_REDIRECT_PORT = 8764
 
 def _get_base_url() -> str:
     """Derive the WCL domain from the configured API URL."""
-    from .config import load_config
+    from wcl_core.config import load_config
 
     try:
         api_url = load_config().get("wcl_api_url", "")
@@ -88,7 +87,7 @@ class UserTokenManager:
         raise RuntimeError("Not authenticated — user must complete OAuth flow first")
 
     def _refresh(self):
-        from .config import load_config
+        from wcl_core.config import load_config
 
         config = load_config()
         client_id = config["client_id"]

@@ -350,7 +350,7 @@ class MainWindow(QMainWindow):
 
     def _auto_check_updates(self):
         try:
-            from ..config import load_config
+            from wcl_core.config import load_config
 
             config = load_config()
             if not config.get("auto_check_updates", True):
@@ -424,9 +424,10 @@ class MainWindow(QMainWindow):
         self.stack.push_view(widget)
 
     def _drill_into_deep_dive(self, report_id: str, encounter_index: int):
-        from ..auth import TokenManager
-        from ..client import WarcraftLogsClient
-        from ..config import load_config
+        from wcl_core.auth import TokenManager
+        from wcl_core.client import WarcraftLogsClient
+        from wcl_core.config import load_config
+
         from .encounter_deep_dive_view import EncounterDeepDiveView
 
         try:
@@ -501,7 +502,7 @@ class MainWindow(QMainWindow):
         self.raids_hub.download_view._analyze_single()
 
     def _load_guild_logo(self):
-        from .. import paths
+        from wcl_core import paths
 
         logo_path = str(paths.get_logo_path())
 
@@ -518,7 +519,7 @@ class MainWindow(QMainWindow):
 
     def _load_guild_info(self):
         try:
-            from ..config import load_config
+            from wcl_core.config import load_config
 
             config = load_config()
             guild_id = config.get("guild_id", 0)
