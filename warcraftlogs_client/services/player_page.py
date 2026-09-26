@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import requests
 
 from ..common.errors import WarcraftLogsError
+from .context import AnalysisThresholds, AppContext, validate_report_code
 
 if TYPE_CHECKING:
     from ..client import WarcraftLogsClient
@@ -29,7 +30,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-REPORT_CODE_RE = re.compile(r"^[A-Za-z0-9]{16}$")
 _REPORT_URL_RE = re.compile(r"warcraftlogs\.com/reports/([A-Za-z0-9]{16})(?:[/?#]|$)")
 # Realm names contain letters, spaces, apostrophes and hyphens; WCL slugs drop
 # apostrophes and join words with hyphens ("Pyrewood Village" -> "pyrewood-village").
@@ -55,8 +55,10 @@ DISMISSED = "dismissed"
 def parse_report_code(text: str) -> str | None:
     """Pull a 16-character report code out of a bare code or a Warcraft Logs report URL."""
     text = (text or "").strip()
-    if REPORT_CODE_RE.match(text):
-        return text
+    try:
+        return validate_report_code(text)
+    except ValueError:
+        pass
     match = _REPORT_URL_RE.search(text)
     return match.group(1) if match else None
 
@@ -153,7 +155,8 @@ class PlayerPageService:
     """Discover and collect the reports a player is in.
 
     ``client`` is only needed for discovery and for adding reports that are not
-    yet imported; ``analyze`` defaults to the configured ``analyze_raid``.
+    yet imported. Frontends build it with ``from_context`` so ``analyze`` is
+    ``RaidService.analyze`` with the configured role thresholds.
     """
 
     def __init__(
@@ -167,6 +170,19 @@ class PlayerPageService:
         self.client = client
         self._analyze = analyze
         self.import_source = import_source
+
+    @classmethod
+    def from_context(cls, ctx: AppContext, db: PerformanceDB, *, with_api: bool = True) -> PlayerPageService:
+        """Wire the service from the shared AppContext: its WCL client and RaidService's analyze.
+
+        ``db`` is the handle from ``ctx.db()``; the caller owns its lifetime. ``with_api=False``
+        gives a local-only service that never builds a WCL client (no credentials needed).
+        """
+        if not with_api:
+            return cls(db)
+        from .raids import RaidService
+
+        return cls(db, ctx.wcl_client, analyze=RaidService(ctx).analyze)
 
     # ── Pages ──
 
@@ -332,11 +348,13 @@ class PlayerPageService:
         return PlayerLog(code=code, title=md.title, start_time=md.start_time, zone=md.zone or "", owner=md.owner)
 
     def _run_analysis(self, code: str) -> RaidAnalysis:
-        if self._analyze is None:
-            if self.client is None:
-                raise WarcraftLogsError("Warcraft Logs API access is needed to import new reports")
-            self._analyze = default_analyzer(self.client)
-        return self._analyze(code)
+        if self._analyze is not None:
+            return self._analyze(code)
+        if self.client is None:
+            raise WarcraftLogsError("Warcraft Logs API access is needed to import new reports")
+        from ..analysis import analyze_raid
+
+        return analyze_raid(self.client, code, **AnalysisThresholds().as_kwargs())
 
     def dismiss(self, player: PlayerRef, codes: list[str]) -> int:
         """Hide reports from future discovery results without importing them."""
@@ -378,39 +396,3 @@ def _history_summary(history) -> dict[str, Any]:
         "avg_damage": history.avg_damage,
         "avg_mitigation_percent": history.avg_mitigation_percent,
     }
-
-
-def default_analyzer(client: WarcraftLogsClient, config: dict | None = None) -> AnalyzeFn:
-    """The same analyze_raid call and role thresholds the CLI and desktop app use."""
-    from ..analysis import analyze_raid
-
-    if config is None:
-        from ..config import load_config
-
-        config = load_config()
-    thresholds = config.get("role_thresholds", {})
-
-    def _analyze(code: str) -> RaidAnalysis:
-        return analyze_raid(
-            client,
-            code,
-            healer_threshold=thresholds.get("healer_min_healing", 900000),
-            tank_min_taken=thresholds.get("tank_min_taken", 150000),
-            tank_min_mitigation=thresholds.get("tank_min_mitigation", 40),
-            healer_threshold_10=thresholds.get("healer_min_healing_10", 400000),
-            tank_min_taken_10=thresholds.get("tank_min_taken_10", 300000),
-        )
-
-    return _analyze
-
-
-def client_from_config(config: dict | None = None) -> WarcraftLogsClient:
-    from ..auth import TokenManager
-    from ..client import WarcraftLogsClient
-
-    if config is None:
-        from ..config import load_config
-
-        config = load_config()
-    token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    return WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))

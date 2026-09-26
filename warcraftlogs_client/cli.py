@@ -298,7 +298,7 @@ def run_history_query(args) -> int:
     return 0
 
 
-def _resolve_player(db, args):
+def _resolve_player(db, args, config):
     """Build a PlayerRef from args, filling server/region from an existing page or config."""
     from .services.player_page import PlayerRef
 
@@ -312,9 +312,6 @@ def _resolve_player(db, args):
             options = ", ".join(f"{p['server']}-{p['region']}" for p in pages)
             raise ValueError(f"{args.name} has pages on several servers ({options}); pass --server")
     if not server or not region:
-        from .config import load_config
-
-        config = load_config()
         server = server or config.get("default_server", "")
         region = region or config.get("default_region", "")
     return PlayerRef.create(args.name, server, region)
@@ -334,15 +331,15 @@ def _print_logs(logs) -> None:
 def run_player_command(args) -> int:
     import json
 
-    from .database import PerformanceDB
-    from .services.player_page import PlayerPageService, client_from_config
+    from .services import AppContext, PlayerPageService
 
     action = getattr(args, "player_command", None)
     if not action:
         print("Specify an action: discover, add, show, remove, dismiss or list.")
         return 1
 
-    with PerformanceDB() as db:
+    ctx = AppContext.from_config_file()
+    with ctx.db() as db:
         if action == "list":
             pages = PlayerPageService(db).list_pages()
             if args.json:
@@ -354,9 +351,9 @@ def run_player_command(args) -> int:
                     print(f"{p['name']:<18} {p['server']:<20} {p['region'].upper():<4} {p['log_count']:>4} reports")
             return 0
 
-        player = _resolve_player(db, args)
+        player = _resolve_player(db, args, ctx.config)
         needs_api = action in ("add",) or (action == "discover" and not args.local)
-        service = PlayerPageService(db, client_from_config() if needs_api else None)
+        service = PlayerPageService.from_context(ctx, db, with_api=needs_api)
 
         if action == "discover":
             logs = service.discover_reports(player, limit=args.limit)

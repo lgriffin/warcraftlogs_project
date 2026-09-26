@@ -244,6 +244,23 @@ class TestPageManagement:
         assert db.find_player_pages() == []
 
 
+class TestFromContext:
+    def test_uses_context_client_and_raid_service(self, db, fake_client):
+        from warcraftlogs_client.services import AppContext, RaidService
+
+        ctx = AppContext(config={}, _client=fake_client)
+        service = PlayerPageService.from_context(ctx, db)
+        assert service.client is fake_client
+        assert service._analyze.__func__ is RaidService.analyze
+
+    def test_local_only_never_builds_client(self, db):
+        from warcraftlogs_client.services import AppContext
+
+        ctx = AppContext(config={})  # no credentials: touching wcl_client would raise
+        service = PlayerPageService.from_context(ctx, db, with_api=False)
+        assert service.client is None
+
+
 @pytest.mark.api
 class TestClientCharacterReports:
     @patch("warcraftlogs_client.client.requests.post")
@@ -309,20 +326,21 @@ class TestPlayerCli:
     @pytest.fixture
     def run_cli(self, tmp_path, fake_client, analyzer, capsys):
         from warcraftlogs_client import cli
-        from warcraftlogs_client.database import PerformanceDB
+        from warcraftlogs_client.services import AppContext
 
-        db_path = str(tmp_path / "cli.db")
-        real_service = PlayerPageService
+        ctx = AppContext(config={"default_region": "EU"}, db_path=str(tmp_path / "cli.db"), _client=fake_client)
+        real_from_context = PlayerPageService.from_context.__func__
 
-        def service_factory(db, client=None, **kw):
-            return real_service(db, client, analyze=analyzer, **kw)
+        def from_context(cls, ctx, db, *, with_api=True):
+            service = real_from_context(cls, ctx, db, with_api=with_api)
+            service._analyze = analyzer
+            return service
 
         def _run(*argv):
             with (
                 patch("sys.argv", ["warcraftlogs", *argv]),
-                patch("warcraftlogs_client.database.PerformanceDB", lambda: PerformanceDB(db_path)),
-                patch("warcraftlogs_client.services.player_page.client_from_config", return_value=fake_client),
-                patch("warcraftlogs_client.services.player_page.PlayerPageService", service_factory),
+                patch("warcraftlogs_client.services.AppContext.from_config_file", return_value=ctx),
+                patch.object(PlayerPageService, "from_context", classmethod(from_context)),
             ):
                 code = cli.main()
             return code, capsys.readouterr().out

@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import paths as _paths
-from ..database import PerformanceDB
+from ..services import AppContext
 from ..services.player_page import (
     API_ERRORS,
     NEW,
@@ -35,7 +35,6 @@ from ..services.player_page import (
     PlayerLog,
     PlayerPageService,
     PlayerRef,
-    client_from_config,
 )
 from .styles import COLORS, COMMON_STYLES
 
@@ -53,8 +52,9 @@ class _DiscoverWorker(QThread):
 
     def run(self):
         try:
-            with PerformanceDB() as db:
-                service = PlayerPageService(db, client_from_config())
+            ctx = AppContext.from_config_file()
+            with ctx.db() as db:
+                service = PlayerPageService.from_context(ctx, db)
                 found = service.discover_reports(self.player)
                 page = service.get_page(self.player)
             self.finished.emit(found, page.logs)
@@ -75,8 +75,9 @@ class _AddWorker(QThread):
 
     def run(self):
         try:
-            with PerformanceDB() as db:
-                service = PlayerPageService(db, client_from_config())
+            ctx = AppContext.from_config_file()
+            with ctx.db() as db:
+                service = PlayerPageService.from_context(ctx, db)
                 results = service.add_reports(self.player, self.refs, known=self.known, progress=self.progress.emit)
             self.finished.emit(results)
         except (*API_ERRORS, sqlite3.Error) as e:
@@ -330,9 +331,10 @@ class PlayerPageView(QWidget):
         if self._player is None:
             return
         try:
-            with PerformanceDB() as db:
-                action(PlayerPageService(db), self._player)
-        except sqlite3.Error as e:
+            ctx = AppContext.from_config_file()
+            with ctx.db() as db:
+                action(PlayerPageService.from_context(ctx, db, with_api=False), self._player)
+        except (*API_ERRORS, sqlite3.Error) as e:
             self.status_message.emit(f"Player page error: {e}")
             return
         self._discover()
