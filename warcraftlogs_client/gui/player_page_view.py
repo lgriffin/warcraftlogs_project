@@ -2,7 +2,8 @@
 Player Page view — a character's own collection of reports.
 
 Look a character up, discover the Warcraft Logs reports they appear in, and add
-the ones they want to their page. All logic lives in services.player_page so the
+the ones they want to their page. The page also shows the character's lineage
+(min / mean / max across raids) and lets them force the role they're analysed as. All logic lives in services.player_page so the
 CLI and web frontends behave the same; this view only wires it to widgets.
 """
 
@@ -14,6 +15,7 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -22,17 +24,19 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from .. import paths as _paths
-from ..services import AppContext
+from ..services import AppContext, CharacterLineage, RoleOverrideService
 from ..services.player_page import (
     API_ERRORS,
     NEW,
     ON_PAGE,
     PlayerLog,
+    PlayerPageData,
     PlayerPageService,
     PlayerRef,
 )
@@ -40,10 +44,13 @@ from .styles import COLORS, COMMON_STYLES
 
 _COLUMNS = ["Date", "Title", "Zone", "Owner", "Status", "Imported", "Code"]
 _STATUS_LABELS = {NEW: "New", ON_PAGE: "On page", "dismissed": "Dismissed"}
+_LINEAGE_COLUMNS = ["Metric", "Role", "Min", "Mean", "Max", "Raids"]
+_ROLE_CHOICES = ["Detected", "healer", "tank", "melee", "ranged", "dps"]
+_LINEAGE_TOP = 15
 
 
 class _DiscoverWorker(QThread):
-    finished = Signal(list, list)  # discovered logs, page logs
+    finished = Signal(list, object)  # discovered logs, PlayerPageData
     error = Signal(str)
 
     def __init__(self, player: PlayerRef, parent=None):
@@ -57,7 +64,7 @@ class _DiscoverWorker(QThread):
                 service = PlayerPageService.from_context(ctx, db)
                 found = service.discover_reports(self.player)
                 page = service.get_page(self.player)
-            self.finished.emit(found, page.logs)
+            self.finished.emit(found, page)
         except (*API_ERRORS, sqlite3.Error) as e:
             self.error.emit(str(e))
 
@@ -79,6 +86,30 @@ class _AddWorker(QThread):
             with ctx.db() as db:
                 service = PlayerPageService.from_context(ctx, db)
                 results = service.add_reports(self.player, self.refs, known=self.known, progress=self.progress.emit)
+            self.finished.emit(results)
+        except (*API_ERRORS, sqlite3.Error) as e:
+            self.error.emit(str(e))
+
+
+class _RoleWorker(QThread):
+    progress = Signal(str)
+    finished = Signal(list)  # ReanalysisResult list
+    error = Signal(str)
+
+    def __init__(self, name: str, role: str | None, parent=None):
+        super().__init__(parent)
+        self.name = name
+        self.role = role  # None clears the override
+
+    def run(self):
+        try:
+            ctx = AppContext.from_config_file()
+            with ctx.db() as db:
+                service = RoleOverrideService.from_context(ctx, db)
+                if self.role is None:
+                    results = service.clear(self.name, progress=self.progress.emit)
+                else:
+                    results = service.set(self.name, self.role, progress=self.progress.emit)
             self.finished.emit(results)
         except (*API_ERRORS, sqlite3.Error) as e:
             self.error.emit(str(e))
@@ -132,11 +163,36 @@ class PlayerPageView(QWidget):
         self._summary.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
         layout.addWidget(self._summary)
 
-        # ── On the page ──
-        layout.addWidget(self._section_label("On your page"))
+        role_row = QHBoxLayout()
+        role_label = QLabel("Analyse as:")
+        role_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        role_row.addWidget(role_label)
+        self._role_combo = QComboBox()
+        self._role_combo.addItems(_ROLE_CHOICES)
+        self._role_combo.setToolTip("Force this role in every raid instead of the detected one")
+        role_row.addWidget(self._role_combo)
+        self._role_btn = QPushButton("Apply Role")
+        self._role_btn.setProperty("secondary", True)
+        self._role_btn.setToolTip("Saves the role and re-analyses imported raids where it differs")
+        self._role_btn.clicked.connect(self._apply_role)
+        role_row.addWidget(self._role_btn)
+        role_row.addStretch()
+        layout.addLayout(role_row)
+
+        # ── On the page / lineage ──
+        self._tabs = QTabWidget()
         self._page_table = self._make_table()
         self._page_table.doubleClicked.connect(lambda idx: self._open_row(self._page_table, idx.row()))
-        layout.addWidget(self._page_table, 2)
+        self._tabs.addTab(self._page_table, "On your page")
+        self._lineage_table = QTableWidget(0, len(_LINEAGE_COLUMNS))
+        self._lineage_table.setHorizontalHeaderLabels(_LINEAGE_COLUMNS)
+        self._lineage_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._lineage_table.setAlternatingRowColors(True)
+        self._lineage_table.verticalHeader().setVisible(False)
+        self._lineage_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._lineage_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self._tabs.addTab(self._lineage_table, "Lineage")
+        layout.addWidget(self._tabs, 2)
 
         page_actions = QHBoxLayout()
         self._url_input = QLineEdit()
@@ -217,6 +273,8 @@ class PlayerPageView(QWidget):
 
     def _set_page_actions_enabled(self, enabled: bool) -> None:
         for w in (
+            self._role_combo,
+            self._role_btn,
             self._url_input,
             self._add_url_btn,
             self._remove_btn,
@@ -271,7 +329,8 @@ class PlayerPageView(QWidget):
         self._worker = worker
         worker.start()
 
-    def _on_discovered(self, found: list, page_logs: list):
+    def _on_discovered(self, found: list, page: PlayerPageData):
+        page_logs = page.logs
         self._set_busy(False)
         # Dismissed reports stay hidden; the page table already lists what's on the page.
         self._discovered = [log for log in found if log.status != "dismissed"]
@@ -282,7 +341,70 @@ class PlayerPageView(QWidget):
         self._summary.setText(
             f"{self._player.label}: {len(page_logs)} on your page, {len(self._discovered)} found, {new} new"
         )
+        self._fill_lineage(page.lineage)
+        wide = next((o["role"] for o in page.role_overrides if not o["report_id"]), None)
+        self._role_combo.setCurrentText(wide or "Detected")
         self.status_message.emit(f"Found {len(self._discovered)} reports for {self._player.name}")
+
+    def _fill_lineage(self, lineage: CharacterLineage | None) -> None:
+        rows: list[tuple[str, str, str, str, str, str] | str] = []
+        if lineage is not None:
+            sections = [
+                ("Per raid", lineage.metrics),
+                ("Casts per raid", lineage.casts[:_LINEAGE_TOP]),
+                ("Consumables per raid", lineage.consumables[:_LINEAGE_TOP]),
+            ]
+            for title, spreads in sections:
+                if not spreads:
+                    continue
+                rows.append(title)
+                for sp in spreads:
+                    rows.append(
+                        (
+                            sp.name,
+                            sp.role or "all",
+                            f"{sp.min:,.0f}",
+                            f"{sp.mean:,.1f}",
+                            f"{sp.max:,.0f}",
+                            str(sp.raids),
+                        )
+                    )
+        self._lineage_table.clearSpans()
+        self._lineage_table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            if isinstance(row, str):
+                item = QTableWidgetItem(row)
+                item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+                item.setForeground(QColor(COLORS["text_gold"]))
+                self._lineage_table.setItem(r, 0, item)
+                self._lineage_table.setSpan(r, 0, 1, len(_LINEAGE_COLUMNS))
+                continue
+            for c, value in enumerate(row):
+                self._lineage_table.setItem(r, c, QTableWidgetItem(value))
+        title = f"Lineage ({lineage.raids} raids)" if lineage else "Lineage"
+        self._tabs.setTabText(1, title)
+
+    def _apply_role(self):
+        if self._player is None or (self._worker and self._worker.isRunning()):
+            return
+        choice = self._role_combo.currentText()
+        role = None if choice == "Detected" else choice
+        self._set_busy(True)
+        worker = _RoleWorker(self._player.name, role, self)
+        worker.progress.connect(self.status_message)
+        worker.finished.connect(self._on_role_applied)
+        worker.error.connect(self._on_error)
+        self._worker = worker
+        worker.start()
+
+    def _on_role_applied(self, results: list):
+        self._set_busy(False)
+        failed = [f"{r.report_id}: {r.message}" for r in results if not r.ok]
+        msg = f"Role saved; re-analysed {sum(1 for r in results if r.ok)} raid(s)"
+        if failed:
+            msg += " — failed: " + "; ".join(failed[:3])
+        self.status_message.emit(msg)
+        self._discover()
 
     def _on_error(self, message: str):
         self._set_busy(False)

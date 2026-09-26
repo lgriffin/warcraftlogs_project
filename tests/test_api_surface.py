@@ -153,6 +153,7 @@ class TestPublicExports:
             "raid_group_members",
             "raid_groups",
             "raids",
+            "role_overrides",
             "schema_version",
             "tank_abilities",
             "tank_damage_taken",

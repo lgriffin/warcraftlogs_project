@@ -230,6 +230,15 @@ CREATE TABLE IF NOT EXISTS player_page_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_player_page_logs_page ON player_page_logs(player_page_id);
+
+CREATE TABLE IF NOT EXISTS role_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_name TEXT NOT NULL COLLATE NOCASE,
+    report_id TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL CHECK(role IN ('healer', 'tank', 'melee', 'ranged', 'dps')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(character_name, report_id)
+);
 """
 
 
@@ -1552,8 +1561,11 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def delete_raid(self, report_id: str) -> None:
-        """Delete a raid and all associated performance data."""
+    def delete_raid(self, report_id: str, clear_cache: bool = True) -> None:
+        """Delete a raid and all associated performance data.
+
+        ``clear_cache=False`` keeps cached API responses, for re-importing the same report.
+        """
         conn = self._get_conn()
         raid = conn.execute("SELECT id FROM raids WHERE report_id = ?", (report_id,)).fetchone()
         if not raid:
@@ -1598,6 +1610,8 @@ class PerformanceDB:
         conn.execute("DELETE FROM raids WHERE id = ?", (raid_id,))
         conn.commit()
 
+        if not clear_cache:
+            return
         cache_file = _cache_file(report_id)
         if os.path.exists(cache_file):
             with contextlib.suppress(OSError):
@@ -1722,6 +1736,139 @@ class PerformanceDB:
                ORDER BY r.start_time DESC""",
             (character_name,),
         ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Role overrides ──
+    # A hand-set role for a character, for every raid (report_id '') or one raid.
+    # A raid-specific override wins over the character-wide one.
+
+    def set_role_override(self, character_name: str, role: str, report_id: str = "") -> None:
+        conn = self._get_conn()
+        conn.execute(
+            """INSERT INTO role_overrides (character_name, report_id, role) VALUES (?, ?, ?)
+               ON CONFLICT(character_name, report_id) DO UPDATE SET
+                   role = excluded.role, updated_at = datetime('now')""",
+            (character_name, report_id, role),
+        )
+        conn.commit()
+
+    def clear_role_override(self, character_name: str, report_id: str = "") -> bool:
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "DELETE FROM role_overrides WHERE character_name = ? AND report_id = ?",
+            (character_name, report_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def get_role_overrides(self, character_name: str | None = None) -> list[dict]:
+        conn = self._get_conn()
+        sql = "SELECT character_name, report_id, role, updated_at FROM role_overrides"
+        params: tuple = ()
+        if character_name:
+            sql += " WHERE character_name = ?"
+            params = (character_name,)
+        rows = conn.execute(sql + " ORDER BY character_name, report_id", params).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_role_overrides_for_report(self, report_id: str) -> dict[str, str]:
+        """Effective overrides for one report: {character_name: role}, raid-specific first."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT character_name, role, report_id FROM role_overrides
+               WHERE report_id IN ('', ?) ORDER BY report_id""",
+            (report_id,),
+        ).fetchall()
+        # '' sorts first, so a raid-specific row overwrites the character-wide one.
+        return {r["character_name"]: r["role"] for r in rows}
+
+    # ── Character lineage ──
+    # Raw per-raid rows for a character; services.lineage turns them into min/mean/max.
+
+    def _lineage_raid_filter(self, sources: tuple[str, ...]) -> tuple[str, list]:
+        marks = ", ".join("?" for _ in sources)
+        return f"r.source IN ({marks})", list(sources)
+
+    def get_character_raid_roles(self, character_name: str, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+        """One row per raid the character is in: role and that role's headline numbers."""
+        src_sql, src_params = self._lineage_raid_filter(sources)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT r.id AS raid_id, r.report_id, r.title, r.raid_date, r.zone, 'healer' AS role,
+                       hp.total_healing AS healing, hp.overheal_percent, NULL AS damage,
+                       NULL AS damage_taken, NULL AS mitigation_percent
+                FROM healer_performance hp
+                JOIN raids r ON r.id = hp.raid_id
+                JOIN characters c ON c.id = hp.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}
+                UNION ALL
+                SELECT r.id, r.report_id, r.title, r.raid_date, r.zone, 'tank',
+                       NULL, NULL, NULL, tp.total_damage_taken, tp.mitigation_percent
+                FROM tank_performance tp
+                JOIN raids r ON r.id = tp.raid_id
+                JOIN characters c ON c.id = tp.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}
+                UNION ALL
+                SELECT r.id, r.report_id, r.title, r.raid_date, r.zone, dp.role,
+                       NULL, NULL, dp.total_damage, NULL, NULL
+                FROM dps_performance dp
+                JOIN raids r ON r.id = dp.raid_id
+                JOIN characters c ON c.id = dp.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}
+                ORDER BY raid_date""",
+                (character_name, *src_params) * 3,
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
+    def get_character_spell_casts(self, character_name: str, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+        """Casts per spell per raid, tagged with the role table they came from."""
+        src_sql, src_params = self._lineage_raid_filter(sources)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT hp.raid_id, 'healer' AS role, s.spell_id, s.spell_name, s.casts
+                FROM healer_spells s
+                JOIN healer_performance hp ON hp.id = s.healer_performance_id
+                JOIN raids r ON r.id = hp.raid_id
+                JOIN characters c ON c.id = hp.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}
+                UNION ALL
+                SELECT tp.raid_id, 'tank', a.spell_id, a.spell_name, a.casts
+                FROM tank_abilities a
+                JOIN tank_performance tp ON tp.id = a.tank_performance_id
+                JOIN raids r ON r.id = tp.raid_id
+                JOIN characters c ON c.id = tp.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}
+                UNION ALL
+                SELECT dp.raid_id, dp.role, a.spell_id, a.spell_name, a.casts
+                FROM dps_abilities a
+                JOIN dps_performance dp ON dp.id = a.dps_performance_id
+                JOIN raids r ON r.id = dp.raid_id
+                JOIN characters c ON c.id = dp.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}""",
+                (character_name, *src_params) * 3,
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
+    def get_character_consumable_counts(self, character_name: str, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+        src_sql, src_params = self._lineage_raid_filter(sources)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT cu.raid_id, cu.consumable_name, cu.count
+                FROM consumable_usage cu
+                JOIN raids r ON r.id = cu.raid_id
+                JOIN characters c ON c.id = cu.character_id
+                WHERE c.name = ? COLLATE NOCASE AND {src_sql}""",
+                (character_name, *src_params),
+            )
+            .fetchall()
+        )
         return [dict(r) for r in rows]
 
     # ── Raid Group operations ──
@@ -2750,6 +2897,7 @@ class PerformanceDB:
         conn.execute("DELETE FROM raid_groups")
         conn.execute("DELETE FROM player_page_logs")
         conn.execute("DELETE FROM player_pages")
+        conn.execute("DELETE FROM role_overrides")
         conn.execute("DELETE FROM healer_spells")
         conn.execute("DELETE FROM healer_performance")
         conn.execute("DELETE FROM tank_damage_taken")

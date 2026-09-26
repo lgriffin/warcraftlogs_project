@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,13 @@ def analyze_raid(
     healer_threshold_10: int = 400000,
     tank_min_taken_10: int = 300000,
     progress_callback=None,
+    role_overrides: dict[str, str] | None = None,
 ) -> RaidAnalysis:
-    """Run a full raid analysis and return structured results."""
+    """Run a full raid analysis and return structured results.
+
+    ``role_overrides`` maps character name (any case) to a forced role:
+    healer, tank, melee, ranged, or dps (melee/ranged picked by class and damage profile).
+    """
     logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.api_url)
 
     def _progress(msg):
@@ -92,6 +98,15 @@ def analyze_raid(
         tank_min_taken,
         tank_min_mitigation,
     )
+    override_notes: list[str] = []
+    if role_overrides:
+        composition, override_notes = apply_role_overrides(
+            composition,
+            role_overrides,
+            classify_dps=lambda p: _classify_hybrid_role(client, report_id, p.source_id, p.player_class),
+        )
+        for note in override_notes:
+            logger.info("  %s", note)
     logger.info(
         "  composition: %d healers, %d tanks, %d melee, %d ranged",
         len(composition.healers),
@@ -100,7 +115,7 @@ def analyze_raid(
         len(composition.ranged),
     )
 
-    all_warnings: list[str] = []
+    all_warnings: list[str] = list(override_notes)
 
     healers, healer_warns = _analyze_healers(client, report_id, composition.healers, progress_callback)
     all_warnings.extend(healer_warns)
@@ -193,6 +208,62 @@ def analyze_raid(
     )
 
 
+_ALWAYS_RANGED = {"Mage", "Warlock", "Hunter"}
+_ALWAYS_MELEE = {"Rogue", "Warrior"}
+OVERRIDE_ROLES = ("healer", "tank", "melee", "ranged", "dps")
+
+
+def apply_role_overrides(
+    composition: RaidComposition,
+    overrides: dict[str, str],
+    classify_dps: Callable[[PlayerIdentity], str] | None = None,
+) -> tuple[RaidComposition, list[str]]:
+    """Move players whose role was set by hand into that role.
+
+    ``overrides`` maps character name (any case) to one of OVERRIDE_ROLES. "dps"
+    keeps an existing melee/ranged guess, otherwise picks by class, asking
+    ``classify_dps`` for hybrids. Returns the new composition and one note per
+    player actually moved.
+    """
+    wanted = {name.lower(): role for name, role in overrides.items() if role in OVERRIDE_ROLES}
+    buckets: dict[str, list[PlayerIdentity]] = {
+        "tank": list(composition.tanks),
+        "healer": list(composition.healers),
+        "melee": list(composition.melee),
+        "ranged": list(composition.ranged),
+    }
+    notes: list[str] = []
+    for current in ("tank", "healer", "melee", "ranged"):
+        for player in list(buckets[current]):
+            target = wanted.get(player.name.lower())
+            if target is None:
+                continue
+            if target == "dps":
+                if current in ("melee", "ranged"):
+                    continue
+                if player.player_class in _ALWAYS_RANGED:
+                    target = "ranged"
+                elif player.player_class in _ALWAYS_MELEE or classify_dps is None:
+                    target = "melee"
+                else:
+                    target = classify_dps(player)
+            if target == current:
+                continue
+            buckets[current].remove(player)
+            buckets[target].append(
+                PlayerIdentity(
+                    name=player.name, player_class=player.player_class, source_id=player.source_id, role=target
+                )
+            )
+            notes.append(f"Role override: {player.name} analysed as {target} (detected {current})")
+    return (
+        RaidComposition(
+            tanks=buckets["tank"], healers=buckets["healer"], melee=buckets["melee"], ranged=buckets["ranged"]
+        ),
+        notes,
+    )
+
+
 def _identify_composition(
     client: WarcraftLogsClient,
     report_id: str,
@@ -211,8 +282,8 @@ def _identify_composition(
     healer_names = {h.name for h in healers}
 
     excluded = tank_names | healer_names
-    always_ranged = {"Mage", "Warlock", "Hunter"}
-    always_melee = {"Rogue", "Warrior"}
+    always_ranged = _ALWAYS_RANGED
+    always_melee = _ALWAYS_MELEE
     hybrid_classes = {"Paladin", "Druid", "Shaman", "Priest"}
 
     melee = []

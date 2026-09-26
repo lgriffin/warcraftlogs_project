@@ -40,6 +40,8 @@ Examples:
   %(prog)s history Hadur                   # Show historical performance for Hadur
   %(prog)s player discover Hadur -s gehennas  # Find reports Hadur is in
   %(prog)s player add Hadur --new          # Import and add every newly found report
+  %(prog)s player role Hadur healer         # Always analyse Hadur as a healer
+  %(prog)s player lineage Hadur             # Min / mean / max across Hadur's raids
         """,
     )
 
@@ -125,6 +127,22 @@ Examples:
     dismiss_parser = player_sub.add_parser("dismiss", help="Hide reports from discovery without adding them")
     _player_args(dismiss_parser)
     dismiss_parser.add_argument("reports", nargs="+", help="Report codes or URLs")
+
+    role_parser = player_sub.add_parser("role", help="Show or force the role a character is analysed as")
+    role_parser.add_argument("name", help="Character name")
+    role_parser.add_argument("role", nargs="?", choices=["healer", "tank", "melee", "ranged", "dps"])
+    role_parser.add_argument("--report", help="Only for this report (code or URL); default is every raid")
+    role_parser.add_argument("--clear", action="store_true", help="Remove the override and let analysis guess again")
+    role_parser.add_argument(
+        "--no-reanalyze", action="store_true", help="Save the override without re-analysing imported raids"
+    )
+    role_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    lineage_parser = player_sub.add_parser("lineage", help="Min / mean / max of a character's numbers across raids")
+    lineage_parser.add_argument("name", help="Character name")
+    lineage_parser.add_argument("--top", type=int, default=15, help="Spells and consumables to list")
+    lineage_parser.add_argument("--include-reference", action="store_true", help="Also count reference raids")
+    lineage_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
     list_parser = player_sub.add_parser("list", help="List player pages")
     list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
@@ -328,6 +346,79 @@ def _print_logs(logs) -> None:
         print(f"{log.date_formatted:<12} {log.code:<18} {log.status:<10} {imported:<9} {log.zone[:21]:<22} {log.title}")
 
 
+def _run_player_role(ctx, db, args) -> int:
+    import json
+
+    from .services import RoleOverrideService, parse_report_code
+
+    report = None
+    if args.report:
+        report = parse_report_code(args.report)
+        if report is None:
+            print(f"Not a report code or URL: {args.report}")
+            return 1
+    if args.role is None and not args.clear:
+        overrides = RoleOverrideService(db).list_overrides(args.name)
+        if args.json:
+            print(json.dumps(overrides, indent=2))
+        elif not overrides:
+            print(f"No role override for {args.name}; roles are detected per raid.")
+        else:
+            for o in overrides:
+                print(f"{o['character_name']:<18} {o['role']:<8} {o['report_id'] or 'all raids'}")
+        return 0
+
+    service = RoleOverrideService.from_context(ctx, db, with_api=not args.no_reanalyze)
+    progress = None if args.json else print
+    reanalyze = not args.no_reanalyze
+    if args.clear:
+        results = service.clear(args.name, report, reanalyze=reanalyze, progress=progress)
+    else:
+        results = service.set(args.name, args.role, report, reanalyze=reanalyze, progress=progress)
+    if args.json:
+        print(json.dumps([r.to_dict() for r in results], indent=2))
+    else:
+        scope = report or "every raid"
+        print(f"{args.name}: {'override cleared' if args.clear else args.role} for {scope}.")
+        for r in results:
+            print(f"  {r.report_id} (was {r.old_role}): {r.message}")
+    return 0 if all(r.ok for r in results) else 1
+
+
+def _run_player_lineage(db, args) -> int:
+    import json
+
+    from .services import character_lineage
+
+    sources = ("guild", "reference") if args.include_reference else ("guild",)
+    lineage = character_lineage(db, args.name, sources)
+    if lineage is None:
+        print(f"No raids stored for '{args.name}'.")
+        return 1
+    if args.json:
+        print(json.dumps(lineage.to_dict(), indent=2))
+        return 0
+
+    roles = ", ".join(f"{n} {r}" for r, n in lineage.role_counts.items())
+    print(f"=== {lineage.character}: {lineage.raids} raids ({roles}), {lineage.first_raid} to {lineage.last_raid} ===")
+
+    def table(title, spreads):
+        if not spreads:
+            return
+        print(f"\n{title:<34} {'Role':<7} {'Min':>11} {'Mean':>11} {'Max':>11} {'Raids':>6}")
+        print("-" * 84)
+        for sp in spreads:
+            label = sp.name if len(sp.name) <= 33 else sp.name[:32] + "…"
+            print(
+                f"{label:<34} {sp.role or 'all':<7} {sp.min:>11,.1f} {sp.mean:>11,.1f} {sp.max:>11,.1f} {sp.raids:>6}"
+            )
+
+    table("Per raid", lineage.metrics)
+    table("Casts per raid", lineage.casts[: args.top])
+    table("Consumables per raid", lineage.consumables[: args.top])
+    return 0
+
+
 def run_player_command(args) -> int:
     import json
 
@@ -335,7 +426,7 @@ def run_player_command(args) -> int:
 
     action = getattr(args, "player_command", None)
     if not action:
-        print("Specify an action: discover, add, show, remove, dismiss or list.")
+        print("Specify an action: discover, add, show, remove, dismiss, role, lineage or list.")
         return 1
 
     ctx = AppContext.from_config_file()
@@ -350,6 +441,11 @@ def run_player_command(args) -> int:
                 for p in pages:
                     print(f"{p['name']:<18} {p['server']:<20} {p['region'].upper():<4} {p['log_count']:>4} reports")
             return 0
+
+        if action == "role":
+            return _run_player_role(ctx, db, args)
+        if action == "lineage":
+            return _run_player_lineage(db, args)
 
         player = _resolve_player(db, args, ctx.config)
         needs_api = action in ("add",) or (action == "discover" and not args.local)
