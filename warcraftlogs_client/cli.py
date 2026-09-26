@@ -10,6 +10,7 @@ This module provides a single entry point for all analysis modes:
 - ranged: Ranged DPS analysis
 - consumes: Consumables analysis across multiple raids
 - history: Query historical character performance
+- player: Discover the reports a character is in and collect them on a player page
 """
 
 import argparse
@@ -37,6 +38,8 @@ Examples:
   %(prog)s ranged                          # Ranged DPS analysis
   %(prog)s consumes ID1 ID2               # Consumables across raids
   %(prog)s history Hadur                   # Show historical performance for Hadur
+  %(prog)s player discover Hadur -s gehennas  # Find reports Hadur is in
+  %(prog)s player add Hadur --new          # Import and add every newly found report
         """,
     )
 
@@ -89,6 +92,42 @@ Examples:
     history_parser.add_argument(
         "--role", type=str, choices=["healer", "tank", "melee", "ranged"], help="Filter trend by role"
     )
+
+    # Player page
+    player_parser = subparsers.add_parser("player", help="Discover and collect the reports a character is in")
+    player_sub = player_parser.add_subparsers(dest="player_command", metavar="ACTION")
+
+    def _player_args(p, name_required=True):
+        p.add_argument("name", nargs=None if name_required else "?", help="Character name")
+        p.add_argument("--server", "-s", help="Server (default: the character's page, else config default_server)")
+        p.add_argument("--region", "-r", help="Region (default: the character's page, else config default_region)")
+        p.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    discover_parser = player_sub.add_parser("discover", help="List reports the character appears in")
+    _player_args(discover_parser)
+    discover_parser.add_argument("--limit", type=int, default=50, help="Reports to fetch from Warcraft Logs")
+    discover_parser.add_argument("--local", action="store_true", help="Only search the local database (no API)")
+
+    add_parser = player_sub.add_parser("add", help="Add reports (codes or URLs) to the character's page")
+    _player_args(add_parser)
+    add_parser.add_argument("reports", nargs="*", help="Report codes or Warcraft Logs report URLs")
+    add_parser.add_argument("--new", action="store_true", help="Add every newly discovered report")
+    add_parser.add_argument("--limit", type=int, default=50, help="Reports to search when using --new")
+    add_parser.add_argument("--no-verify", action="store_true", help="Skip checking the character is in the report")
+
+    show_parser = player_sub.add_parser("show", help="Show the character's page")
+    _player_args(show_parser)
+
+    remove_parser = player_sub.add_parser("remove", help="Remove reports from the character's page")
+    _player_args(remove_parser)
+    remove_parser.add_argument("reports", nargs="+", help="Report codes or URLs")
+
+    dismiss_parser = player_sub.add_parser("dismiss", help="Hide reports from discovery without adding them")
+    _player_args(dismiss_parser)
+    dismiss_parser.add_argument("reports", nargs="+", help="Report codes or URLs")
+
+    list_parser = player_sub.add_parser("list", help="List player pages")
+    list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
     return parser
 
@@ -259,6 +298,121 @@ def run_history_query(args) -> int:
     return 0
 
 
+def _resolve_player(db, args):
+    """Build a PlayerRef from args, filling server/region from an existing page or config."""
+    from .services.player_page import PlayerRef
+
+    server, region = args.server, args.region
+    if not server or not region:
+        pages = db.find_player_pages(args.name)
+        if len(pages) == 1:
+            server = server or pages[0]["server"]
+            region = region or pages[0]["region"]
+        elif len(pages) > 1 and not server:
+            options = ", ".join(f"{p['server']}-{p['region']}" for p in pages)
+            raise ValueError(f"{args.name} has pages on several servers ({options}); pass --server")
+    if not server or not region:
+        from .config import load_config
+
+        config = load_config()
+        server = server or config.get("default_server", "")
+        region = region or config.get("default_region", "")
+    return PlayerRef.create(args.name, server, region)
+
+
+def _print_logs(logs) -> None:
+    if not logs:
+        print("No reports found.")
+        return
+    print(f"\n{'Date':<12} {'Code':<18} {'Status':<10} {'Imported':<9} {'Zone':<22} Title")
+    print("-" * 100)
+    for log in logs:
+        imported = "yes" if log.imported else "no"
+        print(f"{log.date_formatted:<12} {log.code:<18} {log.status:<10} {imported:<9} {log.zone[:21]:<22} {log.title}")
+
+
+def run_player_command(args) -> int:
+    import json
+
+    from .database import PerformanceDB
+    from .services.player_page import PlayerPageService, client_from_config
+
+    action = getattr(args, "player_command", None)
+    if not action:
+        print("Specify an action: discover, add, show, remove, dismiss or list.")
+        return 1
+
+    with PerformanceDB() as db:
+        if action == "list":
+            pages = PlayerPageService(db).list_pages()
+            if args.json:
+                print(json.dumps(pages, indent=2))
+            elif not pages:
+                print("No player pages yet. Use 'player discover NAME' to start one.")
+            else:
+                for p in pages:
+                    print(f"{p['name']:<18} {p['server']:<20} {p['region'].upper():<4} {p['log_count']:>4} reports")
+            return 0
+
+        player = _resolve_player(db, args)
+        needs_api = action in ("add",) or (action == "discover" and not args.local)
+        service = PlayerPageService(db, client_from_config() if needs_api else None)
+
+        if action == "discover":
+            logs = service.discover_reports(player, limit=args.limit)
+            if args.json:
+                print(json.dumps([log.to_dict() for log in logs], indent=2))
+            else:
+                print(f"Reports for {player.label}:")
+                _print_logs(logs)
+                new = sum(1 for log in logs if log.status == "new")
+                if new:
+                    print(f"\n{new} new. Add them with: player add {player.name} --new")
+            return 0
+
+        if action == "add":
+            refs = list(args.reports)
+            known = {}
+            if args.new:
+                found = [log for log in service.discover_reports(player, limit=args.limit) if log.status == "new"]
+                known = {log.code: log for log in found}
+                refs.extend(known)
+            if not refs:
+                print("Nothing to add. Pass report codes/URLs or --new.")
+                return 1
+            results = service.add_reports(
+                player, refs, verify=not args.no_verify, known=known, progress=None if args.json else print
+            )
+            if args.json:
+                print(json.dumps([r.to_dict() for r in results], indent=2))
+            else:
+                for r in results:
+                    print(f"{r.code:<18} {r.outcome:<16} {r.message}")
+            return 0 if all(r.ok for r in results) else 1
+
+        if action == "show":
+            page = service.get_page(player)
+            if args.json:
+                print(json.dumps(page.to_dict(), indent=2))
+                return 0
+            print(f"=== {player.label} ===")
+            if page.history:
+                h = page.history
+                print(f"{h['player_class']}, {h['total_raids']} raids tracked ({h['first_seen']} to {h['last_seen']})")
+            _print_logs(page.logs)
+            return 0
+
+        if action == "remove":
+            print(f"Removed {service.remove(player, args.reports)} report(s) from {player.label}.")
+            return 0
+
+        if action == "dismiss":
+            print(f"Dismissed {service.dismiss(player, args.reports)} report(s) for {player.label}.")
+            return 0
+
+    return 1
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -284,6 +438,7 @@ def main() -> int:
         "ranged": run_ranged_analysis,
         "consumes": run_consumes_analysis,
         "history": run_history_query,
+        "player": run_player_command,
     }
 
     handler = commands.get(args.command)
