@@ -239,6 +239,14 @@ CREATE TABLE IF NOT EXISTS role_overrides (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(character_name, report_id)
 );
+
+-- Which players an override actually moved in a stored raid, so clearing it re-analyses only those raids.
+CREATE TABLE IF NOT EXISTS role_override_raids (
+    raid_id INTEGER NOT NULL REFERENCES raids(id),
+    character_name TEXT NOT NULL COLLATE NOCASE,
+    detected_role TEXT NOT NULL,
+    UNIQUE(raid_id, character_name)
+);
 """
 
 
@@ -512,6 +520,28 @@ class PerformanceDB:
 
     def import_raid(self, analysis: RaidAnalysis, source: str = "guild") -> None:
         """Import all performance data from a completed raid analysis."""
+        self._write_raid(analysis, source)
+        self._get_conn().commit()
+
+    def replace_raid_analysis(self, analysis: RaidAnalysis, source: str = "guild") -> None:
+        """Swap a raid's stored analysis for a fresh one in one transaction.
+
+        The raids row (its id, label and source) is kept; every per-player row is
+        dropped first so players who changed role don't keep their old rows. On any
+        error the previous data is left exactly as it was.
+        """
+        conn = self._get_conn()
+        try:
+            raid = conn.execute("SELECT id FROM raids WHERE report_id = ?", (analysis.metadata.report_id,)).fetchone()
+            if raid:
+                self._delete_raid_rows(conn, raid["id"], keep_raid_row=True)
+            self._write_raid(analysis, source)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    def _write_raid(self, analysis: RaidAnalysis, source: str) -> None:
         conn = self._get_conn()
         raid_date = analysis.metadata.date.strftime("%Y-%m-%d %H:%M:%S")
         raid_id = self._upsert_raid(analysis.metadata, source=source)
@@ -628,7 +658,11 @@ class PerformanceDB:
         if analysis.totem_uptimes:
             self._import_totem_uptimes(conn, raid_id, analysis.totem_uptimes)
 
-        conn.commit()
+        conn.execute("DELETE FROM role_override_raids WHERE raid_id = ?", (raid_id,))
+        conn.executemany(
+            "INSERT INTO role_override_raids (raid_id, character_name, detected_role) VALUES (?, ?, ?)",
+            [(raid_id, name, detected) for name, detected in analysis.role_overrides_applied.items()],
+        )
 
     def _import_encounters(
         self, conn: sqlite3.Connection, raid_id: int, raid_date: str, encounters: list[EncounterSummary]
@@ -1561,17 +1595,22 @@ class PerformanceDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def delete_raid(self, report_id: str, clear_cache: bool = True) -> None:
-        """Delete a raid and all associated performance data.
-
-        ``clear_cache=False`` keeps cached API responses, for re-importing the same report.
-        """
+    def delete_raid(self, report_id: str) -> None:
+        """Delete a raid and all associated performance data."""
         conn = self._get_conn()
         raid = conn.execute("SELECT id FROM raids WHERE report_id = ?", (report_id,)).fetchone()
         if not raid:
             return
-        raid_id = raid["id"]
+        self._delete_raid_rows(conn, raid["id"])
+        conn.commit()
 
+        cache_file = _cache_file(report_id)
+        if os.path.exists(cache_file):
+            with contextlib.suppress(OSError):
+                os.remove(cache_file)
+        clear_response_cache()
+
+    def _delete_raid_rows(self, conn: sqlite3.Connection, raid_id: int, keep_raid_row: bool = False) -> None:
         conn.execute(
             "DELETE FROM healer_spells WHERE healer_performance_id IN "
             "(SELECT id FROM healer_performance WHERE raid_id = ?)",
@@ -1607,16 +1646,9 @@ class PerformanceDB:
             (raid_id,),
         )
         conn.execute("DELETE FROM encounters WHERE raid_id = ?", (raid_id,))
-        conn.execute("DELETE FROM raids WHERE id = ?", (raid_id,))
-        conn.commit()
-
-        if not clear_cache:
-            return
-        cache_file = _cache_file(report_id)
-        if os.path.exists(cache_file):
-            with contextlib.suppress(OSError):
-                os.remove(cache_file)
-        clear_response_cache()
+        conn.execute("DELETE FROM role_override_raids WHERE raid_id = ?", (raid_id,))
+        if not keep_raid_row:
+            conn.execute("DELETE FROM raids WHERE id = ?", (raid_id,))
 
     def clear_raid_cache(self, report_id: str) -> None:
         """Clear cached API data for a specific report."""
@@ -1781,6 +1813,19 @@ class PerformanceDB:
         ).fetchall()
         # '' sorts first, so a raid-specific row overwrites the character-wide one.
         return {r["character_name"]: r["role"] for r in rows}
+
+    def get_role_override_raids(self, character_name: str) -> set[str]:
+        """Report codes of stored raids where an override moved this character off the detected role."""
+        rows = (
+            self._get_conn()
+            .execute(
+                """SELECT r.report_id FROM role_override_raids o JOIN raids r ON r.id = o.raid_id
+                   WHERE o.character_name = ?""",
+                (character_name,),
+            )
+            .fetchall()
+        )
+        return {r["report_id"] for r in rows}
 
     # ── Character lineage ──
     # Raw per-raid rows for a character; services.lineage turns them into min/mean/max.
@@ -2898,6 +2943,7 @@ class PerformanceDB:
         conn.execute("DELETE FROM player_page_logs")
         conn.execute("DELETE FROM player_pages")
         conn.execute("DELETE FROM role_overrides")
+        conn.execute("DELETE FROM role_override_raids")
         conn.execute("DELETE FROM healer_spells")
         conn.execute("DELETE FROM healer_performance")
         conn.execute("DELETE FROM tank_damage_taken")

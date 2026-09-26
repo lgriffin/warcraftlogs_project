@@ -168,8 +168,11 @@ A standalone page for one character (**Characters > Player Page**, or `player` o
 - **Find My Logs** — look a character up by name, server and region; lists every Warcraft Logs report they appear in, plus any already in your local database, marked New / On page / Dismissed.
 - **Add to your page** — add selected reports, all new ones, or paste any report URL (the character's presence in the report is checked first). Reports not yet imported are analysed and saved, so they feed the character's history and trends.
 - **Remove / Dismiss** — unlink a report from the page (its raid data stays), or hide it from future discovery.
-- **Analyse as** — force the role a character is analysed as (healer, tank, melee, ranged or dps) when detection guesses wrong. Imported raids where the stored role differs are re-analysed; pick *Detected* to go back to guessing. The CLI can also set it for a single report.
-- **Lineage** — min / mean / max per raid for the character's headline numbers, total casts, casts per spell (averaged over raids in that spell's role) and consumables (raids where none were used count as 0).
+- **Analyse as** — force the role a character is analysed as (healer, tank, melee, ranged or dps) when
+  detection guesses wrong. Imported raids where the stored role differs are re-analysed; pick *Detected*
+  to go back to guessing. The CLI can also set it for a single report.
+- **Lineage** — min / mean / max per raid for the character's headline numbers, total casts, casts per
+  spell (averaged over raids in that spell's role) and consumables (raids where none were used count as 0).
 
 ### Raid Groups
 

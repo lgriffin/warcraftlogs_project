@@ -13,6 +13,7 @@ damage), so relabelling stored rows would not be enough.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
@@ -27,7 +28,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-AnalyzeFn = Callable[[str], "RaidAnalysis"]
+# Called as analyze(report_id, reference=...), matching RaidService.analyze.
+AnalyzeFn = Callable[..., "RaidAnalysis"]
 
 
 @dataclass
@@ -102,8 +104,14 @@ class RoleOverrideService:
             return []
         if not reanalyze:
             return []
-        # Only raids whose stored role came from this override need a fresh guess.
-        affected = [r for r in self._raids_in_scope(name, code) if role_matches(r["role"], old)]
+        # Re-guess raids this override actually moved the character in, plus any where a
+        # remaining override (character-wide, after a raid-specific clear) now disagrees.
+        moved = self.db.get_role_override_raids(name)
+        affected = []
+        for r in self._raids_in_scope(name, code):
+            now = self._effective_role(name, r["report_id"])
+            if r["report_id"] in moved or (now and not role_matches(r["role"], now)):
+                affected.append(r)
         return self._reanalyze(affected, progress)
 
     def _effective_role(self, name: str, report_id: str) -> str:
@@ -134,14 +142,14 @@ class RoleOverrideService:
             source = self.db.get_raid_source(code) or "guild"
             try:
                 assert self._analyze is not None
-                analysis = self._analyze(code)
-            except API_ERRORS as e:
+                analysis = self._analyze(code, reference=source == "reference")
+                # Replace, don't merge: the character's old-role rows must go. Atomic, and
+                # keeps the raid's label and source.
+                self.db.replace_raid_analysis(analysis, source=source)
+            except (*API_ERRORS, sqlite3.Error) as e:
                 logger.warning("Re-analysis of %s failed: %s", code, e)
                 results.append(ReanalysisResult(code, raid["role"], False, str(e)))
                 continue
-            # Replace, don't merge: the character's old-role rows must go.
-            self.db.delete_raid(code, clear_cache=False)
-            self.db.import_raid(analysis, source=source)
             results.append(ReanalysisResult(code, raid["role"], True, "Re-analysed"))
         return results
 

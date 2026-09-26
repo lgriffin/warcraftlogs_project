@@ -99,7 +99,9 @@ def analyze_raid(
         tank_min_mitigation,
     )
     override_notes: list[str] = []
+    overrides_applied: dict[str, str] = {}
     if role_overrides:
+        detected = {p.name: p.role for p in composition.all_players}
         composition, override_notes = apply_role_overrides(
             composition,
             role_overrides,
@@ -107,6 +109,7 @@ def analyze_raid(
         )
         for note in override_notes:
             logger.info("  %s", note)
+        overrides_applied = {p.name: detected[p.name] for p in composition.all_players if p.role != detected[p.name]}
     logger.info(
         "  composition: %d healers, %d tanks, %d melee, %d ranged",
         len(composition.healers),
@@ -205,6 +208,7 @@ def analyze_raid(
         totem_uptimes=totem_uptimes,
         encounters=encounters,
         warnings=all_warnings,
+        role_overrides_applied=overrides_applied,
     )
 
 

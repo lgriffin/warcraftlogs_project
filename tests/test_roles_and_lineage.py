@@ -1,6 +1,7 @@
 """Tests for role overrides and character lineage (min / mean / max across raids)."""
 
 import json
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -96,8 +97,8 @@ class TestRoleOverrideService:
         """Analyzer that returns HolyPriest as ranged dps (what the override asks for)."""
         calls = []
 
-        def _analyze(code):
-            calls.append(code)
+        def _analyze(code, reference=False):
+            calls.append((code, reference))
             a = build_analysis(report_id=code, dps_name="HolyPriest", dps_class="Priest", dps_role="ranged")
             a.healers = []
             a.composition.healers = []
@@ -109,6 +110,7 @@ class TestRoleOverrideService:
     def test_set_reanalyses_only_disagreeing_raids(self, stored, as_dps):
         results = RoleOverrideService(stored, analyze=as_dps).set("holypriest", "dps")
         assert sorted(r.report_id for r in results) == [CODE_A, CODE_B, CODE_C]
+        assert sorted(as_dps.calls) == [(CODE_A, False), (CODE_B, False), (CODE_C, True)]  # reference raid
         assert all(r.ok and r.old_role == "healer" for r in results)
         roles = {r["report_id"]: r["role"] for r in stored.get_character_raid_roles("HolyPriest", ("guild",))}
         assert roles == {CODE_A: "ranged", CODE_B: "ranged"}  # healer rows replaced, not merged
@@ -138,7 +140,7 @@ class TestRoleOverrideService:
         assert len(results) == 3 and not any(r.ok for r in results)
 
     def test_failure_leaves_raid_untouched(self, stored):
-        def boom(code):
+        def boom(code, reference=False):
             raise ValueError("Report not found or inaccessible")
 
         results = RoleOverrideService(stored, analyze=boom).set("HolyPriest", "tank", CODE_A)
@@ -146,12 +148,41 @@ class TestRoleOverrideService:
         assert stored.is_raid_imported(CODE_A)
 
     def test_clear_reguesses_raids_the_override_covered(self, stored, as_dps, build_analysis):
-        service = RoleOverrideService(stored, analyze=as_dps)
-        service.set("HolyPriest", "dps")
-        results = RoleOverrideService(stored, analyze=lambda code: build_analysis(report_id=code)).clear("HolyPriest")
+        def moved(code, reference=False):
+            a = as_dps(code)
+            a.role_overrides_applied = {"HolyPriest": "healer"}
+            return a
+
+        RoleOverrideService(stored, analyze=moved).set("HolyPriest", "dps")
+        assert stored.get_role_override_raids("holypriest") == {CODE_A, CODE_B, CODE_C}
+        detect = RoleOverrideService(stored, analyze=lambda code, reference=False: build_analysis(report_id=code))
+        results = detect.clear("HolyPriest")
         assert sorted(r.report_id for r in results) == [CODE_A, CODE_B, CODE_C]
         assert stored.get_role_overrides("HolyPriest") == []
+        assert stored.get_role_override_raids("HolyPriest") == set()
         assert RoleOverrideService(stored).clear("HolyPriest") == []  # nothing left to clear
+
+    def test_clear_skips_raids_the_override_never_moved(self, stored, as_dps):
+        # Saved without re-analysis and matching detection everywhere: nothing was moved.
+        RoleOverrideService(stored).set("HolyPriest", "healer", reanalyze=False)
+        assert RoleOverrideService(stored, analyze=as_dps).clear("HolyPriest") == []
+        assert as_dps.calls == []
+
+    def test_reanalysis_keeps_label_and_source(self, stored, as_dps):
+        conn = stored._get_conn()
+        conn.execute("UPDATE raids SET label = 'Kara alt run' WHERE report_id = ?", (CODE_A,))
+        conn.commit()
+        raid_id = conn.execute("SELECT id FROM raids WHERE report_id = ?", (CODE_A,)).fetchone()["id"]
+        RoleOverrideService(stored, analyze=as_dps).set("HolyPriest", "dps", CODE_A)
+        row = conn.execute("SELECT id, label, source FROM raids WHERE report_id = ?", (CODE_A,)).fetchone()
+        assert (row["id"], row["label"], row["source"]) == (raid_id, "Kara alt run", "guild")
+
+    def test_failed_import_rolls_back(self, stored, as_dps):
+        before = stored.get_character_raid_roles("HolyPriest", ("guild",))
+        with patch.object(stored, "_import_tank", side_effect=sqlite3.OperationalError("disk I/O error")):
+            results = RoleOverrideService(stored, analyze=as_dps).set("HolyPriest", "dps", CODE_A)
+        assert not results[0].ok and "disk I/O" in results[0].message
+        assert stored.get_character_raid_roles("HolyPriest", ("guild",)) == before
 
     @pytest.mark.parametrize("role,report", [("bard", None), ("healer", "not-a-code")])
     def test_rejects_bad_input(self, stored, role, report):

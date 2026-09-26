@@ -290,6 +290,8 @@ class RaidAnalysis:
     totem_uptimes: list[AuraUptime] = field(default_factory=list)
     encounters: list[EncounterSummary] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # Players a role override moved: {character name: role the analyzer detected}.
+    role_overrides_applied: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
