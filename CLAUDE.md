@@ -53,3 +53,15 @@ codespell warcraftlogs_client/ tests/
 - All changes go through PRs — never push directly to master
 - Config in `pyproject.toml`, not separate tool config files
 - `config.json` holds API credentials — never commit real values (template in `config.example.json`)
+
+## Architecture rules
+
+Layers, innermost first; each may import only itself and inner layers. `tests/test_architecture.py` enforces this.
+
+1. **core**: WCL client, auth, config, analysis, domain models (moving to `wcl_core`). No Qt, SQLite, web or bot code.
+2. **persistence**: `database.py` (`PerformanceDB`). The only place SQL lives.
+3. **services**: `warcraftlogs_client/services/` (future `wcl-app`). The application layer every frontend shares. No Qt, `sqlite3`, FastAPI or Discord imports.
+4. **presenters**: `renderers/`. Turn domain models into text; never read storage.
+5. **frontends**: CLI, PySide6 desktop, and later the Toads API and bot. Call services only; from core they may use just `models`, `common`, `paths`, `version`.
+
+New features go into a service first, then each frontend adapts it. Charts share presenter payloads, not drawing code. Auth/RBAC stays in the frontend adapters. Existing shortcuts are listed in `KNOWN_VIOLATIONS` in the test; the list may only shrink, so move a view onto a service and delete its entry rather than adding new ones.
