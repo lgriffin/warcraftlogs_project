@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # Sigstore keyless signing of SHA256SUMS via GitHub OIDC (no private key held by anyone)
 
 jobs:
   build:
@@ -48,16 +49,36 @@ jobs:
         if: steps.inno.outcome == 'success'
         run: Start-Sleep -Seconds 10
 
-      - name: Generate SHA256 checksums
+      # REQ-CORE-REL-001: the in-app updater refuses any zip whose SHA-256 is not listed here.
+      - name: Generate SHA256SUMS
         run: |
           $files = @(Get-ChildItem "dist\*.zip" -ErrorAction SilentlyContinue)
           if ("${{ steps.inno.outcome }}" -eq "success") {
             $files += @(Get-ChildItem "installer_output\*.exe" -ErrorAction SilentlyContinue)
           }
-          foreach ($f in $files) {
+          if ($files.Count -eq 0) { throw "No release files to checksum" }
+          $lines = foreach ($f in $files) {
             $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
-            "$hash  $($f.Name)" | Out-File -Append -FilePath SHA256SUMS.txt -Encoding utf8
+            "$hash  $($f.Name)"
           }
+          # sha256sum format: LF line endings, UTF-8 without BOM
+          [IO.File]::WriteAllText("$PWD\SHA256SUMS", (($lines -join "`n") + "`n"))
+          Get-Content SHA256SUMS
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # Keyless: the signing certificate is issued to this workflow's OIDC identity, and the
+      # signature is recorded in the public Rekor transparency log. No long-lived key exists.
+      - name: Sign SHA256SUMS (Sigstore keyless)
+        run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+
+      - name: Verify SHA256SUMS signature
+        run: >-
+          cosign verify-blob SHA256SUMS
+          --bundle SHA256SUMS.sigstore.json
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          --certificate-identity-regexp "^https://github.com/${{ github.repository }}/\.github/workflows/build-installer\.yml@"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -66,7 +87,8 @@ jobs:
           path: |
             installer_output/*.exe
             dist/*.zip
-            SHA256SUMS.txt
+            SHA256SUMS
+            SHA256SUMS.sigstore.json
 
       - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -75,5 +97,6 @@ jobs:
           files: |
             installer_output/*.exe
             dist/*.zip
-            SHA256SUMS.txt
+            SHA256SUMS
+            SHA256SUMS.sigstore.json
           generate_release_notes: true

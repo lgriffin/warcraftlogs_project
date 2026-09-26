@@ -378,7 +378,7 @@ The CLI provides subcommands: `unified`, `healer`, `tank`, `melee`, `ranged`, `c
 | `consumes_analysis.py` | Multi-raid consumable usage tracking with spike detection |
 | `cache.py` | SHA256-keyed JSON file cache for API query results (`cache/responses/`) |
 | `paths.py` | Path resolution for dev vs PyInstaller frozen environments |
-| `updater.py` | Auto-update checker — polls GitHub Releases, downloads and stages updates |
+| `updater.py` | Auto-update checker — polls GitHub Releases, downloads, verifies against the release `SHA256SUMS` and stages updates |
 | `common/errors.py` | Exception hierarchy: `WarcraftLogsError`, `ApiError`, `ConfigurationError`, `DataProcessingError` |
 | `cli.py` | Argument parser and CLI subcommand dispatch |
 

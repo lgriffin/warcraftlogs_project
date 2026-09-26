@@ -81,7 +81,7 @@ def check_client_id(load_result, expected):
 
 @then(parsers.parse('the API client_secret should be "{expected}"'))
 def check_client_secret(load_result, expected):
-    assert load_result["config"].api.client_secret == expected
+    assert load_result["config"].api.client_secret.get_secret_value() == expected
 
 
 @then(parsers.parse("healer_min_healing should be {value:d}"))

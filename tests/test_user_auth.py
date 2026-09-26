@@ -8,6 +8,7 @@ from urllib.request import urlopen
 
 import pytest
 import requests
+from pydantic import SecretStr
 
 from warcraftlogs_client.common.errors import AuthenticationError
 from warcraftlogs_client.user_auth import (
@@ -24,20 +25,20 @@ class TestUserTokenManager:
     def test_save_and_load_token(self, tmp_path):
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
-        tm._access_token = "test_access"
-        tm._refresh_token = "test_refresh"
+        tm._access_token = SecretStr("test_access")
+        tm._refresh_token = SecretStr("test_refresh")
         tm._expires_at = time.time() + 3600
         tm._save()
 
         tm2 = UserTokenManager(token_path=path)
         assert tm2.is_authenticated()
-        assert tm2._access_token == "test_access"
-        assert tm2._refresh_token == "test_refresh"
+        assert tm2._access_token.get_secret_value() == "test_access"
+        assert tm2._refresh_token.get_secret_value() == "test_refresh"
 
     def test_get_token_returns_valid(self, tmp_path):
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
-        tm._access_token = "valid_token"
+        tm._access_token = SecretStr("valid_token")
         tm._expires_at = time.time() + 3600
         tm._save()
 
@@ -52,8 +53,8 @@ class TestUserTokenManager:
     def test_revoke_clears_token(self, tmp_path):
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
-        tm._access_token = "test"
-        tm._refresh_token = "test"
+        tm._access_token = SecretStr("test")
+        tm._refresh_token = SecretStr("test")
         tm._expires_at = time.time() + 3600
         tm._save()
         assert os.path.exists(path)
@@ -66,7 +67,7 @@ class TestUserTokenManager:
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
         tm._access_token = None
-        tm._refresh_token = "refresh_only"
+        tm._refresh_token = SecretStr("refresh_only")
         tm._expires_at = 0
         tm._save()
 
@@ -89,8 +90,8 @@ class TestUserTokenManager:
         tm = UserTokenManager(token_path=path)
         tm.complete_auth("test_code", "client_id", "client_secret")
 
-        assert tm._access_token == "new_access"
-        assert tm._refresh_token == "new_refresh"
+        assert tm._access_token.get_secret_value() == "new_access"
+        assert tm._refresh_token.get_secret_value() == "new_refresh"
         assert tm.is_authenticated()
 
         with open(path) as f:
@@ -115,8 +116,8 @@ class TestUserTokenManager:
 
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
-        tm._access_token = "expired"
-        tm._refresh_token = "old_refresh"
+        tm._access_token = SecretStr("expired")
+        tm._refresh_token = SecretStr("old_refresh")
         tm._expires_at = time.time() - 100  # expired
         tm._save()
 
@@ -134,8 +135,8 @@ class TestUserTokenManager:
 
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
-        tm._access_token = "expired"
-        tm._refresh_token = "bad_refresh"
+        tm._access_token = SecretStr("expired")
+        tm._refresh_token = SecretStr("bad_refresh")
         tm._expires_at = time.time() - 100
         tm._save()
 
@@ -151,8 +152,8 @@ class TestUserTokenManager:
 
         path = str(tmp_path / "token.json")
         tm = UserTokenManager(token_path=path)
-        tm._access_token = "expired"
-        tm._refresh_token = "old_refresh"
+        tm._access_token = SecretStr("expired")
+        tm._refresh_token = SecretStr("old_refresh")
         tm._expires_at = time.time() - 100
         tm._save()
 

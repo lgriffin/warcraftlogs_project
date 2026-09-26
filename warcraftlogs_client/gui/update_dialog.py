@@ -160,7 +160,8 @@ class UpdateDialog(QDialog):
         self._cancel_btn.setEnabled(False)
 
         try:
-            apply_update(self._zip_path)
+            expected = self._downloader.expected_sha256 if self._downloader else ""
+            apply_update(self._zip_path, expected)
         except RuntimeError as e:
             self._error_label.setText(str(e))
             self._error_label.setVisible(True)

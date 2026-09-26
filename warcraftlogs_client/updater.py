@@ -1,7 +1,21 @@
 """
 Auto-update logic: check GitHub Releases, download, and apply updates.
+
+Integrity (REQ-CORE-REL-001): every release publishes a ``SHA256SUMS`` asset listing the
+SHA-256 of each downloadable file. The release workflow signs ``SHA256SUMS`` with Sigstore
+keyless signing (cosign + GitHub OIDC) and publishes the bundle as
+``SHA256SUMS.sigstore.json``. The updater refuses to stage a zip unless its digest matches
+the entry in ``SHA256SUMS``; a missing ``SHA256SUMS`` or a missing/mismatched entry is an error.
+
+TODO(REQ-CORE-REL-001): verify the Sigstore bundle in-app as well. That needs the
+``sigstore`` package (plus its TUF/crypto dependency tree) inside the frozen app, so for
+now the trust chain is: CI signs SHA256SUMS keylessly (verifiable offline with
+``cosign verify-blob``), and the app enforces the digest match against the release's
+SHA256SUMS over HTTPS from github.com.
 """
 
+import hashlib
+import hmac
 import json
 import shutil
 import subprocess
@@ -10,7 +24,17 @@ import zipfile
 from dataclasses import dataclass
 
 import requests
-from PySide6.QtCore import QThread, Signal
+
+try:
+    from PySide6.QtCore import QThread, Signal
+except ImportError:  # pragma: no cover - GUI extra not installed (CLI-only install, headless CI)
+    # Keep the pure update/verification helpers importable without PySide6.
+    QThread = object  # type: ignore[assignment,misc]
+
+    def Signal(*_types):  # type: ignore[no-redef]
+        return None
+
+
 from wcl_core import paths
 
 from .version import __version__
@@ -18,6 +42,12 @@ from .version import __version__
 REPO = "lgriffin/warcraftlogs_project"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 CHECK_COOLDOWN_SECONDS = 4 * 3600
+CHECKSUMS_ASSET_NAMES = ("SHA256SUMS", "SHA256SUMS.txt")
+_HEX_DIGITS = frozenset("0123456789abcdef")
+
+
+class UpdateVerificationError(RuntimeError):
+    """The downloaded update could not be proven to match the release's SHA256SUMS."""
 
 
 @dataclass
@@ -27,6 +57,8 @@ class UpdateInfo:
     release_notes: str
     asset_size: int
     published_at: str
+    asset_name: str = ""
+    checksums_url: str = ""
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -82,13 +114,88 @@ def check_for_update(force: bool = False) -> UpdateInfo | None:
 
     _save_check_timestamp()
 
+    checksums_asset = find_checksums_asset(data.get("assets", []))
+
     return UpdateInfo(
         version=tag.lstrip("v"),
         download_url=zip_asset["browser_download_url"],
         release_notes=data.get("body", ""),
         asset_size=zip_asset.get("size", 0),
         published_at=data.get("published_at", ""),
+        asset_name=zip_asset.get("name", ""),
+        checksums_url=checksums_asset.get("browser_download_url", "") if checksums_asset else "",
     )
+
+
+def find_checksums_asset(assets: list[dict]) -> dict | None:
+    """Return the release's SHA256SUMS asset, or None when the release does not publish one."""
+    for wanted in CHECKSUMS_ASSET_NAMES:
+        for asset in assets:
+            if asset.get("name") == wanted:
+                return asset
+    return None
+
+
+def parse_sha256sums(text: str) -> dict[str, str]:
+    """Parse ``sha256sum``-style lines (``<hex>  <name>`` or ``<hex> *<name>``) into {name: hex}.
+
+    Malformed lines are ignored; a UTF-8 BOM and CRLF line endings (PowerShell output) are tolerated.
+    """
+    digests: dict[str, str] = {}
+    for raw_line in text.lstrip("\ufeff").splitlines():
+        parts = raw_line.strip().split(maxsplit=1)
+        if len(parts) != 2:
+            continue
+        digest, name = parts[0].lower(), parts[1].strip().lstrip("*")
+        if len(digest) == 64 and set(digest) <= _HEX_DIGITS and name:
+            digests[name] = digest
+    return digests
+
+
+def fetch_expected_sha256(info: UpdateInfo) -> str:
+    """Download the release's SHA256SUMS and return the digest listed for ``info.asset_name``."""
+    if not info.checksums_url:
+        raise UpdateVerificationError(
+            "This release does not publish a SHA256SUMS file, so the download cannot be verified. "
+            "The update was not installed; download it manually from the GitHub releases page."
+        )
+    try:
+        resp = requests.get(info.checksums_url, timeout=30)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise UpdateVerificationError(f"Could not download SHA256SUMS to verify the update: {e}") from e
+
+    expected = parse_sha256sums(resp.text).get(info.asset_name)
+    if not expected:
+        raise UpdateVerificationError(
+            f"SHA256SUMS does not list {info.asset_name!r}, so the download cannot be verified. "
+            "The update was not installed."
+        )
+    return expected
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_update_zip(zip_path: str, expected_sha256: str) -> None:
+    """Raise UpdateVerificationError unless *zip_path* hashes to *expected_sha256*."""
+    expected_sha256 = (expected_sha256 or "").strip().lower()
+    if len(expected_sha256) != 64 or not set(expected_sha256) <= _HEX_DIGITS:
+        raise UpdateVerificationError(
+            "No valid expected SHA-256 for this update; refusing to install an unverified file."
+        )
+    actual = sha256_file(zip_path)
+    if not hmac.compare_digest(actual, expected_sha256):
+        raise UpdateVerificationError(
+            "The downloaded update does not match the SHA-256 published in the release's SHA256SUMS "
+            "(it may be corrupted or tampered with). It was not installed.\n"
+            f"Expected {expected_sha256}\nGot      {actual}"
+        )
 
 
 def _save_check_timestamp():
@@ -119,6 +226,7 @@ class UpdateDownloader(QThread):
         super().__init__(parent)
         self._info = info
         self._cancelled = False
+        self.expected_sha256 = ""  # set once SHA256SUMS has been fetched; passed to apply_update()
 
     def cancel(self):
         self._cancelled = True
@@ -128,6 +236,8 @@ class UpdateDownloader(QThread):
         zip_path = update_dir / f"WarcraftLogsAnalyzer-v{self._info.version}.zip"
 
         try:
+            # Resolve the expected digest first: no SHA256SUMS entry means no download at all.
+            self.expected_sha256 = fetch_expected_sha256(self._info)
             resp = requests.get(self._info.download_url, stream=True, timeout=30)
             resp.raise_for_status()
             total = int(resp.headers.get("content-length", self._info.asset_size))
@@ -149,18 +259,22 @@ class UpdateDownloader(QThread):
                 self.error.emit(f"Download size mismatch: expected {self._info.asset_size}, got {done}")
                 return
 
+            verify_update_zip(str(zip_path), self.expected_sha256)
             self.finished.emit(str(zip_path))
 
-        except (requests.RequestException, OSError) as e:
+        except (requests.RequestException, OSError, UpdateVerificationError) as e:
             zip_path.unlink(missing_ok=True)
             self.error.emit(str(e))
 
 
-def apply_update(zip_path: str) -> bool:
-    """Extract update zip and write a batch script to swap files on restart.
+def apply_update(zip_path: str, expected_sha256: str) -> bool:
+    """Verify the zip against SHA256SUMS, extract it and write a batch script to swap files on restart.
 
+    Raises UpdateVerificationError (a RuntimeError) without staging anything if the digest does not match.
     Returns True if the script was created and the caller should quit the app.
     """
+    verify_update_zip(zip_path, expected_sha256)
+
     install_dir = paths.get_install_dir()
     update_dir = paths.get_update_dir()
     staged_dir = update_dir / "staged"

@@ -2,24 +2,26 @@ import base64
 import time
 
 import requests
+from pydantic import SecretStr
 
 from .common.errors import AuthenticationError
+from .config import as_secret
 
 
 class TokenManager:
     TOKEN_URL = "https://www.warcraftlogs.com/oauth/token"
 
-    def __init__(self, client_id, client_secret):
+    def __init__(self, client_id, client_secret: str | SecretStr):
         self.client_id = client_id
-        self.client_secret = client_secret
-        self.access_token = None
+        self.client_secret = as_secret(client_secret)
+        self.access_token: SecretStr | None = None
         self.token_expiry = 0
 
     def _is_token_valid(self):
-        return self.access_token and time.time() < self.token_expiry
+        return bool(self.access_token) and time.time() < self.token_expiry
 
     def _get_new_token(self):
-        auth_string = f"{self.client_id}:{self.client_secret}"
+        auth_string = f"{self.client_id}:{self.client_secret.get_secret_value()}"
         b64_auth = base64.b64encode(auth_string.encode()).decode()
 
         headers = {"Authorization": f"Basic {b64_auth}", "Content-Type": "application/x-www-form-urlencoded"}
@@ -39,10 +41,13 @@ class TokenManager:
         except (ValueError, KeyError) as e:
             raise AuthenticationError("Received invalid response from WarcraftLogs", details=str(e)) from e
 
-        self.access_token = token_data["access_token"]
+        self.access_token = SecretStr(token_data["access_token"])
         self.token_expiry = time.time() + token_data.get("expires_in", 3600) - 60
 
-    def get_token(self):
+    def get_token(self) -> str:
+        """Return the raw bearer token; callers must put it only in the Authorization header."""
         if not self._is_token_valid():
             self._get_new_token()
-        return self.access_token
+        if self.access_token is None:
+            raise AuthenticationError("No access token available")
+        return self.access_token.get_secret_value()

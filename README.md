@@ -40,6 +40,15 @@ Uninstalling the app does not remove user data — delete the folders above manu
 
 The app checks for updates automatically on launch via GitHub Releases. When a new version is available, a notification dialog offers to download and apply it.
 
+Each release publishes a `SHA256SUMS` file, signed in CI with [Sigstore](https://www.sigstore.dev/) keyless signing (bundle: `SHA256SUMS.sigstore.json`). The updater refuses to install a download whose SHA-256 is not listed in `SHA256SUMS`, or when the release has no `SHA256SUMS`. To check a release by hand:
+
+```bash
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/lgriffin/warcraftlogs_project/\.github/workflows/build-installer\.yml@'
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
 ### Building the Installer
 
 To build the installer from source:

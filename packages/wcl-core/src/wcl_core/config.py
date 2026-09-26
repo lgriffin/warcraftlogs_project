@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import SecretStr
+
 
 @dataclass
 class RoleThresholds:
@@ -27,7 +29,7 @@ class ApiConfig:
     """Configuration for Warcraft Logs API access."""
 
     client_id: str
-    client_secret: str
+    client_secret: SecretStr
     report_id: str
     guild_id: int = 774065
 
@@ -60,6 +62,14 @@ class AppConfig:
 
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
+
+
+def as_secret(value: str | SecretStr) -> SecretStr:
+    """Wrap a credential in ``SecretStr`` so repr/str/logging show ``**********``.
+
+    Call ``.get_secret_value()`` only at the point the raw value is sent over the wire.
+    """
+    return value if isinstance(value, SecretStr) else SecretStr(value)
 
 
 class ConfigManager:
@@ -121,7 +131,7 @@ class ConfigManager:
 
         api_config = ApiConfig(
             client_id=client_id,
-            client_secret=client_secret,
+            client_secret=as_secret(client_secret),
             report_id=report_id,
             guild_id=guild_id,
         )
@@ -190,7 +200,8 @@ def load_config(config_file: str | None = None) -> dict[str, Any]:
     manager = get_config_manager(config_file)
     config = manager.load()
 
-    # Return in legacy format
+    # Return in legacy format. ``client_secret`` stays a ``SecretStr`` so dumping or logging
+    # this dict never reveals it; TokenManager / UserTokenManager accept it as-is.
     return {
         "client_id": config.api.client_id,
         "client_secret": config.api.client_secret,
