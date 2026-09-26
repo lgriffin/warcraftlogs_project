@@ -94,30 +94,16 @@ Examples:
 
 
 def run_unified_analysis(args) -> int:
-    from .analysis import analyze_raid
-    from .auth import TokenManager
-    from .client import WarcraftLogsClient
-    from .config import load_config
     from .renderers.console import render_raid_analysis
+    from .services import AppContext, RaidService
     from .spell_manager import reset_spell_manager
 
     reset_spell_manager()
-    config = load_config()
-    report_id = args.report_id if hasattr(args, "report_id") and args.report_id else config["report_id"]
-    role_thresholds = config.get("role_thresholds", {})
+    ctx = AppContext.from_config_file()
+    report_id = args.report_id if hasattr(args, "report_id") and args.report_id else ctx.config["report_id"]
+    raids = RaidService(ctx)
 
-    token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
-
-    analysis = analyze_raid(
-        client,
-        report_id,
-        healer_threshold=role_thresholds.get("healer_min_healing", 900000),
-        tank_min_taken=role_thresholds.get("tank_min_taken", 150000),
-        tank_min_mitigation=role_thresholds.get("tank_min_mitigation", 40),
-        healer_threshold_10=role_thresholds.get("healer_min_healing_10", 400000),
-        tank_min_taken_10=role_thresholds.get("tank_min_taken_10", 300000),
-    )
+    analysis = raids.analyze(report_id)
 
     render_raid_analysis(analysis)
 
@@ -128,10 +114,7 @@ def run_unified_analysis(args) -> int:
         print(f"\nMarkdown report exported to: {path}")
 
     if hasattr(args, "save") and args.save:
-        from .database import PerformanceDB
-
-        with PerformanceDB() as db:
-            db.import_raid(analysis)
+        raids.save(analysis)
         print(f"\nResults saved to database for report {report_id}")
 
     return 0
