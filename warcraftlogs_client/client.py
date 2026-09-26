@@ -5,8 +5,10 @@ All API interactions go through WarcraftLogsClient. Methods return
 extracted data (not raw JSON wrappers), with consistent signatures.
 """
 
+import json
 import logging
 import time
+from typing import Any
 
 import requests
 
@@ -35,6 +37,63 @@ def _extract_report(result: dict) -> dict:
 
 
 DEFAULT_API_URL = "https://www.warcraftlogs.com/api/v2/client"
+
+# End timestamp used for "whole report" queries (report-relative milliseconds).
+FULL_REPORT_END = 999999999
+# Largest page size the events endpoint accepts; the API default is far smaller.
+EVENTS_PAGE_LIMIT = 10000
+
+# GraphQL types for the variables the query builders send. Values always travel as
+# variables; only enum arguments are written into the query text, and those are
+# checked against the allow-lists below first.
+_VAR_TYPES = {
+    "code": "String!",
+    "startTime": "Float!",
+    "endTime": "Float!",
+    "sourceID": "Int!",
+    "targetID": "Int!",
+    "abilityID": "Float!",
+    "fightIDs": "[Int]!",
+    "limit": "Int!",
+}
+_EVENT_DATA_TYPES = {
+    "All",
+    "Buffs",
+    "Casts",
+    "CombatantInfo",
+    "DamageDone",
+    "DamageTaken",
+    "Deaths",
+    "Debuffs",
+    "Dispels",
+    "Healing",
+    "Interrupts",
+    "Resources",
+    "Summons",
+    "Threat",
+}
+_TABLE_DATA_TYPES = (_EVENT_DATA_TYPES - {"All", "CombatantInfo"}) | {"Summary", "Survivability"}
+_HOSTILITY_TYPES = {"Friendlies", "Enemies"}
+_RANKING_METRICS = {
+    "bossdps",
+    "bossrdps",
+    "default",
+    "dps",
+    "hps",
+    "krsi",
+    "playerscore",
+    "playerspeed",
+    "rdps",
+    "tankhps",
+    "wdps",
+}
+
+
+def _enum(value: str, allowed: set[str]) -> str:
+    """Return *value* for use as a GraphQL enum literal, rejecting anything not allow-listed."""
+    if value not in allowed:
+        raise ValueError(f"Unsupported GraphQL enum value: {value!r}")
+    return value
 
 
 class WarcraftLogsClient:
@@ -68,25 +127,30 @@ class WarcraftLogsClient:
         if elapsed < self.MIN_REQUEST_INTERVAL:
             time.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
 
-    def run_query(self, query: str, use_cache: bool = True) -> dict:
+    def run_query(self, query: str, use_cache: bool = True, variables: dict | None = None) -> dict:
+        """POST a GraphQL query. Pass user- or report-derived values in *variables*, never in *query*."""
         use_cache = use_cache and self.cache_enabled
+        cache_key = query if not variables else f"{query}\n{json.dumps(variables, sort_keys=True)}"
         if use_cache:
-            cached = get_cached_response(query)
+            cached = get_cached_response(cache_key)
             if cached is not None:
                 logger.debug("Cache hit for query")
                 return cached
 
         token = self.token_manager.get_token()
         headers = {"Authorization": f"Bearer {token}"}
+        payload: dict = {"query": query}
+        if variables:
+            payload["variables"] = variables
 
         logger.info("API request: POST %s", self.api_url)
-        logger.debug("Query: %s", query[:200])
+        logger.debug("Query: %s variables=%s", query[:200], variables)
 
         for attempt in range(self.MAX_RETRIES):
             self._throttle()
             self._last_request_time = time.monotonic()
 
-            response = requests.post(self.api_url, headers=headers, json={"query": query}, timeout=30)
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
@@ -103,33 +167,89 @@ class WarcraftLogsClient:
             if result.get("errors"):
                 logger.warning("GraphQL errors: %s", result["errors"])
             if use_cache:
-                save_response_cache(query, result)
+                save_response_cache(cache_key, result)
             return result
 
         response.raise_for_status()
         result = response.json()
         if use_cache:
-            save_response_cache(query, result)
+            save_response_cache(cache_key, result)
         return result
+
+    # ── Query builders ──
+
+    def _query_report(self, report_id: str, body: str, args: dict | None = None, use_cache: bool = True) -> dict:
+        """Run ``reportData { report(code: $code) { <body> } }`` and return the report object.
+
+        *body* may reference ``$name`` for each key in *args*; values are sent as GraphQL variables.
+        """
+        variables = {"code": report_id, **(args or {})}
+        decls = ", ".join(f"${name}: {_VAR_TYPES[name]}" for name in variables)
+        query = f"query({decls}) {{ reportData {{ report(code: $code) {{ {body} }} }} }}"
+        return _extract_report(self.run_query(query, use_cache=use_cache, variables=variables))
+
+    def _table(self, report_id: str, data_type: str, start_time: float, end_time: float, **filters) -> Any:
+        """Fetch a report ``table`` for a data type. *filters* take hostilityType/sourceID/targetID."""
+        hostility = filters.pop("hostilityType", None)
+        args: dict = {"startTime": start_time, "endTime": end_time}
+        args.update({k: v for k, v in filters.items() if v})
+        call = [f"dataType: {_enum(data_type, _TABLE_DATA_TYPES)}"]
+        if hostility:
+            call.append(f"hostilityType: {_enum(hostility, _HOSTILITY_TYPES)}")
+        call += [f"{name}: ${name}" for name in args]
+        report = self._query_report(report_id, f"table({', '.join(call)})", args)
+        return report.get("table")
+
+    def _table_entries(self, report_id: str, data_type: str, start_time: float, end_time: float, **filters) -> list:
+        raw_table = self._table(report_id, data_type, start_time, end_time, **filters)
+        if isinstance(raw_table, dict):
+            if "data" in raw_table and "entries" in raw_table["data"]:
+                return raw_table["data"]["entries"]
+            if "entries" in raw_table:
+                return raw_table["entries"]
+        return []
+
+    def _events(
+        self,
+        report_id: str,
+        data_type: str,
+        start_time: float = 0,
+        end_time: float = FULL_REPORT_END,
+        *,
+        hostility: str | None = "Friendlies",
+        paginate: bool = True,
+        **filters,
+    ) -> list[dict]:
+        """Fetch ``events`` for a data type, following ``nextPageTimestamp`` when *paginate* is set.
+
+        *filters* take sourceID/abilityID/fightIDs/limit; falsy values are omitted.
+        """
+        base: dict = {k: v for k, v in filters.items() if v}
+        if paginate:
+            base.setdefault("limit", EVENTS_PAGE_LIMIT)
+        call = [f"dataType: {_enum(data_type, _EVENT_DATA_TYPES)}"]
+        if hostility:
+            call.append(f"hostilityType: {_enum(hostility, _HOSTILITY_TYPES)}")
+        call += ["startTime: $startTime", "endTime: $endTime"]
+        call += [f"{name}: ${name}" for name in base]
+        body = f"events({', '.join(call)}) {{ data{' nextPageTimestamp' if paginate else ''} }}"
+
+        all_data: list[dict] = []
+        page_start = start_time
+        while True:
+            args = {"startTime": page_start, "endTime": end_time, **base}
+            report = self._query_report(report_id, body, args)
+            events = report.get("events") or {}
+            all_data.extend(events.get("data") or [])
+            next_page = events.get("nextPageTimestamp") if paginate else None
+            if not next_page:
+                return all_data
+            page_start = next_page
 
     # ── Report-level queries ──
 
     def get_report_metadata(self, report_id: str) -> RaidMetadata:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              title
-              owner {{ name }}
-              startTime
-              endTime
-              zone {{ name }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
+        report = self._query_report(report_id, "title owner { name } startTime endTime zone { name }")
         zone_data = report.get("zone")
         return RaidMetadata(
             report_id=report_id,
@@ -142,22 +262,17 @@ class WarcraftLogsClient:
 
     def get_guild_info(self, guild_id: int) -> dict:
         """Fetch guild name and server by guild ID."""
-        query = f"""
-        {{
-          guildData {{
-            guild(id: {guild_id}) {{
+        query = """
+        query($id: Int!) {
+          guildData {
+            guild(id: $id) {
               name
-              server {{
-                name
-                region {{
-                  name
-                }}
-              }}
-            }}
-          }}
-        }}
+              server { name region { name } }
+            }
+          }
+        }
         """
-        result = self.run_query(query)
+        result = self.run_query(query, variables={"id": guild_id})
         guild = result["data"]["guildData"]["guild"]
         if not guild:
             return {"name": "", "server": ""}
@@ -172,26 +287,27 @@ class WarcraftLogsClient:
         all_reports: list[dict] = []
         page = 1
         per_page = min(total, 100)
+        query = """
+        query($guildID: Int!, $limit: Int!, $page: Int!) {
+          reportData {
+            reports(guildID: $guildID, limit: $limit, page: $page) {
+              data {
+                code
+                title
+                owner { name }
+                startTime
+                endTime
+                zone { name }
+              }
+              has_more_pages
+            }
+          }
+        }
+        """
 
         while len(all_reports) < total:
-            query = f"""
-            {{
-              reportData {{
-                reports(guildID: {guild_id}, limit: {per_page}, page: {page}) {{
-                  data {{
-                    code
-                    title
-                    owner {{ name }}
-                    startTime
-                    endTime
-                    zone {{ name }}
-                  }}
-                  has_more_pages
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query, use_cache=False)
+            variables = {"guildID": guild_id, "limit": per_page, "page": page}
+            result = self.run_query(query, use_cache=False, variables=variables)
             page_data = result["data"]["reportData"]["reports"]
             for r in page_data["data"]:
                 all_reports.append(
@@ -211,66 +327,15 @@ class WarcraftLogsClient:
         return all_reports[:total]
 
     def get_master_data(self, report_id: str) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              masterData {{
-                actors {{
-                  id
-                  name
-                  type
-                  subType
-                }}
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        actors = (report.get("masterData") or {}).get("actors") or []
-        return [a for a in actors if a["type"] == "Player"]
+        return [a for a in self.get_all_actors(report_id) if a["type"] == "Player"]
 
     def get_ability_names(self, report_id: str) -> dict[int, str]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              masterData {{
-                abilities {{
-                  gameID
-                  name
-                }}
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
+        report = self._query_report(report_id, "masterData { abilities { gameID name } }")
         abilities = (report.get("masterData") or {}).get("abilities") or []
         return {a["gameID"]: a["name"] for a in abilities if a.get("gameID") and a.get("name")}
 
     def get_fights(self, report_id: str) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              fights {{
-                id
-                name
-                startTime
-                endTime
-                kill
-                encounterID
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
+        report = self._query_report(report_id, "fights { id name startTime endTime kill encounterID }")
         return report.get("fights") or []
 
     def get_encounter_table(self, report_id: str, start_time: int, end_time: int, data_type: str) -> list[dict]:
@@ -279,146 +344,28 @@ class WarcraftLogsClient:
         Returns per-player aggregate totals for the given data_type
         (DamageDone, Healing, or DamageTaken) within the fight window.
         """
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: {data_type}, startTime: {start_time}, endTime: {end_time},
-                    hostilityType: Friendlies)
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        raw_table = report.get("table")
-        if isinstance(raw_table, dict):
-            if "data" in raw_table and "entries" in raw_table["data"]:
-                return raw_table["data"]["entries"]
-            if "entries" in raw_table:
-                return raw_table["entries"]
-        return []
+        return self._table_entries(report_id, data_type, start_time, end_time, hostilityType="Friendlies")
 
     # ── Player event queries ──
 
     def get_healing_data(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              events(startTime: 0, endTime: 999999999, sourceID: {source_id},
-                     dataType: Healing, hostilityType: Friendlies) {{
-                data
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return (report.get("events") or {}).get("data") or []
+        return self._events(report_id, "Healing", sourceID=source_id, paginate=False)
 
     def get_cast_data(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              events(startTime: 0, endTime: 999999999, sourceID: {source_id},
-                     dataType: Casts, hostilityType: Friendlies) {{
-                data
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return (report.get("events") or {}).get("data") or []
+        return self._events(report_id, "Casts", sourceID=source_id, paginate=False)
 
     def get_cast_events_paginated(self, report_id: str, source_id: int) -> list[dict]:
-        all_data = []
-        start_time = 0
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {start_time}, endTime: 999999999, sourceID: {source_id},
-                         dataType: Casts, hostilityType: Friendlies, limit: 10000) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            start_time = next_page
-        return all_data
+        return self._events(report_id, "Casts", sourceID=source_id)
 
     def get_cast_events_for_encounter(
         self, report_id: str, source_id: int, start_time: int, end_time: int
     ) -> list[dict]:
-        all_data: list[dict] = []
-        page_start = start_time
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {page_start}, endTime: {end_time}, sourceID: {source_id},
-                         dataType: Casts, hostilityType: Friendlies, limit: 10000) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            page_start = next_page
-        return all_data
+        return self._events(report_id, "Casts", start_time, end_time, sourceID=source_id)
 
     def get_resource_events_paginated(
         self, report_id: str, source_id: int, start_time: int, end_time: int
     ) -> list[dict]:
-        all_data: list[dict] = []
-        page_start = start_time
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {page_start}, endTime: {end_time}, sourceID: {source_id},
-                         dataType: Resources, hostilityType: Friendlies, limit: 10000) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            page_start = next_page
-        return all_data
+        return self._events(report_id, "Resources", start_time, end_time, sourceID=source_id)
 
     def get_buffs_table_for_encounter(
         self,
@@ -428,235 +375,56 @@ class WarcraftLogsClient:
         source_id: int = 0,
         target_id: int = 0,
     ) -> dict:
-        filters = "hostilityType: Friendlies"
-        if source_id:
-            filters += f", sourceID: {source_id}"
-        if target_id:
-            filters += f", targetID: {target_id}"
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: Buffs, startTime: {start_time}, endTime: {end_time},
-                    {filters})
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return report.get("table") or {}
+        table = self._table(
+            report_id,
+            "Buffs",
+            start_time,
+            end_time,
+            hostilityType="Friendlies",
+            sourceID=source_id,
+            targetID=target_id,
+        )
+        return table or {}
 
     def get_cast_table(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: Casts, sourceID: {source_id}, startTime: 0, endTime: 999999999)
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        raw_table = report.get("table")
-        if isinstance(raw_table, dict):
-            if "data" in raw_table and "entries" in raw_table["data"]:
-                return raw_table["data"]["entries"]
-            if "entries" in raw_table:
-                return raw_table["entries"]
-        return []
+        return self._table_entries(report_id, "Casts", 0, FULL_REPORT_END, sourceID=source_id)
 
     def get_damage_taken_table(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: DamageTaken, sourceID: {source_id}, startTime: 0, endTime: 999999999,
-                    hostilityType: Friendlies)
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        raw_table = report.get("table")
-        if isinstance(raw_table, dict):
-            if "data" in raw_table and "entries" in raw_table["data"]:
-                return raw_table["data"]["entries"]
-            if "entries" in raw_table:
-                return raw_table["entries"]
-        return []
+        return self._table_entries(
+            report_id, "DamageTaken", 0, FULL_REPORT_END, hostilityType="Friendlies", sourceID=source_id
+        )
 
     def get_damage_done_table(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: DamageDone, sourceID: {source_id}, startTime: 0, endTime: 999999999)
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        raw_table = report.get("table")
-        if isinstance(raw_table, dict):
-            if "data" in raw_table and "entries" in raw_table["data"]:
-                return raw_table["data"]["entries"]
-            if "entries" in raw_table:
-                return raw_table["entries"]
-        return []
+        return self._table_entries(report_id, "DamageDone", 0, FULL_REPORT_END, sourceID=source_id)
 
     def get_aura_data(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              events(startTime: 0, endTime: 999999999, sourceID: {source_id},
-                     dataType: Buffs, hostilityType: Friendlies) {{
-                data
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return (report.get("events") or {}).get("data") or []
+        return self._events(report_id, "Buffs", sourceID=source_id, paginate=False)
 
     def get_auras_paginated(self, report_id: str, source_id: int) -> list[dict]:
-        all_data = []
-        start_time = 0
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {start_time}, endTime: 999999999, sourceID: {source_id},
-                         dataType: Buffs, hostilityType: Friendlies, limit: 10000) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            start_time = next_page
-        return all_data
+        return self._events(report_id, "Buffs", sourceID=source_id)
 
     def get_aura_data_by_ability(self, report_id: str, source_id: int, ability_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              events(startTime: 0, endTime: 999999999, sourceID: {source_id},
-                     dataType: Buffs, hostilityType: Friendlies, abilityID: {ability_id}) {{
-                data
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return (report.get("events") or {}).get("data") or []
+        return self._events(report_id, "Buffs", sourceID=source_id, abilityID=ability_id, paginate=False)
 
     def get_buffs_table(self, report_id: str, source_id: int) -> dict:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: Buffs, startTime: 0, endTime: 999999999,
-                    hostilityType: Friendlies, sourceID: {source_id})
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return report.get("table") or {}
+        table = self._table(report_id, "Buffs", 0, FULL_REPORT_END, hostilityType="Friendlies", sourceID=source_id)
+        return table or {}
 
     def get_debuffs_table(self, report_id: str, start_time: int, end_time: int) -> dict:
         """Fetch debuff table for enemies in a fight time window."""
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              table(dataType: Debuffs, startTime: {start_time}, endTime: {end_time},
-                    hostilityType: Enemies)
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return report.get("table") or {}
+        table = self._table(report_id, "Debuffs", start_time, end_time, hostilityType="Enemies")
+        return table or {}
 
     def get_damage_done_data(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              events(startTime: 0, endTime: 999999999, sourceID: {source_id},
-                     dataType: DamageDone, hostilityType: Friendlies) {{
-                data
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return (report.get("events") or {}).get("data") or []
+        return self._events(report_id, "DamageDone", sourceID=source_id, paginate=False)
 
     def get_damage_taken_data(self, report_id: str, source_id: int) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              events(startTime: 0, endTime: 999999999, sourceID: {source_id},
-                     dataType: DamageTaken, hostilityType: Friendlies) {{
-                data
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
-        return (report.get("events") or {}).get("data") or []
+        return self._events(report_id, "DamageTaken", sourceID=source_id, paginate=False)
 
     def get_enemy_ability_names(self, report_id: str, start_time: int, end_time: int) -> dict[int, str]:
         names: dict[int, str] = {}
         for data_type in ("Casts", "DamageDone"):
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  table(dataType: {data_type}, startTime: {start_time}, endTime: {end_time},
-                        hostilityType: Enemies)
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            raw_table = report.get("table")
-            if not isinstance(raw_table, dict):
-                continue
-            entries = []
-            if "data" in raw_table and "entries" in raw_table["data"]:
-                entries = raw_table["data"]["entries"]
-            elif "entries" in raw_table:
-                entries = raw_table["entries"]
+            entries = self._table_entries(report_id, data_type, start_time, end_time, hostilityType="Enemies")
             for actor in entries:
                 for ability in actor.get("abilities", []):
                     gid = ability.get("gameID") or ability.get("guid")
@@ -666,106 +434,17 @@ class WarcraftLogsClient:
         return names
 
     def get_enemy_cast_events(self, report_id: str, start_time: int, end_time: int) -> list[dict]:
-        all_data: list[dict] = []
-        page_start = start_time
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {page_start}, endTime: {end_time},
-                         dataType: Casts, hostilityType: Enemies, limit: 10000) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            page_start = next_page
-        return all_data
+        return self._events(report_id, "Casts", start_time, end_time, hostility="Enemies")
 
     def get_raid_damage_taken_events(self, report_id: str, start_time: int, end_time: int) -> list[dict]:
-        all_data: list[dict] = []
-        page_start = start_time
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {page_start}, endTime: {end_time},
-                         dataType: DamageTaken, hostilityType: Friendlies, limit: 10000) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            page_start = next_page
-        return all_data
+        return self._events(report_id, "DamageTaken", start_time, end_time)
 
     def get_all_actors(self, report_id: str) -> list[dict]:
-        query = f"""
-        {{
-          reportData {{
-            report(code: "{report_id}") {{
-              masterData {{
-                actors {{
-                  id
-                  name
-                  type
-                  subType
-                }}
-              }}
-            }}
-          }}
-        }}
-        """
-        result = self.run_query(query)
-        report = _extract_report(result)
+        report = self._query_report(report_id, "masterData { actors { id name type subType } }")
         return (report.get("masterData") or {}).get("actors") or []
 
     def get_threat_data(self, report_id: str, source_id: int) -> list[dict]:
-        all_data = []
-        start_time = 0
-        while True:
-            query = f"""
-            {{
-              reportData {{
-                report(code: "{report_id}") {{
-                  events(startTime: {start_time}, endTime: 999999999,
-                         sourceID: {source_id}, dataType: Threat) {{
-                    data
-                    nextPageTimestamp
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(query)
-            report = _extract_report(result)
-            events = report.get("events") or {}
-            all_data.extend(events.get("data", []))
-            next_page = events.get("nextPageTimestamp")
-            if not next_page:
-                break
-            start_time = next_page
-        return all_data
+        return self._events(report_id, "Threat", hostility=None, sourceID=source_id)
 
     # ── Character profile queries ──
 
@@ -778,29 +457,30 @@ class WarcraftLogsClient:
             self.api_url = api_url.rstrip("/")
 
         try:
-            query = f"""
-            {{
-              characterData {{
-                character(name: "{name}", serverSlug: "{server_slug}", serverRegion: "{server_region}") {{
+            query = """
+            query($name: String!, $serverSlug: String!, $serverRegion: String!) {
+              characterData {
+                character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {
                   name
                   classID
                   level
-                  faction {{ name }}
-                  guilds {{ name }}
+                  faction { name }
+                  guilds { name }
                   zoneRankings
-                  recentReports(limit: 20) {{
-                    data {{
+                  recentReports(limit: 20) {
+                    data {
                       code
                       title
                       startTime
-                      zone {{ name }}
-                    }}
-                  }}
-                }}
-              }}
-            }}
+                      zone { name }
+                    }
+                  }
+                }
+              }
+            }
             """
-            result = self.run_query(query, use_cache=False)
+            variables = {"name": name, "serverSlug": server_slug, "serverRegion": server_region}
+            result = self.run_query(query, use_cache=False, variables=variables)
             char = result["data"]["characterData"]["character"]
             if not char:
                 raise ValueError(f"Character '{name}' not found on {server_slug}-{server_region}")
@@ -843,18 +523,10 @@ class WarcraftLogsClient:
     def _fetch_gear_from_report(self, report_code: str, char_name: str) -> list[GearItem]:
         """Pull equipped gear from CombatantInfo events in a report."""
         try:
-            actors_query = f"""
-            {{
-              reportData {{
-                report(code: "{report_code}") {{
-                  masterData {{ actors(type: "Player") {{ id name }} }}
-                  fights(killType: Encounters) {{ id }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(actors_query, use_cache=True)
-            report = _extract_report(result)
+            report = self._query_report(
+                report_code,
+                'masterData { actors(type: "Player") { id name } } fights(killType: Encounters) { id }',
+            )
 
             actors = report.get("masterData", {}).get("actors", [])
             source_id = None
@@ -870,20 +542,11 @@ class WarcraftLogsClient:
                 return []
             fight_id = fights[-1]["id"]
 
-            events_query = f"""
-            {{
-              reportData {{
-                report(code: "{report_code}") {{
-                  events(dataType: CombatantInfo, fightIDs: [{fight_id}],
-                         sourceID: {source_id}, limit: 10) {{
-                    data
-                  }}
-                }}
-              }}
-            }}
-            """
-            result = self.run_query(events_query, use_cache=True)
-            gear_report = _extract_report(result)
+            gear_report = self._query_report(
+                report_code,
+                "events(dataType: CombatantInfo, fightIDs: $fightIDs, sourceID: $sourceID, limit: $limit) { data }",
+                {"fightIDs": [fight_id], "sourceID": source_id, "limit": 10},
+            )
             events = (gear_report.get("events") or {}).get("data") or []
             if not events:
                 return []
@@ -927,15 +590,16 @@ class WarcraftLogsClient:
 
         try:
             query = f"""
-            {{
+            query($name: String!, $serverSlug: String!, $serverRegion: String!, $zoneID: Int!) {{
               characterData {{
-                character(name: "{name}", serverSlug: "{server_slug}", serverRegion: "{server_region}") {{
-                  zoneRankings(zoneID: {zone_id}, metric: {metric})
+                character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {{
+                  zoneRankings(zoneID: $zoneID, metric: {_enum(metric, _RANKING_METRICS)})
                 }}
               }}
             }}
             """
-            result = self.run_query(query, use_cache=False)
+            variables = {"name": name, "serverSlug": server_slug, "serverRegion": server_region, "zoneID": zone_id}
+            result = self.run_query(query, use_cache=False, variables=variables)
             char = result["data"]["characterData"]["character"]
             if not char:
                 return None

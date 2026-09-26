@@ -286,10 +286,10 @@ class TestGetEncounterTable:
         assert result[0]["total"] == 100000
 
         call_args = mock_post.call_args
-        query = call_args[1]["json"]["query"]
-        assert "DamageDone" in query
-        assert "startTime: 1000" in query
-        assert "endTime: 5000" in query
+        payload = call_args[1]["json"]
+        query = payload["query"]
+        assert "dataType: DamageDone" in query
+        assert payload["variables"] == {"code": "abc123", "startTime": 1000, "endTime": 5000}
         assert "sourceID" not in query
 
     def test_handles_empty_response(self):
