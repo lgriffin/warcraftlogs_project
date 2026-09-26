@@ -61,3 +61,27 @@ class TestCreateParser:
     def test_tank_subcommand(self, parser):
         args = parser.parse_args(["tank"])
         assert args.command == "tank"
+
+    @pytest.mark.parametrize("role", ["healer", "tank", "melee", "ranged"])
+    def test_role_subcommands_share_unified_options(self, parser, role):
+        args = parser.parse_args([role, "--md", "--save", "--report-id", "abc123"])
+        assert args.command == role
+        assert args.md is True
+        assert args.save is True
+        assert args.report_id == "abc123"
+
+    def test_healer_accepts_legacy_dynamic_roles_flag(self, parser):
+        args = parser.parse_args(["healer", "--use-dynamic-roles"])
+        assert args.use_dynamic_roles is True
+
+
+class TestRoleDispatch:
+    @pytest.mark.parametrize("role", ["healer", "tank", "melee", "ranged"])
+    def test_role_commands_run_unified_analysis_filtered(self, monkeypatch, role):
+        from warcraftlogs_client import cli
+
+        calls = []
+        monkeypatch.setattr(cli, "run_unified_analysis", lambda args, role=None: calls.append(role) or 0)
+        monkeypatch.setattr("sys.argv", ["warcraftlogs", role])
+        assert cli.main() == 0
+        assert calls == [role]

@@ -24,7 +24,7 @@ Source: architecture & best-practices review (v4.3.x)
 | Phase | Focus | Status |
 |-------|--------|--------|
 | **0** | Secrets hygiene + wire `wcl_api_url` into the API client | Done (PR) |
-| **1** | Collapse dual analysis stacks; shared role classifier | Next |
+| **1** | Collapse dual analysis stacks; shared role classifier | In progress (legacy stack removed) |
 | **2** | Split `database.py`; numbered migrations | Later |
 | **3** | Thin GUI views; extract pure helpers; GraphQL variables | Later |
 | **4** | Enforce mypy + GUI CI; honest coverage docs | Later |
@@ -43,8 +43,8 @@ Source: architecture & best-practices review (v4.3.x)
 
 ## Phase 1 — One analysis stack (next)
 
-- Make CLI `healer` / `tank` / `melee` / `ranged` thin filters over `analyze_raid` + renderers (or remove the subcommands)
-- Delete or quarantine: `*_main.py`, `dump_report.py`, `loader.py`, `markdown_exporter.py`
+- [x] Make CLI `healer` / `tank` / `melee` / `ranged` thin filters over `analyze_raid` + renderers
+- [x] Delete legacy modules: `*_main.py`, `main.py`, `dump_report.py`, `loader.py`, `markdown_exporter.py`, `healing.py`, `characters.py`, `character_api.py`, `utils/report_renderer.py`, `common/metadata.py` (and the now-unused `jinja2` dependency)
 - Extract a single role-classification module used by `analysis.py` and `consumes_analysis.py` (today consumes hardcodes healer threshold `900000` and uses legacy `dynamic_role_parser`)
 - Update `DEVELOPER.md` mermaid: there is no live `roles/` package; modern classification lives in `analysis.py`
 
