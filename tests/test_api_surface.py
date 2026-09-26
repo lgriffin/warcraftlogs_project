@@ -148,6 +148,8 @@ class TestPublicExports:
             "healer_performance",
             "healer_spells",
             "interrupt_usage",
+            "player_page_logs",
+            "player_pages",
             "raid_group_members",
             "raid_groups",
             "raids",
@@ -170,7 +172,7 @@ class TestPublicExports:
         for action in parser._subparsers._group_actions:
             subcommands.update(action.choices.keys())
 
-        expected = {"unified", "healer", "tank", "melee", "ranged", "consumes", "history"}
+        expected = {"unified", "healer", "tank", "melee", "ranged", "consumes", "history", "player"}
         assert subcommands == expected, f"CLI subcommands changed! Got: {subcommands}"
 
     def test_dps_performance_fields(self):

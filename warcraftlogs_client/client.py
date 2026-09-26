@@ -5,6 +5,7 @@ All API interactions go through WarcraftLogsClient. Methods return
 extracted data (not raw JSON wrappers), with consistent signatures.
 """
 
+import json
 import logging
 import time
 
@@ -839,6 +840,56 @@ class WarcraftLogsClient:
             return profile
         finally:
             self.api_url = original_url
+
+    def get_character_reports(
+        self, name: str, server_slug: str, server_region: str, limit: int = 100, page: int = 1
+    ) -> tuple[list[dict], bool]:
+        """Fetch one page of reports a character appears in, newest first.
+
+        Returns ``(reports, has_more_pages)``. Each report dict carries code, title,
+        owner, guild, start_time, end_time and zone. Raises ValueError if WCL does
+        not know the character.
+        """
+        # json.dumps yields a valid, escaped GraphQL string literal for user-typed input.
+        query = f"""
+        {{
+          characterData {{
+            character(name: {json.dumps(name)}, serverSlug: {json.dumps(server_slug)},
+                      serverRegion: {json.dumps(server_region)}) {{
+              recentReports(limit: {int(limit)}, page: {int(page)}) {{
+                data {{
+                  code
+                  title
+                  startTime
+                  endTime
+                  owner {{ name }}
+                  guild {{ name }}
+                  zone {{ name }}
+                }}
+                has_more_pages
+              }}
+            }}
+          }}
+        }}
+        """
+        result = self.run_query(query, use_cache=False)
+        char = (result.get("data") or {}).get("characterData", {}).get("character")
+        if not char:
+            raise ValueError(f"Character '{name}' not found on {server_slug}-{server_region}")
+        page_data = char.get("recentReports") or {}
+        reports = [
+            {
+                "code": r["code"],
+                "title": r.get("title") or "",
+                "owner": (r.get("owner") or {}).get("name", ""),
+                "guild": (r.get("guild") or {}).get("name", ""),
+                "start_time": r.get("startTime") or 0,
+                "end_time": r.get("endTime"),
+                "zone": (r.get("zone") or {}).get("name", ""),
+            }
+            for r in page_data.get("data") or []
+        ]
+        return reports, bool(page_data.get("has_more_pages"))
 
     def _fetch_gear_from_report(self, report_code: str, char_name: str) -> list[GearItem]:
         """Pull equipped gear from CombatantInfo events in a report."""
