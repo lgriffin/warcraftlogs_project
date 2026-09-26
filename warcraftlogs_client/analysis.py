@@ -51,7 +51,25 @@ from .models import (
 )
 from .spell_manager import SpellBreakdown, get_spell_manager
 
-_TEN_MAN_ZONES = {"Karazhan", "Zul'Aman"}
+_TEN_MAN_ZONE_KEYWORDS = ("karazhan", "zul'aman", "zul aman", "zulaman")
+
+
+def _is_ten_man(zone: str | None, fights: object) -> bool:
+    """Decide whether a report is a 10-player raid.
+
+    Prefers the group size WCL records on boss fights; falls back to a
+    case-insensitive zone-name match when no fight carries a size.
+    """
+    if isinstance(fights, list):
+        sizes: list[int] = [
+            f["size"]
+            for f in fights
+            if isinstance(f, dict) and f.get("encounterID") and isinstance(f.get("size"), int) and f["size"] > 0
+        ]
+        if sizes:
+            return max(sizes) <= 10
+    zone_name = (zone or "").lower()
+    return any(keyword in zone_name for keyword in _TEN_MAN_ZONE_KEYWORDS)
 
 
 def analyze_raid(
@@ -79,7 +97,13 @@ def analyze_raid(
     master_actors = client.get_master_data(report_id)
     logger.info("  master_actors: %d entries", len(master_actors) if master_actors else 0)
 
-    if metadata.zone in _TEN_MAN_ZONES:
+    try:
+        fights = client.get_fights(report_id)
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        fights = []
+    ten_man = _is_ten_man(metadata.zone, fights)
+    logger.info("  raid size: %s (zone=%r)", "10-man" if ten_man else "25-man", metadata.zone)
+    if ten_man:
         healer_threshold = healer_threshold_10
         tank_min_taken = tank_min_taken_10
 

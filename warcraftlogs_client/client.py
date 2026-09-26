@@ -332,7 +332,7 @@ class WarcraftLogsClient:
         return {a["gameID"]: a["name"] for a in abilities if a.get("gameID") and a.get("name")}
 
     def get_fights(self, report_id: str) -> list[dict]:
-        report = self._query_report(report_id, "fights { id name startTime endTime kill encounterID }")
+        report = self._query_report(report_id, "fights { id name startTime endTime kill encounterID size }")
         return report.get("fights") or []
 
     def get_encounter_table(self, report_id: str, start_time: int, end_time: int, data_type: str) -> list[dict]:
