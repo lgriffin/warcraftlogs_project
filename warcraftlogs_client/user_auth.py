@@ -223,7 +223,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"<html><body><h2>Unexpected response</h2><p>You can close this window.</p></body></html>")
             self.server.auth_result = {"error": "no_code"}
 
-    def log_message(self, format, *args):
+    def log_message(self, *args):
         pass
 
 
