@@ -41,6 +41,12 @@ COMMANDS = [
         "hint": "",
         "desc": "Compare multiple characters side-by-side",
     },
+    {
+        "key": "characters.player",
+        "label": "Characters > Player Page",
+        "hint": "",
+        "desc": "Find the reports a character is in and add them to their page",
+    },
     {"key": "insights", "label": "Insights", "hint": "Ctrl+4", "desc": "Performance trends and boss analytics"},
     {"key": "raid_groups", "label": "Raid Groups", "hint": "Ctrl+5", "desc": "Manage raid groups and members"},
     {"key": "settings", "label": "Settings", "hint": "Ctrl+,", "desc": "Application settings"},

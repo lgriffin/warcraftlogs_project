@@ -206,6 +206,30 @@ CREATE TABLE IF NOT EXISTS encounter_performance (
 CREATE INDEX IF NOT EXISTS idx_encounter_raid ON encounters(raid_id);
 CREATE INDEX IF NOT EXISTS idx_encounter_perf_enc ON encounter_performance(encounter_row_id);
 CREATE INDEX IF NOT EXISTS idx_encounter_perf_char ON encounter_performance(character_id);
+
+CREATE TABLE IF NOT EXISTS player_pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE,
+    server TEXT NOT NULL COLLATE NOCASE,
+    region TEXT NOT NULL COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(name, server, region)
+);
+
+CREATE TABLE IF NOT EXISTS player_page_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_page_id INTEGER NOT NULL REFERENCES player_pages(id) ON DELETE CASCADE,
+    report_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('added', 'dismissed')),
+    title TEXT NOT NULL DEFAULT '',
+    zone TEXT DEFAULT NULL,
+    owner TEXT DEFAULT NULL,
+    start_time INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(player_page_id, report_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_page_logs_page ON player_page_logs(player_page_id);
 """
 
 
@@ -1600,6 +1624,106 @@ class PerformanceDB:
         rows = conn.execute("SELECT report_id, imported_at FROM raids").fetchall()
         return {r["report_id"]: r["imported_at"] for r in rows}
 
+    # ── Player page operations ──
+    # A player page is one character (name + server + region) plus the reports its
+    # owner has added to it or dismissed from discovery. Reports are linked by code,
+    # so a page entry survives the raid being deleted and re-imported.
+
+    def get_or_create_player_page(self, name: str, server: str, region: str) -> int:
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO player_pages (name, server, region) VALUES (?, ?, ?)",
+            (name, server, region),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT id FROM player_pages WHERE name = ? AND server = ? AND region = ?",
+            (name, server, region),
+        ).fetchone()
+        return row["id"]
+
+    def find_player_pages(self, name: str | None = None) -> list[dict]:
+        """List player pages, optionally only those for one character name."""
+        conn = self._get_conn()
+        sql = """SELECT p.id, p.name, p.server, p.region, p.created_at,
+                        (SELECT COUNT(*) FROM player_page_logs l
+                         WHERE l.player_page_id = p.id AND l.status = 'added') AS log_count
+                 FROM player_pages p"""
+        params: tuple = ()
+        if name:
+            sql += " WHERE p.name = ?"
+            params = (name,)
+        rows = conn.execute(sql + " ORDER BY p.name, p.server", params).fetchall()
+        return [dict(r) for r in rows]
+
+    def set_player_page_log(
+        self,
+        page_id: int,
+        report_id: str,
+        status: str,
+        title: str = "",
+        zone: str | None = None,
+        owner: str | None = None,
+        start_time: int = 0,
+    ) -> None:
+        """Add or dismiss a report on a player page, keeping any metadata already stored."""
+        conn = self._get_conn()
+        conn.execute(
+            """INSERT INTO player_page_logs (player_page_id, report_id, status, title, zone, owner, start_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(player_page_id, report_id) DO UPDATE SET
+                   status = excluded.status,
+                   title = CASE WHEN excluded.title != '' THEN excluded.title ELSE player_page_logs.title END,
+                   zone = COALESCE(excluded.zone, player_page_logs.zone),
+                   owner = COALESCE(excluded.owner, player_page_logs.owner),
+                   start_time = CASE WHEN excluded.start_time > 0 THEN excluded.start_time
+                                     ELSE player_page_logs.start_time END,
+                   updated_at = datetime('now')""",
+            (page_id, report_id, status, title, zone, owner, start_time),
+        )
+        conn.commit()
+
+    def remove_player_page_log(self, page_id: int, report_id: str) -> bool:
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "DELETE FROM player_page_logs WHERE player_page_id = ? AND report_id = ?",
+            (page_id, report_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def get_player_page_logs(self, page_id: int, status: str | None = None) -> list[dict]:
+        """Reports linked to a player page, newest first, with whether each is imported locally."""
+        conn = self._get_conn()
+        sql = """SELECT l.report_id, l.status, l.title, l.zone, l.owner, l.start_time, l.updated_at,
+                        r.id IS NOT NULL AS imported
+                 FROM player_page_logs l
+                 LEFT JOIN raids r ON r.report_id = l.report_id
+                 WHERE l.player_page_id = ?"""
+        params: tuple = (page_id,)
+        if status:
+            sql += " AND l.status = ?"
+            params = (page_id, status)
+        rows = conn.execute(sql + " ORDER BY l.start_time DESC", params).fetchall()
+        return [{**dict(r), "imported": bool(r["imported"])} for r in rows]
+
+    def get_reports_for_character(self, character_name: str) -> list[dict]:
+        """Every imported raid (any source) in which the character has a performance row."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            """SELECT DISTINCT r.report_id, r.title, r.owner, r.zone, r.start_time, r.end_time, r.source
+               FROM raids r
+               JOIN characters c ON c.name = ? COLLATE NOCASE
+               WHERE r.id IN (
+                   SELECT raid_id FROM healer_performance WHERE character_id = c.id
+                   UNION SELECT raid_id FROM tank_performance WHERE character_id = c.id
+                   UNION SELECT raid_id FROM dps_performance WHERE character_id = c.id
+               )
+               ORDER BY r.start_time DESC""",
+            (character_name,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     # ── Raid Group operations ──
 
     def create_raid_group(self, name: str, raid_days: list[str] | None = None) -> RaidGroup:
@@ -2624,6 +2748,8 @@ class PerformanceDB:
         conn.execute("DELETE FROM encounters")
         conn.execute("DELETE FROM raid_group_members")
         conn.execute("DELETE FROM raid_groups")
+        conn.execute("DELETE FROM player_page_logs")
+        conn.execute("DELETE FROM player_pages")
         conn.execute("DELETE FROM healer_spells")
         conn.execute("DELETE FROM healer_performance")
         conn.execute("DELETE FROM tank_damage_taken")

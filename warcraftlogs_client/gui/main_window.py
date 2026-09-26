@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):
 
         self.characters_hub.status_message.connect(self.status_bar.showMessage)
         self.characters_hub.analyze_report.connect(self._analyze_report)
+        self.characters_hub.open_raid.connect(self._drill_into_raid)
 
         self.insights_view.status_message.connect(self.status_bar.showMessage)
 
@@ -322,6 +323,7 @@ class MainWindow(QMainWindow):
             "characters": lambda: self.nav_list.setCurrentRow(2),
             "characters.my": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_my_character()),
             "characters.compare": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_compare()),
+            "characters.player": lambda: (self.nav_list.setCurrentRow(2), self.characters_hub._show_player_page()),
             "insights": lambda: self.nav_list.setCurrentRow(3),
             "raid_groups": lambda: self.nav_list.setCurrentRow(4),
             "settings": self._show_settings,
