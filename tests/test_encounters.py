@@ -27,6 +27,15 @@ class TestAnalyzeEncounters:
         assert result[0].name == "Attumen"
         assert result[0].encounter_id == 658
 
+    def test_uses_prefetched_fights_without_refetching(self, mock_client, sample_composition):
+        fights = [{"id": 2, "name": "Attumen", "startTime": 12000, "endTime": 60000, "kill": True, "encounterID": 658}]
+        mock_client.get_encounter_table.return_value = []
+
+        result = _analyze_encounters(mock_client, "abc123", sample_composition, fights=fights)
+
+        assert [e.name for e in result] == ["Attumen"]
+        mock_client.get_fights.assert_not_called()
+
     def test_empty_fights_returns_empty(self, mock_client, sample_composition):
         mock_client.get_fights.return_value = []
         result = _analyze_encounters(mock_client, "abc123", sample_composition)

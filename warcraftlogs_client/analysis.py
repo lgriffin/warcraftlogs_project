@@ -97,10 +97,11 @@ def analyze_raid(
     master_actors = client.get_master_data(report_id)
     logger.info("  master_actors: %d entries", len(master_actors) if master_actors else 0)
 
+    fights: list[dict] | None
     try:
         fights = client.get_fights(report_id)
     except (requests.RequestException, KeyError, TypeError, ValueError):
-        fights = []
+        fights = None  # encounter analysis retries the fetch
     ten_man = _is_ten_man(metadata.zone, fights)
     logger.info("  raid size: %s (zone=%r)", "10-man" if ten_man else "25-man", metadata.zone)
     if ten_man:
@@ -149,7 +150,7 @@ def analyze_raid(
 
     try:
         _progress("Analyzing encounters...")
-        encounters = _analyze_encounters(client, report_id, composition, progress_callback)
+        encounters = _analyze_encounters(client, report_id, composition, progress_callback, fights=fights)
         logger.info("  encounters analyzed: %d", len(encounters))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
         logger.error("  encounter analysis failed: %s", e)
@@ -1207,9 +1208,14 @@ def _analyze_encounters(
     report_id: str,
     composition: RaidComposition,
     progress_callback=None,
+    fights: list[dict] | None = None,
 ) -> list[EncounterSummary]:
-    """Analyze per-boss-kill performance using time-windowed table queries."""
-    fights = client.get_fights(report_id)
+    """Analyze per-boss-kill performance using time-windowed table queries.
+
+    Pass *fights* when the caller already fetched them, to avoid a second request.
+    """
+    if fights is None:
+        fights = client.get_fights(report_id)
     boss_kills = [f for f in fights if f.get("encounterID", 0) > 0 and f.get("kill")]
     if not boss_kills:
         return []

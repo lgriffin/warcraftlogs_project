@@ -61,7 +61,7 @@ Examples:
     }
     for role, help_text in role_help.items():
         role_parser = subparsers.add_parser(role, help=help_text)
-        role_parser.add_argument("--md", action="store_true", help="Export the full analysis as a Markdown report")
+        role_parser.add_argument("--md", action="store_true", help="Export this role's analysis as a Markdown report")
         role_parser.add_argument("--save", action="store_true", help="Save results to local database")
         role_parser.add_argument("--report-id", type=str, help="Override report ID from config")
         if role == "healer":
@@ -121,7 +121,7 @@ def run_unified_analysis(args, role: str | None = None) -> int:
     if hasattr(args, "md") and args.md:
         from .renderers.markdown import export_raid_analysis
 
-        path = export_raid_analysis(analysis)
+        path = export_raid_analysis(analysis, role=role)
         print(f"\nMarkdown report exported to: {path}")
 
     if hasattr(args, "save") and args.save:

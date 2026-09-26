@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from warcraftlogs_client.models import (
     ConsumableUsage,
     DPSPerformance,
@@ -246,3 +248,22 @@ class TestEmptyAnalysis:
         for line in md.splitlines():
             if line.startswith("|"):
                 assert line.endswith("|"), f"Table row not terminated: {line}"
+
+
+class TestRoleFilter:
+    def test_healer_only(self, sample_raid_analysis):
+        md = render_raid_analysis(sample_raid_analysis, role="healer")
+        full = render_raid_analysis(sample_raid_analysis)
+        assert "HolyPriest" in md
+        assert "Sinister Strike" in full
+        assert "Sinister Strike" not in md
+
+    def test_unknown_role_rejected(self, sample_raid_analysis):
+        with pytest.raises(ValueError, match="Unknown role"):
+            render_raid_analysis(sample_raid_analysis, role="bard")
+
+    def test_export_passes_role(self, sample_raid_analysis, tmp_path):
+        path = export_raid_analysis(sample_raid_analysis, str(tmp_path / "tank.md"), role="tank")
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        assert "Sinister Strike" not in content
