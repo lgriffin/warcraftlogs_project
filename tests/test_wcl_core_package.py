@@ -23,6 +23,7 @@ MOVED = [
     "models",
     "paths",
     "spell_manager",
+    "user_auth",
     "common.data",
     "common.errors",
 ]

@@ -40,15 +40,17 @@ warcraftlogs = "warcraftlogs_client.cli:main"
 [project.gui-scripts]
 warcraftlogs-gui = "warcraftlogs_client.gui.app:run"
 
-# The desktop app and CLI install wcl-core and wcl-store from the same checkout, so `pip install -e .` and
-# PyInstaller keep working unchanged. Other projects install packages/wcl-core and packages/wcl-store on their own.
+# The desktop app and CLI install wcl-core, wcl-store and wcl-app from the same checkout, so `pip install -e .`
+# and PyInstaller keep working unchanged. Other projects install packages/wcl-core, packages/wcl-store and
+# packages/wcl-app on their own.
 [tool.setuptools.packages.find]
-where = [".", "packages/wcl-core/src", "packages/wcl-store/src"]
-include = ["warcraftlogs_client*", "wcl_core*", "wcl_store*"]
+where = [".", "packages/wcl-core/src", "packages/wcl-store/src", "packages/wcl-app/src"]
+include = ["warcraftlogs_client*", "wcl_core*", "wcl_store*", "wcl_app*"]
 
 [tool.setuptools.package-data]
 wcl_core = ["py.typed", "data/*.json", "data/spell_data/*.json"]
 wcl_store = ["py.typed"]
+wcl_app = ["py.typed"]
 "wcl_store.postgres" = ["migrations/*.py", "migrations/script.py.mako", "migrations/versions/*.py"]
 
 [tool.ruff]
@@ -102,7 +104,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["warcraftlogs_client", "wcl_core", "wcl_store"]
+source = ["warcraftlogs_client", "wcl_core", "wcl_store", "wcl_app"]
 omit = ["warcraftlogs_client/gui/*"]
 
 [tool.coverage.report]
@@ -121,14 +123,21 @@ count = true
 quiet-level = 3
 
 [tool.vulture]
-paths = ["warcraftlogs_client", "packages/wcl-core/src", "packages/wcl-store/src", "vulture_whitelist.py"]
+paths = [
+    "warcraftlogs_client",
+    "packages/wcl-core/src",
+    "packages/wcl-store/src",
+    "packages/wcl-app/src",
+    "vulture_whitelist.py",
+]
 exclude = ["warcraftlogs_client/gui/"]
 min_confidence = 80
 
 # REQ-CORE-ARCH-001: wcl-core stays headless so the desktop app and the Toads Hub worker can share it.
 # REQ-CORE-STORE-002: wcl-store is persistence only, and its SQLite side never needs the Postgres extra.
+# REQ-CORE-APP-001: wcl-app (services) installs and runs without the desktop app.
 [tool.importlinter]
-root_packages = ["wcl_core", "wcl_store"]
+root_packages = ["wcl_core", "wcl_store", "wcl_app"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -148,3 +157,17 @@ name = "wcl-store's SQLite side needs no Postgres extra"
 type = "forbidden"
 source_modules = ["wcl_store.errors", "wcl_store.repository", "wcl_store._codec", "wcl_store.sqlite"]
 forbidden_modules = ["sqlalchemy", "psycopg", "alembic", "wcl_store.postgres"]
+
+# Services reach SQLite only through wcl_store.sqlite (AppContext.db, the desktop default), never directly.
+[[tool.importlinter.contracts]]
+name = "wcl-app never imports sqlite3 itself"
+type = "forbidden"
+source_modules = ["wcl_app"]
+forbidden_modules = ["sqlite3"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "wcl-app imports no Qt, web, bot or desktop code, even indirectly"
+type = "forbidden"
+source_modules = ["wcl_app"]
+forbidden_modules = ["PySide6", "fastapi", "discord", "warcraftlogs_client"]

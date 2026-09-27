@@ -12,6 +12,7 @@ sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" warcraftlogs_client/v
 sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
 sed -i "s/^version = .*/version = \"${VERSION}\"/" packages/wcl-core/pyproject.toml
 sed -i "s/^version = .*/version = \"${VERSION}\"/" packages/wcl-store/pyproject.toml
+sed -i "s/^version = .*/version = \"${VERSION}\"/" packages/wcl-app/pyproject.toml
 
 # Update version in installer.iss and spec (if present)
 if [ -f installer.iss ]; then

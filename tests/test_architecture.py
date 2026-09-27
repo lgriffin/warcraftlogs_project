@@ -4,7 +4,7 @@ Layers, innermost first. Each layer may import only itself and the layers inside
 
     core        WCL API client, auth, config, analysis engine, domain models (moving to ``wcl_core``)
     persistence ``wcl_store``: the RaidRepository protocol, PerformanceDB (SQLite) and Postgres backends
-    services    application layer every frontend shares (``services/``, future ``wcl-app``)
+    services    ``wcl_app``: the application layer every frontend shares (``services/`` is its alias)
     presenters  text/Markdown renderers of domain models (``renderers/``)
     frontends   CLI, PySide6 desktop, updater
 
@@ -30,8 +30,10 @@ PACKAGES = {
     "wcl_core": ROOT / "packages" / "wcl-core" / "src" / "wcl_core",
     # The persistence layer. Its modules keep the "wcl_store." prefix so they never collide with core names.
     "wcl_store": ROOT / "packages" / "wcl-store" / "src" / "wcl_store",
+    # The services layer, prefixed the same way so "wcl_app.context" never collides with a core name.
+    "wcl_app": ROOT / "packages" / "wcl-app" / "src" / "wcl_app",
 }
-PREFIXED = {"wcl_store"}
+PREFIXED = {"wcl_store", "wcl_app"}
 
 LAYER_ORDER = ["core", "persistence", "services", "presenters", "frontends"]
 
@@ -94,7 +96,7 @@ def layer_of(name: str) -> str | None:
         return None
     if top in ("database", "wcl_store"):
         return "persistence"
-    if top == "services":
+    if top in ("services", "wcl_app"):
         return "services"
     if top == "renderers":
         return "presenters"
@@ -267,4 +269,29 @@ def test_detector_flags_storage_reaching_outward_or_a_frontend_skipping_services
         ("wcl_store.sqlite", "PySide6"),
         ("services.roles", "sqlite3"),
         ("gui.new_view", "wcl_store"),
+    }
+
+
+def test_wcl_app_is_the_services_layer(tmp_path, monkeypatch):
+    pkg_dir = tmp_path / "wcl_app"
+    pkg_dir.mkdir()
+    f = pkg_dir / "roles.py"
+    f.write_text(
+        "from wcl_app.context import AppContext\nfrom wcl_core.analysis import OVERRIDE_ROLES\n", encoding="utf-8"
+    )
+    assert _imports(pkg_dir, f, "wcl_app") == {("wcl_app.context", True), ("analysis", True)}
+    assert layer_of("wcl_app.raids") == "services"
+
+    monkeypatch.setattr(
+        "tests.test_architecture.collect_edges",
+        lambda: {
+            "wcl_app.raids": {("wcl_store", True), ("analysis", True), ("gui.worker", True), ("sqlite3", False)},
+            "wcl_store.sqlite": {("wcl_app.context", True)},
+            "gui.new_view": {("wcl_app", True)},
+        },
+    )
+    assert find_violations() == {
+        ("wcl_app.raids", "gui"),
+        ("wcl_app.raids", "sqlite3"),
+        ("wcl_store.sqlite", "wcl_app"),
     }
