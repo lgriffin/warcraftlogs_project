@@ -8,10 +8,10 @@ The WarcraftLogs Analyzer employs a multi-tier testing strategy spanning eight l
 
 | Metric     | Threshold | Notes                                    |
 |------------|-----------|------------------------------------------|
-| Lines      | 80%       | Enforced in CI via `--cov-fail-under=80` |
-| Statements | 80%       | Rising target as coverage improves       |
+| Total      | 70%       | `fail_under` in `pyproject.toml` (measured 71%); a ratchet, raised as coverage grows |
+| Changed lines | 80%    | `diff-cover` on every PR against `origin/master` (`python scripts/dev.py diffcov`) |
 
-Coverage is gathered from `warcraftlogs_client/`, with `warcraftlogs_client/gui/*` initially excluded from the non-GUI threshold (GUI coverage comes from Tier 3).
+Coverage is gathered from `warcraftlogs_client/`, `wcl_core`, `wcl_store` and `wcl_app`, with `warcraftlogs_client/gui/*` excluded (GUI behaviour is covered by the blocking gui-test job).
 
 ---
 
@@ -228,8 +228,8 @@ pytest -m "not slow and not live"     # Fast tests only
 | Job | Trigger | Command | Enforcement |
 |-----|---------|---------|-------------|
 | **lint** | Every push/PR | `ruff check` (incl. security `S`, blind-except `BLE`, pathlib `PTH`, `PERF`, complexity `C901` ≤ 15), `ruff format --check`, `codespell`, `vulture` | Hard fail (except vulture) |
-| **test** | Every push/PR | `pytest --cov --cov-fail-under=80` (Python 3.10 + 3.12) | Hard fail |
-| **gui-test** | Every push/PR | `xvfb-run pytest tests/gui/` | Soft fail (continue-on-error) |
+| **test** | Every push/PR | `pytest --cov` with the 70% floor (Python 3.10 + 3.12); on PRs, `diff-cover` needs 80% of changed lines | Hard fail |
+| **gui-test** | Every push/PR | `pytest tests/gui/` with `QT_QPA_PLATFORM=offscreen` | Hard fail |
 | **fuzz** | Every push/PR | `pytest tests/fuzz/` | Hard fail |
 | **type-check** | Every push/PR | `mypy` (excludes gui/; strict on wcl_core, wcl_store and wcl_app) | Hard fail |
 | **security** | Every push/PR | `bandit` + `pytest tests/test_security.py` + `pip-audit` | Hard fail (except pip-audit) |

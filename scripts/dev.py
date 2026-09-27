@@ -65,11 +65,16 @@ TASKS: dict[str, tuple[str, list[list[str]]]] = {
                 "-rs",
                 *COVERAGE,
                 "--cov-report=term-missing:skip-covered",
+                "--cov-report=xml",
                 "--cov-config=pyproject.toml",
                 "--ignore=tests/gui",
                 "--ignore=tests/integration/test_live_api.py",
             ]
         ],
+    ),
+    "diffcov": (
+        "coverage of lines changed since origin/master (run test first)",
+        [["diff-cover", "coverage.xml", "--compare-branch=origin/master", "--fail-under=80"]],
     ),
     "fuzz": ("hypothesis fuzz tests", [["pytest", "-q", "--tb=short", "tests/fuzz/"]]),
     "gui": ("GUI tests (needs the gui extra and a display)", [["pytest", "-q", "--tb=short", "tests/gui/"]]),
