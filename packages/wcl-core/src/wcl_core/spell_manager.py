@@ -11,7 +11,10 @@ import logging
 import os
 from collections import defaultdict
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .client import WarcraftLogsClient
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +412,9 @@ class SpellBreakdown:
         return manager.process_spell_events(healing_events)
 
     @staticmethod
-    def get_spell_id_to_name_map(client, report_id: str, source_id: int) -> tuple[dict[int, str], dict[int, int], list]:
+    def get_spell_id_to_name_map(
+        client: "WarcraftLogsClient", report_id: str, source_id: int
+    ) -> tuple[dict[int, str], dict[int, int], list]:
         """Legacy method for getting spell mappings."""
         # This method still needs to make API calls, so we keep the original logic
         # but use the new manager for processing the results

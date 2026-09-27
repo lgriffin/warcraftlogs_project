@@ -78,9 +78,9 @@ ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 exclude = ["warcraftlogs_client/gui/"]
 
-# Strict typing, one package at a time (wcl_core next): every function in these packages is annotated and checked.
+# Strict typing for the shared packages: every function in them is annotated and its body checked.
 [[tool.mypy.overrides]]
-module = ["wcl_store.*", "wcl_app.*"]
+module = ["wcl_store.*", "wcl_app.*", "wcl_core.*"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true

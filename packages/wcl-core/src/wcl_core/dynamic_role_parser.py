@@ -2,12 +2,13 @@
 
 import logging
 from collections import defaultdict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def group_players_by_class(master_actors):
-    class_groups = defaultdict(list)
+def group_players_by_class(master_actors: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    class_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     for actor in master_actors:
         if actor.get("type") == "Player":
@@ -28,10 +29,12 @@ def group_players_by_class(master_actors):
     return class_groups
 
 
-def identify_healers(master_actors, healing_totals, threshold):
+def identify_healers(
+    master_actors: list[dict[str, Any]], healing_totals: dict[str, int], threshold: float
+) -> list[dict[str, Any]]:
     healing_classes = {"Priest", "Paladin", "Druid", "Shaman"}
 
-    healers = []
+    healers: list[dict[str, Any]] = []
     for actor in master_actors:
         if actor.get("type") != "Player":
             continue
