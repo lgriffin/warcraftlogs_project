@@ -37,7 +37,8 @@ class TokenManager:
         except requests.Timeout as e:
             raise AuthenticationError("WarcraftLogs authentication timed out — try again later") from e
         except requests.HTTPError as e:
-            raise AuthenticationError(f"Authentication failed (HTTP {e.response.status_code})", details=str(e)) from e
+            status = e.response.status_code if e.response is not None else "error"
+            raise AuthenticationError(f"Authentication failed (HTTP {status})", details=str(e)) from e
         except (ValueError, KeyError) as e:
             raise AuthenticationError("Received invalid response from WarcraftLogs", details=str(e)) from e
 
