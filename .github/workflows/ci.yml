@@ -190,7 +190,8 @@ jobs:
       - name: Storage contract, migrations and REQ-CORE-STORE-001 scenarios on both backends, with no skips
         shell: bash
         run: |
-          pytest --tb=short -v -rs tests/test_store_contract.py tests/test_wcl_store_package.py tests/test_wcl_app_package.py tests/step_defs/test_storage.py | tee pg.log
+          pytest --tb=short -v -rs tests/test_store_contract.py tests/test_wcl_store_package.py \
+            tests/test_wcl_app_package.py tests/test_home_service.py tests/step_defs/test_storage.py | tee pg.log
           ! grep -q "SKIPPED" pg.log
 
   gui-test:
