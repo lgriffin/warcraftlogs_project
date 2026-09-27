@@ -71,12 +71,20 @@ TASKS: dict[str, tuple[str, list[list[str]]]] = {
             ]
         ],
     ),
+    "quality": (
+        "radon complexity and maintainability report",
+        [
+            ["radon", "cc", "warcraftlogs_client/", "-a", "-nc", "--exclude", "gui/*"],
+            ["radon", "mi", "warcraftlogs_client/", "-nc", "--exclude", "gui/*"],
+        ],
+    ),
     "fuzz": ("hypothesis fuzz tests", [["pytest", "-q", "--tb=short", "tests/fuzz/"]]),
     "gui": ("GUI tests (needs the gui extra and a display)", [["pytest", "-q", "--tb=short", "tests/gui/"]]),
 }
 
-# What `check` runs: every blocking CI job that needs no network or services, cheapest first so it fails fast.
-CHECK = ["format", "lint", "spelling", "imports", "deadcode", "types", "security", "test", "fuzz"]
+# What `check` runs: every CI check that needs no network or services, cheapest first so it fails fast.
+# `test` already collects tests/fuzz (as CI's test job does, for coverage), so `fuzz` stays a separate task.
+CHECK = ["format", "lint", "spelling", "imports", "deadcode", "types", "quality", "security", "test"]
 
 FIX = [["ruff", "check", "--fix", "."], ["ruff", "format", "."]]
 

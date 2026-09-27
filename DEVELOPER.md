@@ -531,7 +531,7 @@ Tests use `tmp_path` fixtures for file/database isolation and `MagicMock` for AP
 `scripts/dev.py` runs the same commands CI does, with the tool versions pinned in the `dev` extra:
 
 ```bash
-python scripts/dev.py check   # lint, format, spelling, import contracts, dead code, mypy, security, tests, fuzz
+python scripts/dev.py check   # format, lint, spelling, import contracts, dead code, mypy, radon, security, tests
 python scripts/dev.py fix     # apply Ruff fixes and formatting
 python scripts/dev.py types   # or any single task; add -k to keep going after a failure
 ```

@@ -38,8 +38,8 @@ repos:
         name: import-linter (package layering)
         entry: lint-imports
         language: system
-        types: [python]
         pass_filenames: false
+        always_run: true  # the contracts live in pyproject.toml, so a config-only commit must run them too
       - id: mypy
         name: mypy
         entry: python scripts/dev.py types
