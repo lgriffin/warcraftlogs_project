@@ -37,6 +37,10 @@ def nocase(expr: Any) -> Any:
     return func.translate(expr, literal_column(f"'{_ASCII_UPPER}'"), literal_column(f"'{_ASCII_UPPER.lower()}'"))
 
 
+# Alembic's revision table for this schema. Not the default ``alembic_version``, so a host such as the Toads Hub can
+# keep its own migrations in the same database.
+VERSION_TABLE = "wcl_store_alembic_version"
+
 # UTC "YYYY-MM-DD HH:MM:SS", the format SQLite's datetime('now') writes.
 NOW_TEXT = text("to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')")
 

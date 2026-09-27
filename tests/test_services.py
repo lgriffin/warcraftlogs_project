@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import wcl_app
 
 from warcraftlogs_client.models import CharacterProfile, CharacterReportEntry
 from warcraftlogs_client.services import (
@@ -16,7 +17,7 @@ from warcraftlogs_client.services import (
     validate_report_code,
 )
 
-SERVICES_DIR = Path(__file__).resolve().parent.parent / "warcraftlogs_client" / "services"
+SERVICES_DIR = Path(wcl_app.__file__).resolve().parent
 FORBIDDEN_IMPORT_PREFIXES = ("PySide6", "argparse", "fastapi", "flask", "starlette")
 
 CODE_A = "aBcDeFgHiJkLmN12"

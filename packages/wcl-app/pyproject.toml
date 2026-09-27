@@ -1,0 +1,19 @@
+[project]
+name = "wcl-app"
+version = "4.3.0"
+description = "WCL Analyzer application services: raid, player page and role-override use cases"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "wcl-core",
+    "wcl-store",
+    # player_page catches requests.RequestException directly (wcl-core pins the same)
+    "requests>=2.31.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wcl_app"]

@@ -7,13 +7,18 @@ Runs on the connection ``wcl_store.postgres.upgrade`` passes in ``config.attribu
 from alembic import context
 from sqlalchemy import Connection
 from wcl_store.postgres.repository import make_engine
-from wcl_store.postgres.schema import metadata
+from wcl_store.postgres.schema import VERSION_TABLE, metadata
 
 config = context.config
 
 
 def _run(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=metadata, compare_server_default=True)
+    context.configure(
+        connection=connection,
+        target_metadata=metadata,
+        compare_server_default=True,
+        version_table=VERSION_TABLE,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

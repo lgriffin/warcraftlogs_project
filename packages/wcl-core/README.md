@@ -1,8 +1,8 @@
 # wcl-core
 
 The Warcraft Logs API client, raid analysis (`analyze_raid`) and result models used by the WCL Analyzer
-desktop app and CLI, and by the Toads Hub worker. It imports no Qt and no SQLite; storage and the
-application services stay in `warcraftlogs_client`.
+desktop app and CLI, and by the Toads Hub worker. It imports no Qt and no SQLite; storage lives in
+`wcl-store` and the application services in `wcl-app`.
 
 Install from another project, pinned to a commit:
 

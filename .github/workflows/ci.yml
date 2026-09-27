@@ -40,10 +40,10 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
       - name: Codespell
-        run: codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ tests/
+        run: codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ packages/wcl-app/src/ tests/
       - name: Vulture dead code check
-        run: vulture warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
-      - name: Import contracts (wcl-core stays headless, wcl-store stays persistence only)
+        run: vulture warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ packages/wcl-app/src/ vulture_whitelist.py --min-confidence 80 --exclude warcraftlogs_client/gui/
+      - name: Import contracts (wcl-core stays headless, wcl-store stays persistence only, wcl-app needs no desktop)
         run: lint-imports
 
   test:
@@ -62,7 +62,7 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -e ".[dev]"
       - name: Run tests with coverage
-        run: pytest --tb=short -q -rs --cov=warcraftlogs_client --cov=wcl_core --cov=wcl_store --cov-report=term-missing --cov-config=pyproject.toml --ignore=tests/gui --ignore=tests/integration/test_live_api.py
+        run: pytest --tb=short -q -rs --cov=warcraftlogs_client --cov=wcl_core --cov=wcl_store --cov=wcl_app --cov-report=term-missing --cov-config=pyproject.toml --ignore=tests/gui --ignore=tests/integration/test_live_api.py
 
   wcl-core-package:
     runs-on: ubuntu-latest
@@ -113,6 +113,53 @@ jobs:
           store-only/bin/pip install "$GITHUB_WORKSPACE"/dist/wcl_core-*.whl "$(ls "$GITHUB_WORKSPACE"/dist/wcl_store-*.whl)[postgres]"
           store-only/bin/python -c "import sys, wcl_store.sqlite, wcl_store.postgres, wcl_store.postgres.schema; assert 'warcraftlogs_client' not in sys.modules; assert wcl_store.postgres.MIGRATIONS_DIR.joinpath('env.py').is_file()"
 
+  # REQ-CORE-APP-001: the services install and run without the desktop app.
+  wcl-app-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the wcl-core, wcl-store and wcl-app wheels on their own
+        run: |
+          pip install --upgrade pip build
+          python -m build --wheel packages/wcl-core -o dist
+          python -m build --wheel packages/wcl-store -o dist
+          python -m build --wheel packages/wcl-app -o dist
+      - name: Import every module and run a raid headless, without the desktop app (as the Toads Hub worker does)
+        working-directory: ${{ runner.temp }}
+        env:
+          WCL_APP_DIR: ${{ runner.temp }}
+        run: |
+          python -m venv app-only
+          app-only/bin/pip install "$GITHUB_WORKSPACE"/dist/wcl_core-*.whl "$GITHUB_WORKSPACE"/dist/wcl_store-*.whl "$GITHUB_WORKSPACE"/dist/wcl_app-*.whl
+          app-only/bin/python - <<'PY'
+          import importlib, pkgutil, sys
+          from unittest.mock import MagicMock, patch
+          import wcl_app
+          for module in pkgutil.walk_packages(wcl_app.__path__, "wcl_app."):
+              importlib.import_module(module.name)
+          from wcl_app import AppContext, RaidService
+          assert "warcraftlogs_client" not in sys.modules
+          assert not {"PySide6", "sqlite3", "sqlalchemy"} & {m.split(".")[0] for m in sys.modules}
+
+          class Repo:
+              def __enter__(self): return self
+              def __exit__(self, *exc): return False
+              def get_role_overrides_for_report(self, code): return {"Holy": "tank"}
+              def import_raid(self, analysis, source="guild"): self.saved = (analysis, source)
+
+          repo, client = Repo(), MagicMock()
+          ctx = AppContext.headless(client, storage=lambda: repo)
+          with patch("wcl_app.raids.analyze_raid") as analyze:
+              RaidService(ctx).analyze_and_save("raidReport000001")
+          assert analyze.call_args.args[0] is client
+          assert analyze.call_args.kwargs["role_overrides"] == {"Holy": "tank"}
+          assert repo.saved[1] == "guild"
+          assert "warcraftlogs_client" not in sys.modules
+          PY
+
   # REQ-CORE-STORE-001: the storage contract on a real Postgres (the SQLite half runs in `test`).
   storage-postgres:
     runs-on: ubuntu-latest
@@ -143,7 +190,7 @@ jobs:
       - name: Storage contract, migrations and REQ-CORE-STORE-001 scenarios on both backends, with no skips
         shell: bash
         run: |
-          pytest --tb=short -v -rs tests/test_store_contract.py tests/test_wcl_store_package.py tests/step_defs/test_storage.py | tee pg.log
+          pytest --tb=short -v -rs tests/test_store_contract.py tests/test_wcl_store_package.py tests/test_wcl_app_package.py tests/step_defs/test_storage.py | tee pg.log
           ! grep -q "SKIPPED" pg.log
 
   gui-test:
@@ -191,7 +238,7 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -e ".[dev]"
       - name: Run mypy
-        run: mypy warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ --exclude 'gui/'
+        run: mypy warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ packages/wcl-app/src/ --exclude 'gui/'
         # Non-blocking until the 28 errors already on master are fixed (build spec phase 1.3: mypy strict on core).
         continue-on-error: true
 
@@ -207,7 +254,7 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -e ".[dev]"
       - name: Run bandit
-        run: bandit -c pyproject.toml -r warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/
+        run: bandit -c pyproject.toml -r warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ packages/wcl-app/src/
       - name: Run security tests
         run: pytest tests/test_security.py -v --tb=short
       - name: pip-audit
