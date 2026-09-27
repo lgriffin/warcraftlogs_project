@@ -40,6 +40,20 @@ throwaway schema, so any scratch database works.
 
 ## Linting & Quality
 
+`scripts/dev.py` holds every check; CI, pre-commit and the `Makefile` call its tasks, so all three agree.
+
+```bash
+python scripts/dev.py check     # every blocking CI check that needs no network, fastest first (or: make check)
+python scripts/dev.py fix       # Ruff fixes and formatting (or: make fix)
+python scripts/dev.py types imports -k   # any tasks, in order; -k keeps going after a failure
+pre-commit install              # run the same pinned tools on every commit
+```
+
+Tasks: `format lint spelling imports deadcode types quality security test` (together, `check`), plus `audit`, `fuzz`,
+`gui`.
+
+Checker versions are pinned in the `dev` extra; bump them through Dependabot, not by hand. The underlying commands:
+
 ```bash
 ruff check .                    # lint
 ruff format --check .           # format check

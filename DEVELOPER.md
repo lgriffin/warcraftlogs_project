@@ -495,6 +495,7 @@ Maps spell IDs to consumable names, split by detection method:
 git clone https://github.com/lgriffin/warcraftlogs_project.git
 cd warcraftlogs_project
 pip install -e ".[dev,gui]"
+pre-commit install   # runs Ruff, codespell, import contracts, mypy and vulture on each commit
 ```
 
 ### Running
@@ -525,11 +526,17 @@ pytest tests/test_reference_reports.py -v
 
 Tests use `tmp_path` fixtures for file/database isolation and `MagicMock` for API client mocking. The `conftest.py` provides shared fixtures including `mock_client`, `sample_raid_analysis`, and a temporary `db` fixture.
 
-### Linting
+### Checks
+
+`scripts/dev.py` runs the same commands CI does, with the tool versions pinned in the `dev` extra:
 
 ```bash
-ruff check .
+python scripts/dev.py check   # format, lint, spelling, import contracts, dead code, mypy, radon, security, tests
+python scripts/dev.py fix     # apply Ruff fixes and formatting
+python scripts/dev.py types   # or any single task; add -k to keep going after a failure
 ```
+
+`make check` and `make fix` wrap the same tasks where `make` is available.
 
 ## Building the Installer
 
