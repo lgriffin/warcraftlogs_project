@@ -5,6 +5,7 @@ description = "Warcraft Logs client, raid analysis and models for TBC Classic, w
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
+    "pydantic>=2",
     "requests>=2.31.0",
 ]
 
