@@ -443,6 +443,7 @@ class HomeView(QWidget):
 
     def _on_loaded(self) -> None:
         self._loading = False
+        self._worker = None  # the finished worker deletes itself; closeEvent must not touch it
         self._refresh_btn.setEnabled(True)
         if self._reload_after:
             self.refresh()
