@@ -13,6 +13,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
@@ -52,14 +53,14 @@ def get_token_url() -> str:
 class UserTokenManager:
     """Manages OAuth2 user tokens with persistence and refresh."""
 
-    def __init__(self, token_path: str | None = None):
+    def __init__(self, token_path: str | None = None) -> None:
         self._token_path = token_path or str(paths.get_user_token_path())
         self._access_token: SecretStr | None = None
         self._refresh_token: SecretStr | None = None
         self._expires_at: float = 0
         self._load()
 
-    def _load(self):
+    def _load(self) -> None:
         try:
             with open(self._token_path) as f:
                 data = json.load(f)
@@ -69,7 +70,7 @@ class UserTokenManager:
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             pass
 
-    def _save(self):
+    def _save(self) -> None:
         data = {
             "access_token": _reveal(self._access_token),
             "refresh_token": _reveal(self._refresh_token),
@@ -90,7 +91,7 @@ class UserTokenManager:
                 return self._access_token.get_secret_value()
         raise RuntimeError("Not authenticated — user must complete OAuth flow first")
 
-    def _refresh(self):
+    def _refresh(self) -> None:
         from .config import load_config
 
         config = load_config()
@@ -135,7 +136,7 @@ class UserTokenManager:
         client_id: str,
         client_secret: str | SecretStr,
         redirect_port: int = DEFAULT_REDIRECT_PORT,
-    ):
+    ) -> None:
         client_secret = as_secret(client_secret)
         redirect_uri = f"http://localhost:{redirect_port}/callback"
         token_url = get_token_url()
@@ -175,7 +176,7 @@ class UserTokenManager:
         self._save()
         logger.info("Token exchange successful, token saved.")
 
-    def revoke(self):
+    def revoke(self) -> None:
         self._access_token = None
         self._refresh_token = None
         self._expires_at = 0
@@ -205,10 +206,18 @@ def _reveal(value: SecretStr | None) -> str | None:
     return value.get_secret_value() if value is not None else None
 
 
+class _CallbackServer(HTTPServer):
+    """The callback server; the handler leaves the redirect's parameters in ``auth_result``."""
+
+    auth_result: dict[str, Any] | None = None
+
+
 class _CallbackHandler(BaseHTTPRequestHandler):
     """Handles the OAuth redirect callback."""
 
-    def do_GET(self):
+    server: _CallbackServer
+
+    def do_GET(self) -> None:
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
 
@@ -235,28 +244,28 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"<html><body><h2>Unexpected response</h2><p>You can close this window.</p></body></html>")
             self.server.auth_result = {"error": "no_code"}
 
-    def log_message(self, *args):
+    def log_message(self, *args: Any) -> None:
         pass
 
 
 class OAuthCallbackServer:
     """Local HTTP server that waits for the OAuth callback."""
 
-    def __init__(self, port: int = DEFAULT_REDIRECT_PORT, timeout: int = 120):
+    def __init__(self, port: int = DEFAULT_REDIRECT_PORT, timeout: int = 120) -> None:
         self._port = port
         self._timeout = timeout
-        self._server: HTTPServer | None = None
+        self._server: _CallbackServer | None = None
         self._thread: Thread | None = None
         self.result: dict | None = None
 
-    def start(self):
-        self._server = HTTPServer(("127.0.0.1", self._port), _CallbackHandler)
-        self._server.timeout = self._timeout
-        self._server.auth_result = None
+    def start(self) -> None:
+        server = _CallbackServer(("127.0.0.1", self._port), _CallbackHandler)
+        server.timeout = self._timeout
+        self._server = server
 
-        def serve():
-            self._server.handle_request()
-            self.result = self._server.auth_result
+        def serve() -> None:
+            server.handle_request()
+            self.result = server.auth_result
 
         self._thread = Thread(target=serve, daemon=True)
         self._thread.start()
@@ -266,7 +275,7 @@ class OAuthCallbackServer:
             self._thread.join(timeout=timeout or self._timeout + 5)
         return self.result
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         if self._server:
             self._server.server_close()
 

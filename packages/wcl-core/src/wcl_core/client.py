@@ -8,7 +8,7 @@ extracted data (not raw JSON wrappers), with consistent signatures.
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, Protocol
 
 import requests
 
@@ -96,6 +96,12 @@ def _enum(value: str, allowed: set[str]) -> str:
     return value
 
 
+class TokenSource(Protocol):
+    """What the client needs from a token manager: ``TokenManager`` or ``UserTokenManager``."""
+
+    def get_token(self) -> str: ...
+
+
 class WarcraftLogsClient:
     """GraphQL client for Warcraft Logs.
 
@@ -107,7 +113,7 @@ class WarcraftLogsClient:
     MIN_REQUEST_INTERVAL = 0.25
     MAX_RETRIES = 3
 
-    def __init__(self, token_manager, cache_enabled: bool = True, api_url: str | None = None):
+    def __init__(self, token_manager: TokenSource, cache_enabled: bool = True, api_url: str | None = None) -> None:
         self.token_manager = token_manager
         self._last_request_time = 0.0
         self.cache_enabled = cache_enabled
@@ -188,7 +194,7 @@ class WarcraftLogsClient:
         query = f"query({decls}) {{ reportData {{ report(code: $code) {{ {body} }} }} }}"
         return _extract_report(self.run_query(query, use_cache=use_cache, variables=variables))
 
-    def _table(self, report_id: str, data_type: str, start_time: float, end_time: float, **filters) -> Any:
+    def _table(self, report_id: str, data_type: str, start_time: float, end_time: float, **filters: Any) -> Any:
         """Fetch a report ``table`` for a data type. *filters* take hostilityType/sourceID/targetID."""
         hostility = filters.pop("hostilityType", None)
         args: dict = {"startTime": start_time, "endTime": end_time}
@@ -200,7 +206,9 @@ class WarcraftLogsClient:
         report = self._query_report(report_id, f"table({', '.join(call)})", args)
         return report.get("table")
 
-    def _table_entries(self, report_id: str, data_type: str, start_time: float, end_time: float, **filters) -> list:
+    def _table_entries(
+        self, report_id: str, data_type: str, start_time: float, end_time: float, **filters: Any
+    ) -> list:
         raw_table = self._table(report_id, data_type, start_time, end_time, **filters)
         if isinstance(raw_table, dict):
             if "data" in raw_table and "entries" in raw_table["data"]:
@@ -217,7 +225,7 @@ class WarcraftLogsClient:
         end_time: float = FULL_REPORT_END,
         *,
         hostility: str | None = "Friendlies",
-        **filters,
+        **filters: Any,
     ) -> list[dict]:
         """Fetch every ``events`` page for a data type, following ``nextPageTimestamp``.
 
@@ -712,37 +720,39 @@ class WarcraftLogsClient:
 # but accept the old (client, report_id, source_id) signature.
 
 
-def get_healing_data(client: WarcraftLogsClient, report_id: str, source_id: int):
+def get_healing_data(client: WarcraftLogsClient, report_id: str, source_id: int) -> dict[str, Any]:
     data = client.get_healing_data(report_id, source_id)
     return {"data": {"reportData": {"report": {"events": {"data": data}}}}}
 
 
-def get_cast_data(client: WarcraftLogsClient, report_id: str, source_id: int):
+def get_cast_data(client: WarcraftLogsClient, report_id: str, source_id: int) -> dict[str, Any]:
     data = client.get_cast_data(report_id, source_id)
     return {"data": {"reportData": {"report": {"events": {"data": data}}}}}
 
 
-def get_cast_events_data(client: WarcraftLogsClient, report_id: str, source_id: int):
+def get_cast_events_data(client: WarcraftLogsClient, report_id: str, source_id: int) -> dict[str, Any]:
     data = client.get_cast_events_paginated(report_id, source_id)
     return {"data": {"reportData": {"report": {"events": {"data": data}}}}}
 
 
-def get_aura_data(client: WarcraftLogsClient, report_id: str, source_id: int):
+def get_aura_data(client: WarcraftLogsClient, report_id: str, source_id: int) -> dict[str, Any]:
     data = client.get_aura_data(report_id, source_id)
     return {"data": {"reportData": {"report": {"events": {"data": data}}}}}
 
 
-def get_auras_data(client: WarcraftLogsClient, report_id: str, source_id: int):
+def get_auras_data(client: WarcraftLogsClient, report_id: str, source_id: int) -> dict[str, Any]:
     data = client.get_auras_paginated(report_id, source_id)
     return {"data": {"reportData": {"report": {"events": {"data": data}}}}}
 
 
-def get_auras_data_by_ability(client: WarcraftLogsClient, report_id: str, source_id: int, ability_id: int):
+def get_auras_data_by_ability(
+    client: WarcraftLogsClient, report_id: str, source_id: int, ability_id: int
+) -> dict[str, Any]:
     data = client.get_aura_data_by_ability(report_id, source_id, ability_id)
     return {"data": {"reportData": {"report": {"events": {"data": data}}}}}
 
 
-def get_buffs_table(client: WarcraftLogsClient, report_id: str, source_id: int):
+def get_buffs_table(client: WarcraftLogsClient, report_id: str, source_id: int) -> dict[str, Any]:
     table = client.get_buffs_table(report_id, source_id)
     return {"data": {"reportData": {"report": {"table": table}}}}
 

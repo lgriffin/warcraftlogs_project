@@ -15,7 +15,7 @@ import re
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from wcl_core.client import WarcraftLogsClient
 from wcl_core.common.errors import ConfigurationError
@@ -37,6 +37,16 @@ def validate_report_code(code: str) -> str:
     if not _REPORT_CODE_RE.match(code):
         raise ValueError(f"Invalid report code: {code!r}")
     return code
+
+
+class ThresholdKwargs(TypedDict):
+    """The threshold keyword arguments of ``analyze_raid``."""
+
+    healer_threshold: int
+    tank_min_taken: int
+    tank_min_mitigation: int
+    healer_threshold_10: int
+    tank_min_taken_10: int
 
 
 @dataclass(frozen=True)
@@ -61,7 +71,7 @@ class AnalysisThresholds:
             tank_min_taken_10=rt.get("tank_min_taken_10", defaults.tank_min_taken_10),
         )
 
-    def as_kwargs(self) -> dict[str, int]:
+    def as_kwargs(self) -> ThresholdKwargs:
         """Keyword arguments in the shape ``analyze_raid`` takes."""
         return {
             "healer_threshold": self.healer_min_healing,

@@ -129,7 +129,7 @@ def get_install_dir() -> Path:
     return get_app_dir()
 
 
-def ensure_first_run_config():
+def ensure_first_run_config() -> None:
     """Copy config.example.json to user data dir if config.json doesn't exist yet."""
     config_path = get_config_path()
     if not config_path.exists():

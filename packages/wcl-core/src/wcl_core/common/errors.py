@@ -8,8 +8,11 @@ error messages across the entire application.
 import logging
 import sys
 import traceback
+from collections.abc import Callable
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
+
+_R = TypeVar("_R")
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +132,13 @@ def handle_error(error: Exception, context: str | None = None, exit_on_critical:
         return False
 
 
-def safe_api_call(func, *args, error_message: str = "API call failed", actor_name: str | None = None, **kwargs):
+def safe_api_call(
+    func: Callable[..., _R],
+    *args: Any,
+    error_message: str = "API call failed",
+    actor_name: str | None = None,
+    **kwargs: Any,
+) -> _R | None:
     """
     Safely execute an API call with consistent error handling.
 
@@ -163,8 +172,12 @@ def safe_api_call(func, *args, error_message: str = "API call failed", actor_nam
 
 
 def safe_data_processing(
-    func, *args, error_message: str = "Data processing failed", actor_name: str | None = None, **kwargs
-):
+    func: Callable[..., _R],
+    *args: Any,
+    error_message: str = "Data processing failed",
+    actor_name: str | None = None,
+    **kwargs: Any,
+) -> _R | None:
     """
     Safely execute data processing with consistent error handling.
 
@@ -221,7 +234,9 @@ def validate_api_response(response: Any, expected_keys: list, context: str = "AP
 
 
 # Decorator for consistent error handling
-def error_handler(error_message: str = "Operation failed", actor_context: bool = False):
+def error_handler(
+    error_message: str = "Operation failed", actor_context: bool = False
+) -> Callable[[Callable[..., _R]], Callable[..., _R]]:
     """
     Decorator for consistent error handling across functions.
 
@@ -230,8 +245,8 @@ def error_handler(error_message: str = "Operation failed", actor_context: bool =
         actor_context: Whether to extract actor name from function arguments
     """
 
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., _R]) -> Callable[..., _R]:
+        def wrapper(*args: Any, **kwargs: Any) -> _R:
             try:
                 return func(*args, **kwargs)
             except WarcraftLogsError:

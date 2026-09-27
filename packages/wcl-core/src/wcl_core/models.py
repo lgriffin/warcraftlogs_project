@@ -46,7 +46,7 @@ class HealerPerformance:
     fear_ward_casts: int = 0
     active_time_percent: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         total = self.total_healing + self.total_overhealing
         if total > 0:
             self.overheal_percent = round(self.total_overhealing / total * 100, 1)
@@ -64,7 +64,7 @@ class TankPerformance:
     abilities_used: list[SpellUsage] = field(default_factory=list)
     active_time_percent: float = 0.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         total = self.total_damage_taken + self.total_mitigated
         if total > 0:
             self.mitigation_percent = round(self.total_mitigated / total * 100, 2)

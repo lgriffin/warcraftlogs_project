@@ -11,16 +11,16 @@ from .config import as_secret
 class TokenManager:
     TOKEN_URL = "https://www.warcraftlogs.com/oauth/token"
 
-    def __init__(self, client_id, client_secret: str | SecretStr):
+    def __init__(self, client_id: str, client_secret: str | SecretStr) -> None:
         self.client_id = client_id
         self.client_secret = as_secret(client_secret)
         self.access_token: SecretStr | None = None
-        self.token_expiry = 0
+        self.token_expiry = 0.0
 
-    def _is_token_valid(self):
+    def _is_token_valid(self) -> bool:
         return bool(self.access_token) and time.time() < self.token_expiry
 
-    def _get_new_token(self):
+    def _get_new_token(self) -> None:
         auth_string = f"{self.client_id}:{self.client_secret.get_secret_value()}"
         b64_auth = base64.b64encode(auth_string.encode()).decode()
 
@@ -37,7 +37,8 @@ class TokenManager:
         except requests.Timeout as e:
             raise AuthenticationError("WarcraftLogs authentication timed out — try again later") from e
         except requests.HTTPError as e:
-            raise AuthenticationError(f"Authentication failed (HTTP {e.response.status_code})", details=str(e)) from e
+            status = e.response.status_code if e.response is not None else "error"
+            raise AuthenticationError(f"Authentication failed (HTTP {status})", details=str(e)) from e
         except (ValueError, KeyError) as e:
             raise AuthenticationError("Received invalid response from WarcraftLogs", details=str(e)) from e
 

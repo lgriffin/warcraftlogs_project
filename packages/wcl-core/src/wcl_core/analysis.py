@@ -12,6 +12,7 @@ import logging
 import os
 from collections import defaultdict
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ from .models import (
     SpellUsage,
     TankPerformance,
 )
-from .spell_manager import SpellBreakdown, get_spell_manager
+from .spell_manager import SpellBreakdown, SpellManager, get_spell_manager
 
 # Breakdown bucket for damage events that carry no abilityGameID (their amount still counts in the totals).
 _UNKNOWN_ABILITY_ID = 0
@@ -84,7 +85,7 @@ def analyze_raid(
     tank_min_mitigation: int = 40,
     healer_threshold_10: int = 400000,
     tank_min_taken_10: int = 300000,
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
     role_overrides: dict[str, str] | None = None,
 ) -> RaidAnalysis:
     """Run a full raid analysis and return structured results.
@@ -94,7 +95,7 @@ def analyze_raid(
     """
     logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.api_url)
 
-    def _progress(msg):
+    def _progress(msg: str) -> None:
         if progress_callback:
             progress_callback(msg)
 
@@ -513,7 +514,7 @@ def _analyze_healers(
     client: WarcraftLogsClient,
     report_id: str,
     healer_ids: list[PlayerIdentity],
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> tuple[list[HealerPerformance], list[str]]:
     results = []
     warnings = []
@@ -579,7 +580,7 @@ def _analyze_tanks(
     client: WarcraftLogsClient,
     report_id: str,
     tank_ids: list[PlayerIdentity],
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> tuple[list[TankPerformance], list[str]]:
     results = []
     warnings = []
@@ -669,7 +670,7 @@ def _analyze_dps(
     report_id: str,
     player_ids: list[PlayerIdentity],
     role: str,
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> tuple[list[DPSPerformance], list[str]]:
     results = []
     warnings = []
@@ -878,7 +879,9 @@ def _analyze_interrupts(
     return results, warnings
 
 
-def _find_next_cast(cast_events, from_idx, spell_names, spell_mgr):
+def _find_next_cast(
+    cast_events: list[dict[str, Any]], from_idx: int, spell_names: dict[int, str], spell_mgr: SpellManager
+) -> NextCastInfo | None:
     for j in range(from_idx + 1, len(cast_events)):
         nxt = cast_events[j]
         nxt_aid = nxt.get("abilityGameID")
@@ -1285,7 +1288,7 @@ def _analyze_encounters(
     client: WarcraftLogsClient,
     report_id: str,
     composition: RaidComposition,
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
     fights: list[dict] | None = None,
 ) -> list[EncounterSummary]:
     """Analyze per-boss-kill performance using time-windowed table queries.
@@ -1380,7 +1383,12 @@ def _analyze_encounters(
     return results
 
 
-def _apply_active_time(encounters, healers, tanks, dps):
+def _apply_active_time(
+    encounters: list[EncounterSummary],
+    healers: list[HealerPerformance],
+    tanks: list[TankPerformance],
+    dps: list[DPSPerformance],
+) -> None:
     """Average per-encounter active time and store on each player's raid performance."""
     player_times: dict[str, list[float]] = {}
     for enc in encounters:
@@ -1388,11 +1396,11 @@ def _apply_active_time(encounters, healers, tanks, dps):
             if p.active_time_percent > 0:
                 player_times.setdefault(p.name, []).append(p.active_time_percent)
 
-    for performer_list in [healers, tanks, dps]:
-        for perf in performer_list:
-            times = player_times.get(perf.name)
-            if times:
-                perf.active_time_percent = round(sum(times) / len(times), 1)
+    performers: list[HealerPerformance | TankPerformance | DPSPerformance] = [*healers, *tanks, *dps]
+    for perf in performers:
+        times = player_times.get(perf.name)
+        if times:
+            perf.active_time_percent = round(sum(times) / len(times), 1)
 
 
 def build_class_cast_timelines(
@@ -1401,7 +1409,7 @@ def build_class_cast_timelines(
     encounter: EncounterSummary,
     composition: RaidComposition,
     player_class: str,
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> list[PlayerCastTimeline]:
     """Build cast timelines for all players of a given class within an encounter."""
     class_players = [p for p in composition.all_players if p.player_class == player_class]
@@ -1483,7 +1491,7 @@ def analyze_resource_waste(
     encounter: EncounterSummary,
     composition: RaidComposition,
     consumable_usage: list,  # list[ConsumableUsage]
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> list[PlayerResourceAnalysis]:
     """Detect resource waste patterns for each player in an encounter."""
     # Primary resource type by class
@@ -1634,7 +1642,7 @@ def analyze_cooldown_synergy(
     report_id: str,
     encounter: EncounterSummary,
     composition: RaidComposition,
-    progress_callback=None,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> CooldownSynergyAnalysis:
     """Analyze how well players align personal cooldowns with Heroism/Bloodlust."""
     from .paths import get_cooldowns_config_path
