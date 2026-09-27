@@ -21,6 +21,11 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _nocase(column: str) -> sa.ColumnElement[str]:
+    """ASCII-only case folding, like SQLite's NOCASE (``wcl_store.postgres.schema.nocase``)."""
+    return sa.literal_column(f"translate({column}, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')")
+
+
 def upgrade() -> None:
     op.create_table(
         "characters",
@@ -31,7 +36,7 @@ def upgrade() -> None:
         sa.Column("last_seen", sa.Text(), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_characters")),
     )
-    op.create_index("uq_characters_lower_name", "characters", [sa.literal_column("lower(name)")], unique=True)
+    op.create_index("uq_characters_lower_name", "characters", [_nocase("name")], unique=True)
     op.create_table(
         "player_pages",
         sa.Column("id", sa.Integer(), sa.Identity(always=False), nullable=False),
@@ -49,7 +54,7 @@ def upgrade() -> None:
     op.create_index(
         "uq_player_pages_lower_name_server_region",
         "player_pages",
-        [sa.literal_column("lower(name)"), sa.literal_column("lower(server)"), sa.literal_column("lower(region)")],
+        [_nocase("name"), _nocase("server"), _nocase("region")],
         unique=True,
     )
     op.create_table(
@@ -94,7 +99,7 @@ def upgrade() -> None:
     op.create_index(
         "uq_role_overrides_lower_character_name_report_id",
         "role_overrides",
-        [sa.literal_column("lower(character_name)"), "report_id"],
+        [_nocase("character_name"), "report_id"],
         unique=True,
     )
     op.create_table(
@@ -270,7 +275,7 @@ def upgrade() -> None:
     op.create_index(
         "uq_role_override_raids_raid_id_lower_character_name",
         "role_override_raids",
-        ["raid_id", sa.literal_column("lower(character_name)")],
+        ["raid_id", _nocase("character_name")],
         unique=True,
     )
     op.create_table(

@@ -2796,7 +2796,8 @@ class PerformanceDB:
     def get_raid_aggregate_stats(self, report_id: str) -> dict | None:
         conn = self._get_conn()
         raid = conn.execute(
-            "SELECT id, report_id, title, raid_date, start_time, end_time, raid_size, zone FROM raids WHERE report_id = ?",
+            "SELECT id, report_id, title, raid_date, start_time, end_time, raid_size, zone "
+            "FROM raids WHERE report_id = ?",
             (report_id,),
         ).fetchone()
         if not raid:
@@ -2851,9 +2852,12 @@ class PerformanceDB:
 
         rows = conn.execute(
             f"""SELECT r.report_id, r.title, r.raid_date, r.start_time, r.end_time, r.raid_size, r.zone,
-                       COALESCE((SELECT SUM(hp.total_healing) FROM healer_performance hp WHERE hp.raid_id = r.id), 0) as total_healing,
-                       COALESCE((SELECT SUM(dp.total_damage) FROM dps_performance dp WHERE dp.raid_id = r.id), 0) as total_damage,
-                       COALESCE((SELECT SUM(tp.total_damage_taken) FROM tank_performance tp WHERE tp.raid_id = r.id), 0) as total_damage_taken
+                       COALESCE((SELECT SUM(hp.total_healing) FROM healer_performance hp
+                                 WHERE hp.raid_id = r.id), 0) as total_healing,
+                       COALESCE((SELECT SUM(dp.total_damage) FROM dps_performance dp
+                                 WHERE dp.raid_id = r.id), 0) as total_damage,
+                       COALESCE((SELECT SUM(tp.total_damage_taken) FROM tank_performance tp
+                                 WHERE tp.raid_id = r.id), 0) as total_damage_taken
                 FROM raids r
                 WHERE r.report_id != ? AND r.source = 'guild' {size_clause} {zone_clause} AND r.raid_size IS NOT NULL
                 ORDER BY r.raid_date ASC

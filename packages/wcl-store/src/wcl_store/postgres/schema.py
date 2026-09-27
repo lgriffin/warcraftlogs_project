@@ -1,10 +1,10 @@
 """SQLAlchemy Core tables for the Postgres backend.
 
 These mirror the SQLite tables the ``RaidRepository`` methods touch, with Postgres types: ``BIGINT`` for
-millisecond timestamps and totals, double precision for percentages, and unique indexes on ``lower(...)``
-where SQLite uses ``COLLATE NOCASE``. Dates and the JSON-encoded lists stay text so both backends return
-identical rows. Alembic migrations in ``migrations/versions`` create them; ``test_store_contract`` checks
-the migrations and this module agree.
+millisecond timestamps and totals, double precision for percentages, and unique indexes on
+``nocase(...)`` (ASCII-only case folding) where SQLite uses ``COLLATE NOCASE``. Dates and the JSON-encoded
+lists stay text so both backends return identical rows. Alembic migrations in ``migrations/versions`` create
+them; ``test_store_contract`` checks the migrations and this module agree.
 """
 
 from __future__ import annotations
@@ -25,8 +25,17 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    literal_column,
     text,
 )
+
+_ASCII_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def nocase(expr: Any) -> Any:
+    """Fold ASCII letters only, like SQLite's ``NOCASE``; ``lower()`` would also merge pairs such as Ä and ä."""
+    return func.translate(expr, literal_column(f"'{_ASCII_UPPER}'"), literal_column(f"'{_ASCII_UPPER.lower()}'"))
+
 
 # UTC "YYYY-MM-DD HH:MM:SS", the format SQLite's datetime('now') writes.
 NOW_TEXT = text("to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')")
@@ -59,7 +68,7 @@ characters = Table(
     Column("first_seen", Text, nullable=False),
     Column("last_seen", Text, nullable=False),
 )
-Index("uq_characters_lower_name", func.lower(characters.c.name), unique=True)
+Index("uq_characters_lower_name", nocase(characters.c.name), unique=True)
 
 raids = Table(
     "raids",
@@ -285,9 +294,9 @@ player_pages = Table(
 )
 Index(
     "uq_player_pages_lower_name_server_region",
-    func.lower(player_pages.c.name),
-    func.lower(player_pages.c.server),
-    func.lower(player_pages.c.region),
+    nocase(player_pages.c.name),
+    nocase(player_pages.c.server),
+    nocase(player_pages.c.region),
     unique=True,
 )
 
@@ -319,7 +328,7 @@ role_overrides = Table(
 )
 Index(
     "uq_role_overrides_lower_character_name_report_id",
-    func.lower(role_overrides.c.character_name),
+    nocase(role_overrides.c.character_name),
     role_overrides.c.report_id,
     unique=True,
 )
@@ -335,7 +344,7 @@ role_override_raids = Table(
 Index(
     "uq_role_override_raids_raid_id_lower_character_name",
     role_override_raids.c.raid_id,
-    func.lower(role_override_raids.c.character_name),
+    nocase(role_override_raids.c.character_name),
     unique=True,
 )
 

@@ -575,6 +575,20 @@ def test_role_overrides(repo):
     assert repo.get_role_overrides_for_report(KARA) == {"Abe": "melee", "Holy": "tank"}
 
 
+def test_names_fold_ascii_case_only(repo):
+    """SQLite's NOCASE folds A-Z only, so both backends keep Ä and ä apart while matching H and h."""
+    upper = repo.get_or_create_player_page("\u00c4sa", "firemaw", "eu")
+    lower = repo.get_or_create_player_page("\u00e4sa", "firemaw", "eu")
+    assert upper != lower
+    assert repo.get_or_create_player_page("\u00c4SA", "FIREMAW", "EU") == upper
+    assert [p["id"] for p in repo.find_player_pages("\u00e4SA")] == [lower]
+
+    repo.set_role_override("\u00c4sa", "tank")
+    repo.set_role_override("\u00e4sa", "healer")
+    assert [r["role"] for r in repo.get_role_overrides("\u00c4SA")] == ["tank"]
+    assert repo.get_role_overrides_for_report(KARA) == {"\u00c4sa": "tank", "\u00e4sa": "healer"}
+
+
 def test_role_override_raids_follow_the_stored_analysis(repo):
     repo.import_raid(_analysis(KARA, overrides_applied={"Stab": "ranged"}))
     repo.import_raid(_analysis(GRUUL, start=T0 + DAY))

@@ -2,8 +2,8 @@
 
 Each public method runs in one transaction, so a failed import leaves nothing behind. Queries follow the
 SQLite backend statement for statement; where SQLite relies on ``COLLATE NOCASE`` this matches on
-``lower(...)``, and where SQLite orders text by bytes this orders with ``COLLATE "C"`` so both backends
-return rows in the same order whatever the database's default collation.
+``nocase(...)`` (ASCII-only folding), and where SQLite orders text by bytes this orders with ``COLLATE "C"``,
+so both backends return rows in the same order whatever the database's default collation.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ from wcl_core.models import (
 from .. import _codec
 from ..errors import StorageError
 from . import schema as t
-from .schema import NOW_TEXT
+from .schema import NOW_TEXT, nocase
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -83,8 +83,8 @@ def make_engine(url: str, **kwargs: Any) -> Engine:
     return create_engine(url, **kwargs)
 
 
-def _lower_eq(column: Any, value: str) -> Any:
-    return func.lower(column) == func.lower(value)
+def _nocase_eq(column: Any, value: str) -> Any:
+    return nocase(column) == nocase(value)
 
 
 def _c(expr: Any) -> Any:
@@ -140,7 +140,7 @@ class PostgresRaidRepository:
             name=name, player_class=player_class, first_seen=raid_date, last_seen=raid_date
         )
         upsert = stmt.on_conflict_do_update(
-            index_elements=[func.lower(t.characters.c.name)],
+            index_elements=[nocase(t.characters.c.name)],
             set_={
                 "player_class": stmt.excluded.player_class,
                 "last_seen": func.greatest(t.characters.c.last_seen, stmt.excluded.last_seen),
@@ -833,7 +833,7 @@ class PostgresRaidRepository:
     def get_character_history(self, character_name: str, source: str = "guild") -> CharacterHistory | None:
         with self._engine.connect() as conn:
             char = conn.execute(
-                select(t.characters).where(_lower_eq(t.characters.c.name, character_name))
+                select(t.characters).where(_nocase_eq(t.characters.c.name, character_name))
             ).one_or_none()
             if char is None:
                 return None
@@ -905,7 +905,7 @@ class PostgresRaidRepository:
         stmt = (
             select(r.c.report_id, r.c.title, r.c.owner, r.c.zone, r.c.start_time, r.c.end_time, r.c.source)
             .distinct()
-            .select_from(r.join(c, _lower_eq(c.c.name, character_name)))
+            .select_from(r.join(c, _nocase_eq(c.c.name, character_name)))
             .where(r.c.id.in_(self._character_raid_ids(c.c.id)))
             .order_by(r.c.start_time.desc())
         )
@@ -917,7 +917,7 @@ class PostgresRaidRepository:
         return (
             stmt.join(r, r.c.id == table.c.raid_id)
             .join(c, c.c.id == table.c.character_id)
-            .where(_lower_eq(c.c.name, character_name), r.c.source.in_(sources))
+            .where(_nocase_eq(c.c.name, character_name), r.c.source.in_(sources))
         )
 
     @_storage_errors
@@ -1003,7 +1003,7 @@ class PostgresRaidRepository:
             conn.execute(insert(p).values(name=name, server=server, region=region).on_conflict_do_nothing())
             return conn.execute(
                 select(p.c.id).where(
-                    _lower_eq(p.c.name, name), _lower_eq(p.c.server, server), _lower_eq(p.c.region, region)
+                    _nocase_eq(p.c.name, name), _nocase_eq(p.c.server, server), _nocase_eq(p.c.region, region)
                 )
             ).scalar_one()
 
@@ -1019,8 +1019,8 @@ class PostgresRaidRepository:
         )
         stmt = select(p.c.id, p.c.name, p.c.server, p.c.region, p.c.created_at, log_count)
         if name:
-            stmt = stmt.where(_lower_eq(p.c.name, name))
-        stmt = stmt.order_by(_c(func.lower(p.c.name)), _c(func.lower(p.c.server)))
+            stmt = stmt.where(_nocase_eq(p.c.name, name))
+        stmt = stmt.order_by(_c(nocase(p.c.name)), _c(nocase(p.c.server)))
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))
 
@@ -1097,7 +1097,7 @@ class PostgresRaidRepository:
         ro = t.role_overrides
         stmt = insert(ro).values(character_name=character_name, report_id=report_id, role=role)
         stmt = stmt.on_conflict_do_update(
-            index_elements=[func.lower(ro.c.character_name), ro.c.report_id],
+            index_elements=[nocase(ro.c.character_name), ro.c.report_id],
             set_={"role": stmt.excluded.role, "updated_at": NOW_TEXT},
         )
         with self._engine.begin() as conn:
@@ -1108,7 +1108,7 @@ class PostgresRaidRepository:
         ro = t.role_overrides
         with self._engine.begin() as conn:
             result = conn.execute(
-                delete(ro).where(_lower_eq(ro.c.character_name, character_name), ro.c.report_id == report_id)
+                delete(ro).where(_nocase_eq(ro.c.character_name, character_name), ro.c.report_id == report_id)
             )
             return result.rowcount > 0
 
@@ -1117,8 +1117,8 @@ class PostgresRaidRepository:
         ro = t.role_overrides
         stmt = select(ro.c.character_name, ro.c.report_id, ro.c.role, ro.c.updated_at)
         if character_name:
-            stmt = stmt.where(_lower_eq(ro.c.character_name, character_name))
-        stmt = stmt.order_by(_c(func.lower(ro.c.character_name)), _c(ro.c.report_id))
+            stmt = stmt.where(_nocase_eq(ro.c.character_name, character_name))
+        stmt = stmt.order_by(_c(nocase(ro.c.character_name)), _c(ro.c.report_id))
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))
 
@@ -1140,7 +1140,7 @@ class PostgresRaidRepository:
         stmt = (
             select(r.c.report_id)
             .select_from(o.join(r, r.c.id == o.c.raid_id))
-            .where(_lower_eq(o.c.character_name, character_name))
+            .where(_nocase_eq(o.c.character_name, character_name))
         )
         with self._engine.connect() as conn:
             return set(conn.execute(stmt).scalars())
