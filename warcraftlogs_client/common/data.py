@@ -1,21 +1,7 @@
-"""
-Legacy data access functions.
+"""Moved to `wcl_core.common.data`; this alias keeps existing imports and patches working."""
 
-These delegate to WarcraftLogsClient methods but maintain the old
-function signatures for backward compatibility with existing analysis modules.
-"""
+import sys
 
+from wcl_core.common import data as _module
 
-def get_master_data(client, report_id):
-    return client.get_master_data(report_id)
-
-
-def get_report_metadata(client, report_id):
-    metadata = client.get_report_metadata(report_id)
-    return {
-        "title": metadata.title,
-        "owner": metadata.owner,
-        "start": metadata.start_time,
-        "end": metadata.end_time,
-        "report_id": metadata.report_id,
-    }
+sys.modules[__name__] = _module

@@ -378,7 +378,7 @@ The CLI provides subcommands: `unified`, `healer`, `tank`, `melee`, `ranged`, `c
 | `consumes_analysis.py` | Multi-raid consumable usage tracking with spike detection |
 | `cache.py` | SHA256-keyed JSON file cache for API query results (`cache/responses/`) |
 | `paths.py` | Path resolution for dev vs PyInstaller frozen environments |
-| `updater.py` | Auto-update checker — polls GitHub Releases, downloads and stages updates |
+| `updater.py` | Auto-update checker — polls GitHub Releases, downloads, verifies against the release `SHA256SUMS` and stages updates |
 | `common/errors.py` | Exception hierarchy: `WarcraftLogsError`, `ApiError`, `ConfigurationError`, `DataProcessingError` |
 | `cli.py` | Argument parser and CLI subcommand dispatch |
 
@@ -581,7 +581,7 @@ Path resolution is handled by `paths.py`, which detects frozen (PyInstaller) vs 
 
 ### Adding a new consumable
 
-Edit `consumes_config.json` and add the spell ID and name to either `buff_consumables` or `cast_consumables` depending on how WarcraftLogs tracks it. Multiple spell IDs can map to the same name for variant unification (e.g., all Master Healthstone ranks → "Master Healthstone").
+Edit `packages/wcl-core/src/wcl_core/data/consumes_config.json` and add the spell ID and name to either `buff_consumables` or `cast_consumables` depending on how WarcraftLogs tracks it. Multiple spell IDs can map to the same name for variant unification (e.g., all Master Healthstone ranks → "Master Healthstone").
 
 ### Adding a new engineering item
 
@@ -589,7 +589,7 @@ Add the item name to the `ENGINEERING_ITEMS` set in `gui/analysis_helpers.py`. T
 
 ### Adding a new spell alias
 
-Edit `spell_data/spell_aliases.json` to map variant spell IDs to a canonical ID. This ensures all ranks of a spell aggregate into a single entry.
+Edit `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` to map variant spell IDs to a canonical ID. This ensures all ranks of a spell aggregate into a single entry.
 
 ### Adding a new database query
 

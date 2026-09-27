@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from pydantic import SecretStr
 
 from warcraftlogs_client.auth import TokenManager
 from warcraftlogs_client.common.errors import AuthenticationError
@@ -20,12 +21,12 @@ class TestIsTokenValid:
         assert not tm._is_token_valid()
 
     def test_valid_token(self, tm):
-        tm.access_token = "tok123"
+        tm.access_token = SecretStr("tok123")
         tm.token_expiry = time.time() + 3600
         assert tm._is_token_valid() is True
 
     def test_expired_token(self, tm):
-        tm.access_token = "tok123"
+        tm.access_token = SecretStr("tok123")
         tm.token_expiry = time.time() - 10
         assert tm._is_token_valid() is False
 
@@ -38,7 +39,7 @@ class TestGetNewToken:
             raise_for_status=lambda: None,
         )
         tm._get_new_token()
-        assert tm.access_token == "new_tok"
+        assert tm.access_token.get_secret_value() == "new_tok"
         assert tm.token_expiry > time.time()
         mock_post.assert_called_once()
 

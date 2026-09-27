@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
     "requests>=2.31.0",
+    "pydantic>=2",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ dev = [
     "pip-audit>=2.7",
     "codespell>=2.2",
     "radon>=6.0",
+    "import-linter>=2.1",
 ]
 
 [project.scripts]
@@ -36,8 +38,14 @@ warcraftlogs = "warcraftlogs_client.cli:main"
 [project.gui-scripts]
 warcraftlogs-gui = "warcraftlogs_client.gui.app:run"
 
+# The desktop app and CLI install wcl-core from the same checkout, so `pip install -e .` and PyInstaller
+# keep working unchanged. Other projects install packages/wcl-core on its own.
 [tool.setuptools.packages.find]
-include = ["warcraftlogs_client*"]
+where = [".", "packages/wcl-core/src"]
+include = ["warcraftlogs_client*", "wcl_core*"]
+
+[tool.setuptools.package-data]
+wcl_core = ["py.typed", "data/*.json", "data/spell_data/*.json"]
 
 [tool.ruff]
 line-length = 120
@@ -89,7 +97,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["warcraftlogs_client"]
+source = ["warcraftlogs_client", "wcl_core"]
 omit = ["warcraftlogs_client/gui/*"]
 
 [tool.coverage.report]
@@ -108,6 +116,17 @@ count = true
 quiet-level = 3
 
 [tool.vulture]
-paths = ["warcraftlogs_client", "vulture_whitelist.py"]
+paths = ["warcraftlogs_client", "packages/wcl-core/src", "vulture_whitelist.py"]
 exclude = ["warcraftlogs_client/gui/"]
 min_confidence = 80
+
+# REQ-CORE-ARCH-001: wcl-core stays headless so the desktop app and the Toads Hub worker can share it.
+[tool.importlinter]
+root_packages = ["wcl_core"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "wcl-core imports no Qt, SQLite, SQLAlchemy or desktop code"
+type = "forbidden"
+source_modules = ["wcl_core"]
+forbidden_modules = ["PySide6", "sqlite3", "sqlalchemy", "warcraftlogs_client"]

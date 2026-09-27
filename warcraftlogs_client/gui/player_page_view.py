@@ -28,8 +28,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core import paths as _paths
 
-from .. import paths as _paths
 from ..services import AppContext, CharacterLineage, RoleOverrideService
 from ..services.player_page import (
     API_ERRORS,

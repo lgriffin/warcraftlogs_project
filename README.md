@@ -40,6 +40,15 @@ Uninstalling the app does not remove user data — delete the folders above manu
 
 The app checks for updates automatically on launch via GitHub Releases. When a new version is available, a notification dialog offers to download and apply it.
 
+Each release publishes a `SHA256SUMS` file, signed in CI with [Sigstore](https://www.sigstore.dev/) keyless signing (bundle: `SHA256SUMS.sigstore.json`). The updater refuses to install a download whose SHA-256 is not listed in `SHA256SUMS`, or when the release has no `SHA256SUMS`. To check a release by hand:
+
+```bash
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/lgriffin/warcraftlogs_project/\.github/workflows/build-installer\.yml@'
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
 ### Building the Installer
 
 To build the installer from source:
@@ -137,7 +146,7 @@ Tracks consumable usage per player per raid:
   - Master Healthstone (all rank variants unified under one name)
   - Fel Iron Bomb, Goblin Sapper Charge
 
-Consumables to track are configured in `consumes_config.json`.
+Consumables to track are configured in `packages/wcl-core/src/wcl_core/data/consumes_config.json`.
 
 ### Raid Filtering
 
@@ -237,7 +246,7 @@ If you see `(ID 12345)` instead of a spell name:
 python manage_spells.py add-name 12345 "Actual Spell Name" warrior_abilities
 ```
 
-Or edit `spell_data/spell_names.json` directly.
+Or edit `packages/wcl-core/src/wcl_core/data/spell_data/spell_names.json` directly.
 
 ### Merging Duplicate Spells
 
@@ -245,7 +254,7 @@ Or edit `spell_data/spell_names.json` directly.
 python manage_spells.py add-alias 12001,12002,12003 12000 new_spell_variants
 ```
 
-Or edit `spell_data/spell_aliases.json` directly.
+Or edit `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` directly.
 
 ### Spell Management Commands
 
@@ -289,9 +298,9 @@ Markdown reports are saved to the `reports/` directory.
 | `config.example.json` | Template for local setup (committed) |
 | `config.json` | Local API credentials and settings (**gitignored** — copy from example) |
 | `user_token.json` | OAuth user token for reference reports (**gitignored**) |
-| `consumes_config.json` | Consumable spell ID mappings (buff-based and cast-based) |
-| `spell_data/spell_names.json` | Spell ID to name mappings by category |
-| `spell_data/spell_aliases.json` | Spell rank/variant merging rules |
+| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell ID mappings (buff-based and cast-based) |
+| `packages/wcl-core/src/wcl_core/data/spell_data/spell_names.json` | Spell ID to name mappings by category |
+| `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 
 Copy `config.example.json` to `config.json` and fill in your Warcraft Logs API credentials. Prefer `WARCRAFTLOGS_CLIENT_ID` / `WARCRAFTLOGS_CLIENT_SECRET` env vars when possible. Set `wcl_api_url` to the Fresh or retail GraphQL endpoint your guild uses.
 

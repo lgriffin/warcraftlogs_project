@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import requests
+from pydantic import SecretStr
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from warcraftlogs_client.auth import TokenManager
@@ -25,7 +26,7 @@ def token_manager(cid, csec):
 )
 def expired_token_manager(token):
     tm = TokenManager("test_id", "test_secret")
-    tm.access_token = token
+    tm.access_token = SecretStr(token)
     tm.token_expiry = 0
     return {"tm": tm, "post_mock": None}
 

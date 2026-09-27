@@ -8,7 +8,7 @@ file export or embedding in a UI.
 import os
 from collections import defaultdict
 
-from ..models import (
+from wcl_core.models import (
     ConsumableUsage,
     DPSPerformance,
     HealerPerformance,
@@ -47,7 +47,7 @@ def export_raid_analysis(analysis: RaidAnalysis, output_path: str | None = None,
         safe_title = (
             "".join(c if c.isalnum() or c in " _-" else "_" for c in analysis.metadata.title).strip().replace(" ", "_")
         )
-        from .. import paths
+        from wcl_core import paths
 
         output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}.md")
 
@@ -406,7 +406,7 @@ def export_cross_analysis(
             .strip()
             .replace(" ", "_")
         )
-        from .. import paths
+        from wcl_core import paths
 
         output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}_cross_analysis.md")
 

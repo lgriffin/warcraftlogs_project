@@ -19,7 +19,7 @@ class TestConfigManagerLoad:
         cfg = mgr.load()
         assert isinstance(cfg, AppConfig)
         assert cfg.api.client_id == "test_id"
-        assert cfg.api.client_secret == "test_secret"
+        assert cfg.api.client_secret.get_secret_value() == "test_secret"
         assert cfg.api.report_id == "test_report"
 
     def test_missing_file(self, tmp_path):
@@ -59,7 +59,7 @@ class TestEnvVarOverrides:
         mgr = ConfigManager(config_file)
         cfg = mgr.load()
         assert cfg.api.client_id == "env_id"
-        assert cfg.api.client_secret == "env_secret"
+        assert cfg.api.client_secret.get_secret_value() == "env_secret"
         assert cfg.api.report_id == "env_report"
 
     def test_env_vars_supply_missing(self, tmp_path, monkeypatch):

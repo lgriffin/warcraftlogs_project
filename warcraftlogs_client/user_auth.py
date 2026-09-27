@@ -16,9 +16,10 @@ from threading import Thread
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
-
-from . import paths
-from .common.errors import AuthenticationError
+from pydantic import SecretStr
+from wcl_core import paths
+from wcl_core.common.errors import AuthenticationError
+from wcl_core.config import as_secret
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ DEFAULT_REDIRECT_PORT = 8764
 
 def _get_base_url() -> str:
     """Derive the WCL domain from the configured API URL."""
-    from .config import load_config
+    from wcl_core.config import load_config
 
     try:
         api_url = load_config().get("wcl_api_url", "")
@@ -52,8 +53,8 @@ class UserTokenManager:
 
     def __init__(self, token_path: str | None = None):
         self._token_path = token_path or str(paths.get_user_token_path())
-        self._access_token: str | None = None
-        self._refresh_token: str | None = None
+        self._access_token: SecretStr | None = None
+        self._refresh_token: SecretStr | None = None
         self._expires_at: float = 0
         self._load()
 
@@ -61,16 +62,16 @@ class UserTokenManager:
         try:
             with open(self._token_path) as f:
                 data = json.load(f)
-            self._access_token = data.get("access_token")
-            self._refresh_token = data.get("refresh_token")
+            self._access_token = _optional_secret(data.get("access_token"))
+            self._refresh_token = _optional_secret(data.get("refresh_token"))
             self._expires_at = data.get("expires_at", 0)
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             pass
 
     def _save(self):
         data = {
-            "access_token": self._access_token,
-            "refresh_token": self._refresh_token,
+            "access_token": _reveal(self._access_token),
+            "refresh_token": _reveal(self._refresh_token),
             "expires_at": self._expires_at,
         }
         with open(self._token_path, "w") as f:
@@ -81,18 +82,19 @@ class UserTokenManager:
 
     def get_token(self) -> str:
         if self._access_token and time.time() < self._expires_at:
-            return self._access_token
+            return self._access_token.get_secret_value()
         if self._refresh_token:
             self._refresh()
-            return self._access_token
+            if self._access_token:
+                return self._access_token.get_secret_value()
         raise RuntimeError("Not authenticated — user must complete OAuth flow first")
 
     def _refresh(self):
-        from .config import load_config
+        from wcl_core.config import load_config
 
         config = load_config()
         client_id = config["client_id"]
-        client_secret = config["client_secret"]
+        client_secret = as_secret(config["client_secret"])
 
         token_url = get_token_url()
         try:
@@ -100,9 +102,9 @@ class UserTokenManager:
                 token_url,
                 data={
                     "grant_type": "refresh_token",
-                    "refresh_token": self._refresh_token,
+                    "refresh_token": _reveal(self._refresh_token),
                     "client_id": client_id,
-                    "client_secret": client_secret,
+                    "client_secret": client_secret.get_secret_value(),
                 },
                 timeout=30,
             )
@@ -117,24 +119,27 @@ class UserTokenManager:
 
         try:
             token_data = response.json()
-            self._access_token = token_data["access_token"]
+            self._access_token = SecretStr(token_data["access_token"])
         except (ValueError, KeyError) as e:
             self.revoke()
             raise AuthenticationError("Received invalid response during token refresh", details=str(e)) from e
 
-        self._refresh_token = token_data.get("refresh_token", self._refresh_token)
+        self._refresh_token = _optional_secret(token_data.get("refresh_token")) or self._refresh_token
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
         self._save()
 
-    def complete_auth(self, code: str, client_id: str, client_secret: str, redirect_port: int = DEFAULT_REDIRECT_PORT):
+    def complete_auth(
+        self,
+        code: str,
+        client_id: str,
+        client_secret: str | SecretStr,
+        redirect_port: int = DEFAULT_REDIRECT_PORT,
+    ):
+        client_secret = as_secret(client_secret)
         redirect_uri = f"http://localhost:{redirect_port}/callback"
         token_url = get_token_url()
-        logger.info("Token exchange: POST %s", token_url)
-        logger.info("  grant_type=authorization_code")
-        logger.info("  redirect_uri=%s", redirect_uri)
-        logger.info("  client_id=%s", client_id)
-        logger.info("  client_secret=%s...%s (len=%d)", client_secret[:4], client_secret[-4:], len(client_secret))
-        logger.info("  code=%s...%s", code[:8], code[-4:] if len(code) > 8 else "")
+        # Never log the client secret, the authorization code, or anything from the token response.
+        logger.info("Token exchange: POST %s (redirect_uri=%s)", token_url, redirect_uri)
 
         try:
             response = requests.post(
@@ -144,7 +149,7 @@ class UserTokenManager:
                     "code": code,
                     "redirect_uri": redirect_uri,
                     "client_id": client_id,
-                    "client_secret": client_secret,
+                    "client_secret": client_secret.get_secret_value(),
                 },
                 timeout=30,
             )
@@ -154,19 +159,17 @@ class UserTokenManager:
             raise AuthenticationError("WarcraftLogs authentication timed out — try again later") from e
 
         logger.info("Token response: %d", response.status_code)
-        logger.info("  headers: %s", dict(response.headers))
-        logger.info("  body: %s", response.text)
 
         if response.status_code != 200:
             raise AuthenticationError(f"Token exchange failed (HTTP {response.status_code})", details=response.text)
 
         try:
             token_data = response.json()
-            self._access_token = token_data["access_token"]
+            self._access_token = SecretStr(token_data["access_token"])
         except (ValueError, KeyError) as e:
             raise AuthenticationError("Received invalid response during token exchange", details=str(e)) from e
 
-        self._refresh_token = token_data.get("refresh_token")
+        self._refresh_token = _optional_secret(token_data.get("refresh_token"))
         self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
         self._save()
         logger.info("Token exchange successful, token saved.")
@@ -191,6 +194,14 @@ class UserTokenManager:
             "state": state,
         }
         return f"{get_authorize_url()}?{urlencode(params)}"
+
+
+def _optional_secret(value: str | None) -> SecretStr | None:
+    return SecretStr(value) if value else None
+
+
+def _reveal(value: SecretStr | None) -> str | None:
+    return value.get_secret_value() if value is not None else None
 
 
 class _CallbackHandler(BaseHTTPRequestHandler):

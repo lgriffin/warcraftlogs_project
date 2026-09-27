@@ -6,7 +6,7 @@ Takes data model objects and prints formatted output to stdout.
 
 from collections import defaultdict
 
-from ..models import (
+from wcl_core.models import (
     DPSPerformance,
     HealerPerformance,
     RaidAnalysis,

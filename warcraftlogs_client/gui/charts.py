@@ -17,13 +17,13 @@ from PySide6.QtCharts import (
 from PySide6.QtCore import QDateTime, QMargins, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
-
-from ..models import (
+from wcl_core.models import (
     RESOURCE_TYPES,
     CooldownSynergyAnalysis,
     PlayerCastTimeline,
     PlayerResourceAnalysis,
 )
+
 from .styles import COLORS
 
 SERIES_COLORS = [

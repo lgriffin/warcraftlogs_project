@@ -19,15 +19,16 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import requests
+from wcl_core.common.errors import WarcraftLogsError
 
-from ..common.errors import WarcraftLogsError
 from .context import AnalysisThresholds, AppContext, validate_report_code
 from .lineage import CharacterLineage, character_lineage
 
 if TYPE_CHECKING:
-    from ..client import WarcraftLogsClient
+    from wcl_core.client import WarcraftLogsClient
+    from wcl_core.models import RaidAnalysis
+
     from ..database import PerformanceDB
-    from ..models import RaidAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -359,7 +360,7 @@ class PlayerPageService:
             return self._analyze(code)
         if self.client is None:
             raise WarcraftLogsError("Warcraft Logs API access is needed to import new reports")
-        from ..analysis import analyze_raid
+        from wcl_core.analysis import analyze_raid
 
         overrides = self.db.get_role_overrides_for_report(code) or None
         return analyze_raid(self.client, code, role_overrides=overrides, **AnalysisThresholds().as_kwargs())

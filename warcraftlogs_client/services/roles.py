@@ -18,13 +18,15 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..analysis import OVERRIDE_ROLES
+from wcl_core.analysis import OVERRIDE_ROLES
+
 from .context import AppContext, ProgressCallback, validate_report_code
 from .player_page import API_ERRORS
 
 if TYPE_CHECKING:
+    from wcl_core.models import RaidAnalysis
+
     from ..database import PerformanceDB
-    from ..models import RaidAnalysis
 
 logger = logging.getLogger(__name__)
 

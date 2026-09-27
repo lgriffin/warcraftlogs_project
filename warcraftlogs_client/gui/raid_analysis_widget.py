@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core.models import EncounterSummary, RaidAnalysis
 
-from ..models import EncounterSummary, RaidAnalysis
 from .analysis_helpers import (
     NumericSortProxy,
     SingleBossTrashModel,

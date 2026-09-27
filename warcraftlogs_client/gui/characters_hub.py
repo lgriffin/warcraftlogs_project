@@ -18,9 +18,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core.models import CharacterHistory
 
 from ..database import PerformanceDB
-from ..models import CharacterHistory
 from .character_history_widget import CharacterHistoryWidget
 from .character_view import CharacterView
 from .compare_view import CompareView

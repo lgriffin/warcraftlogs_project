@@ -12,6 +12,10 @@ import os
 import sys
 from typing import Any
 
+SPELL_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "packages", "wcl-core", "src", "wcl_core", "data", "spell_data"
+)
+
 
 def load_json_file(filepath: str) -> dict[str, Any] | None:
     """Load and parse a JSON file."""
@@ -45,13 +49,13 @@ def validate_configurations() -> bool:
     print("🔍 Validating spell configurations...")
 
     # Check if spell_data directory exists
-    if not os.path.exists("spell_data"):
+    if not os.path.exists(SPELL_DATA_DIR):
         print("❌ spell_data directory not found!")
         print("💡 Run this script from the project root directory.")
         return False
 
-    aliases_file = "spell_data/spell_aliases.json"
-    names_file = "spell_data/spell_names.json"
+    aliases_file = os.path.join(SPELL_DATA_DIR, "spell_aliases.json")
+    names_file = os.path.join(SPELL_DATA_DIR, "spell_names.json")
 
     # Load files
     aliases_data = load_json_file(aliases_file)
@@ -133,7 +137,7 @@ def validate_configurations() -> bool:
 
 def add_spell_name(spell_id: int, spell_name: str, category: str) -> bool:
     """Add a new spell name to the configuration."""
-    names_file = "spell_data/spell_names.json"
+    names_file = os.path.join(SPELL_DATA_DIR, "spell_names.json")
     names_data = load_json_file(names_file)
 
     if names_data is None:
@@ -154,7 +158,7 @@ def add_spell_name(spell_id: int, spell_name: str, category: str) -> bool:
 
 def add_spell_alias(variant_ids: list, canonical_id: int, group_name: str) -> bool:
     """Add new spell aliases to the configuration."""
-    aliases_file = "spell_data/spell_aliases.json"
+    aliases_file = os.path.join(SPELL_DATA_DIR, "spell_aliases.json")
     aliases_data = load_json_file(aliases_file)
 
     if aliases_data is None:
@@ -176,7 +180,7 @@ def add_spell_alias(variant_ids: list, canonical_id: int, group_name: str) -> bo
 
 def list_categories() -> None:
     """List all available categories in spell_names.json."""
-    names_file = "spell_data/spell_names.json"
+    names_file = os.path.join(SPELL_DATA_DIR, "spell_names.json")
     names_data = load_json_file(names_file)
 
     if names_data is None:
@@ -191,7 +195,7 @@ def list_categories() -> None:
 
 def list_groups() -> None:
     """List all available groups in spell_aliases.json."""
-    aliases_file = "spell_data/spell_aliases.json"
+    aliases_file = os.path.join(SPELL_DATA_DIR, "spell_aliases.json")
     aliases_data = load_json_file(aliases_file)
 
     if aliases_data is None:
@@ -206,7 +210,7 @@ def list_groups() -> None:
 
 def search_spells(query: str) -> None:
     """Search for spells by name or ID."""
-    names_file = "spell_data/spell_names.json"
+    names_file = os.path.join(SPELL_DATA_DIR, "spell_names.json")
     names_data = load_json_file(names_file)
 
     if names_data is None:

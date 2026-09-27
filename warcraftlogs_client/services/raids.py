@@ -8,8 +8,9 @@ Every frontend (CLI, desktop, web API, bot) calls these instead of wiring
 from dataclasses import dataclass
 from typing import Any
 
-from ..analysis import analyze_raid
-from ..models import RaidAnalysis
+from wcl_core.analysis import analyze_raid
+from wcl_core.models import RaidAnalysis
+
 from .context import AppContext, ProgressCallback, validate_report_code
 
 
