@@ -1,0 +1,23 @@
+[project]
+name = "wcl-store"
+version = "4.3.0"
+description = "Storage for WCL Analyzer raid data: one RaidRepository contract, SQLite and Postgres backends"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "wcl-core",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "SQLAlchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "alembic>=1.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wcl_store"]

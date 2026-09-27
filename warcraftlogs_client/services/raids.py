@@ -48,7 +48,7 @@ class RaidService:
                 raise ReferenceAuthRequired("Sign in to Warcraft Logs to analyse reference reports")
         else:
             client = self.ctx.wcl_client
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             overrides = db.get_role_overrides_for_report(report_id)
         return analyze_raid(
             client,
@@ -59,7 +59,7 @@ class RaidService:
         )
 
     def save(self, analysis: RaidAnalysis, source: str = "guild") -> None:
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             db.import_raid(analysis, source=source)
 
     def analyze_and_save(
@@ -74,15 +74,15 @@ class RaidService:
         return analysis
 
     def list_raids(self, limit: int = 50) -> list[dict[str, Any]]:
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             return db.get_raid_list(limit=limit)
 
     def get_raid(self, report_id: str) -> RaidAnalysis | None:
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             return db.get_raid_analysis(report_id)
 
     def delete_raid(self, report_id: str) -> None:
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             db.delete_raid(report_id)
 
     def guild_info(self, guild_id: int) -> dict[str, Any]:
@@ -93,7 +93,7 @@ class RaidService:
         return self.ctx.wcl_client.get_guild_reports(guild_id)
 
     def imported_codes(self) -> set[str]:
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             return set(db.get_imported_report_codes())
 
     def import_missing(

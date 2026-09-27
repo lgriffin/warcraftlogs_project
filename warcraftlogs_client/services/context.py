@@ -5,20 +5,25 @@ The CLI, the desktop app and the web API all need the same things before they
 can do any work: loaded config, analysis thresholds, an authenticated WCL
 client and a database handle. ``AppContext`` builds those once so no frontend
 wires ``TokenManager`` / ``WarcraftLogsClient`` / ``PerformanceDB`` itself.
+
+Services open storage through ``repository()``, typed as the ``wcl_store.RaidRepository`` protocol. It is the
+desktop SQLite database unless the host passes ``storage`` (the Toads Hub worker passes a Postgres one).
 """
 
 import re
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 from wcl_core.client import WarcraftLogsClient
 from wcl_core.common.errors import ConfigurationError
-
-from ..database import PerformanceDB
+from wcl_store import RaidRepository
+from wcl_store.sqlite import PerformanceDB
 
 ProgressCallback = Callable[[str], None]
+# Opens a repository for one ``with`` block, e.g. ``lambda: PostgresRaidRepository(engine)``.
+StorageFactory = Callable[[], AbstractContextManager[RaidRepository]]
 
 _REPORT_CODE_RE = re.compile(r"^[A-Za-z0-9]{16}$")
 
@@ -71,6 +76,7 @@ class AppContext:
     config: dict[str, Any]
     db_path: str | None = None
     _client: WarcraftLogsClient | None = field(default=None, repr=False)
+    storage: StorageFactory | None = field(default=None, repr=False)
 
     @classmethod
     def from_config_file(cls, config_file: str | None = None, db_path: str | None = None) -> "AppContext":
@@ -106,6 +112,19 @@ class AppContext:
 
     @contextmanager
     def db(self) -> Iterator[PerformanceDB]:
-        """Open the performance database for the duration of a ``with`` block."""
+        """Open the desktop SQLite database for the duration of a ``with`` block.
+
+        For frontends that still need queries outside ``RaidRepository``; services use ``repository()``.
+        """
         with PerformanceDB(self.db_path) as db:
             yield db
+
+    @contextmanager
+    def repository(self) -> Iterator[RaidRepository]:
+        """Open the configured storage (``storage``, else the SQLite database) for a ``with`` block."""
+        if self.storage is None:
+            with self.db() as db:
+                yield db
+        else:
+            with self.storage() as repo:
+                yield repo

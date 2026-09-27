@@ -3,7 +3,7 @@
 Layers, innermost first. Each layer may import only itself and the layers inside it:
 
     core        WCL API client, auth, config, analysis engine, domain models (moving to ``wcl_core``)
-    persistence PerformanceDB / SQL (``database``)
+    persistence ``wcl_store``: the RaidRepository protocol, PerformanceDB (SQLite) and Postgres backends
     services    application layer every frontend shares (``services/``, future ``wcl-app``)
     presenters  text/Markdown renderers of domain models (``renderers/``)
     frontends   CLI, PySide6 desktop, updater
@@ -28,7 +28,10 @@ PACKAGES = {
     "warcraftlogs_client": ROOT / "warcraftlogs_client",
     # After the wcl-core split the headless modules live here; old names stay as aliases.
     "wcl_core": ROOT / "packages" / "wcl-core" / "src" / "wcl_core",
+    # The persistence layer. Its modules keep the "wcl_store." prefix so they never collide with core names.
+    "wcl_store": ROOT / "packages" / "wcl-store" / "src" / "wcl_store",
 }
+PREFIXED = {"wcl_store"}
 
 LAYER_ORDER = ["core", "persistence", "services", "presenters", "frontends"]
 
@@ -44,8 +47,6 @@ FORBIDDEN_EXTERNAL = {
 
 # (importing module, imported module or external package) pairs that predate this check.
 KNOWN_VIOLATIONS = {
-    # services should see storage errors as domain errors, not sqlite3.Error
-    ("services.roles", "sqlite3"),
     # CLI
     ("cli", "consumes_analysis"),
     ("cli", "database"),
@@ -91,7 +92,7 @@ def layer_of(name: str) -> str | None:
     top = name.split(".")[0]
     if top in ("", "__init__"):
         return None
-    if top == "database":
+    if top in ("database", "wcl_store"):
         return "persistence"
     if top == "services":
         return "services"
@@ -103,16 +104,16 @@ def layer_of(name: str) -> str | None:
     return "core"
 
 
-def _module_name(pkg_dir: Path, path: Path) -> str:
+def _module_name(pkg_dir: Path, path: Path, prefix: str = "") -> str:
     parts = list(path.relative_to(pkg_dir).with_suffix("").parts)
     if parts[-1] == "__init__":
         parts = parts[:-1]
-    return ".".join(parts)
+    return ".".join([prefix, *parts] if prefix else parts)
 
 
-def _imports(pkg_dir: Path, path: Path) -> set[tuple[str, bool]]:
+def _imports(pkg_dir: Path, path: Path, prefix: str = "") -> set[tuple[str, bool]]:
     """(target, internal) pairs: internal targets are package-relative, external ones are top-level names."""
-    mod = _module_name(pkg_dir, path)
+    mod = _module_name(pkg_dir, path, prefix)
     # Package the file lives in, for resolving relative imports.
     here = mod.split(".") if path.name == "__init__.py" else mod.split(".")[:-1]
     here = [p for p in here if p]
@@ -139,7 +140,9 @@ def _imports(pkg_dir: Path, path: Path) -> set[tuple[str, bool]]:
         if absolute:
             for t in targets:
                 top, _, rest = t.partition(".")
-                if top in PACKAGES:
+                if top in PREFIXED:
+                    found.add((t, True))
+                elif top in PACKAGES:
                     if rest:
                         found.add((rest, True))
                 else:
@@ -149,12 +152,13 @@ def _imports(pkg_dir: Path, path: Path) -> set[tuple[str, bool]]:
 
 def collect_edges() -> dict[str, set[tuple[str, bool]]]:
     edges: dict[str, set[tuple[str, bool]]] = {}
-    for pkg_dir in PACKAGES.values():
+    for name, pkg_dir in PACKAGES.items():
         if not pkg_dir.is_dir():
             continue
+        prefix = name if name in PREFIXED else ""
         for path in sorted(pkg_dir.rglob("*.py")):
-            mod = _module_name(pkg_dir, path) or "__init__"
-            edges.setdefault(mod, set()).update(_imports(pkg_dir, path))
+            mod = _module_name(pkg_dir, path, prefix) or "__init__"
+            edges.setdefault(mod, set()).update(_imports(pkg_dir, path, prefix))
     return edges
 
 
@@ -203,6 +207,8 @@ def test_known_violations_are_not_stale():
         ("from warcraftlogs_client import paths\n", ("paths", True)),
         ("from wcl_core.client import WarcraftLogsClient\n", ("client", True)),
         ("import sqlite3\n", ("sqlite3", False)),
+        ("from wcl_store import StorageError\n", ("wcl_store.StorageError", True)),
+        ("from wcl_store.sqlite import PerformanceDB\n", ("wcl_store.sqlite", True)),
     ],
 )
 def test_import_resolution(tmp_path, source, expected):
@@ -235,4 +241,30 @@ def test_detector_flags_an_inner_layer_importing_an_outer_one(monkeypatch):
         ("analysis", "renderers"),
         ("analysis", "PySide6"),
         ("services.raids", "gui"),
+    }
+
+
+def test_wcl_store_modules_resolve_inside_their_package(tmp_path):
+    pkg_dir = tmp_path / "wcl_store"
+    (pkg_dir / "postgres").mkdir(parents=True)
+    f = pkg_dir / "postgres" / "repository.py"
+    f.write_text("from ..errors import StorageError\nfrom . import schema\n", encoding="utf-8")
+    assert _imports(pkg_dir, f, "wcl_store") == {("wcl_store.errors", True), ("wcl_store.postgres.schema", True)}
+    assert layer_of("wcl_store.postgres.schema") == "persistence"
+
+
+def test_detector_flags_storage_reaching_outward_or_a_frontend_skipping_services(monkeypatch):
+    monkeypatch.setattr(
+        "tests.test_architecture.collect_edges",
+        lambda: {
+            "wcl_store.sqlite": {("services.raids", True), ("models", True), ("PySide6", False)},
+            "services.roles": {("wcl_store", True), ("sqlite3", False)},
+            "gui.new_view": {("wcl_store.sqlite", True)},
+        },
+    )
+    assert find_violations() == {
+        ("wcl_store.sqlite", "services"),
+        ("wcl_store.sqlite", "PySide6"),
+        ("services.roles", "sqlite3"),
+        ("gui.new_view", "wcl_store"),
     }

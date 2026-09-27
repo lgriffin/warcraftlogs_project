@@ -16,7 +16,7 @@ flowchart TD
     ROLES["Role Detection<br/>(dynamic_role_parser.py)"]
     SPELLS["Spell Mapping<br/>(spell_manager.py)"]
     MODELS["Data Models<br/>(models.py)"]
-    DB["SQLite Persistence<br/>(database.py)"]
+    DB["SQLite Persistence<br/>(wcl_store.sqlite)"]
     RENDER["Renderers<br/>(console.py, markdown.py)"]
     GUI["GUI Display<br/>(gui/)"]
 
@@ -369,7 +369,7 @@ The CLI provides subcommands: `unified`, `healer`, `tank`, `melee`, `ranged`, `c
 |--------|---------|
 | `client.py` | GraphQL API client with rate limiting (250ms throttle, exponential backoff on 429/5xx) |
 | `analysis.py` | Raid analysis orchestration: role detection, performance calculation, consumable tracking |
-| `database.py` | SQLite persistence with schema migrations, trend queries, raid group management |
+| `database.py` | Alias for `wcl_store.sqlite` (`packages/wcl-store`): SQLite persistence with schema migrations, trend queries, raid group management |
 | `models.py` | Dataclasses for all domain objects (`RaidAnalysis`, `HealerPerformance`, `TankPerformance`, etc.) |
 | `config.py` | Configuration loading from `config.json` with env var overrides |
 | `auth.py` | OAuth2 client credentials token management with auto-renewal |
@@ -593,6 +593,9 @@ Edit `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` to map 
 
 ### Adding a new database query
 
-1. Add the query method to `PerformanceDB` in `database.py`
+1. Add the query method to `PerformanceDB` in `packages/wcl-store/src/wcl_store/sqlite.py`
 2. Write tests in `tests/test_database.py` or `tests/test_database_extended.py`
 3. If it needs a schema change, increment `SCHEMA_VERSION` and add migration logic to `_migrate()`
+4. If a service calls it, it belongs in the `RaidRepository` protocol: add it to `wcl_store/repository.py`, implement it in
+   `wcl_store/postgres/repository.py` too (with a new numbered Alembic revision for any schema change), and cover it in
+   `tests/test_store_contract.py`

@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..database import PerformanceDB
+    from wcl_store import RaidRepository
 
 
 @dataclass
@@ -70,7 +70,7 @@ _ROLE_METRICS: dict[str, list[tuple[str, str]]] = {
 
 
 def character_lineage(
-    db: PerformanceDB, character_name: str, sources: tuple[str, ...] = ("guild",)
+    db: RaidRepository, character_name: str, sources: tuple[str, ...] = ("guild",)
 ) -> CharacterLineage | None:
     raids = db.get_character_raid_roles(character_name, sources)
     if not raids:
