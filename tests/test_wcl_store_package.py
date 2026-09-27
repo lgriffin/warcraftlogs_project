@@ -153,18 +153,21 @@ def test_migrations_match_the_schema_and_downgrade_cleanly(pg_engine):
     from alembic.migration import MigrationContext
     from sqlalchemy import inspect
     from wcl_store.postgres import alembic_config
-    from wcl_store.postgres.schema import metadata
+    from wcl_store.postgres.schema import VERSION_TABLE, metadata
 
     def diff() -> list:
         with pg_engine.connect() as conn:
-            ctx = MigrationContext.configure(conn, opts={"compare_server_default": True})
+            ctx = MigrationContext.configure(
+                conn, opts={"compare_server_default": True, "version_table": VERSION_TABLE}
+            )
             return compare_metadata(ctx, metadata)
 
     assert diff() == []
     with pg_engine.begin() as conn:
         command.downgrade(alembic_config(conn), "base")
     with pg_engine.connect() as conn:
-        assert set(inspect(conn).get_table_names()) == {"alembic_version"}
+        # Its own revision table, so it can share a database with another app's Alembic migrations.
+        assert set(inspect(conn).get_table_names()) == {VERSION_TABLE}
     with pg_engine.begin() as conn:
         command.upgrade(alembic_config(conn), "head")
     assert diff() == []
