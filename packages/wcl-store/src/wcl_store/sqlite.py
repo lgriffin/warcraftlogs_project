@@ -485,13 +485,12 @@ class PerformanceDB:
             self._conn.close()
             self._conn = None
 
-    def __enter__(self):
+    def __enter__(self) -> "PerformanceDB":
         self.initialize()
         return self
 
-    def __exit__(self, _exc_type, _exc_val, _exc_tb):
+    def __exit__(self, _exc_type: object, _exc_val: object, _exc_tb: object) -> None:
         self.close()
-        return False
 
     # ── Character operations ──
 
@@ -2737,7 +2736,7 @@ class PerformanceDB:
         if not all_chars:
             return {}
 
-        def percentile(value, all_values):
+        def percentile(value: float | None, all_values: list[float] | list[int]) -> int:
             if not all_values or value is None:
                 return 0
             sorted_vals = sorted(v for v in all_values if v is not None)

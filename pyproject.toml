@@ -78,6 +78,14 @@ ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 exclude = ["warcraftlogs_client/gui/"]
 
+# Strict typing, one package at a time (wcl_core next): every function in these packages is annotated and checked.
+[[tool.mypy.overrides]]
+module = ["wcl_store.*", "wcl_app.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B101", "B105", "B110", "B404", "B603", "B607", "B608"]

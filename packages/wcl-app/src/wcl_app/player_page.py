@@ -26,7 +26,7 @@ from wcl_app.lineage import CharacterLineage, character_lineage
 
 if TYPE_CHECKING:
     from wcl_core.client import WarcraftLogsClient
-    from wcl_core.models import RaidAnalysis
+    from wcl_core.models import CharacterHistory, RaidAnalysis
     from wcl_store import RaidRepository
 
 logger = logging.getLogger(__name__)
@@ -394,7 +394,7 @@ class PlayerPageService:
         )
 
 
-def _history_summary(history) -> dict[str, Any]:
+def _history_summary(history: CharacterHistory) -> dict[str, Any]:
     return {
         "player_class": history.player_class,
         "total_raids": history.total_raids,
