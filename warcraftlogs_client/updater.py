@@ -22,6 +22,7 @@ import subprocess
 import time
 import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import requests
 
@@ -71,7 +72,7 @@ def check_for_update(force: bool = False) -> UpdateInfo | None:
         config_path = paths.get_config_path()
         if config_path.exists():
             try:
-                with open(config_path) as f:
+                with config_path.open() as f:
                     config = json.load(f)
                 last_check = config.get("last_update_check", 0)
                 if time.time() - last_check < CHECK_COOLDOWN_SECONDS:
@@ -176,7 +177,7 @@ def fetch_expected_sha256(info: UpdateInfo) -> str:
 
 def sha256_file(path: str) -> str:
     digest = hashlib.sha256()
-    with open(path, "rb") as f:
+    with Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
@@ -203,13 +204,13 @@ def _save_check_timestamp():
     config = {}
     if config_path.exists():
         try:
-            with open(config_path) as f:
+            with config_path.open() as f:
                 config = json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
     config["last_update_check"] = time.time()
     try:
-        with open(config_path, "w") as f:
+        with config_path.open("w") as f:
             json.dump(config, f, indent=4)
     except OSError:
         pass
@@ -243,7 +244,7 @@ class UpdateDownloader(QThread):
             total = int(resp.headers.get("content-length", self._info.asset_size))
             done = 0
 
-            with open(zip_path, "wb") as f:
+            with zip_path.open("wb") as f:
                 for chunk in resp.iter_content(chunk_size=8192):
                     if self._cancelled:
                         f.close()
@@ -339,7 +340,7 @@ del "%~f0"
 """
 
     try:
-        with open(script_path, "w") as f:
+        with script_path.open("w") as f:
             f.write(script)
     except OSError as e:
         shutil.rmtree(staged_dir, ignore_errors=True)

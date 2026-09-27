@@ -49,7 +49,7 @@ python scripts/dev.py types imports -k   # any tasks, in order; -k keeps going a
 pre-commit install              # run the same pinned tools on every commit
 ```
 
-Tasks: `format lint spelling imports deadcode types quality security test` (together, `check`), plus `audit`, `fuzz`,
+Tasks: `format lint spelling imports deadcode types security test` (together, `check`), plus `audit`, `fuzz`,
 `gui`.
 
 Checker versions are pinned in the `dev` extra; bump them through Dependabot, not by hand. The underlying commands:
@@ -91,6 +91,9 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 
 - Python 3.10+, line length 120
 - Ruff for linting and formatting (config in pyproject.toml)
+- Ruff also enforces security (`S`), blind excepts (`BLE`), pathlib (`PTH`) and a complexity ceiling of 15 (`C901`).
+  Split a function rather than adding `# noqa: C901`; the existing ones are a list to shrink. A deliberate catch-all
+  gets `# noqa: BLE001 - <why>`
 - All changes go through PRs — never push directly to master
 - Config in `pyproject.toml`, not separate tool config files
 - `config.json` holds API credentials — never commit real values (template in `config.example.json`)

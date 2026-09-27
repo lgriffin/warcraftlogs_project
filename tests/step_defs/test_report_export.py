@@ -1,5 +1,7 @@
 """Step definitions for markdown report export feature."""
 
+from pathlib import Path
+
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from warcraftlogs_client.renderers.markdown import export_raid_analysis, render_raid_analysis
@@ -63,13 +65,12 @@ def check_contains(render_result, text):
 
 @then("the file should exist")
 def check_file_exists(render_result):
-    import os
 
-    assert os.path.exists(render_result["path"])
+    assert Path(render_result["path"]).exists()
 
 
 @then(parsers.parse('the file should contain "{text}"'))
 def check_file_contains(render_result, text):
-    with open(render_result["path"]) as f:
+    with Path(render_result["path"]).open() as f:
         content = f.read()
     assert text in content

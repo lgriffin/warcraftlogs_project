@@ -8,9 +8,9 @@ by editing JSON configuration files.
 
 import json
 import logging
-import os
 from collections import defaultdict
 from functools import lru_cache
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -43,15 +43,15 @@ class SpellManager:
         if self._aliases is not None:
             return self._aliases
 
-        aliases_file = os.path.join(self.spell_data_dir, "spell_aliases.json")
+        aliases_file = Path(self.spell_data_dir) / "spell_aliases.json"
         self._aliases = {}
 
-        if not os.path.exists(aliases_file):
+        if not aliases_file.exists():
             logger.warning("Spell aliases file not found: %s", aliases_file)
             return self._aliases
 
         try:
-            with open(aliases_file, encoding="utf-8") as f:
+            with aliases_file.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             # Flatten all alias groups into a single dictionary
@@ -79,15 +79,15 @@ class SpellManager:
         if self._names is not None:
             return self._names
 
-        names_file = os.path.join(self.spell_data_dir, "spell_names.json")
+        names_file = Path(self.spell_data_dir) / "spell_names.json"
         self._names = {}
 
-        if not os.path.exists(names_file):
+        if not names_file.exists():
             logger.warning("Spell names file not found: %s", names_file)
             return self._names
 
         try:
-            with open(names_file, encoding="utf-8") as f:
+            with names_file.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             # Flatten all name groups into a single dictionary

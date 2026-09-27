@@ -192,7 +192,7 @@ def run_consumes_analysis(args) -> int:
         return 1
 
 
-def run_history_query(args) -> int:
+def run_history_query(args) -> int:  # noqa: C901
     from .database import PerformanceDB
 
     with PerformanceDB() as db:
@@ -378,7 +378,7 @@ def _run_player_lineage(db, args) -> int:
     return 0
 
 
-def run_player_command(args) -> int:
+def run_player_command(args) -> int:  # noqa: C901
     import json
 
     from .services import AppContext, PlayerPageService

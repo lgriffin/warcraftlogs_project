@@ -1,8 +1,8 @@
 """Tests for OAuth2 Authorization Code flow (user_auth module)."""
 
 import json
-import os
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from urllib.request import urlopen
 
@@ -57,11 +57,11 @@ class TestUserTokenManager:
         tm._refresh_token = SecretStr("test")
         tm._expires_at = time.time() + 3600
         tm._save()
-        assert os.path.exists(path)
+        assert Path(path).exists()
 
         tm.revoke()
         assert not tm.is_authenticated()
-        assert not os.path.exists(path)
+        assert not Path(path).exists()
 
     def test_is_authenticated_with_refresh_token_only(self, tmp_path):
         path = str(tmp_path / "token.json")
@@ -94,7 +94,7 @@ class TestUserTokenManager:
         assert tm._refresh_token.get_secret_value() == "new_refresh"
         assert tm.is_authenticated()
 
-        with open(path) as f:
+        with Path(path).open() as f:
             saved = json.load(f)
         assert saved["access_token"] == "new_access"
 
@@ -200,7 +200,7 @@ class TestUserTokenManager:
 
     def test_corrupted_token_file(self, tmp_path):
         path = str(tmp_path / "token.json")
-        with open(path, "w") as f:
+        with Path(path).open("w") as f:
             f.write("not valid json{{{")
 
         tm = UserTokenManager(token_path=path)

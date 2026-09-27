@@ -1,6 +1,7 @@
 """Security-focused tests: token leakage, SQL injection, and path traversal."""
 
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -56,7 +57,7 @@ class TestTokenLeakage:
         output_path = str(tmp_path / "test_report.md")
         export_raid_analysis(sample_raid_analysis, output_path=output_path)
 
-        content = open(output_path, encoding="utf-8").read()
+        content = Path(output_path).read_text(encoding="utf-8")
         for secret in secrets:
             assert secret not in content
 
@@ -155,7 +156,7 @@ class TestPathTraversal:
     def test_path_traversal_in_report_id(self, tmp_path, monkeypatch):
         """Report IDs with path traversal should not escape cache directory."""
         cache_dir = str(tmp_path / "cache")
-        os.makedirs(cache_dir, exist_ok=True)
+        Path(cache_dir).mkdir(parents=True, exist_ok=True)
         monkeypatch.setattr("warcraftlogs_client.cache.CACHE_DIR", cache_dir)
 
         from warcraftlogs_client.cache import _cache_file, _safe_filename

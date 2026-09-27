@@ -47,7 +47,7 @@ class HealerTableModel(QAbstractTableModel):
             return self._columns[section]
         return None
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):  # noqa: C901
         if not index.isValid() or index.row() >= len(self._healers):
             return None
 
@@ -130,7 +130,7 @@ class TankTableModel(QAbstractTableModel):
             return self._columns[section]
         return None
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):  # noqa: C901
         if not index.isValid() or index.row() >= len(self._tanks):
             return None
 
@@ -191,7 +191,7 @@ class DPSTableModel(QAbstractTableModel):
             return self._columns[section]
         return None
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):  # noqa: C901
         if not index.isValid() or index.row() >= len(self._dps):
             return None
 
@@ -375,7 +375,7 @@ class GearTableModel(QAbstractTableModel):
             return self.COLUMNS[section]
         return None
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):  # noqa: C901
         if not index.isValid() or index.row() >= len(self._items):
             return None
 
@@ -553,7 +553,7 @@ class CancelledCastTableModel(QAbstractTableModel):
             return self.COLUMNS[section] if section < len(self.COLUMNS) else None
         return None
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):  # noqa: C901
         if not index.isValid() or index.row() >= len(self._rows):
             return None
         r = self._rows[index.row()]

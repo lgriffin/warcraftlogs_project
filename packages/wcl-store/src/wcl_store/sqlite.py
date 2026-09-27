@@ -14,10 +14,10 @@ import contextlib
 import functools
 import inspect
 import json
-import os
 import sqlite3
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any, TypeVar
 
 from wcl_core.cache import _cache_file, clear_response_cache
@@ -305,7 +305,7 @@ class PerformanceDB:
         self._migrate(conn)
         conn.commit()
 
-    def _migrate(self, conn: sqlite3.Connection) -> None:
+    def _migrate(self, conn: sqlite3.Connection) -> None:  # noqa: C901
         cols = {row[1] for row in conn.execute("PRAGMA table_info(consumable_usage)").fetchall()}
         if "timestamps" not in cols:
             conn.execute("ALTER TABLE consumable_usage ADD COLUMN timestamps TEXT DEFAULT NULL")
@@ -1613,10 +1613,8 @@ class PerformanceDB:
         self._delete_raid_rows(conn, raid["id"])
         conn.commit()
 
-        cache_file = _cache_file(report_id)
-        if os.path.exists(cache_file):
-            with contextlib.suppress(OSError):
-                os.remove(cache_file)
+        with contextlib.suppress(OSError):
+            Path(_cache_file(report_id)).unlink(missing_ok=True)
         clear_response_cache()
 
     def _delete_raid_rows(self, conn: sqlite3.Connection, raid_id: int, keep_raid_row: bool = False) -> None:
@@ -1661,10 +1659,8 @@ class PerformanceDB:
 
     def clear_raid_cache(self, report_id: str) -> None:
         """Clear cached API data for a specific report."""
-        cache_file = _cache_file(report_id)
-        if os.path.exists(cache_file):
-            with contextlib.suppress(OSError):
-                os.remove(cache_file)
+        with contextlib.suppress(OSError):
+            Path(_cache_file(report_id)).unlink(missing_ok=True)
         clear_response_cache()
 
     def is_raid_imported(self, report_id: str) -> bool:

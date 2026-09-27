@@ -225,7 +225,7 @@ class RaidDiffView(QWidget):
         else:
             layout.addWidget(lbl)
 
-    def _display_comparison(self, raid_a, raid_b, stats_a, stats_b):
+    def _display_comparison(self, raid_a, raid_b, stats_a, stats_b):  # noqa: C901
         self._clear_content()
         layout = self._content_layout
 

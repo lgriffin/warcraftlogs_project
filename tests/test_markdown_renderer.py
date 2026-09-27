@@ -1,6 +1,6 @@
 """Tests for markdown renderer — output correctness and file export."""
 
-import os
+from pathlib import Path
 
 import pytest
 
@@ -213,20 +213,20 @@ class TestExportFile:
         out = str(tmp_path / "report.md")
         result = export_raid_analysis(sample_raid_analysis, output_path=out)
         assert result == out
-        assert os.path.exists(out)
-        content = open(out, encoding="utf-8").read()
+        assert Path(out).exists()
+        content = Path(out).read_text(encoding="utf-8")
         assert "# Karazhan Clear" in content
 
     def test_auto_path(self, sample_raid_analysis, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         result = export_raid_analysis(sample_raid_analysis)
         assert "Karazhan_Clear" in result
-        assert os.path.exists(result)
+        assert Path(result).exists()
 
     def test_creates_directory(self, sample_raid_analysis, tmp_path):
         out = str(tmp_path / "subdir" / "report.md")
         export_raid_analysis(sample_raid_analysis, output_path=out)
-        assert os.path.exists(out)
+        assert Path(out).exists()
 
 
 class TestEmptyAnalysis:
@@ -264,6 +264,6 @@ class TestRoleFilter:
 
     def test_export_passes_role(self, sample_raid_analysis, tmp_path):
         path = export_raid_analysis(sample_raid_analysis, str(tmp_path / "tank.md"), role="tank")
-        with open(path, encoding="utf-8") as f:
+        with Path(path).open(encoding="utf-8") as f:
             content = f.read()
         assert "Sinister Strike" not in content

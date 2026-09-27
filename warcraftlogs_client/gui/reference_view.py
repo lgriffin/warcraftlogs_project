@@ -1230,7 +1230,7 @@ class _EngineeringComparisonModel(QAbstractTableModel):
             return self.HEADERS[section]
         return None
 
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):  # noqa: C901
         if not index.isValid():
             return None
         row = self._rows[index.row()]
@@ -1478,7 +1478,7 @@ class _HeadToHeadPanel(QWidget):
         self._content_layout.setContentsMargins(8, 8, 8, 8)
         self._content_layout.setSpacing(16)
 
-    def _display_comparison(self, guild, ref, guild_stats, ref_stats):
+    def _display_comparison(self, guild, ref, guild_stats, ref_stats):  # noqa: C901
         self._clear_content()
         layout = self._content_layout
 
