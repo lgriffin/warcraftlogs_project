@@ -82,7 +82,15 @@ jobs:
         run: |
           python -m venv core-only
           core-only/bin/pip install "$GITHUB_WORKSPACE"/dist/*.whl
-          core-only/bin/python -c "import importlib, pkgutil, sys, wcl_core; [importlib.import_module(m.name) for m in pkgutil.walk_packages(wcl_core.__path__, 'wcl_core.')]; from wcl_core import paths; assert 'warcraftlogs_client' not in sys.modules; assert paths.get_consumes_config_path().is_file()"
+          core-only/bin/python - <<'PY'
+          import importlib, pkgutil, sys
+          import wcl_core
+          for module in pkgutil.walk_packages(wcl_core.__path__, "wcl_core."):
+              importlib.import_module(module.name)
+          from wcl_core import paths
+          assert "warcraftlogs_client" not in sys.modules
+          assert paths.get_consumes_config_path().is_file()
+          PY
 
   gui-test:
     runs-on: ubuntu-latest
