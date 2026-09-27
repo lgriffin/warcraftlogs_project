@@ -1,7 +1,7 @@
 [project]
 name = "wcl-app"
 version = "4.3.0"
-description = "Application services for WCL Analyzer: raid, player page and role-override use cases shared by every frontend"
+description = "WCL Analyzer application services: raid, player page and role-override use cases"
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [

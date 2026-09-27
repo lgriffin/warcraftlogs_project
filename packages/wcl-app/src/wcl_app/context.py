@@ -80,6 +80,10 @@ class AppContext:
     db_path: str | None = None
     _client: WarcraftLogsClient | None = field(default=None, repr=False)
     storage: StorageFactory | None = field(default=None, repr=False)
+    # Headless hosts: returns the user-scoped client for reference reports, or None. Unset means no reference
+    # analysis; the desktop's signed-in token file is never read.
+    _user_client: Callable[[], WarcraftLogsClient | None] | None = field(default=None, repr=False)
+    _headless: bool = field(default=False, repr=False)
 
     @classmethod
     def from_config_file(cls, config_file: str | None = None, db_path: str | None = None) -> "AppContext":
@@ -93,13 +97,15 @@ class AppContext:
         client: WarcraftLogsClient,
         storage: StorageFactory,
         config: dict[str, Any] | None = None,
+        user_client: Callable[[], WarcraftLogsClient | None] | None = None,
     ) -> "AppContext":
         """Context for a host with its own WCL client and storage, such as the Toads Hub worker.
 
         Reads no config file and never opens the SQLite database. ``config`` only supplies optional
-        settings such as ``role_thresholds``.
+        settings such as ``role_thresholds``. ``user_client`` supplies the user-scoped client for reference
+        reports; without it reference analysis raises ``ReferenceAuthRequired``.
         """
-        return cls(config=dict(config or {}), _client=client, storage=storage)
+        return cls(config=dict(config or {}), _client=client, storage=storage, _user_client=user_client, _headless=True)
 
     @property
     def thresholds(self) -> AnalysisThresholds:
@@ -120,6 +126,8 @@ class AppContext:
 
     def user_client(self) -> WarcraftLogsClient | None:
         """User-scoped WCL client for reference reports, or None if the user has not signed in."""
+        if self._headless:
+            return self._user_client() if self._user_client is not None else None
         from wcl_core.user_auth import UserTokenManager, _get_base_url
 
         user_tm = UserTokenManager()

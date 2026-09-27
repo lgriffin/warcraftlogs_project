@@ -17,10 +17,20 @@ Install from another project, pinned to a commit (all three packages from the sa
 [project]
 dependencies = ["wcl-app", "wcl-store[postgres]"]
 
-[tool.uv.sources]
-wcl-core = { git = "https://github.com/lgriffin/warcraftlogs_project", subdirectory = "packages/wcl-core", rev = "<sha>" }
-wcl-store = { git = "https://github.com/lgriffin/warcraftlogs_project", subdirectory = "packages/wcl-store", rev = "<sha>" }
-wcl-app = { git = "https://github.com/lgriffin/warcraftlogs_project", subdirectory = "packages/wcl-app", rev = "<sha>" }
+[tool.uv.sources.wcl-core]
+git = "https://github.com/lgriffin/warcraftlogs_project"
+subdirectory = "packages/wcl-core"
+rev = "<sha>"
+
+[tool.uv.sources.wcl-store]
+git = "https://github.com/lgriffin/warcraftlogs_project"
+subdirectory = "packages/wcl-store"
+rev = "<sha>"
+
+[tool.uv.sources.wcl-app]
+git = "https://github.com/lgriffin/warcraftlogs_project"
+subdirectory = "packages/wcl-app"
+rev = "<sha>"
 ```
 
 A headless host passes its own WCL client and storage, so nothing reads `config.json` or opens SQLite:

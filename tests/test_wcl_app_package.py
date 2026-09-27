@@ -126,6 +126,23 @@ def test_headless_context_needs_no_credentials_or_config_file():
     assert ctx.config == {} and ctx.db_path is None
 
 
+def test_headless_reference_analysis_uses_only_the_injected_user_client():
+    """Reference reports never fall back to the desktop's signed-in token file or config.json."""
+    from wcl_app import ReferenceAuthRequired
+
+    repo = FakeRepository()
+    refuse = AssertionError("a headless host must not read the desktop's user token")
+    with _no_config_or_sqlite(), patch("wcl_core.user_auth.UserTokenManager", side_effect=refuse):
+        with pytest.raises(ReferenceAuthRequired):
+            RaidService(AppContext.headless(MagicMock(), storage=lambda: repo)).analyze(CODE, reference=True)
+
+        user = MagicMock(name="member's WarcraftLogsClient")
+        ctx = AppContext.headless(MagicMock(), storage=lambda: repo, user_client=lambda: user)
+        with patch("wcl_app.raids.analyze_raid", side_effect=lambda *a, **k: _fake_analysis(CODE)) as analyze:
+            RaidService(ctx).analyze(CODE, reference=True)
+    assert analyze.call_args.args == (user, CODE)
+
+
 def test_role_override_service_reanalyses_through_the_injected_client():
     repo = FakeRepository()
     ctx = AppContext.headless(MagicMock(), storage=lambda: repo)
