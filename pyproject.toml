@@ -15,6 +15,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.6.0", "pytest-qt>=4.2"]
+# The Postgres backend of wcl-store (same pins as wcl-store[postgres]); the desktop app never needs it.
+postgres = ["SQLAlchemy>=2.0", "psycopg[binary]>=3.1", "alembic>=1.13"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -38,14 +40,16 @@ warcraftlogs = "warcraftlogs_client.cli:main"
 [project.gui-scripts]
 warcraftlogs-gui = "warcraftlogs_client.gui.app:run"
 
-# The desktop app and CLI install wcl-core from the same checkout, so `pip install -e .` and PyInstaller
-# keep working unchanged. Other projects install packages/wcl-core on its own.
+# The desktop app and CLI install wcl-core and wcl-store from the same checkout, so `pip install -e .` and
+# PyInstaller keep working unchanged. Other projects install packages/wcl-core and packages/wcl-store on their own.
 [tool.setuptools.packages.find]
-where = [".", "packages/wcl-core/src"]
-include = ["warcraftlogs_client*", "wcl_core*"]
+where = [".", "packages/wcl-core/src", "packages/wcl-store/src"]
+include = ["warcraftlogs_client*", "wcl_core*", "wcl_store*"]
 
 [tool.setuptools.package-data]
 wcl_core = ["py.typed", "data/*.json", "data/spell_data/*.json"]
+wcl_store = ["py.typed"]
+"wcl_store.postgres" = ["migrations/*.py", "migrations/script.py.mako", "migrations/versions/*.py"]
 
 [tool.ruff]
 line-length = 120
@@ -85,6 +89,7 @@ markers = [
     "ears_state_driven: EARS state-driven requirement (While state, system shall behave)",
     "ears_optional: EARS optional requirement (Where feature, system shall behave)",
     "database: Tests involving SQLite database operations",
+    "postgres: Tests that need a Postgres server (skipped unless WCL_STORE_TEST_DATABASE_URL is set)",
     "api: Tests involving WCL API client or network calls",
     "auth: Tests involving authentication and token management",
     "reference: Tests for reference report comparison features",
@@ -97,7 +102,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["warcraftlogs_client", "wcl_core"]
+source = ["warcraftlogs_client", "wcl_core", "wcl_store"]
 omit = ["warcraftlogs_client/gui/*"]
 
 [tool.coverage.report]
@@ -116,13 +121,14 @@ count = true
 quiet-level = 3
 
 [tool.vulture]
-paths = ["warcraftlogs_client", "packages/wcl-core/src", "vulture_whitelist.py"]
+paths = ["warcraftlogs_client", "packages/wcl-core/src", "packages/wcl-store/src", "vulture_whitelist.py"]
 exclude = ["warcraftlogs_client/gui/"]
 min_confidence = 80
 
 # REQ-CORE-ARCH-001: wcl-core stays headless so the desktop app and the Toads Hub worker can share it.
+# REQ-CORE-STORE-002: wcl-store is persistence only, and its SQLite side never needs the Postgres extra.
 [tool.importlinter]
-root_packages = ["wcl_core"]
+root_packages = ["wcl_core", "wcl_store"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -130,3 +136,15 @@ name = "wcl-core imports no Qt, SQLite, SQLAlchemy or desktop code"
 type = "forbidden"
 source_modules = ["wcl_core"]
 forbidden_modules = ["PySide6", "sqlite3", "sqlalchemy", "warcraftlogs_client"]
+
+[[tool.importlinter.contracts]]
+name = "wcl-store imports no Qt, web, bot or desktop code"
+type = "forbidden"
+source_modules = ["wcl_store"]
+forbidden_modules = ["PySide6", "fastapi", "discord", "warcraftlogs_client"]
+
+[[tool.importlinter.contracts]]
+name = "wcl-store's SQLite side needs no Postgres extra"
+type = "forbidden"
+source_modules = ["wcl_store.errors", "wcl_store.repository", "wcl_store._codec", "wcl_store.sqlite"]
+forbidden_modules = ["sqlalchemy", "psycopg", "alembic", "wcl_store.postgres"]

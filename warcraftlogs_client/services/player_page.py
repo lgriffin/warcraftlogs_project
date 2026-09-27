@@ -27,8 +27,7 @@ from .lineage import CharacterLineage, character_lineage
 if TYPE_CHECKING:
     from wcl_core.client import WarcraftLogsClient
     from wcl_core.models import RaidAnalysis
-
-    from ..database import PerformanceDB
+    from wcl_store import RaidRepository
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +166,7 @@ class PlayerPageService:
 
     def __init__(
         self,
-        db: PerformanceDB,
+        db: RaidRepository,
         client: WarcraftLogsClient | None = None,
         analyze: AnalyzeFn | None = None,
         import_source: str = "guild",
@@ -178,10 +177,10 @@ class PlayerPageService:
         self.import_source = import_source
 
     @classmethod
-    def from_context(cls, ctx: AppContext, db: PerformanceDB, *, with_api: bool = True) -> PlayerPageService:
+    def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool = True) -> PlayerPageService:
         """Wire the service from the shared AppContext: its WCL client and RaidService's analyze.
 
-        ``db`` is the handle from ``ctx.db()``; the caller owns its lifetime. ``with_api=False``
+        ``db`` is the handle from ``ctx.repository()``; the caller owns its lifetime. ``with_api=False``
         gives a local-only service that never builds a WCL client (no credentials needed).
         """
         if not with_api:

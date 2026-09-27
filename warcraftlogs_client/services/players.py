@@ -41,5 +41,5 @@ class PlayerService:
         return self.raids.import_missing(codes, progress=progress)
 
     def history(self, name: str) -> CharacterHistory | None:
-        with self.ctx.db() as db:
+        with self.ctx.repository() as db:
             return db.get_character_history(name)

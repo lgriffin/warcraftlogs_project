@@ -1,6 +1,8 @@
 """Shared fixtures for the Warcraft Logs test suite."""
 
 import json
+import os
+import uuid
 from unittest.mock import MagicMock
 
 import pytest
@@ -310,3 +312,47 @@ def build_analysis():
         )
 
     return _build
+
+
+# ── Postgres (wcl-store) ──
+
+PG_URL_ENV = "WCL_STORE_TEST_DATABASE_URL"
+
+
+@pytest.fixture(scope="session")
+def pg_engine():
+    """Engine on a fresh Postgres schema migrated to head, dropped afterwards.
+
+    Skips unless $WCL_STORE_TEST_DATABASE_URL names a server and the ``postgres`` extra is installed.
+    """
+    url = os.environ.get(PG_URL_ENV)
+    if not url:
+        pytest.skip(f"Postgres backend not tested: set {PG_URL_ENV} to a Postgres URL to run it")
+    for module in ("sqlalchemy", "psycopg", "alembic"):
+        pytest.importorskip(module, reason=f"Postgres backend not tested: {module} missing, install .[postgres]")
+    from wcl_store.postgres import make_engine, upgrade
+
+    schema = f"wcl_store_test_{uuid.uuid4().hex[:12]}"
+    admin = make_engine(url)
+    with admin.begin() as conn:
+        conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    engine = make_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    try:
+        upgrade(engine)
+        yield engine
+    finally:
+        engine.dispose()
+        with admin.begin() as conn:
+            conn.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
+        admin.dispose()
+
+
+@pytest.fixture
+def pg_empty_engine(pg_engine):
+    """``pg_engine`` with every table emptied."""
+    from wcl_store.postgres.schema import metadata
+
+    names = ", ".join(f'"{t.name}"' for t in metadata.sorted_tables)
+    with pg_engine.begin() as conn:
+        conn.exec_driver_sql(f"TRUNCATE {names} RESTART IDENTITY CASCADE")
+    return pg_engine

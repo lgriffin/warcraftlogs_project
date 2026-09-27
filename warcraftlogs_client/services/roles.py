@@ -13,20 +13,19 @@ damage), so relabelling stored rows would not be enough.
 from __future__ import annotations
 
 import logging
-import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from wcl_core.analysis import OVERRIDE_ROLES
+from wcl_store import StorageError
 
 from .context import AppContext, ProgressCallback, validate_report_code
 from .player_page import API_ERRORS
 
 if TYPE_CHECKING:
     from wcl_core.models import RaidAnalysis
-
-    from ..database import PerformanceDB
+    from wcl_store import RaidRepository
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +49,12 @@ def role_matches(stored: str, wanted: str) -> bool:
 
 
 class RoleOverrideService:
-    def __init__(self, db: PerformanceDB, analyze: AnalyzeFn | None = None):
+    def __init__(self, db: RaidRepository, analyze: AnalyzeFn | None = None):
         self.db = db
         self._analyze = analyze
 
     @classmethod
-    def from_context(cls, ctx: AppContext, db: PerformanceDB, *, with_api: bool = True) -> RoleOverrideService:
+    def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool = True) -> RoleOverrideService:
         if not with_api:
             return cls(db)
         from .raids import RaidService
@@ -148,7 +147,7 @@ class RoleOverrideService:
                 # Replace, don't merge: the character's old-role rows must go. Atomic, and
                 # keeps the raid's label and source.
                 self.db.replace_raid_analysis(analysis, source=source)
-            except (*API_ERRORS, sqlite3.Error) as e:
+            except (*API_ERRORS, StorageError) as e:
                 logger.warning("Re-analysis of %s failed: %s", code, e)
                 results.append(ReanalysisResult(code, raid["role"], False, str(e)))
                 continue

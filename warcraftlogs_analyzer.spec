@@ -7,7 +7,7 @@ pyside6_datas = collect_data_files("PySide6")
 
 a = Analysis(
     ["launcher.py"],
-    pathex=["packages/wcl-core/src"],
+    pathex=["packages/wcl-core/src", "packages/wcl-store/src"],
     binaries=[],
     datas=[
         ("packages/wcl-core/src/wcl_core/data", "wcl_core/data"),
@@ -68,12 +68,19 @@ a = Analysis(
         "wcl_core.spell_manager",
         "wcl_core.common.data",
         "wcl_core.common.errors",
+        "wcl_store",
+        "wcl_store._codec",
+        "wcl_store.errors",
+        "wcl_store.repository",
+        "wcl_store.sqlite",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
         "tkinter", "matplotlib", "numpy", "scipy", "PIL",
+        # wcl-store's Postgres backend is for the Toads Hub; the desktop app only uses SQLite.
+        "wcl_store.postgres", "sqlalchemy", "psycopg", "alembic",
         "PySide6.Qt3DAnimation", "PySide6.Qt3DCore", "PySide6.Qt3DExtras",
         "PySide6.Qt3DInput", "PySide6.Qt3DLogic", "PySide6.Qt3DRender",
         "PySide6.QtBluetooth",
