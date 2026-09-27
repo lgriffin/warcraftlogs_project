@@ -52,6 +52,9 @@ from .models import (
 )
 from .spell_manager import SpellBreakdown, get_spell_manager
 
+# Breakdown bucket for damage events that carry no abilityGameID (their amount still counts in the totals).
+_UNKNOWN_ABILITY_ID = 0
+
 _TEN_MAN_ZONE_KEYWORDS = ("karazhan", "zul'aman", "zul aman", "zulaman")
 
 
@@ -614,8 +617,8 @@ def _analyze_tanks(
 
             taken_counts: dict[int, int] = defaultdict(int)
             for e in taken_events:
-                sid = e.get("abilityGameID")
-                if e.get("type") == "damage" and sid is not None:
+                if e.get("type") == "damage":
+                    sid = e.get("abilityGameID") or _UNKNOWN_ABILITY_ID
                     taken_counts[alias_map.get(sid, sid)] += 1
 
             taken_breakdown = [
@@ -630,8 +633,8 @@ def _analyze_tanks(
             done_events = client.get_damage_done_data(report_id, player.source_id)
             done_counts: dict[int, int] = defaultdict(int)
             for e in done_events:
-                sid = e.get("abilityGameID")
-                if e.get("type") == "damage" and sid is not None:
+                if e.get("type") == "damage":
+                    sid = e.get("abilityGameID") or _UNKNOWN_ABILITY_ID
                     done_counts[alias_map.get(sid, sid)] += 1
 
             abilities_used = [
@@ -697,9 +700,9 @@ def _analyze_dps(
             total_damage = 0
             damage_by_ability: dict[int, int] = defaultdict(int)
             for e in events:
-                sid = e.get("abilityGameID")
-                if e.get("type") == "damage" and sid is not None:
+                if e.get("type") == "damage":
                     amount = e.get("amount", 0)
+                    sid = e.get("abilityGameID") or _UNKNOWN_ABILITY_ID
                     canonical = alias_map.get(sid, sid)
                     total_damage += amount
                     damage_by_ability[canonical] += amount
