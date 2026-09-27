@@ -112,6 +112,7 @@ python -m warcraftlogs_client.gui.app
 
 The full-featured PySide6 desktop app provides:
 
+- **Home** — A customisable landing page. Pick and order widgets with Customise: quick actions, guild at a glance, last raid, recent raids, raid activity, top damage and healing, attendance, boss kills, class mix, interrupts, consumables and tracked players. Rows open the raid, character or player page they show.
 - **Download** — Fetch your guild's recent reports from WarcraftLogs and run a full raid analysis. Reports are filtered by day-of-week and show cached/saved status for previously imported raids.
 - **Raids** — Browse all imported raids with encounter details. Each raid shows role-based performance breakdowns (Healers, Tanks, Melee DPS, Ranged DPS), consumable tracking, Boss vs Trash usage breakdown, Engineering Stats, and a Consumable Timeline.
 - **Find Character** — Search and browse all tracked characters across your imported raids.

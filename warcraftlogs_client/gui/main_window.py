@@ -24,7 +24,7 @@ from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
 from .console_widget import ConsoleDock
-from .dashboard_view import DashboardView
+from .home_view import HomeView
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
 from .raid_analysis_widget import RaidAnalysisWidget
@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
         """)
 
         nav_items = [
-            ("Dashboard", "Overview and quick stats (Ctrl+1)"),
+            ("Home", "Your customisable home page (Ctrl+1)"),
             ("Raids", "Download, browse, diff, and compare raids (Ctrl+2)"),
             ("Characters", "Search, profile, and compare characters (Ctrl+3)"),
             ("Insights", "Performance trends and boss analytics (Ctrl+4)"),
@@ -209,14 +209,14 @@ class MainWindow(QMainWindow):
         self.stack = NavigationStack()
         self.stack.setStyleSheet(f"QStackedWidget {{ background-color: {COLORS['bg_dark']}; }}")
 
-        self.dashboard_view = DashboardView()
+        self.home_view = HomeView()
         self.raids_hub = RaidsHub()
         self.characters_hub = CharactersHub()
         self.insights_view = InsightsView()
         self.raid_group_view = RaidGroupView()
         self.settings_view = SettingsView()
 
-        self.stack.addWidget(self.dashboard_view)
+        self.stack.addWidget(self.home_view)
         self.stack.addWidget(self.raids_hub)
         self.stack.addWidget(self.characters_hub)
         self.stack.addWidget(self.insights_view)
@@ -272,9 +272,11 @@ class MainWindow(QMainWindow):
         self.nav_list.currentRowChanged.connect(self._on_nav_changed)
         self.nav_list.setCurrentRow(0)
 
-        self.dashboard_view.status_message.connect(self.status_bar.showMessage)
-        self.dashboard_view.open_raid.connect(self._drill_into_raid)
-        self.dashboard_view.navigate_to_raids.connect(lambda: self.nav_list.setCurrentRow(1))
+        self.home_view.status_message.connect(self.status_bar.showMessage)
+        self.home_view.open_raid.connect(self._drill_into_raid)
+        self.home_view.open_character.connect(self._drill_into_character_history)
+        self.home_view.open_player_page.connect(self._open_player_page)
+        self.home_view.run_action.connect(self._handle_palette_command)
 
         self.raids_hub.status_message.connect(self.status_bar.showMessage)
         self.raids_hub.open_raid.connect(self._drill_into_raid)
@@ -314,7 +316,7 @@ class MainWindow(QMainWindow):
 
     def _handle_palette_command(self, key: str):
         commands = {
-            "dashboard": lambda: self.nav_list.setCurrentRow(0),
+            "home": lambda: self.nav_list.setCurrentRow(0),
             "raids": lambda: self.nav_list.setCurrentRow(1),
             "raids.download": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(0)),
             "raids.browse": lambda: (self.nav_list.setCurrentRow(1), self.raids_hub._tabs.setCurrentIndex(1)),
@@ -397,6 +399,10 @@ class MainWindow(QMainWindow):
 
         dlg = UpdateDialog(self._pending_update, parent=self)
         dlg.exec()
+
+    def _open_player_page(self, name: str, server: str, region: str):
+        self._handle_palette_command("characters.player")
+        self.characters_hub.player_page_view.prefill(name, server, region)
 
     def _on_nav_changed(self, index: int):
         self.stack.show_base_page(index)
@@ -543,6 +549,7 @@ class MainWindow(QMainWindow):
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
+            self.home_view,
             self.raids_hub.download_view,
             self.characters_hub.character_view,
             self.raids_hub.reference_view,

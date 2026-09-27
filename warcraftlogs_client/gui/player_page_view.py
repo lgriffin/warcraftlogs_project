@@ -305,6 +305,12 @@ class PlayerPageView(QWidget):
         self._server_input.setText(config.get("character_server", config.get("default_server", "")))
         self._region_input.setText(config.get("character_region", config.get("default_region", "eu")))
 
+    def prefill(self, name: str, server: str, region: str) -> None:
+        """Fill the lookup with a character, e.g. one picked on Home, ready for Find reports."""
+        self._name_input.setText(name)
+        self._server_input.setText(server)
+        self._region_input.setText(region or "eu")
+
     # ── Actions ──
 
     def _read_player(self) -> PlayerRef | None:

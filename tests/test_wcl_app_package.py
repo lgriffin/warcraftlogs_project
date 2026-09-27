@@ -15,7 +15,7 @@ from wcl_app import AppContext, RaidService, RoleOverrideService
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_SRC = Path(wcl_app.__file__).resolve().parent
-MODULES = ["context", "lineage", "player_page", "players", "raids", "roles"]
+MODULES = ["context", "home", "lineage", "player_page", "players", "raids", "roles"]
 CODE = "raidReport000001"
 OTHER = "raidReport000002"
 

@@ -15,6 +15,11 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import AnalysisThresholds as AnalysisThresholds
     from wcl_app import AppContext as AppContext
     from wcl_app import CharacterLineage as CharacterLineage
+    from wcl_app import HomeLayout as HomeLayout
+    from wcl_app import HomePage as HomePage
+    from wcl_app import HomeService as HomeService
+    from wcl_app import HomeWidget as HomeWidget
+    from wcl_app import JsonLayoutStore as JsonLayoutStore
     from wcl_app import PlayerLog as PlayerLog
     from wcl_app import PlayerPageData as PlayerPageData
     from wcl_app import PlayerPageService as PlayerPageService
@@ -27,10 +32,11 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import ReportRef as ReportRef
     from wcl_app import RoleOverrideService as RoleOverrideService
     from wcl_app import Spread as Spread
+    from wcl_app import WidgetSpec as WidgetSpec
     from wcl_app import character_lineage as character_lineage
     from wcl_app import parse_report_code as parse_report_code
     from wcl_app import validate_report_code as validate_report_code
 
-for _name in ("context", "lineage", "player_page", "players", "raids", "roles"):
+for _name in ("context", "home", "lineage", "player_page", "players", "raids", "roles"):
     sys.modules[f"{__name__}.{_name}"] = importlib.import_module(f"wcl_app.{_name}")
 sys.modules[__name__] = _module

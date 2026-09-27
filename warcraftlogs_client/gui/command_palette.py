@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from .styles import COLORS
 
 COMMANDS = [
-    {"key": "dashboard", "label": "Dashboard", "hint": "Ctrl+1", "desc": "Overview and quick stats"},
+    {"key": "home", "label": "Home", "hint": "Ctrl+1", "desc": "Your customisable home page"},
     {"key": "raids", "label": "Raids", "hint": "Ctrl+2", "desc": "Download, browse, diff, and compare raids"},
     {"key": "raids.download", "label": "Raids > Download", "hint": "", "desc": "Fetch and analyze guild reports"},
     {"key": "raids.browse", "label": "Raids > Browse", "hint": "", "desc": "Browse analyzed raids"},
