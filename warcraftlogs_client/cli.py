@@ -231,7 +231,7 @@ def run_history_query(args) -> int:
 
         print(f"\n=== {history.name} ({history.player_class}) ===")
         print(f"Raids tracked: {history.total_raids}")
-        if history.first_seen:
+        if history.first_seen and history.last_seen:
             print(f"Active: {history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}")
         if history.avg_healing is not None:
             print(f"Avg Healing: {history.avg_healing:,.0f}")

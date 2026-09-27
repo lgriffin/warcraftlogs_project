@@ -231,7 +231,7 @@ pytest -m "not slow and not live"     # Fast tests only
 | **test** | Every push/PR | `pytest --cov --cov-fail-under=80` (Python 3.10 + 3.12) | Hard fail |
 | **gui-test** | Every push/PR | `xvfb-run pytest tests/gui/` | Soft fail (continue-on-error) |
 | **fuzz** | Every push/PR | `pytest tests/fuzz/` | Hard fail |
-| **type-check** | Every push/PR | `mypy` (excludes gui/) | Hard fail |
+| **type-check** | Every push/PR | `mypy` (excludes gui/; strict on wcl_store and wcl_app) | Hard fail |
 | **security** | Every push/PR | `bandit` + `pytest tests/test_security.py` + `pip-audit` | Hard fail (except pip-audit) |
 | **quality** | Every push/PR | `radon cc` + `radon mi` | Soft fail |
 
