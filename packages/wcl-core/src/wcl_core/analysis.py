@@ -52,6 +52,9 @@ from .models import (
 )
 from .spell_manager import SpellBreakdown, get_spell_manager
 
+# Breakdown bucket for damage events that carry no abilityGameID (their amount still counts in the totals).
+_UNKNOWN_ABILITY_ID = 0
+
 _TEN_MAN_ZONE_KEYWORDS = ("karazhan", "zul'aman", "zul aman", "zulaman")
 
 
@@ -615,7 +618,7 @@ def _analyze_tanks(
             taken_counts: dict[int, int] = defaultdict(int)
             for e in taken_events:
                 if e.get("type") == "damage":
-                    sid = e.get("abilityGameID")
+                    sid = e.get("abilityGameID") or _UNKNOWN_ABILITY_ID
                     taken_counts[alias_map.get(sid, sid)] += 1
 
             taken_breakdown = [
@@ -631,7 +634,7 @@ def _analyze_tanks(
             done_counts: dict[int, int] = defaultdict(int)
             for e in done_events:
                 if e.get("type") == "damage":
-                    sid = e.get("abilityGameID")
+                    sid = e.get("abilityGameID") or _UNKNOWN_ABILITY_ID
                     done_counts[alias_map.get(sid, sid)] += 1
 
             abilities_used = [
@@ -699,7 +702,7 @@ def _analyze_dps(
             for e in events:
                 if e.get("type") == "damage":
                     amount = e.get("amount", 0)
-                    sid = e.get("abilityGameID")
+                    sid = e.get("abilityGameID") or _UNKNOWN_ABILITY_ID
                     canonical = alias_map.get(sid, sid)
                     total_damage += amount
                     damage_by_ability[canonical] += amount
@@ -796,12 +799,12 @@ def _analyze_consumables(
         try:
             cast_events = client.get_cast_events_paginated(report_id, player.source_id)
             cast_data: dict[int, list[int]] = defaultdict(list)
-            for e in cast_events:
-                if e.get("type") == "begincast":
+            for event in cast_events:
+                if event.get("type") == "begincast":
                     continue
-                aid = e.get("abilityGameID")
+                aid = event.get("abilityGameID")
                 if aid in cast_ids:
-                    ts = e.get("timestamp", 0)
+                    ts = event.get("timestamp", 0)
                     cast_data[aid].append(ts)
 
             for spell_id, timestamps in cast_data.items():

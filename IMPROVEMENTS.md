@@ -77,7 +77,7 @@ Source: architecture & best-practices review (v4.3.x)
 ## Phase 4 — Quality gates
 
 - Align `guides/TESTING.md` (claims ~80%) with `fail_under = 55` and `omit = gui/*` in `pyproject.toml`
-- Promote mypy (core package) and GUI tests off `continue-on-error` once baselines are green
+- ~~Promote mypy off `continue-on-error`~~ (done: mypy is blocking in CI and runs in pre-commit); GUI tests still to promote
 - Keep vulture/radon advisory until legacy deletion (Phase 1) lands
 - Raise coverage on extracted pure modules; keep GUI coverage optional until helpers are non-Qt
 

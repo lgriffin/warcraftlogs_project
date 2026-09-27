@@ -7,6 +7,8 @@ import requests
 
 from warcraftlogs_client.analysis import (
     _analyze_consumables,
+    _analyze_dps,
+    _analyze_tanks,
     _classify_hybrid_role,
     _identify_composition,
     _identify_healers,
@@ -14,7 +16,8 @@ from warcraftlogs_client.analysis import (
     _load_consumes_config,
     analyze_raid,
 )
-from warcraftlogs_client.models import RaidComposition, RaidMetadata
+from warcraftlogs_client.models import PlayerIdentity, RaidComposition, RaidMetadata
+from warcraftlogs_client.spell_manager import SpellBreakdown
 
 
 class TestClassifyHybridRole:
@@ -53,6 +56,40 @@ class TestClassifyHybridRole:
             {"type": "damage", "abilityGameID": 9999, "amount": 59},
         ]
         assert _classify_hybrid_role(mock_client, "r1", 1, "Druid") == "melee"
+
+
+class TestDamageEventsWithoutAbilityId:
+    """A damage event with no abilityGameID still counts, in the totals and in an unknown-ability bucket."""
+
+    @pytest.fixture(autouse=True)
+    def _no_cast_table(self, monkeypatch):
+        monkeypatch.setattr(SpellBreakdown, "get_spell_id_to_name_map", staticmethod(lambda *args: ({}, {}, [])))
+
+    def test_dps_total_and_breakdown_include_it(self, mock_client):
+        mock_client.get_damage_done_data.return_value = [
+            {"type": "damage", "abilityGameID": 9999, "amount": 300},
+            {"type": "damage", "amount": 200},
+        ]
+        player = PlayerIdentity(name="Rogue", player_class="Rogue", source_id=1, role="melee")
+        results, warnings = _analyze_dps(mock_client, "r1", [player], "melee")
+        assert warnings == []
+        assert results[0].total_damage == 500
+        assert sum(a.total_amount for a in results[0].abilities) == 500
+        assert all(isinstance(a.spell_id, int) for a in results[0].abilities)
+
+    def test_tank_breakdowns_count_every_hit(self, mock_client):
+        mock_client.get_damage_taken_data.return_value = [
+            {"type": "damage", "abilityGameID": 9999, "amount": 300},
+            {"type": "damage", "amount": 200},
+        ]
+        mock_client.get_damage_done_data.return_value = [{"type": "damage", "amount": 50}]
+        player = PlayerIdentity(name="Tank", player_class="Warrior", source_id=2, role="tank")
+        results, warnings = _analyze_tanks(mock_client, "r1", [player])
+        assert warnings == []
+        assert results[0].total_damage_taken == 500
+        assert sum(s.casts for s in results[0].damage_taken_breakdown) == 2
+        assert sum(s.casts for s in results[0].abilities_used) == 1
+        assert all(isinstance(s.spell_id, int) for s in results[0].damage_taken_breakdown + results[0].abilities_used)
 
 
 class TestIdentifyTanks:

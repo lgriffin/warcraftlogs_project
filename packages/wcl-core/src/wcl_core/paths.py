@@ -32,7 +32,7 @@ def get_app_dir() -> Path:
     Otherwise: the directory set with set_app_dir(), then $WCL_APP_DIR, then the working directory.
     """
     if is_frozen():
-        return Path(sys._MEIPASS)
+        return Path(getattr(sys, "_MEIPASS"))  # noqa: B009 - set only by PyInstaller, unknown to typeshed
     if _app_dir is not None:
         return _app_dir
     env = os.environ.get("WCL_APP_DIR")

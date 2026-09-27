@@ -130,9 +130,9 @@ class ConfigManager:
             guild_id = 774065
 
         api_config = ApiConfig(
-            client_id=client_id,
-            client_secret=as_secret(client_secret),
-            report_id=report_id,
+            client_id=str(client_id),
+            client_secret=as_secret(str(client_secret)),
+            report_id=str(report_id),
             guild_id=guild_id,
         )
 
