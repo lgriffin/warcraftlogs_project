@@ -182,7 +182,7 @@ class SpellManager:
         if exclude_ids is None:
             exclude_ids = {20343}  # Default: exclude Judgement of Light
 
-        spell_totals = defaultdict(int)
+        spell_totals: dict[int, int] = defaultdict(int)
 
         for event in events:
             ability_id = event.get("abilityGameID")
@@ -207,7 +207,7 @@ class SpellManager:
             Tuple of (id_to_name, id_to_casts) dictionaries
         """
         id_to_name = {}
-        id_to_casts = defaultdict(int)
+        id_to_casts: dict[int, int] = defaultdict(int)
 
         # Process API entries - always count casts, collect names when available
         for entry in entries:
@@ -475,7 +475,3 @@ class SpellBreakdown:
                         logger.debug("Found mapped Cleave ID: %s -> %s", spell_id, canonical_id)
                 elif "cleave" in str(event.get("ability", "")).lower():
                     logger.debug("Potential Cleave variant: %s -- name: %s", spell_id, event.get("ability"))
-
-
-# Initialize the legacy class attribute
-SpellBreakdown.spell_id_aliases = get_spell_manager().get_legacy_aliases()

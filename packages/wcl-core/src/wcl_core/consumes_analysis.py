@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from typing import Any
 
 import requests
 
@@ -28,14 +29,16 @@ class ConsumesAnalyzer:
         from . import paths
 
         self.config = self._load_config(config_path or str(paths.get_consumes_config_path()))
-        self.consumes_data = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-        self.raid_metadata = {}
-        self.healers_by_raid = defaultdict(set)  # Store healers per raid
+        # player -> report -> consumable -> count
+        self.consumes_data: defaultdict[str, defaultdict[str, defaultdict[str, int]]] = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(int))
+        )
+        self.raid_metadata: dict[str, dict[str, Any]] = {}
+        self.healers_by_raid: defaultdict[str, set[str]] = defaultdict(set)  # Store healers per raid
         self.include_healers = include_healers  # Whether to analyze healer personal buffs
-        self.timestamp_data = defaultdict(
-            lambda: defaultdict(list)
-        )  # Store (timestamp, player, potion) for spike analysis
-        self.boss_kills = defaultdict(list)  # Store boss kill timestamps per raid
+        # Store (timestamp, player, potion) for spike analysis
+        self.timestamp_data: defaultdict[str, defaultdict[str, list[Any]]] = defaultdict(lambda: defaultdict(list))
+        self.boss_kills: defaultdict[str, list[Any]] = defaultdict(list)  # Store boss kill timestamps per raid
 
     def _load_config(self, config_path: str) -> dict:
         """Load consumable configuration from JSON file."""
@@ -146,7 +149,7 @@ class ConsumesAnalyzer:
         self, client: WarcraftLogsClient, report_id: str, master_actors: list[dict]
     ) -> dict[str, list[str]]:
         """Identify roles using existing dynamic role parser logic."""
-        roles = {"tanks": [], "healers": [], "melee": [], "ranged": []}
+        roles: dict[str, list[str]] = {"tanks": [], "healers": [], "melee": [], "ranged": []}
 
         # Identify tanks (simplified version of existing logic)
         for actor in master_actors:
@@ -260,7 +263,7 @@ class ConsumesAnalyzer:
     def _count_consumables(self, player_name: str, player_role: str, report_id: str, events: list[dict]) -> None:
         """Count consumable usage for a player."""
         # Group events by ability for smarter counting
-        ability_events = {}
+        ability_events: dict[int, list[dict[str, Any]]] = {}
 
         # First pass: collect and deduplicate events
         seen_events = set()

@@ -91,7 +91,7 @@ def _render_composition(analysis: RaidAnalysis) -> str:
 
     dps_players = comp.melee + comp.ranged
     if dps_players:
-        by_class: dict[str, list[str]] = defaultdict(list)
+        by_class = defaultdict(list)
         for p in dps_players:
             by_class[p.player_class].append(p.name)
         lines.append("**DPS**")

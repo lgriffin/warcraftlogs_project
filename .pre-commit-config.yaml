@@ -22,3 +22,13 @@ repos:
       - id: codespell
         additional_dependencies: ["tomli"]
         args: ["--config", "pyproject.toml"]
+
+  # Uses the mypy from `pip install -e ".[dev]"`, so it sees the installed packages and matches CI.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ packages/wcl-app/src/ --exclude gui/
+        language: system
+        types: [python]
+        pass_filenames: false

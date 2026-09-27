@@ -13,6 +13,7 @@ This module provides a single entry point for all analysis modes:
 import argparse
 import logging
 import sys
+from collections.abc import Callable
 
 import requests
 from wcl_core.common.errors import WarcraftLogsError
@@ -481,7 +482,7 @@ def main() -> int:
         args.save = False
         args.report_id = None
 
-    commands = {
+    commands: dict[str, Callable[[argparse.Namespace], int]] = {
         "unified": run_unified_analysis,
         "healer": run_role_analysis,
         "tank": run_role_analysis,
