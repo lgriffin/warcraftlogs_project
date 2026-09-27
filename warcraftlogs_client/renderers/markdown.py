@@ -259,7 +259,9 @@ def _render_dps_summary_tables(all_dps: list[DPSPerformance], role: str) -> str:
     return "\n".join(lines)
 
 
-def render_cross_analysis(raid_stats: dict, historical: list[dict], player_deltas: list[dict], size_label: str) -> str:  # noqa: C901
+def render_cross_analysis(  # noqa: C901
+    raid_stats: dict, historical: list[dict], player_deltas: list[dict], size_label: str
+) -> str:
     lines = [
         f"# Cross-Analysis: {raid_stats['title']}",
         "",

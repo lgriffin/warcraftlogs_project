@@ -67,7 +67,7 @@ ignore = [
     # Loops that append stay readable, and try/except in a loop is free on 3.11+.
     "PERF203", "PERF401",
     # The same choices as bandit's skips: asserts narrow types, and subprocess always gets a fixed argument list.
-    "S101", "S603", "S607",
+    "S101", "S404", "S603", "S607",
 ]
 
 [tool.ruff.lint.mccabe]
