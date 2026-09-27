@@ -154,7 +154,7 @@ def safe_api_call(
     """
     try:
         return func(*args, **kwargs)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - this wrapper exists to turn any failure into a reported error
         if "data" not in str(e).lower():
             # Generic API error
             api_error = ApiError(f"{error_message}: {e}")
@@ -193,7 +193,7 @@ def safe_data_processing(
     """
     try:
         return func(*args, **kwargs)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - this wrapper exists to turn any failure into a reported error
         processing_error = DataProcessingError(f"{error_message}: {e}", actor_name)
         handle_error(processing_error, exit_on_critical=False)
         return None

@@ -8,8 +8,8 @@ providing role-based filtering and detailed reporting.
 import csv
 import json
 import logging
-import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -42,10 +42,10 @@ class ConsumesAnalyzer:
 
     def _load_config(self, config_path: str) -> dict:
         """Load consumable configuration from JSON file."""
-        if not os.path.exists(config_path):
+        if not Path(config_path).exists():
             raise FileNotFoundError(f"Consumable config file not found: {config_path}")
 
-        with open(config_path, encoding="utf-8") as f:
+        with Path(config_path).open(encoding="utf-8") as f:
             return json.load(f)
 
     def analyze_raid(self, client: WarcraftLogsClient, report_id: str) -> None:
@@ -501,7 +501,7 @@ class ConsumesAnalyzer:
         """Export consumables data to CSV file."""
         logger.info("Exporting data to CSV: %s", output_file)
 
-        with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
+        with Path(output_file).open("w", newline="", encoding="utf-8") as csvfile:
             writer = csv.writer(csvfile)
 
             # Write header
@@ -569,10 +569,10 @@ class ConsumesAnalyzer:
             )
             from . import paths
 
-            output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}_consumes.md")
+            output_path = str(Path(paths.get_reports_dir()) / f"{safe_title}_consumes.md")
 
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with Path(output_path).open("w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
         return output_path

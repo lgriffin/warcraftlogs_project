@@ -9,7 +9,7 @@ from .config import as_secret
 
 
 class TokenManager:
-    TOKEN_URL = "https://www.warcraftlogs.com/oauth/token"
+    TOKEN_URL = "https://www.warcraftlogs.com/oauth/token"  # noqa: S105 - a URL, not a secret
 
     def __init__(self, client_id: str, client_secret: str | SecretStr) -> None:
         self.client_id = client_id

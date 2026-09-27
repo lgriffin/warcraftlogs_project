@@ -6,12 +6,14 @@ To access detailed event/table data for reports the user doesn't own,
 we need a user-scoped token via the Authorization Code flow (/api/v2/user).
 """
 
+import contextlib
 import json
 import logging
 import secrets
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from threading import Thread
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -37,7 +39,7 @@ def _get_base_url() -> str:
         parsed = urlparse(api_url)
         if parsed.hostname:
             return f"{parsed.scheme}://{parsed.hostname}"
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - no readable config means the default domain
         pass
     return "https://www.warcraftlogs.com"
 
@@ -62,7 +64,7 @@ class UserTokenManager:
 
     def _load(self) -> None:
         try:
-            with open(self._token_path) as f:
+            with Path(self._token_path).open() as f:
                 data = json.load(f)
             self._access_token = _optional_secret(data.get("access_token"))
             self._refresh_token = _optional_secret(data.get("refresh_token"))
@@ -76,7 +78,7 @@ class UserTokenManager:
             "refresh_token": _reveal(self._refresh_token),
             "expires_at": self._expires_at,
         }
-        with open(self._token_path, "w") as f:
+        with Path(self._token_path).open("w") as f:
             json.dump(data, f, indent=2)
 
     def is_authenticated(self) -> bool:
@@ -180,12 +182,8 @@ class UserTokenManager:
         self._access_token = None
         self._refresh_token = None
         self._expires_at = 0
-        try:
-            import os
-
-            os.remove(self._token_path)
-        except OSError:
-            pass
+        with contextlib.suppress(OSError):
+            Path(self._token_path).unlink()
 
     @staticmethod
     def build_authorize_url(client_id: str, state: str, redirect_port: int = DEFAULT_REDIRECT_PORT) -> str:

@@ -5,8 +5,8 @@ Takes data model objects and produces a markdown string suitable for
 file export or embedding in a UI.
 """
 
-import os
 from collections import defaultdict
+from pathlib import Path
 
 from wcl_core.models import (
     ConsumableUsage,
@@ -49,10 +49,10 @@ def export_raid_analysis(analysis: RaidAnalysis, output_path: str | None = None,
         )
         from wcl_core import paths
 
-        output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}.md")
+        output_path = str(Path(paths.get_reports_dir()) / f"{safe_title}.md")
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with Path(output_path).open("w", encoding="utf-8") as f:
         f.write(content)
 
     return output_path
@@ -259,7 +259,9 @@ def _render_dps_summary_tables(all_dps: list[DPSPerformance], role: str) -> str:
     return "\n".join(lines)
 
 
-def render_cross_analysis(raid_stats: dict, historical: list[dict], player_deltas: list[dict], size_label: str) -> str:
+def render_cross_analysis(  # noqa: C901
+    raid_stats: dict, historical: list[dict], player_deltas: list[dict], size_label: str
+) -> str:
     lines = [
         f"# Cross-Analysis: {raid_stats['title']}",
         "",
@@ -408,10 +410,10 @@ def export_cross_analysis(
         )
         from wcl_core import paths
 
-        output_path = os.path.join(str(paths.get_reports_dir()), f"{safe_title}_cross_analysis.md")
+        output_path = str(Path(paths.get_reports_dir()) / f"{safe_title}_cross_analysis.md")
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with Path(output_path).open("w", encoding="utf-8") as f:
         f.write(content)
 
     return output_path

@@ -216,7 +216,7 @@ class RaidMetadata:
 
             api_url = load_config().get("wcl_api_url", "")
             base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
-        except Exception:
+        except Exception:  # noqa: BLE001 - a link must render even without a readable config
             base = "https://www.warcraftlogs.com"
         return f"{base}/reports/{self.report_id}"
 

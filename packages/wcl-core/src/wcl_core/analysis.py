@@ -9,9 +9,9 @@ import bisect
 import contextlib
 import json
 import logging
-import os
 from collections import defaultdict
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -747,10 +747,10 @@ def _analyze_dps(
 def _load_consumes_config() -> dict:
     from . import paths
 
-    config_path = str(paths.get_consumes_config_path())
-    if not os.path.exists(config_path):
+    config_path = Path(paths.get_consumes_config_path())
+    if not config_path.exists():
         return {"buff_consumables": {}, "cast_consumables": {}}
-    with open(config_path, encoding="utf-8") as f:
+    with config_path.open(encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -829,10 +829,10 @@ def _analyze_consumables(
 def _load_interrupt_config() -> dict[int, str]:
     from . import paths
 
-    config_path = str(paths.get_interrupt_config_path())
-    if not os.path.exists(config_path):
+    config_path = Path(paths.get_interrupt_config_path())
+    if not config_path.exists():
         return {}
-    with open(config_path, encoding="utf-8") as f:
+    with config_path.open(encoding="utf-8") as f:
         raw = json.load(f)
     return {int(sid): name for sid, name in raw.items()}
 
@@ -1120,10 +1120,10 @@ def _correlate_cancelled_casts(
 def _load_debuff_config() -> dict[int, str]:
     from . import paths
 
-    config_path = str(paths.get_debuff_config_path())
-    if not os.path.exists(config_path):
+    config_path = Path(paths.get_debuff_config_path())
+    if not config_path.exists():
         return {}
-    with open(config_path, encoding="utf-8") as f:
+    with config_path.open(encoding="utf-8") as f:
         raw = json.load(f)
     boss_debuffs = raw.get("boss_debuffs", {})
     return {int(sid): name for sid, name in boss_debuffs.items()}
@@ -1195,10 +1195,10 @@ def _analyze_aura_uptimes(
 def _load_totem_config() -> dict[int, dict]:
     from . import paths
 
-    config_path = str(paths.get_totem_config_path())
-    if not os.path.exists(config_path):
+    config_path = Path(paths.get_totem_config_path())
+    if not config_path.exists():
         return {}
-    with open(config_path, encoding="utf-8") as f:
+    with config_path.open(encoding="utf-8") as f:
         raw = json.load(f)
     totems = raw.get("totems", {})
     return {int(sid): info for sid, info in totems.items()}
@@ -1284,7 +1284,7 @@ def _analyze_totem_uptimes(
     return results, warnings
 
 
-def _analyze_encounters(
+def _analyze_encounters(  # noqa: C901
     client: WarcraftLogsClient,
     report_id: str,
     composition: RaidComposition,
@@ -1485,7 +1485,7 @@ def build_class_cast_timelines(
     return timelines
 
 
-def analyze_resource_waste(
+def analyze_resource_waste(  # noqa: C901
     client: WarcraftLogsClient,
     report_id: str,
     encounter: EncounterSummary,
@@ -1521,7 +1521,7 @@ def analyze_resource_waste(
 
     try:
         api_ability_names = client.get_ability_names(report_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 - names are cosmetic; fall back to the built-in table
         api_ability_names = {}
 
     for player in all_players:
@@ -1637,7 +1637,7 @@ def analyze_resource_waste(
     return results
 
 
-def analyze_cooldown_synergy(
+def analyze_cooldown_synergy(  # noqa: C901
     client: WarcraftLogsClient,
     report_id: str,
     encounter: EncounterSummary,
@@ -1647,9 +1647,9 @@ def analyze_cooldown_synergy(
     """Analyze how well players align personal cooldowns with Heroism/Bloodlust."""
     from .paths import get_cooldowns_config_path
 
-    config_path = get_cooldowns_config_path()
+    config_path = Path(get_cooldowns_config_path())
     try:
-        with open(config_path, encoding="utf-8") as f:
+        with config_path.open(encoding="utf-8") as f:
             cd_config = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
         logger.error("Failed to load cooldowns config: %s", e)

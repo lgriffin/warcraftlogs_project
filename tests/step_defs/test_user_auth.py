@@ -2,6 +2,7 @@
 
 import json
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -31,7 +32,7 @@ def saved_valid_token(tmp_path, token, seconds):
         "refresh_token": "some_refresh",
         "expires_at": time.time() + seconds,
     }
-    with open(token_path, "w") as f:
+    with Path(token_path).open("w") as f:
         json.dump(data, f)
     tm = UserTokenManager(token_path=token_path)
     return {"tm": tm, "path": token_path, "post_mock": None}
@@ -48,7 +49,7 @@ def saved_expired_token(tmp_path, refresh):
         "refresh_token": refresh,
         "expires_at": 0,
     }
-    with open(token_path, "w") as f:
+    with Path(token_path).open("w") as f:
         json.dump(data, f)
     tm = UserTokenManager(token_path=token_path)
     return {"tm": tm, "path": token_path, "post_mock": None}
@@ -57,7 +58,7 @@ def saved_expired_token(tmp_path, refresh):
 @given("a corrupted token file", target_fixture="user_auth_ctx")
 def corrupted_token(tmp_path):
     token_path = str(tmp_path / "user_token.json")
-    with open(token_path, "w") as f:
+    with Path(token_path).open("w") as f:
         f.write("{corrupted data not valid json!!!")
     tm = UserTokenManager(token_path=token_path)
     return {"tm": tm, "path": token_path, "post_mock": None}
@@ -154,16 +155,14 @@ def check_not_authenticated(user_auth_ctx):
 
 @then("the token file should exist")
 def check_file_exists(user_auth_ctx):
-    import os
 
-    assert os.path.exists(user_auth_ctx["path"])
+    assert Path(user_auth_ctx["path"]).exists()
 
 
 @then("the token file should not exist")
 def check_file_not_exists(user_auth_ctx):
-    import os
 
-    assert not os.path.exists(user_auth_ctx["path"])
+    assert not Path(user_auth_ctx["path"]).exists()
 
 
 @then(parsers.parse('the token should be "{expected}"'))

@@ -272,7 +272,7 @@ class CharacterHistoryWidget(QWidget):
         table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         return table
 
-    def _load_data(self):
+    def _load_data(self):  # noqa: C901
         try:
             with PerformanceDB() as db:
                 history = db.get_character_history(self._name)

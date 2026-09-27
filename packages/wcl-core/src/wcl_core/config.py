@@ -8,6 +8,7 @@ settings used throughout the application.
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from pydantic import SecretStr
@@ -86,14 +87,14 @@ class ConfigManager:
         if self._config is not None:
             return self._config
 
-        if not os.path.exists(self.config_file):
+        if not Path(self.config_file).exists():
             raise ConfigurationError(
                 f"Configuration file '{self.config_file}' not found. "
                 "Please create it with your Warcraft Logs API credentials."
             )
 
         try:
-            with open(self.config_file) as f:
+            with Path(self.config_file).open() as f:
                 raw_config = json.load(f)
         except json.JSONDecodeError as e:
             raise ConfigurationError(f"Invalid JSON in config file: {e}") from e

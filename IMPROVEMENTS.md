@@ -78,7 +78,7 @@ Source: architecture & best-practices review (v4.3.x)
 
 - Align `guides/TESTING.md` (claims ~80%) with `fail_under = 55` and `omit = gui/*` in `pyproject.toml`
 - ~~Promote mypy off `continue-on-error`~~ (done: mypy is blocking in CI and runs in pre-commit); GUI tests still to promote
-- Keep vulture/radon advisory until legacy deletion (Phase 1) lands
+- ~~Keep radon advisory~~ (done: Ruff's C901 gate blocks functions over complexity 15; older ones carry `# noqa: C901`)
 - Raise coverage on extracted pure modules; keep GUI coverage optional until helpers are non-Qt
 
 ---

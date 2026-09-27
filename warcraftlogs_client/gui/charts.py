@@ -706,7 +706,7 @@ class CalendarHeatmapWidget(QWidget):
         self.setMinimumHeight(160)
         self.setMouseTracking(True)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event):  # noqa: C901
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))
@@ -1480,7 +1480,7 @@ class OverlayTimelineHeatmap(QWidget):
         legend_h = 20
         self.setMinimumHeight(top_margin + max(total_rows, 1) * (cell_h + gap) + legend_h + 10)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event):  # noqa: C901
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.fillRect(self.rect(), QColor(COLORS["bg_card"]))

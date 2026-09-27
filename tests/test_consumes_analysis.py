@@ -1,7 +1,7 @@
 """Tests for ConsumesAnalyzer — spike detection, counting, role determination."""
 
 import json
-import os
+from pathlib import Path
 
 import pytest
 
@@ -142,8 +142,8 @@ class TestCsvExport:
         analyzer.raid_metadata["r1"] = {"title": "Kara", "date": 1700000000}
         csv_path = str(tmp_path / "output.csv")
         analyzer._export_to_csv(csv_path)
-        assert os.path.exists(csv_path)
-        with open(csv_path) as f:
+        assert Path(csv_path).exists()
+        with Path(csv_path).open() as f:
             content = f.read()
         assert "Player1" in content
         assert "Haste Potion" in content
