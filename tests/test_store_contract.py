@@ -223,6 +223,18 @@ def test_raid_list_is_guild_raids_newest_first(repo):
     assert [r["report_id"] for r in repo.get_raid_list(limit=1)] == [GRUUL]
 
 
+def test_count_raids_counts_each_source(repo):
+    assert repo.count_raids() == 0
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(GRUUL, start=T0 + DAY, title="Gruul"))
+    repo.import_raid(_analysis(REF, start=T0 + 2 * DAY), source="reference")
+    repo.import_raid(_analysis(KARA, start=T0))  # storing again adds no raid
+
+    assert repo.count_raids() == 2
+    assert repo.count_raids("guild") == 2
+    assert repo.count_raids("reference") == 1
+
+
 def test_raid_analysis_round_trips(repo):
     repo.import_raid(_analysis())
     got = repo.get_raid_analysis(KARA)

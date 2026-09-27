@@ -437,6 +437,7 @@ class HomeView(QWidget):
         worker = _PageWorker(self._service, self)
         worker.loaded.connect(self.show_page)
         worker.finished.connect(self._on_loaded)
+        worker.finished.connect(worker.deleteLater)
         self._worker = worker
         worker.start()
 

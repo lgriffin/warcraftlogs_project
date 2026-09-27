@@ -299,6 +299,39 @@ def test_one_failing_widget_does_not_blank_the_others(tmp_path):
     assert not page.widgets[1].error and page.widgets[1].actions
 
 
+def test_undecodable_stored_data_marks_only_that_widget(tmp_path, build_analysis):
+    class BadAnalysis(PerformanceDB):
+        def get_raid_analysis(self, report_id):
+            raise ValueError("Expecting value: line 1 column 1")
+
+    path = str(tmp_path / "bad.db")
+    with PerformanceDB(path) as db:
+        db.import_raid(build_analysis(report_id=KARA))
+
+    page = HomeService(lambda: BadAnalysis(path)).page(HomeLayout.of(["last_raid", "recent_raids"]))
+    assert "Expecting value" in page.widgets[0].error
+    assert not page.widgets[1].error and page.widgets[1].items
+
+
+def test_future_dated_raids_are_not_counted_as_recent(storage, build_analysis):
+    ahead = datetime(2026, 10, 3, 20, 0)  # after NOW, e.g. an uploader with a wrong clock
+    with storage() as repo:
+        repo.import_raid(build_analysis(report_id=KARA, start_time=_ms(ahead), end_time=_ms(ahead) + 60_000))
+    tiles = _tiles(HomeService(storage, now=lambda: NOW).widget("guild_snapshot"))
+    assert tiles["Raids stored"].value == 1
+    assert tiles["Raids in 30 days"].value == 0
+
+
+def test_raids_stored_counts_every_guild_raid_not_just_the_ones_read(storage, build_analysis, monkeypatch):
+    monkeypatch.setattr("wcl_app.home._RECENT_RAIDS_READ", 1)
+    with storage() as repo:
+        repo.import_raid(build_analysis(report_id=KARA, start_time=_ms(datetime(2026, 9, 14, 20))))
+        repo.import_raid(build_analysis(report_id=GRUUL, start_time=_ms(datetime(2026, 9, 21, 20))))
+        repo.import_raid(build_analysis(report_id="RefRefRefRefRefR"), source="reference")
+    tiles = _tiles(HomeService(storage, now=lambda: NOW).widget("guild_snapshot"))
+    assert tiles["Raids stored"].value == 2
+
+
 def test_unknown_widget_id_raises_key_error(service):
     with pytest.raises(KeyError):
         service.widget("nope")

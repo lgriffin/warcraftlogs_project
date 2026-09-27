@@ -58,8 +58,8 @@ ACTIVITY_WEEKS = 8
 RECENT_RAIDS = 8
 TOP_N = 5
 
-# Enough to list every stored raid; get_raid_list requires a limit.
-_ALL_RAIDS = 100_000
+# Newest raids read per page: enough for recent raids, attendance and weeks of activity at any raid cadence.
+_RECENT_RAIDS_READ = 100
 
 
 # ── Payloads ──
@@ -204,7 +204,7 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec("attendance", "Attendance", f"Who came to the last {ATTENDANCE_WINDOW} raids", TABLE, HALF, True),
     WidgetSpec("boss_kills", "Boss kills", "Every boss killed in the last raid and how long it took", TABLE, HALF),
     WidgetSpec("class_mix", "Class mix", "Players of each class in the last raid", BARS, HALF),
-    WidgetSpec("interrupts", "Interrupts", "Most interrupts in the last raid", TABLE, HALF),
+    WidgetSpec("interrupts", "Interrupt casts", "Most interrupt abilities cast in the last raid", TABLE, HALF),
     WidgetSpec("consumables", "Consumables", "Most consumables used in the last raid", TABLE, HALF),
     WidgetSpec("tracked_players", "Tracked players", "Characters you follow with a player page", TABLE, HALF),
 )
@@ -332,7 +332,12 @@ class _Snapshot:
 
     @cached_property
     def raids(self) -> list[dict[str, Any]]:
-        return self.repo.get_raid_list(limit=_ALL_RAIDS)
+        """The newest guild raids, newest first."""
+        return self.repo.get_raid_list(limit=_RECENT_RAIDS_READ)
+
+    @cached_property
+    def raid_count(self) -> int:
+        return self.repo.count_raids("guild")
 
     @cached_property
     def last_raid(self) -> dict[str, Any] | None:
@@ -440,8 +445,8 @@ class HomeService:
         widget = self._blank(widget_id)
         try:
             self._builders[widget_id](snapshot, widget)
-        except StorageError as e:
-            widget.error = str(e)
+        except (StorageError, ValueError) as e:  # ValueError: stored data that no longer decodes
+            widget.error = str(e) or type(e).__name__
         return widget
 
     # ── Widgets ──
@@ -454,10 +459,10 @@ class HomeService:
         dates = [_parse_date(r.get("raid_date")) for r in s.raids]
         last = dates[0] if dates else None
         active = {p["name"].lower() for roster in s.rosters for p in roster}
-        last_30 = sum(1 for d in dates if d is not None and now - d <= timedelta(days=30))
+        last_30 = sum(1 for d in dates if d is not None and timedelta(0) <= now - d <= timedelta(days=30))
         days_since = (now.date() - last.date()).days if last else None
         w.tiles = [
-            Tile("Raids stored", len(s.raids), f"{len(s.raids):,}"),
+            Tile("Raids stored", s.raid_count, f"{s.raid_count:,}"),
             Tile("Active raiders", len(active), str(len(active)), f"in the last {ATTENDANCE_WINDOW} raids"),
             Tile("Raids in 30 days", last_30, str(last_30)),
             Tile("Last raid", last.strftime("%Y-%m-%d") if last else None, f"{last:%b} {last.day}" if last else "-"),
@@ -647,10 +652,10 @@ class HomeService:
             counts[i.player_name] += i.count
             classes[i.player_name] = i.player_class
         if not counts:
-            w.empty = "No interrupts recorded in the last raid."
+            w.empty = "No interrupt casts recorded in the last raid."
             return
         w.subtitle = s.last_raid["title"] if s.last_raid else ""
-        w.columns = [Column("name", "Name"), Column("class", "Class"), Column("interrupts", "Interrupts", "right")]
+        w.columns = [Column("name", "Name"), Column("class", "Class"), Column("interrupts", "Casts", "right")]
         for name, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:TOP_N]:
             w.rows.append(
                 Row(

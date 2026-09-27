@@ -531,6 +531,12 @@ class PostgresRaidRepository:
             return {r.report_id: r.imported_at for r in rows}
 
     @_storage_errors
+    def count_raids(self, source: str = "guild") -> int:
+        with self._engine.connect() as conn:
+            query = select(func.count()).select_from(t.raids).where(t.raids.c.source == source)
+            return int(conn.execute(query).scalar_one())
+
+    @_storage_errors
     def get_raid_list(self, limit: int = 50) -> list[dict[str, Any]]:
         r = t.raids.c
         with self._engine.connect() as conn:

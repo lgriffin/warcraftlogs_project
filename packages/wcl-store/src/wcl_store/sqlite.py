@@ -1579,6 +1579,10 @@ class PerformanceDB:
         ).fetchall()
         return [r["zone"] for r in rows]
 
+    def count_raids(self, source: str = "guild") -> int:
+        row = self._get_conn().execute("SELECT COUNT(*) AS n FROM raids WHERE source = ?", (source,)).fetchone()
+        return int(row["n"])
+
     def get_raid_list(self, limit: int = 50) -> list[dict]:
         """Get list of all imported guild raids."""
         conn = self._get_conn()

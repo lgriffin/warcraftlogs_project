@@ -20,7 +20,8 @@ home.widget("attendance").to_dict()             # one widget, to refresh it alon
 ```
 
 Storage comes from `ctx.repository()`, so a headless host (`AppContext.headless(client, storage)`) gets the
-same payloads from Postgres. Only `RaidRepository` methods are used: no new storage operations.
+same payloads from Postgres. It reads only `RaidRepository` methods: the newest 100 guild raids, `count_raids()`
+for the total, rosters of the last 10 raids and the last raid's analysis.
 
 A `LayoutStore` has `load() -> HomeLayout | None` and `save(layout | None)`. The desktop uses
 `JsonLayoutStore(<user data dir>/home_layout.json)`. The Hub should keep one layout per member, storing
@@ -86,16 +87,16 @@ Quick action ids: `raids.download`, `raids.browse`, `raids.diff`, `characters`, 
 | id                | kind    | size | default | shows                                                               |
 |-------------------|---------|------|---------|---------------------------------------------------------------------|
 | `quick_actions`   | actions | full | yes     | shortcuts to the main parts of the app                              |
-| `guild_snapshot`  | stats   | full | yes     | raids stored, active raiders (last 10 raids), raids in 30 days, last raid, days since |
-| `last_raid`       | stats   | full | yes     | date, duration, bosses killed, raid size, total damage and healing; links the raid |
+| `guild_snapshot`  | stats   | full | yes     | raids stored, active raiders, raids in 30 days, last raid, days since |
+| `last_raid`       | stats   | full | yes     | date, duration, bosses, raid size, total damage and healing |
 | `recent_raids`    | list    | half | yes     | the 8 newest raids                                                   |
 | `raid_activity`   | bars    | half | yes     | raids per week for the last 8 weeks, labelled by the week's Monday   |
 | `top_damage`      | table   | half | yes     | top 5 damage in the last raid: rank, name, class, damage, share      |
 | `top_healing`     | table   | half | yes     | top 5 healing in the last raid: rank, name, class, healing, overheal |
-| `attendance`      | table   | half | yes     | top 10 attendance over the last 10 raids: name, class, raids, attendance |
-| `boss_kills`      | table   | half | no      | bosses killed in the last raid, in kill order: boss, kill time, players |
+| `attendance`      | table   | half | yes     | top 10 attendance over the last 10 raids                            |
+| `boss_kills`      | table   | half | no      | bosses killed in the last raid, in kill order, with kill time       |
 | `class_mix`       | bars    | half | no      | players per class in the last raid                                  |
-| `interrupts`      | table   | half | no      | top 5 interrupters in the last raid                                 |
+| `interrupts`      | table   | half | no      | top 5 interrupt ability casts in the last raid (casts, not hits)    |
 | `consumables`     | table   | half | no      | top 5 consumable users in the last raid: name, role, used           |
 | `tracked_players` | table   | half | no      | player pages: name, server, region, logs added                      |
 

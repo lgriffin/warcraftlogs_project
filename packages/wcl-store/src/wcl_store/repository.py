@@ -42,6 +42,10 @@ class RaidRepository(Protocol):
         """``{report_id: imported_at}`` for every stored raid, of any source."""
         ...
 
+    def count_raids(self, source: str = "guild") -> int:
+        """How many raids of ``source`` (``"guild"`` or ``"reference"``) are stored."""
+        ...
+
     def get_raid_list(self, limit: int = 50) -> list[dict[str, Any]]:
         """Guild raids, newest ``raid_date`` first: report_id, title, owner, raid_date, imported_at."""
         ...
