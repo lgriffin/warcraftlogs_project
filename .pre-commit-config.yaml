@@ -1,3 +1,6 @@
+# Install once with `pre-commit install` after `pip install -e ".[dev]"`.
+# The checks below are `local`/`system` hooks: they run the tools pinned in pyproject.toml's dev extra, against the
+# installed packages, so pre-commit, `python scripts/dev.py check` and CI all use the same versions.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -6,29 +9,46 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
       - id: check-added-large-files
         args: ['--maxkb=500']
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
-    hooks:
-      - id: ruff
-        args: ['--fix']
-      - id: ruff-format
-
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
-    hooks:
-      - id: codespell
-        additional_dependencies: ["tomli"]
-        args: ["--config", "pyproject.toml"]
-
-  # Uses the mypy from `pip install -e ".[dev]"`, so it sees the installed packages and matches CI.
   - repo: local
     hooks:
+      - id: ruff
+        name: ruff (lint, with fixes)
+        entry: ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff (format)
+        entry: ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: codespell
+        name: codespell
+        entry: codespell
+        language: system
+        types: [text]
+        files: ^(warcraftlogs_client|packages/wcl-[a-z]+/src|tests)/
+      - id: import-contracts
+        name: import-linter (package layering)
+        entry: lint-imports
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: mypy
         name: mypy
-        entry: mypy warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ packages/wcl-app/src/ --exclude gui/
+        entry: python scripts/dev.py types
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: vulture
+        name: vulture (dead code)
+        entry: python scripts/dev.py deadcode
         language: system
         types: [python]
         pass_filenames: false
