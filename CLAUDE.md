@@ -49,8 +49,9 @@ python scripts/dev.py types imports -k   # any tasks, in order; -k keeps going a
 pre-commit install              # run the same pinned tools on every commit
 ```
 
-Tasks: `format lint spelling imports deadcode types security test` (together, `check`), plus `audit`, `fuzz`,
-`gui`.
+Tasks: `format lint spelling imports deadcode types security test` (together, `check`), plus `audit`, `diffcov`
+(coverage of lines changed since origin/master, after `test`), `fuzz`, `gui`. The coverage floor in `pyproject.toml`
+only goes up.
 
 Checker versions are pinned in the `dev` extra; bump them through Dependabot, not by hand. The underlying commands:
 

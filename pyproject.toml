@@ -32,6 +32,7 @@ dev = [
     "vulture==2.16",
     "pip-audit>=2.7",
     "codespell==2.4.3",
+    "diff-cover==9.2.0",
     "import-linter==2.15",
 ]
 
@@ -130,7 +131,8 @@ source = ["warcraftlogs_client", "wcl_core", "wcl_store", "wcl_app"]
 omit = ["warcraftlogs_client/gui/*"]
 
 [tool.coverage.report]
-fail_under = 55
+# Measured 71% on 2026-09-27. Raise it as coverage grows; never lower it.
+fail_under = 70
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

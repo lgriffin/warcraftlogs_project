@@ -76,8 +76,8 @@ Source: architecture & best-practices review (v4.3.x)
 
 ## Phase 4 — Quality gates
 
-- Align `guides/TESTING.md` (claims ~80%) with `fail_under = 55` and `omit = gui/*` in `pyproject.toml`
-- ~~Promote mypy off `continue-on-error`~~ (done: mypy is blocking in CI and runs in pre-commit); GUI tests still to promote
+- ~~Align `guides/TESTING.md` with the coverage config~~ (done: floor 70%, 80% of changed lines via diff-cover)
+- ~~Promote mypy and GUI tests off `continue-on-error`~~ (done: both block; GUI tests run on Qt's offscreen platform)
 - ~~Keep radon advisory~~ (done: Ruff's C901 gate blocks functions over complexity 15; older ones carry `# noqa: C901`)
 - Raise coverage on extracted pure modules; keep GUI coverage optional until helpers are non-Qt
 
@@ -156,8 +156,8 @@ Source: architecture & best-practices review (v4.3.x)
 |-----------|---------|
 | “No API rate limiting” | **Done** — `WarcraftLogsClient` throttles (250 ms) and retries 429/5xx |
 | “No `PRAGMA busy_timeout`” | **Done** — set to 5000 with WAL + foreign keys |
-| “GUI has zero coverage / add pytest-qt” | Partially outdated — `tests/gui/` exists; CI still `continue-on-error` |
-| Coverage “29% / target 80%” | Docs/config drift — enforce 55% on non-GUI; update TESTING.md |
+| “GUI has zero coverage / add pytest-qt” | **Done** — `tests/gui/` runs in a blocking CI job (offscreen Qt) |
+| Coverage “29% / target 80%” | **Done** — 70% floor on non-GUI code plus 80% of changed lines per PR |
 
 ---
 
