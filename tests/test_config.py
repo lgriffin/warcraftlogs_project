@@ -156,3 +156,16 @@ class TestSingleton:
         )
         m2 = get_config_manager(str(other))
         assert m1 is not m2
+
+
+class TestBadges:
+    def test_badges_section_passes_through(self, tmp_path):
+        cfg_path = tmp_path / "config.json"
+        section = {"thresholds": {"attendance": [1, 2]}, "disabled": ["drums"]}
+        cfg_path.write_text(json.dumps({"client_id": "a", "client_secret": "b", "report_id": "c", "badges": section}))
+        assert load_config(str(cfg_path))["badges"] == section
+
+    def test_missing_or_malformed_badges_section_is_empty(self, tmp_path):
+        cfg_path = tmp_path / "config.json"
+        cfg_path.write_text(json.dumps({"client_id": "a", "client_secret": "b", "report_id": "c", "badges": [1]}))
+        assert ConfigManager(str(cfg_path)).load().badges == {}

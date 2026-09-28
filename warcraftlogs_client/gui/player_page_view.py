@@ -40,6 +40,7 @@ from ..services.player_page import (
     PlayerPageService,
     PlayerRef,
 )
+from .badges import BadgeStrip
 from .styles import COLORS, COMMON_STYLES
 
 _COLUMNS = ["Date", "Title", "Zone", "Owner", "Status", "Imported", "Code"]
@@ -162,6 +163,15 @@ class PlayerPageView(QWidget):
         self._summary = QLabel("Enter a character to find the reports they appear in.")
         self._summary.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
         layout.addWidget(self._summary)
+
+        badge_row = QHBoxLayout()
+        badge_label = QLabel("Toads badges:")
+        badge_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        badge_row.addWidget(badge_label)
+        self._badges = BadgeStrip(size=30)
+        self._badges.setToolTip("Hover a badge for its tier and what the next one needs")
+        badge_row.addWidget(self._badges, 1)
+        layout.addLayout(badge_row)
 
         role_row = QHBoxLayout()
         role_label = QLabel("Analyse as:")
@@ -348,6 +358,7 @@ class PlayerPageView(QWidget):
             f"{self._player.label}: {len(page_logs)} on your page, {len(self._discovered)} found, {new} new"
         )
         self._fill_lineage(page.lineage)
+        self._badges.set_badges(page.badges.badges if page.badges else [])
         wide = next((o["role"] for o in page.role_overrides if not o["report_id"]), None)
         self._role_combo.setCurrentText(wide or "Detected")
         self.status_message.emit(f"Found {len(self._discovered)} reports for {self._player.name}")

@@ -14,6 +14,8 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import AddResult as AddResult
     from wcl_app import AnalysisThresholds as AnalysisThresholds
     from wcl_app import AppContext as AppContext
+    from wcl_app import BadgeRules as BadgeRules
+    from wcl_app import BadgeService as BadgeService
     from wcl_app import CharacterLineage as CharacterLineage
     from wcl_app import Chart as Chart
     from wcl_app import ChartError as ChartError
@@ -23,6 +25,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import HomeService as HomeService
     from wcl_app import HomeWidget as HomeWidget
     from wcl_app import JsonLayoutStore as JsonLayoutStore
+    from wcl_app import PlayerBadges as PlayerBadges
     from wcl_app import PlayerLog as PlayerLog
     from wcl_app import PlayerPageData as PlayerPageData
     from wcl_app import PlayerPageService as PlayerPageService
@@ -46,6 +49,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import validate_report_code as validate_report_code
 
 for _name in (
+    "badges",
     "charts",
     "context",
     "healing",

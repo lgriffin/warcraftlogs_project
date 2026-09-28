@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import requests
 from wcl_core.common.errors import WarcraftLogsError
 
+from wcl_app.badges import BadgeRules, PlayerBadges, character_stats
 from wcl_app.context import AnalysisThresholds, AppContext, validate_report_code
 from wcl_app.lineage import CharacterLineage, character_lineage
 
@@ -142,6 +143,7 @@ class PlayerPageData:
     history: dict[str, Any] | None = None
     lineage: CharacterLineage | None = None
     role_overrides: list[dict] = field(default_factory=list)
+    badges: PlayerBadges | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -150,6 +152,7 @@ class PlayerPageData:
             "history": self.history,
             "lineage": self.lineage.to_dict() if self.lineage else None,
             "role_overrides": self.role_overrides,
+            "badges": self.badges.to_dict() if self.badges else None,
         }
 
 
@@ -170,11 +173,13 @@ class PlayerPageService:
         client: WarcraftLogsClient | None = None,
         analyze: AnalyzeFn | None = None,
         import_source: str = "guild",
+        badge_rules: BadgeRules | None = None,
     ):
         self.db = db
         self.client = client
         self._analyze = analyze
         self.import_source = import_source
+        self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
 
     @classmethod
     def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool = True) -> PlayerPageService:
@@ -183,11 +188,12 @@ class PlayerPageService:
         ``db`` is the handle from ``ctx.repository()``; the caller owns its lifetime. ``with_api=False``
         gives a local-only service that never builds a WCL client (no credentials needed).
         """
+        rules = BadgeRules.from_config(ctx.config)
         if not with_api:
-            return cls(db)
+            return cls(db, badge_rules=rules)
         from wcl_app.raids import RaidService
 
-        return cls(db, ctx.wcl_client, analyze=RaidService(ctx).analyze)
+        return cls(db, ctx.wcl_client, analyze=RaidService(ctx).analyze, badge_rules=rules)
 
     # ── Pages ──
 
@@ -201,12 +207,15 @@ class PlayerPageService:
         page_id = self.open_page(player)
         logs = [self._row_to_log(r) for r in self.db.get_player_page_logs(page_id, status="added")]
         history = self.db.get_character_history(player.name)
+        badges = self.badge_rules.award(character_stats(self.db, player.name))
+        badges.player_class = history.player_class if history else ""
         return PlayerPageData(
             player=player,
             logs=logs,
             history=_history_summary(history) if history else None,
             lineage=character_lineage(self.db, player.name),
             role_overrides=self.db.get_role_overrides(player.name),
+            badges=badges,
         )
 
     # ── Discovery ──

@@ -8,6 +8,7 @@ imports (enforced by ``lint-imports`` and ``tests/test_wcl_app_package.py``).
 ``warcraftlogs_client.services`` is an alias of this package.
 """
 
+from wcl_app.badges import Badge, BadgeRule, BadgeRules, BadgeService, PlayerBadges
 from wcl_app.charts import Chart, ChartError, Series
 from wcl_app.context import AnalysisThresholds, AppContext, ProgressCallback, validate_report_code
 from wcl_app.healing import HealingService, WeeklyHealing
@@ -23,6 +24,10 @@ __all__ = [
     "AddResult",
     "AnalysisThresholds",
     "AppContext",
+    "Badge",
+    "BadgeRule",
+    "BadgeRules",
+    "BadgeService",
     "CharacterLineage",
     "Chart",
     "ChartError",
@@ -32,6 +37,7 @@ __all__ = [
     "HomeService",
     "HomeWidget",
     "JsonLayoutStore",
+    "PlayerBadges",
     "PlayerLog",
     "PlayerPageData",
     "PlayerPageService",
