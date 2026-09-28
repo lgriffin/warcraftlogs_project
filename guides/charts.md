@@ -13,7 +13,7 @@ A chart is capped so it stays readable on a phone and its payload stays small:
 |--------------|-------|------------------------------------------------------------------|
 | `MAX_SERIES` | 8     | a longer legend stops being readable and colours start to repeat |
 | `MAX_POINTS` | 52    | a year of weekly points; more labels no longer fit a narrow axis |
-| `MAX_REFERENCES` | 3 | reference lines (a target, a baseline); more read as data        |
+| `MAX_REFERENCES` | 3 | reference lines (such as a recent average); more read as data    |
 | `MAX_TEXT`   | 120   | every text field (titles, keys, names, `display`) stays one line |
 | `MAX_NOTES`  | 10    | notes are a few lines under the chart, not a report              |
 
@@ -63,28 +63,30 @@ Colours are the frontend's: give series colours in order, with the emphasised se
 
 ## Week-on-week healing
 
-`wcl_app.healing` is the guild's standard healing view, the number the guild holds itself to while it aims to be a
-high-energy guild. Every week is measured two ways:
+`wcl_app.healing` is the guild's standard healing view, the numbers the guild holds itself to while it aims to be a
+high-energy guild. There is no fixed target: the standard is two averages tracked over time.
 
-- **Trend**: the latest raided week against the average of the 4 raided weeks before it: `up`, `down`, or `steady`
-  within 2%, or `new` when there is nothing before it.
-- **Target**: when the guild sets a healing-per-raid target (`HealingService(storage, target=...)`,
-  `HomeService(..., healing_target=...)`), whether the latest week met it and in how many raided weeks it was met.
+- **Per raid**: effective healing per raid.
+- **Per character**: healing per healer per raid, averaged over every healer in every raid that week.
 
-Both are drawn as reference lines on the `healing_weekly` chart and spelled out in its notes. Weeks start on
-Monday (by the raid's local start) and every number is per raid, so a week with two raids compares fairly with a
-week with one. Guild raids only.
+Each is measured against its own average over the 4 raided weeks before the latest (`up`, `down`, or `steady`
+within 2%, or `new` when there is nothing before it). The `healing_weekly` chart draws healing per raid with its
+4-week average as a reference line; `healers_weekly` draws the average per character as the emphasised line with
+each healer's healing per raid attended around it. Both trends are spelled out in the notes. Weeks start on Monday
+(by the raid's local start) and every number is per raid, so a week with two raids compares fairly with a week with
+one. Guild raids only.
 
 ```python
 from wcl_app import HealingService
 
-service = HealingService.from_context(ctx, target=4_000_000)
+service = HealingService.from_context(ctx)
 weekly = service.weekly(weeks=12)   # clamped to 2..26 weeks, this week included
-weekly.standard()      # HealingStandard: latest week, baseline, trend, target, on_target, weeks_on_target
+weekly.standard()      # HealingStandard: latest week, per raid and per character against their 4-week averages
 weekly.to_dict()       # "standard" as above, then per week: raids, healing, healing_per_raid,
-                       # overheal_percent, healers, change_percent; per healer: healing_per_raid by week
-weekly.raid_chart()    # bar chart "healing_weekly": healing per raid by week, against baseline and target
-weekly.healer_chart()  # line chart "healers_weekly": the top 8 healers' healing per raid attended
+                       # healing_per_character, overheal_percent, healers, change_percent;
+                       # per healer: healing_per_raid by week
+weekly.raid_chart()    # bar chart "healing_weekly": healing per raid by week, against its 4-week average
+weekly.healer_chart()  # line chart "healers_weekly": average per character, then the top 7 healers
 ```
 
 Storage is read once per page through `RaidRepository.get_healing_by_raid(since)`: healer totals for every guild
