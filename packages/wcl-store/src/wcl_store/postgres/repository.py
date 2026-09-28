@@ -1019,6 +1019,45 @@ class PostgresRaidRepository:
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))
 
+    # ── Guild totals ──
+
+    @_storage_errors
+    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+        c, r = t.characters, t.raids
+        rows = union(
+            *(
+                select(tbl.c.character_id, tbl.c.raid_id)
+                for tbl in (t.healer_performance, t.tank_performance, t.dps_performance)
+            )
+        ).subquery()
+        stmt = (
+            select(c.c.name, c.c.player_class, func.count(rows.c.raid_id.distinct()).label("raids"))
+            .select_from(rows.join(r, r.c.id == rows.c.raid_id).join(c, c.c.id == rows.c.character_id))
+            .where(r.c.source.in_(sources))
+            .group_by(c.c.id, c.c.name, c.c.player_class)
+            .order_by(_c(c.c.name))
+        )
+        with self._engine.connect() as conn:
+            return _dicts(conn.execute(stmt))
+
+    @_storage_errors
+    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+        c, r, cu = t.characters, t.raids, t.consumable_usage
+        stmt = (
+            select(
+                c.c.name,
+                cu.c.consumable_name,
+                func.sum(cu.c.count).label("count"),
+                func.count(cu.c.raid_id.distinct()).label("raids"),
+            )
+            .select_from(cu.join(r, r.c.id == cu.c.raid_id).join(c, c.c.id == cu.c.character_id))
+            .where(cu.c.count > 0, r.c.source.in_(sources))
+            .group_by(c.c.id, c.c.name, cu.c.consumable_name)
+            .order_by(_c(c.c.name), _c(cu.c.consumable_name))
+        )
+        with self._engine.connect() as conn:
+            return [{**row, "count": int(row["count"])} for row in _dicts(conn.execute(stmt))]
+
     # ── Player pages ──
 
     @_storage_errors

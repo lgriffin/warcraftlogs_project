@@ -237,6 +237,18 @@ class TestPageManagement:
         assert payload["player"] == {"name": "Holypriest", "server": "spineshatter", "region": "eu"}
         assert payload["logs"][0]["code"] == CODE_A
         assert payload["logs"][0]["date"]
+        assert payload["badges"]["name"] == "Holypriest" and payload["badges"]["player_class"] == "Priest"
+        attendance = payload["badges"]["badges"][0]
+        assert (attendance["id"], attendance["value"], attendance["tier"]) == ("attendance", 1, 0)
+
+    def test_page_badges_use_the_configured_thresholds(self, db, fake_client, analyzer):
+        from warcraftlogs_client.services import AppContext
+
+        ctx = AppContext(config={"badges": {"thresholds": {"attendance": [1]}}}, _client=fake_client)
+        PlayerPageService(db, fake_client, analyze=analyzer).add_reports(PLAYER, [CODE_A])
+        page = PlayerPageService.from_context(ctx, db, with_api=False).get_page(PLAYER)
+        assert page.badges is not None
+        assert [b.id for b in page.badges.earned] == ["attendance"]
 
     def test_clear_all_removes_pages(self, db, fake_client, analyzer):
         PlayerPageService(db, fake_client, analyze=analyzer).add_reports(PLAYER, [CODE_A])

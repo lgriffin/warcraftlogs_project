@@ -524,6 +524,41 @@ def test_character_consumable_counts(repo):
     assert repo.get_character_consumable_counts("Holy", ("reference",)) == []
 
 
+# ── Guild totals ──
+
+
+def test_raid_attendance_counts_raids_per_character(repo):
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(GRUUL, start=T0 + DAY, healer="Disc"))
+    repo.import_raid(_analysis(REF, start=T0 + 2 * DAY), source="reference")
+
+    assert repo.get_raid_attendance() == [
+        {"name": "Disc", "player_class": "Priest", "raids": 1},
+        {"name": "Holy", "player_class": "Priest", "raids": 1},
+        {"name": "Stab", "player_class": "Rogue", "raids": 2},
+        {"name": "Tanky", "player_class": "Warrior", "raids": 2},
+    ]
+    both = {r["name"]: r["raids"] for r in repo.get_raid_attendance(("guild", "reference"))}
+    assert both == {"Disc": 1, "Holy": 2, "Stab": 3, "Tanky": 3}
+    assert repo.get_raid_attendance(("nowhere",)) == []
+
+
+def test_consumable_totals_sum_across_raids(repo):
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(GRUUL, start=T0 + DAY))
+    repo.import_raid(_analysis(REF, start=T0 + 2 * DAY), source="reference")
+    unused = _analysis("UnusedUnusedUnus", start=T0 + 3 * DAY)
+    unused.consumables = [ConsumableUsage("Stab", "melee", "UnusedUnusedUnus", "Drums of Battle", 0, [])]
+    repo.import_raid(unused)
+
+    assert repo.get_consumable_totals() == [
+        {"name": "Holy", "consumable_name": "Super Mana Potion", "count": 6, "raids": 2},
+        {"name": "Stab", "consumable_name": "Haste Potion", "count": 2, "raids": 2},
+    ]
+    both = repo.get_consumable_totals(("guild", "reference"))
+    assert [(r["name"], r["count"], r["raids"]) for r in both] == [("Holy", 9, 3), ("Stab", 3, 3)]
+
+
 # ── Player pages ──
 
 
@@ -666,6 +701,8 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
         "roles": rows(repo.get_character_raid_roles("Stab", ("guild", "reference"))),
         "casts": unordered(repo.get_character_spell_casts("Holy")),
         "consumables": unordered(repo.get_character_consumable_counts("Disc")),
+        "attendance": repo.get_raid_attendance(("guild", "reference")),
+        "consumable_totals": repo.get_consumable_totals(("guild", "reference")),
         "pages": rows(repo.find_player_pages()),
         "page_logs": rows(repo.get_player_page_logs(page)),
         "overrides": rows(repo.get_role_overrides()),

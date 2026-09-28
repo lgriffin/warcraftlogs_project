@@ -1,9 +1,9 @@
 """
 Home — a customisable landing page built from ``services.home`` widgets.
 
-The view only draws what ``HomeService`` returns: each widget kind (stats, table, list, bars, actions, chart) has one
-renderer here, and links are turned into navigation signals the main window handles. The user's choice of
-widgets is saved through the service to ``home_layout.json`` in the user data directory.
+The view only draws what ``HomeService`` returns: each widget kind (stats, table, list, bars, actions, chart,
+badges) has one renderer here, and links are turned into navigation signals the main window handles. The user's
+choice of widgets is saved through the service to ``home_layout.json`` in the user data directory.
 """
 
 from __future__ import annotations
@@ -30,9 +30,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..common.errors import ConfigurationError
 from ..paths import get_user_data_dir
 from ..services import AppContext, HomeLayout, HomePage, HomeService, HomeWidget, JsonLayoutStore, WidgetSpec
 from ..services.home import ACTION, CHARACTER, PLAYER_PAGE, RAID, Link
+from .badges import BadgeStrip
 from .charts import build_payload_chart
 from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
@@ -42,8 +44,15 @@ _TILES_PER_ROW = 6
 
 
 def default_home_service() -> HomeService:
-    """The desktop's home service: the local database, with the layout kept next to it."""
-    return HomeService.from_context(AppContext(config={}), JsonLayoutStore(get_user_data_dir() / LAYOUT_FILE))
+    """The desktop's home service: the local database, with the layout kept next to it.
+
+    Badge thresholds come from config.json when it loads; without it the defaults apply.
+    """
+    try:
+        ctx = AppContext.from_config_file()
+    except ConfigurationError:
+        ctx = AppContext(config={})
+    return HomeService.from_context(ctx, JsonLayoutStore(get_user_data_dir() / LAYOUT_FILE))
 
 
 class _PageWorker(QThread):
@@ -145,6 +154,7 @@ class WidgetCard(QFrame):
             "list": self._list,
             "bars": self._bars,
             "actions": self._actions,
+            "badges": self._badges,
             "chart": self._chart,
         }
         return builders[widget.kind](widget)
@@ -297,6 +307,30 @@ class WidgetCard(QFrame):
             link = Link(ACTION, {"id": action.id})
             btn.clicked.connect(lambda _checked=False, link=link: self.link_activated.emit(link))
             grid.addWidget(btn, i // per_row, i % per_row)
+        return body
+
+    def _badges(self, widget: HomeWidget) -> QWidget:
+        body = QWidget()
+        grid = QGridLayout(body)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(4)
+        grid.setColumnStretch(1, 1)
+        for r, holder in enumerate(widget.holders):
+            name = QPushButton(holder.name)
+            name.setObjectName(f"holder:{holder.name}")
+            name.setFlat(True)
+            name.setCursor(Qt.CursorShape.PointingHandCursor)
+            color = CLASS_COLORS.get(holder.player_class, COLORS["text"])
+            name.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {color}; text-align: left; padding: 2px 4px;"
+                f" font-weight: normal; }} QPushButton:hover {{ color: {COLORS['text_gold']}; }}"
+            )
+            if holder.link is not None:
+                link = holder.link
+                name.clicked.connect(lambda _checked=False, link=link: self.link_activated.emit(link))
+            grid.addWidget(name, r, 0)
+            grid.addWidget(BadgeStrip(holder.badges, 24), r, 1)
         return body
 
 

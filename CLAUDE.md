@@ -30,7 +30,7 @@ pytest --cov=warcraftlogs_client --cov=wcl_core --cov=wcl_store --cov=wcl_app \
   --cov-report=term-missing                     # with coverage
 WCL_STORE_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres \
   pytest -rs tests/test_store_contract.py tests/test_wcl_store_package.py tests/test_wcl_app_package.py \
-  tests/test_home_service.py tests/step_defs/test_storage.py
+  tests/test_home_service.py tests/test_badges.py tests/step_defs/test_storage.py
 ```
 
 The storage contract (`tests/test_store_contract.py`) runs every test on SQLite and on Postgres. Without
@@ -83,10 +83,10 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `packages/wcl-store/src/wcl_store/postgres/migrations/` — Alembic migrations for the Postgres schema, numbered
   `0001_…`; `wcl_store.postgres.upgrade(url)` runs them
 - `packages/wcl-app/` — `wcl_app`: the application services (`AppContext`, `RaidService`, `PlayerService`,
-  `PlayerPageService`, `RoleOverrideService`, `HomeService`, lineage); depends only on wcl-core and wcl-store.
+  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, lineage); depends only on wcl-core and wcl-store.
   `warcraftlogs_client/services/` is an import alias of it. Headless hosts use `AppContext.headless(client, storage)`
 - `guides/` — project documentation; `guides/home_widgets.md` is the Home widget payload contract the Toads Hub
-  shares
+  shares, and `guides/badges.md` the Toads badge payload and its thresholds
 
 ## Conventions
 
