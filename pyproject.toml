@@ -91,9 +91,10 @@ ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 exclude = ["warcraftlogs_client/gui/"]
 
-# Strict typing for the shared packages: every function in them is annotated and its body checked.
+# Strict typing for the shared packages, the CLI and the renderers: every function in them is annotated and its body
+# checked. The GUI and the Qt-bound updater stay outside it.
 [[tool.mypy.overrides]]
-module = ["wcl_store.*", "wcl_app.*", "wcl_core.*"]
+module = ["wcl_store.*", "wcl_app.*", "wcl_core.*", "warcraftlogs_client.cli", "warcraftlogs_client.renderers.*"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
