@@ -8,6 +8,7 @@ Every frontend renders the same payloads. A widget is one of five kinds, and eac
     list     ``items``
     bars     ``bars``     one labelled value per bar, drawn as a bar chart
     actions  ``actions``  shortcuts to other parts of the app
+    chart    ``chart``    one ``wcl_app.charts.Chart`` payload (contract in ``guides/charts.md``)
 
 ``HomeWidget.to_dict()`` is the JSON shape the Toads Hub serves, documented in ``guides/home_widgets.md``.
 Values arrive both raw (``value`` / ``values``) and formatted (``display`` / ``cells``), so a frontend never
@@ -24,7 +25,7 @@ import json
 from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Protocol
@@ -32,7 +33,9 @@ from typing import Any, Protocol
 from wcl_core.models import RaidAnalysis
 from wcl_store import RaidRepository, StorageError
 
+from wcl_app.charts import Chart, compact
 from wcl_app.context import AppContext, StorageFactory
+from wcl_app.healing import WeeklyHealing, weekly_healing, window_start
 
 HOME_SCHEMA_VERSION = 1
 
@@ -42,6 +45,7 @@ TABLE = "table"
 LIST = "list"
 BARS = "bars"
 ACTIONS = "actions"
+CHART = "chart"
 
 # Widget sizes: a full-width row, or half a row next to another half widget.
 FULL = "full"
@@ -57,6 +61,7 @@ ATTENDANCE_WINDOW = 10  # raids counted for attendance and active raiders
 ACTIVITY_WEEKS = 8
 RECENT_RAIDS = 8
 TOP_N = 5
+HEALING_WEEKS = 12
 
 # Newest raids read per page: enough for recent raids, attendance and weeks of activity at any raid cadence.
 _RECENT_RAIDS_READ = 100
@@ -135,6 +140,7 @@ _KIND_FIELDS = {
     LIST: ("items",),
     BARS: ("bars",),
     ACTIONS: ("actions",),
+    CHART: ("chart",),
 }
 
 
@@ -154,12 +160,14 @@ class HomeWidget:
     items: list[ListItem] = field(default_factory=list)
     bars: list[Bar] = field(default_factory=list)
     actions: list[Action] = field(default_factory=list)
+    chart: Chart | None = None
     empty: str = ""
     error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """JSON shape: the common fields plus only the fields of this widget's kind."""
         data = asdict(self)
+        data["chart"] = self.chart.to_dict() if self.chart else None
         keep = {"id", "title", "kind", "size", "subtitle", "link", "empty", "error", *_KIND_FIELDS[self.kind]}
         return {k: v for k, v in data.items() if k in keep}
 
@@ -198,6 +206,21 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec("recent_raids", "Recent raids", "The latest raids, one click to open", LIST, HALF, True),
     WidgetSpec(
         "raid_activity", "Raid activity", f"Raids per week over the last {ACTIVITY_WEEKS} weeks", BARS, HALF, True
+    ),
+    WidgetSpec(
+        "healing_weekly",
+        "Weekly healing",
+        f"Healing per raid, week on week, over the last {HEALING_WEEKS} weeks",
+        CHART,
+        FULL,
+        True,
+    ),
+    WidgetSpec(
+        "healers_weekly",
+        "Healers week on week",
+        f"Each healer's healing per raid over the last {HEALING_WEEKS} weeks",
+        CHART,
+        FULL,
     ),
     WidgetSpec("top_damage", "Top damage", "Highest damage dealers in the last raid", TABLE, HALF, True),
     WidgetSpec("top_healing", "Top healing", "Highest healers in the last raid", TABLE, HALF, True),
@@ -293,14 +316,6 @@ class JsonLayoutStore:
 # ── Formatting ──
 
 
-def compact(n: float) -> str:
-    """12345678 -> "12.3M", 4500 -> "4.5K", 950 -> "950"."""
-    for size, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
-        if abs(n) >= size:
-            return f"{n / size:.1f}{suffix}"
-    return f"{n:,.0f}"
-
-
 def _duration(ms: int) -> str:
     seconds = max(ms, 0) // 1000
     hours, rest = divmod(seconds, 3600)
@@ -327,8 +342,10 @@ def _day(dt: datetime | None, raw: str | None) -> str:
 class _Snapshot:
     """The storage reads a page needs, each done at most once however many widgets use it."""
 
-    def __init__(self, repo: RaidRepository):
+    def __init__(self, repo: RaidRepository, today: date, healing_target: float | None = None):
         self.repo = repo
+        self.today = today
+        self.healing_target = healing_target
 
     @cached_property
     def raids(self) -> list[dict[str, Any]]:
@@ -346,6 +363,12 @@ class _Snapshot:
     @cached_property
     def last_analysis(self) -> RaidAnalysis | None:
         return self.repo.get_raid_analysis(self.last_raid["report_id"]) if self.last_raid else None
+
+    @cached_property
+    def weekly_healing(self) -> WeeklyHealing:
+        """Week-on-week healing over every guild raid in the last ``HEALING_WEEKS`` weeks, read once."""
+        rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS))
+        return weekly_healing(rows, self.today, HEALING_WEEKS, self.healing_target)
 
     @cached_property
     def rosters(self) -> list[list[dict[str, Any]]]:
@@ -370,8 +393,11 @@ class HomeService:
         layouts: LayoutStore | None = None,
         *,
         now: Callable[[], datetime] = datetime.now,
+        healing_target: float | None = None,
     ):
+        """``healing_target`` is the guild's healing per raid the weekly healing chart measures against."""
         self.storage = storage
+        self.healing_target = healing_target
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
         self._builders: dict[str, Callable[[_Snapshot, HomeWidget], None]] = {
@@ -380,6 +406,8 @@ class HomeService:
             "last_raid": self._last_raid,
             "recent_raids": self._recent_raids,
             "raid_activity": self._raid_activity,
+            "healing_weekly": self._healing_weekly,
+            "healers_weekly": self._healers_weekly,
             "top_damage": self._top_damage,
             "top_healing": self._top_healing,
             "attendance": self._attendance,
@@ -391,9 +419,11 @@ class HomeService:
         }
 
     @classmethod
-    def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
+    def from_context(
+        cls, ctx: AppContext, layouts: LayoutStore | None = None, *, healing_target: float | None = None
+    ) -> HomeService:
         """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(ctx.repository, layouts)
+        return cls(ctx.repository, layouts, healing_target=healing_target)
 
     # ── Layout ──
 
@@ -424,7 +454,7 @@ class HomeService:
         generated_at = self.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             with self.storage() as repo:
-                snapshot = _Snapshot(repo)
+                snapshot = _Snapshot(repo, self.now().date(), self.healing_target)
                 return HomePage([self._build(i, snapshot) for i in ids], generated_at)
         except (StorageError, OSError) as e:
             widgets = [self._blank(i) for i in ids]
@@ -517,6 +547,16 @@ class HomeService:
         w.bars = [Bar(f"{week.day} {week:%b}", counts[week], str(counts[week])) for week in weeks]
         if not any(counts[week] for week in weeks):
             w.empty = f"No raids in the last {ACTIVITY_WEEKS} weeks."
+
+    def _healing_weekly(self, s: _Snapshot, w: HomeWidget) -> None:
+        w.chart = s.weekly_healing.raid_chart()
+        w.subtitle = w.chart.subtitle
+        w.empty = w.chart.empty
+
+    def _healers_weekly(self, s: _Snapshot, w: HomeWidget) -> None:
+        w.chart = s.weekly_healing.healer_chart()
+        w.subtitle = w.chart.subtitle
+        w.empty = w.chart.empty
 
     def _top_damage(self, s: _Snapshot, w: HomeWidget) -> None:
         a = s.last_analysis
