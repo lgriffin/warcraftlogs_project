@@ -160,6 +160,20 @@ class TestChartWidgets:
         assert len(chart.series()) == 3  # two runs of "One", a lone point of "Two"
         visible = [m.label() for m in chart.legend().markers() if m.isVisible()]
         assert visible == ["One", "Two"]
+        assert chart.axes(Qt.Orientation.Horizontal)[0].titleText() == ""
+
+    def test_payload_tips_use_the_formatted_numbers_and_the_x_axis_is_titled(self, qtbot):
+        from warcraftlogs_client.gui.charts import _tip_at, build_payload_chart, payload_tips
+        from warcraftlogs_client.services.charts import Chart, Series
+
+        series = Series("one", "Healing per raid", [1.0, None], ["1.0M", "-"])
+        payload = Chart("demo", "Demo", "bar", ["14 Sep", "21 Sep"], [series], x_label="Week starting", y_max=2.0)
+        tips = payload_tips(payload, series)
+        assert tips == ["Healing per raid, 14 Sep: 1.0M", "Healing per raid, 21 Sep: -"]
+        assert _tip_at(tips, 0.2) == tips[0] and _tip_at(tips, 5) == ""
+        view = build_payload_chart(payload)
+        qtbot.addWidget(view)
+        assert view.chart().axes(Qt.Orientation.Horizontal)[0].titleText() == "Week starting"
 
     def test_payload_bar_chart_draws_one_set_per_series(self, qtbot):
         from warcraftlogs_client.gui.charts import build_payload_chart

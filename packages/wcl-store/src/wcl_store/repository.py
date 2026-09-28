@@ -50,6 +50,11 @@ class RaidRepository(Protocol):
         """Guild raids, newest ``raid_date`` first: report_id, title, owner, raid_date, imported_at."""
         ...
 
+    def get_healing_by_raid(self, since: str) -> list[dict[str, Any]]:
+        """One row per healer per guild raid with ``raid_date >= since``, oldest raid first, then by name:
+        report_id, raid_date, name, player_class, healing, overhealing. Raids without healers are not listed."""
+        ...
+
     def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None:
         """Rebuild the stored analysis (source ids are not stored and come back as 0)."""
         ...

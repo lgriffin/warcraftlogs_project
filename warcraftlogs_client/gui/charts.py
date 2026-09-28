@@ -15,7 +15,7 @@ from PySide6.QtCharts import (
     QValueAxis,
 )
 from PySide6.QtCore import QDateTime, QMargins, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QCursor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 from wcl_core.models import (
     RESOURCE_TYPES,
@@ -2553,6 +2553,8 @@ def build_payload_chart(payload: Chart) -> QChartView:
     x_axis = QBarCategoryAxis()
     x_axis.append(payload.categories)
     _style_axis(x_axis)
+    if payload.x_label:
+        x_axis.setTitleText(payload.x_label)
     chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
     y_axis = QValueAxis()
     y_axis.setRange(0, payload.y_max or 1)
@@ -2569,16 +2571,38 @@ def build_payload_chart(payload: Chart) -> QChartView:
             bar_set = QBarSet(s.name)
             bar_set.setColor(colour)
             bar_set.append([0.0 if v is None else float(v) for v in s.values])
+            tips = payload_tips(payload, s)
+            bar_set.hovered.connect(lambda on, i, tips=tips: _show_tip(tips[i] if on and 0 <= i < len(tips) else ""))
             bars.append(bar_set)
         chart.addSeries(bars)
         bars.attachAxis(x_axis)
         bars.attachAxis(y_axis)
     else:
         for s, colour in zip(payload.series, colours, strict=True):
-            _add_line_runs(chart, s.name, s.values, colour, s.emphasis, x_axis, y_axis)
+            runs = _add_line_runs(chart, s.name, s.values, colour, s.emphasis, x_axis, y_axis)
+            tips = payload_tips(payload, s)
+            for run in runs:
+                run.hovered.connect(lambda point, on, tips=tips: _show_tip(_tip_at(tips, point.x()) if on else ""))
     for ref in payload.references:
         _add_reference_line(chart, ref.label, ref.display, ref.value, len(payload.categories), x_axis, y_axis)
     return make_chart_view(chart)
+
+
+def payload_tips(payload: Chart, series) -> list[str]:
+    """Hover text for each category of a series, from the payload's own formatted numbers."""
+    return [f"{series.name}, {c}: {d}" for c, d in zip(payload.categories, series.display, strict=True)]
+
+
+def _tip_at(tips: list[str], x: float) -> str:
+    i = round(x)
+    return tips[i] if 0 <= i < len(tips) else ""
+
+
+def _show_tip(text: str) -> None:
+    if text:
+        QToolTip.showText(QCursor.pos(), text)
+    else:
+        QToolTip.hideText()
 
 
 def _add_reference_line(chart: QChart, label: str, display: str, value: float, width: int, x_axis, y_axis) -> None:
@@ -2608,9 +2632,11 @@ def _payload_colours(series: list) -> list[QColor]:
     return colours
 
 
-def _add_line_runs(chart: QChart, name: str, values: list, colour: QColor, emphasis: bool, x_axis, y_axis) -> None:
+def _add_line_runs(
+    chart: QChart, name: str, values: list, colour: QColor, emphasis: bool, x_axis, y_axis
+) -> list[QLineSeries | QScatterSeries]:
     """One QLineSeries per run of values without a gap, so a missing week breaks the line; only the first run
-    appears in the legend. A lone point is drawn as a dot."""
+    appears in the legend. A lone point is drawn as a dot. Returns the series added."""
     runs: list[list[tuple[int, float]]] = [[]]
     for i, v in enumerate(values):
         if v is None:
@@ -2618,8 +2644,10 @@ def _add_line_runs(chart: QChart, name: str, values: list, colour: QColor, empha
         else:
             runs[-1].append((i, float(v)))
     first = True
+    added: list[QLineSeries | QScatterSeries] = []
     for run in (r for r in runs if r):
         line = QScatterSeries() if len(run) == 1 else QLineSeries()
+        added.append(line)
         line.setName(name)
         if isinstance(line, QScatterSeries):
             line.setMarkerSize(8.0)
@@ -2636,3 +2664,4 @@ def _add_line_runs(chart: QChart, name: str, values: list, colour: QColor, empha
             for marker in chart.legend().markers(line):
                 marker.setVisible(False)
         first = False
+    return added

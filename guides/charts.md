@@ -14,11 +14,13 @@ A chart is capped so it stays readable on a phone and its payload stays small:
 | `MAX_SERIES` | 8     | a longer legend stops being readable and colours start to repeat |
 | `MAX_POINTS` | 52    | a year of weekly points; more labels no longer fit a narrow axis |
 | `MAX_REFERENCES` | 3 | reference lines (a target, a baseline); more read as data        |
-| `MAX_TEXT`   | 120   | titles, labels, categories and notes stay on one line            |
+| `MAX_TEXT`   | 120   | every text field (titles, keys, names, `display`) stays one line |
+| `MAX_NOTES`  | 10    | notes are a few lines under the chart, not a report              |
 
 Builders apply them (`top_series` keeps emphasised series, then the largest) and say what they dropped in
 `notes`. `Chart.validate()` and `Chart.from_dict()` raise `ChartError` for a payload that breaks a limit or does
-not line up, so a host that stores or relays a chart can refuse a bad one at the door.
+not line up, including every value and reference outside 0 to a finite `y_max`, text of the wrong type and any
+`version` other than the current one, so a host that stores or relays a chart can refuse a bad one at the door.
 
 ## Payload
 
@@ -52,8 +54,8 @@ not line up, so a host that stores or relays a chart can refuse a bad one at the
 | `values`     | raw numbers; `null` is a gap: no bar, and a line breaks there                            |
 | `display`    | the same numbers formatted for tooltips and labels ("4.1M", "-" for a gap)               |
 | `emphasis`   | the headline series: draw it stronger or in the accent colour                            |
-| `y_max`      | a round number (1, 2, 2.5 or 5 times a power of ten) at or above every value; the y axis runs 0 to `y_max` |
-| `references` | at most 3 horizontal lines to measure against, `{key, label, value, display}`; draw them dashed and name them with their `display` |
+| `y_max`      | a round ceiling (1, 2, 2.5 or 5 times a power of ten); the y axis runs from 0 to `y_max`  |
+| `references` | at most 3 lines to measure against, `{key, label, value, display}`; draw them dashed    |
 | `notes`      | short lines to show under the chart, such as series left out by the limits              |
 | `empty`      | when set, draw this message instead of the chart                                         |
 
@@ -69,19 +71,24 @@ high-energy guild. Every week is measured two ways:
 - **Target**: when the guild sets a healing-per-raid target (`HealingService(storage, target=...)`,
   `HomeService(..., healing_target=...)`), whether the latest week met it and in how many raided weeks it was met.
 
-Both are drawn as reference lines on the `healing_weekly` chart and spelled out in its notes. Weeks start on Monday (by the raid's local start) and
-every number is per raid, so a week with two raids compares fairly with a week with one. Guild raids only.
+Both are drawn as reference lines on the `healing_weekly` chart and spelled out in its notes. Weeks start on
+Monday (by the raid's local start) and every number is per raid, so a week with two raids compares fairly with a
+week with one. Guild raids only.
 
 ```python
 from wcl_app import HealingService
 
-weekly = HealingService.from_context(ctx, target=4_000_000).weekly(weeks=12)   # clamped to 2..26 weeks, this week included
-weekly.standard()         # HealingStandard: latest week, baseline, trend, target, on_target, weeks_on_target
-weekly.to_dict()          # "standard" as above, then the numbers: per week raids, healing, healing_per_raid, overheal_percent, healers,
-                          # change_percent; per healer healing and healing_per_raid by week
-weekly.raid_chart()       # bar chart "healing_weekly": healing per raid by week, latest change in the notes
-weekly.healer_chart()     # line chart "healers_weekly": the top 8 healers' healing per raid attended
+service = HealingService.from_context(ctx, target=4_000_000)
+weekly = service.weekly(weeks=12)   # clamped to 2..26 weeks, this week included
+weekly.standard()      # HealingStandard: latest week, baseline, trend, target, on_target, weeks_on_target
+weekly.to_dict()       # "standard" as above, then per week: raids, healing, healing_per_raid,
+                       # overheal_percent, healers, change_percent; per healer: healing_per_raid by week
+weekly.raid_chart()    # bar chart "healing_weekly": healing per raid by week, against baseline and target
+weekly.healer_chart()  # line chart "healers_weekly": the top 8 healers' healing per raid attended
 ```
+
+Storage is read once per page through `RaidRepository.get_healing_by_raid(since)`: healer totals for every guild
+raid in the window, whatever the guild's raid count, without loading whole analyses.
 
 `change_percent` compares a week's healing per raid with the previous week that had a raid. On the home page
 the same charts are the `healing_weekly` and `healers_weekly` widgets (`guides/home_widgets.md`).

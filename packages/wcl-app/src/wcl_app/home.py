@@ -35,7 +35,7 @@ from wcl_store import RaidRepository, StorageError
 
 from wcl_app.charts import Chart, compact
 from wcl_app.context import AppContext, StorageFactory
-from wcl_app.healing import WeeklyHealing, weekly_healing
+from wcl_app.healing import WeeklyHealing, weekly_healing, window_start
 
 HOME_SCHEMA_VERSION = 1
 
@@ -366,17 +366,9 @@ class _Snapshot:
 
     @cached_property
     def weekly_healing(self) -> WeeklyHealing:
-        """Week-on-week healing over the newest raids; each raid's analysis is read once."""
-        loaded: dict[str, RaidAnalysis | None] = {}
-        if self.last_analysis is not None and self.last_raid is not None:
-            loaded[self.last_raid["report_id"]] = self.last_analysis
-
-        def load(report_id: str) -> RaidAnalysis | None:
-            if report_id not in loaded:
-                loaded[report_id] = self.repo.get_raid_analysis(report_id)
-            return loaded[report_id]
-
-        return weekly_healing(self.raids, load, self.today, HEALING_WEEKS, self.healing_target)
+        """Week-on-week healing over every guild raid in the last ``HEALING_WEEKS`` weeks, read once."""
+        rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS))
+        return weekly_healing(rows, self.today, HEALING_WEEKS, self.healing_target)
 
     @cached_property
     def rosters(self) -> list[list[dict[str, Any]]]:

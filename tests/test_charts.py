@@ -62,15 +62,26 @@ def test_a_valid_chart_round_trips_through_json():
         ({"kind": "pie"}, "unknown chart kind"),
         ({"series": [_series(f"s{i}", [1, 2, 3]) for i in range(MAX_SERIES + 1)]}, "series; at most"),
         ({"categories": ["x"] * (MAX_POINTS + 1), "series": []}, "categories; at most"),
-        ({"title": "x" * 121}, "text longer than"),
+        ({"title": "x" * 121}, "text must be at most"),
         ({"series": [_series("one", [1, 2, 3]), _series("one", [1, 2, 3])]}, "unique"),
         ({"series": [_series("one", [1, 2])]}, "does not match"),
-        ({"series": [_series("one", [1, 2, 6])]}, "above y_max"),
-        ({"series": [_series("one", [1, 2, math.nan])]}, "not finite"),
+        ({"series": [_series("one", [1, 2, 6])]}, "outside 0 to y_max"),
+        ({"series": [_series("one", [1, 2, math.nan])]}, "outside 0 to y_max"),
         ({"references": [Reference(f"r{i}", "R", 1, "1") for i in range(MAX_REFERENCES + 1)]}, "references; at most"),
-        ({"references": [Reference("r", "R", 6, "6")]}, "between 0 and y_max"),
-        ({"references": [Reference("r", "R", -1, "-1")]}, "between 0 and y_max"),
-        ({"references": [Reference("r", "x" * 121, 1, "1")]}, "text longer than"),
+        ({"references": [Reference("r", "R", 6, "6")]}, "outside 0 to y_max"),
+        ({"references": [Reference("r", "R", -1, "-1")]}, "outside 0 to y_max"),
+        ({"references": [Reference("r", "x" * 121, 1, "1")]}, "text must be at most"),
+        ({"y_max": math.nan}, "y_max must be a finite number"),
+        ({"y_max": -1.0, "series": []}, "y_max must be a finite number"),
+        ({"id": "x" * 121}, "text must be at most"),
+        ({"empty": "x" * 121}, "text must be at most"),
+        ({"categories": ["a", "b", 3]}, "text must be at most"),
+        ({"series": [Series("one", "One", [1, 2, 3], ["1", "2", "x" * 121])]}, "text must be at most"),
+        ({"series": [Series("one", "x" * 121, [1, 2, 3], ["1", "2", "3"])]}, "text must be at most"),
+        ({"series": [Series("one", "One", [1, 2, "big"], ["1", "2", "3"])]}, "outside 0 to y_max"),
+        ({"series": [Series("one", "One", [1, 2, -1], ["1", "2", "3"])]}, "outside 0 to y_max"),
+        ({"notes": ["n"] * 11}, "notes; at most"),
+        ({"series": [Series("one", "One", 5, ["1", "2", "3"])]}, "not a chart payload"),
     ],
 )
 def test_validate_refuses_a_chart_that_breaks_the_contract(overrides, message):
@@ -78,11 +89,25 @@ def test_validate_refuses_a_chart_that_breaks_the_contract(overrides, message):
         _chart(**overrides).validate()
 
 
+def test_from_dict_refuses_other_schema_versions():
+    data = _chart().to_dict()
+    for version in (None, 0, 2, "1"):
+        with pytest.raises(ChartError, match="not a version 1 chart payload"):
+            Chart.from_dict({**data, "version": version})
+    del data["version"]
+    with pytest.raises(ChartError, match="not a version 1 chart payload"):
+        Chart.from_dict(data)
+    with pytest.raises(ChartError, match="not a version 1 chart payload"):
+        Chart.from_dict([])  # type: ignore[arg-type]
+
+
 def test_from_dict_refuses_something_that_is_not_a_chart():
     with pytest.raises(ChartError, match="not a chart payload"):
-        Chart.from_dict({"id": "x"})
+        Chart.from_dict({"version": 1, "id": "x"})
     with pytest.raises(ChartError, match="not a chart payload"):
         Chart.from_dict({**_chart().to_dict(), "colour": "red"})
+    with pytest.raises(ChartError, match="not a chart payload"):
+        Chart.from_dict({**_chart().to_dict(), "references": [{"key": "r"}]})
 
 
 def test_an_empty_chart_is_valid():

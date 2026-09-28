@@ -33,12 +33,17 @@ MAX_SERIES = 8
 MAX_POINTS = 52
 # Reference lines: a standard, a target, a baseline; more and they read as data.
 MAX_REFERENCES = 3
-# Labels and notes are one line.
+# Labels, keys, formatted numbers and notes are one line each, and there are only a few notes.
 MAX_TEXT = 120
+MAX_NOTES = 10
 
 
 class ChartError(ValueError):
     """A chart payload that breaks the contract."""
+
+
+def _finite(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
 @dataclass
@@ -89,30 +94,50 @@ class Chart:
 
     def validate(self) -> Chart:
         """Raise ``ChartError`` if the payload breaks the contract; return the chart otherwise."""
+        try:
+            self._check_shape()
+            self._check_text()
+            self._check_numbers()
+        except (TypeError, AttributeError) as e:  # a field of the wrong type, e.g. from a hand-built payload
+            raise ChartError(f"not a chart payload: {e}") from e
+        return self
+
+    def _check_shape(self) -> None:
         if self.kind not in KINDS:
             raise ChartError(f"unknown chart kind {self.kind!r}")
-        if len(self.series) > MAX_SERIES:
-            raise ChartError(f"{len(self.series)} series; at most {MAX_SERIES} are drawn")
-        if len(self.categories) > MAX_POINTS:
-            raise ChartError(f"{len(self.categories)} categories; at most {MAX_POINTS} are drawn")
-        if len(self.references) > MAX_REFERENCES:
-            raise ChartError(f"{len(self.references)} references; at most {MAX_REFERENCES} are drawn")
-        for ref in self.references:
-            if not math.isfinite(ref.value) or not 0 <= ref.value <= self.y_max:
-                raise ChartError(f"reference {ref.key!r} is not between 0 and y_max")
-        labels = [r.label for r in self.references]
-        for text in (self.title, self.subtitle, self.x_label, self.y_label, *self.categories, *self.notes, *labels):
-            if len(text) > MAX_TEXT:
-                raise ChartError(f"text longer than {MAX_TEXT} characters: {text[:20]!r}...")
+        for name, items, limit in (
+            ("series", self.series, MAX_SERIES),
+            ("categories", self.categories, MAX_POINTS),
+            ("references", self.references, MAX_REFERENCES),
+            ("notes", self.notes, MAX_NOTES),
+        ):
+            if len(items) > limit:
+                raise ChartError(f"{len(items)} {name}; at most {limit} are drawn")
         keys = [s.key for s in self.series]
         if len(set(keys)) != len(keys):
             raise ChartError("series keys must be unique")
         for s in self.series:
             if len(s.values) != len(self.categories) or len(s.display) != len(self.categories):
                 raise ChartError(f"series {s.key!r} does not match the {len(self.categories)} categories")
-            if any(v is not None and (not math.isfinite(v) or v > self.y_max) for v in s.values):
-                raise ChartError(f"series {s.key!r} has a value that is not finite or is above y_max")
-        return self
+
+    def _check_text(self) -> None:
+        texts = [self.id, self.title, self.subtitle, self.x_label, self.y_label, self.empty, *self.categories]
+        texts += self.notes
+        texts += [t for s in self.series for t in (s.key, s.name, *s.display)]
+        texts += [t for r in self.references for t in (r.key, r.label, r.display)]
+        for text in texts:
+            if not isinstance(text, str) or len(text) > MAX_TEXT:
+                raise ChartError(f"text must be at most {MAX_TEXT} characters: {str(text)[:20]!r}")
+
+    def _check_numbers(self) -> None:
+        if not _finite(self.y_max) or self.y_max < 0:
+            raise ChartError("y_max must be a finite number of at least 0")
+        for s in self.series:
+            if any(v is not None and not (_finite(v) and 0 <= v <= self.y_max) for v in s.values):
+                raise ChartError(f"series {s.key!r} has a value outside 0 to y_max")
+        for ref in self.references:
+            if not (_finite(ref.value) and 0 <= ref.value <= self.y_max):
+                raise ChartError(f"reference {ref.key!r} is outside 0 to y_max")
 
     def to_dict(self) -> dict[str, Any]:
         return {"version": CHART_SCHEMA_VERSION, **asdict(self)}
@@ -120,12 +145,14 @@ class Chart:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Chart:
         """Read a payload back, checking it against the contract. Raises ``ChartError``."""
+        if not isinstance(data, dict) or data.get("version") != CHART_SCHEMA_VERSION:
+            raise ChartError(f"not a version {CHART_SCHEMA_VERSION} chart payload")
         try:
             series = [Series(**s) for s in data["series"]]
             references = [Reference(**r) for r in data.get("references", [])]
             fields = {k: v for k, v in data.items() if k not in ("version", "series", "references")}
             chart = cls(series=series, references=references, **fields)
-        except (KeyError, TypeError) as e:
+        except (KeyError, TypeError, AttributeError) as e:
             raise ChartError(f"not a chart payload: {e}") from e
         return chart.validate()
 

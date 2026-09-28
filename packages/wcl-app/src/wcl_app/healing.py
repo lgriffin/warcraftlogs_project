@@ -24,8 +24,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from wcl_core.models import RaidAnalysis
-
 from wcl_app.charts import BAR, LINE, MAX_SERIES, Chart, Reference, Series, compact, top_series, y_ceiling
 from wcl_app.context import AppContext, StorageFactory
 
@@ -37,8 +35,6 @@ MAX_WEEKS = 26
 BASELINE_WEEKS = 4
 # Within this many percent of the baseline, the trend is steady.
 STEADY_PERCENT = 2.0
-# Newest guild raids read: several raids a week for MAX_WEEKS weeks.
-RAIDS_READ = 150
 
 
 def week_start(day: date) -> date:
@@ -285,50 +281,61 @@ def _display(value: float | None) -> str:
     return "-" if value is None else compact(value)
 
 
+def window(today: date, weeks: int = DEFAULT_WEEKS) -> list[date]:
+    """The Mondays of the ``weeks`` weeks (clamped) up to and including ``today``'s, oldest first."""
+    this_week = week_start(today)
+    return [this_week - timedelta(weeks=n) for n in range(clamp_weeks(weeks) - 1, -1, -1)]
+
+
+def window_start(today: date, weeks: int = DEFAULT_WEEKS) -> str:
+    """The window's first moment as a stored ``raid_date``, for ``RaidRepository.get_healing_by_raid``."""
+    return f"{window(today, weeks)[0]:%Y-%m-%d} 00:00:00"
+
+
 def weekly_healing(
-    raids: Sequence[dict[str, Any]],
-    load: Callable[[str], RaidAnalysis | None],
+    rows: Sequence[dict[str, Any]],
     today: date,
     weeks: int = DEFAULT_WEEKS,
     target: float | None = None,
 ) -> WeeklyHealing:
-    """Week-on-week healing for the ``weeks`` weeks up to and including ``today``'s. ``raids`` are guild raid rows
-    (``report_id``, ``raid_date``); ``load`` reads one raid's analysis and is called only for raids in the window."""
-    weeks = clamp_weeks(weeks)
-    this_week = week_start(today)
-    starts = [this_week - timedelta(weeks=n) for n in range(weeks - 1, -1, -1)]
+    """Week-on-week healing for the ``weeks`` weeks up to and including ``today``'s, from
+    ``RaidRepository.get_healing_by_raid`` rows (one per healer per raid). Rows outside the window are ignored."""
+    starts = window(today, weeks)
     index = {s: i for i, s in enumerate(starts)}
     table = [HealingWeek(s) for s in starts]
     healers: dict[str, HealerWeeks] = {}
     names: list[set[str]] = [set() for _ in starts]
-    for raid in raids:
-        raid_date = _parse_date(raid.get("raid_date"))
+    raids: list[set[str]] = [set() for _ in starts]
+    for row in rows:
+        raid_date = _parse_date(row.get("raid_date"))
         i = index.get(week_start(raid_date.date())) if raid_date else None
         if i is None:
             continue
-        analysis = load(raid["report_id"])
-        if analysis is None:
-            continue
-        week = table[i]
-        week.raids += 1
-        for h in analysis.healers:
-            week.healing += h.total_healing
-            week.overhealing += h.total_overhealing
-            key = h.name.lower()
-            names[i].add(key)
-            entry = healers.setdefault(key, HealerWeeks(h.name, h.player_class, [(0, 0)] * len(starts)))
-            attended, healing = entry.weeks[i]
-            entry.weeks[i] = (attended + 1, healing + h.total_healing)
-    previous: HealingWeek | None = None
-    for week, seen in zip(table, names, strict=True):
-        week.healers = len(seen)
-        if not week.raids:
-            continue
-        if previous is not None and previous.per_raid and week.per_raid is not None:
-            week.change_percent = round((week.per_raid - previous.per_raid) / previous.per_raid * 100, 1)
-        previous = week
+        healing, overhealing = int(row.get("healing") or 0), int(row.get("overhealing") or 0)
+        table[i].healing += healing
+        table[i].overhealing += overhealing
+        raids[i].add(row["report_id"])
+        key = row["name"].lower()
+        names[i].add(key)
+        entry = healers.setdefault(key, HealerWeeks(row["name"], row.get("player_class") or "", [(0, 0)] * len(starts)))
+        attended, total = entry.weeks[i]
+        entry.weeks[i] = (attended + 1, total + healing)
+    for week, seen, raided in zip(table, names, raids, strict=True):
+        week.healers, week.raids = len(seen), len(raided)
+    _link_changes(table)
     ranked = sorted(healers.values(), key=lambda h: (-h.total, h.name.lower()))
     return WeeklyHealing(table, ranked, target)
+
+
+def _link_changes(table: Sequence[HealingWeek]) -> None:
+    """Each raided week's change in healing per raid on the previous week that raided."""
+    previous: HealingWeek | None = None
+    for week in table:
+        if week.per_raid is None:
+            continue
+        if previous is not None and previous.per_raid:
+            week.change_percent = round((week.per_raid - previous.per_raid) / previous.per_raid * 100, 1)
+        previous = week
 
 
 def _parse_date(value: str | None) -> datetime | None:
@@ -362,5 +369,6 @@ class HealingService:
         """The last ``weeks`` weeks (clamped to ``MIN_WEEKS``..``MAX_WEEKS``), this week included. Raises
         ``wcl_store.StorageError`` if storage fails."""
         with self.storage() as repo:
-            raids = repo.get_raid_list(limit=RAIDS_READ)
-            return weekly_healing(raids, repo.get_raid_analysis, self.now().date(), weeks, self.target)
+            today = self.now().date()
+            rows = repo.get_healing_by_raid(window_start(today, weeks))
+        return weekly_healing(rows, today, weeks, self.target)
