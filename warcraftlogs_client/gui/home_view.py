@@ -1,7 +1,7 @@
 """
 Home — a customisable landing page built from ``services.home`` widgets.
 
-The view only draws what ``HomeService`` returns: each widget kind (stats, table, list, bars, actions) has one
+The view only draws what ``HomeService`` returns: each widget kind (stats, table, list, bars, actions, chart) has one
 renderer here, and links are turned into navigation signals the main window handles. The user's choice of
 widgets is saved through the service to ``home_layout.json`` in the user data directory.
 """
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from ..paths import get_user_data_dir
 from ..services import AppContext, HomeLayout, HomePage, HomeService, HomeWidget, JsonLayoutStore, WidgetSpec
 from ..services.home import ACTION, CHARACTER, PLAYER_PAGE, RAID, Link
+from .charts import build_payload_chart
 from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
 LAYOUT_FILE = "home_layout.json"
@@ -144,6 +145,7 @@ class WidgetCard(QFrame):
             "list": self._list,
             "bars": self._bars,
             "actions": self._actions,
+            "chart": self._chart,
         }
         return builders[widget.kind](widget)
 
@@ -267,6 +269,17 @@ class WidgetCard(QFrame):
             """)
             grid.addWidget(meter, r, 1)
             grid.addWidget(_label(bar.display, 9, "text"), r, 2)
+        return body
+
+    def _chart(self, widget: HomeWidget) -> QWidget:
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        if widget.chart is not None:
+            layout.addWidget(build_payload_chart(widget.chart))
+            for note in widget.chart.notes:
+                layout.addWidget(_label(note, 9, "text_dim"))
         return body
 
     def _actions(self, widget: HomeWidget) -> QWidget:

@@ -188,6 +188,19 @@ class TestWidgets:
         assert tiles["Last raid"].value == "2026-09-21" and tiles["Last raid"].display == "Sep 21"
         assert tiles["Days since last raid"].value == 6
 
+    def test_weekly_healing(self, service):
+        w = _widget(service, "healing_weekly")
+        assert w.kind == "chart" and not w.empty and not w.error
+        assert len(w.chart.categories) == 12
+        assert w.chart.series[0].values[-2:] == [500_000, 1_200_000]
+        assert w.chart.series[0].display[-2:] == ["500.0K", "1.2M"]
+        assert w.chart.notes[0] == "Week of 21 Sep: +140.0% on the week before it raided."
+
+    def test_healers_week_on_week(self, service):
+        chart = _widget(service, "healers_weekly").chart
+        assert [s.name for s in chart.series] == ["HolyPriest"]
+        assert chart.series[0].values[-3:] == [None, 500_000, 1_200_000]
+
     def test_last_raid(self, service):
         w = _widget(service, "last_raid")
         assert w.subtitle == "Gruul's Lair"
@@ -263,9 +276,13 @@ class TestWidgets:
         assert data["version"] == 1 and data["generated_at"] == "2026-09-27 12:00:00"
         kind_fields = {"stats": {"tiles"}, "table": {"columns", "rows"}, "list": {"items"}, "bars": {"bars"}}
         kind_fields["actions"] = {"actions"}
+        kind_fields["chart"] = {"chart"}
         common = {"id", "title", "kind", "size", "subtitle", "link", "empty", "error"}
         for w in data["widgets"]:
             assert set(w) == common | kind_fields[w["kind"]], w["id"]
+        healing = next(w for w in data["widgets"] if w["id"] == "healing_weekly")
+        assert healing["chart"]["version"] == 1 and healing["chart"]["kind"] == "bar"
+        assert healing["chart"]["categories"][-2:] == ["14 Sep", "21 Sep"]
         top = next(w for w in data["widgets"] if w["id"] == "top_damage")
         assert top["rows"][0]["link"] == {"kind": "character", "params": {"name": "FrostMage"}}
 

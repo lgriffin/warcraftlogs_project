@@ -24,6 +24,7 @@ from wcl_core.models import (
     PlayerResourceAnalysis,
 )
 
+from ..services.charts import Chart
 from .styles import COLORS
 
 SERIES_COLORS = [
@@ -2536,3 +2537,84 @@ class CooldownSynergyWidget(QWidget):
                 return
         QToolTip.hideText()
         super().mouseMoveEvent(event)
+
+
+# ── Shared chart payloads (wcl_app.charts, guides/charts.md) ──
+
+
+def build_payload_chart(payload: Chart) -> QChartView:
+    """Draw a ``wcl_app.charts.Chart`` as the payload says: its categories, series, y range and colours in order,
+    the emphasised series in the accent colour. Gaps (``None``) leave out a bar or break a line."""
+    from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet
+
+    chart = _make_chart(payload.title)
+    chart.legend().setVisible(len(payload.series) > 1)
+    x_axis = QBarCategoryAxis()
+    x_axis.append(payload.categories)
+    _style_axis(x_axis)
+    chart.addAxis(x_axis, Qt.AlignmentFlag.AlignBottom)
+    y_axis = QValueAxis()
+    y_axis.setRange(0, payload.y_max or 1)
+    y_axis.setLabelFormat("%'.0f")
+    if payload.y_label:
+        y_axis.setTitleText(payload.y_label)
+    _style_axis(y_axis)
+    chart.addAxis(y_axis, Qt.AlignmentFlag.AlignLeft)
+
+    colours = _payload_colours(payload.series)
+    if payload.kind == "bar":
+        bars = QBarSeries()
+        for s, colour in zip(payload.series, colours, strict=True):
+            bar_set = QBarSet(s.name)
+            bar_set.setColor(colour)
+            bar_set.append([0.0 if v is None else float(v) for v in s.values])
+            bars.append(bar_set)
+        chart.addSeries(bars)
+        bars.attachAxis(x_axis)
+        bars.attachAxis(y_axis)
+    else:
+        for s, colour in zip(payload.series, colours, strict=True):
+            _add_line_runs(chart, s.name, s.values, colour, s.emphasis, x_axis, y_axis)
+    return make_chart_view(chart)
+
+
+def _payload_colours(series: list) -> list[QColor]:
+    """The accent for the emphasised series, the palette in order for the rest."""
+    colours, n = [], 0
+    for s in series:
+        if s.emphasis:
+            colours.append(QColor(COLORS["accent"]))
+        else:
+            colours.append(SERIES_COLORS[n % len(SERIES_COLORS)])
+            n += 1
+    return colours
+
+
+def _add_line_runs(chart: QChart, name: str, values: list, colour: QColor, emphasis: bool, x_axis, y_axis) -> None:
+    """One QLineSeries per run of values without a gap, so a missing week breaks the line; only the first run
+    appears in the legend. A lone point is drawn as a dot."""
+    runs: list[list[tuple[int, float]]] = [[]]
+    for i, v in enumerate(values):
+        if v is None:
+            runs.append([])
+        else:
+            runs[-1].append((i, float(v)))
+    first = True
+    for run in (r for r in runs if r):
+        line = QScatterSeries() if len(run) == 1 else QLineSeries()
+        line.setName(name)
+        if isinstance(line, QScatterSeries):
+            line.setMarkerSize(8.0)
+            line.setColor(colour)
+            line.setBorderColor(colour)
+        else:
+            line.setPen(QPen(colour, 3 if emphasis else 2))
+        for i, v in run:
+            line.append(QPointF(i, v))
+        chart.addSeries(line)
+        line.attachAxis(x_axis)
+        line.attachAxis(y_axis)
+        if not first:
+            for marker in chart.legend().markers(line):
+                marker.setVisible(False)
+        first = False

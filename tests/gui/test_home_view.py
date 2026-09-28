@@ -125,3 +125,54 @@ class TestCustomiseDialog:
         dialog.list.setCurrentRow(0)
         dialog.move_selected(-1)
         assert dialog.chosen() == list(HomeLayout.default().widgets)
+
+
+@pytest.mark.gui
+class TestChartWidgets:
+    def test_weekly_healing_draws_a_chart_with_its_notes(self, view, service):
+        view.show_page(service.page(HomeLayout.of(["healing_weekly", "healers_weekly"])))
+        from PySide6.QtCharts import QChartView
+
+        for widget_id in ("healing_weekly", "healers_weekly"):
+            card = _card(view, widget_id)
+            assert card.findChildren(QChartView), widget_id
+
+    def test_payload_chart_breaks_lines_at_gaps_and_keeps_one_legend_entry(self, qtbot):
+        from warcraftlogs_client.gui.charts import build_payload_chart
+        from warcraftlogs_client.services.charts import Chart, Series
+
+        payload = Chart(
+            id="demo",
+            title="Demo",
+            kind="line",
+            categories=["a", "b", "c", "d", "e"],
+            series=[
+                Series("one", "One", [1, 2, None, 4, 5], ["1", "2", "-", "4", "5"], emphasis=True),
+                Series("two", "Two", [None, 3, None, None, None], ["-", "3", "-", "-", "-"]),
+            ],
+            y_max=5.0,
+        ).validate()
+        view = build_payload_chart(payload)
+        qtbot.addWidget(view)
+        chart = view.chart()
+        assert len(chart.series()) == 3  # two runs of "One", a lone point of "Two"
+        visible = [m.label() for m in chart.legend().markers() if m.isVisible()]
+        assert visible == ["One", "Two"]
+
+    def test_payload_bar_chart_draws_one_set_per_series(self, qtbot):
+        from warcraftlogs_client.gui.charts import build_payload_chart
+        from warcraftlogs_client.services.charts import Chart, Series
+
+        payload = Chart(
+            id="demo",
+            title="Demo",
+            kind="bar",
+            categories=["a", "b"],
+            series=[Series("one", "One", [None, 2], ["-", "2"])],
+            y_max=2.0,
+        )
+        view = build_payload_chart(payload)
+        qtbot.addWidget(view)
+        (bars,) = view.chart().series()
+        assert [s.label() for s in bars.barSets()] == ["One"]
+        assert not view.chart().legend().isVisible()
