@@ -9,7 +9,9 @@ imports (enforced by ``lint-imports`` and ``tests/test_wcl_app_package.py``).
 """
 
 from wcl_app.badges import Badge, BadgeRule, BadgeRules, BadgeService, PlayerBadges
+from wcl_app.charts import Chart, ChartError, Series
 from wcl_app.context import AnalysisThresholds, AppContext, ProgressCallback, validate_report_code
+from wcl_app.healing import HealingService, WeeklyHealing
 from wcl_app.home import HomeLayout, HomePage, HomeService, HomeWidget, JsonLayoutStore, WidgetSpec
 from wcl_app.lineage import CharacterLineage, Spread, character_lineage
 from wcl_app.player_page import AddResult, PlayerLog, PlayerPageData, PlayerPageService, PlayerRef, parse_report_code
@@ -26,6 +28,9 @@ __all__ = [
     "BadgeRules",
     "BadgeService",
     "CharacterLineage",
+    "Chart",
+    "ChartError",
+    "HealingService",
     "HomeLayout",
     "HomePage",
     "HomeService",
@@ -43,7 +48,9 @@ __all__ = [
     "ReferenceAuthRequired",
     "ReportRef",
     "RoleOverrideService",
+    "Series",
     "Spread",
+    "WeeklyHealing",
     "WidgetSpec",
     "character_lineage",
     "parse_report_code",

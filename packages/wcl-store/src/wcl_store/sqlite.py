@@ -1582,6 +1582,24 @@ class PerformanceDB:
         row = self._get_conn().execute("SELECT COUNT(*) AS n FROM raids WHERE source = ?", (source,)).fetchone()
         return int(row["n"])
 
+    def get_healing_by_raid(self, since: str) -> list[dict]:
+        """Healer totals per guild raid since ``since``, for week-on-week healing."""
+        rows = (
+            self._get_conn()
+            .execute(
+                """SELECT r.report_id, r.raid_date, c.name, c.player_class,
+                          hp.total_healing AS healing, hp.total_overhealing AS overhealing
+                   FROM healer_performance hp
+                   JOIN raids r ON r.id = hp.raid_id
+                   JOIN characters c ON c.id = hp.character_id
+                   WHERE r.source = 'guild' AND r.raid_date >= ?
+                   ORDER BY r.raid_date, r.report_id, c.name""",
+                (since,),
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
     def get_raid_list(self, limit: int = 50) -> list[dict]:
         """Get list of all imported guild raids."""
         conn = self._get_conn()
