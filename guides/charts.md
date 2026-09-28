@@ -69,12 +69,12 @@ high-energy guild. There is no fixed target: the standard is two averages tracke
 - **Per raid**: effective healing per raid.
 - **Per character**: healing per healer per raid, averaged over every healer in every raid that week.
 
-Each is measured against its own average over the 4 raided weeks before the latest (`up`, `down`, or `steady`
-within 2%, or `new` when there is nothing before it). The `healing_weekly` chart draws healing per raid with its
-4-week average as a reference line; `healers_weekly` draws the average per character as the emphasised line with
-each healer's healing per raid attended around it. Both trends are spelled out in the notes. Weeks start on Monday
-(by the raid's local start) and every number is per raid, so a week with two raids compares fairly with a week with
-one. Guild raids only.
+Each is measured against its own average over the 4 raided weeks before the latest (`up`, `down`, or `steady` within
+2%, or `new` when there is nothing before it). The `healing_weekly` chart draws healing per raid with its 4-week
+average as a reference line; `healers_weekly` draws the average per character as the emphasised line, with its own
+4-week average as a reference line and each healer's healing per raid attended around it. Both trends are spelled
+out in the notes. Weeks start on Monday (by the raid's local start) and every number is per raid, so a week with two
+raids compares fairly with a week with one. Guild raids only.
 
 ```python
 from wcl_app import HealingService

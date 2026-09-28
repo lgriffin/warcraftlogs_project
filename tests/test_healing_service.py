@@ -148,7 +148,7 @@ class TestCharts:
         assert chart.kind == "line"
         assert len(chart.series) == MAX_SERIES
         average, first = chart.series[:2]
-        assert (average.key, average.name, average.emphasis) == ("average", "Average per character", True)
+        assert (average.key, average.name, average.emphasis) == ("guild_average", "Average per character", True)
         assert first.name == "Healer10" and first.key == "healer10" and not first.emphasis
         assert chart.notes == [
             f"Showing the {MAX_SERIES - 1} healers with the most healing per raid; 4 more not drawn."
@@ -162,6 +162,24 @@ class TestCharts:
             ("Holy", [300, 600]),
             ("Resto", [100, None]),
         ]
+
+    def test_healer_chart_measures_the_average_per_character_on_its_own(self):
+        rows = _raids(("A", "2026-09-15", {"Holy": 300, "Resto": 100}), ("B", "2026-09-22", {"Holy": 600}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart()
+        assert [(r.key, r.label, r.value) for r in chart.references] == [("character_baseline", "4-week average", 200)]
+        assert chart.notes == ["Per character 600: up, 200.0% above its 4-week average of 200."]
+
+    def test_a_healer_named_average_does_not_clash_with_the_guild_line(self):
+        rows = _raids(("A", "2026-09-22", {"Average": 300, "Holy": 100}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart()
+        assert [s.key for s in chart.series] == ["guild_average", "average", "holy"]
+
+    @pytest.mark.parametrize("top", [0, -1])
+    def test_no_room_for_lines_draws_nothing_and_counts_no_healers(self, top):
+        rows = _raids(("A", "2026-09-22", {"Holy": 3, "Resto": 2}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart(top=top)
+        assert chart.series == [] and chart.references == [] and chart.empty == "No lines to draw."
+        assert chart.notes == ["Showing the 0 healers with the most healing per raid; 2 more not drawn."]
 
     def test_top_limit_is_honoured(self):
         rows = _raids(("A", "2026-09-22", {"Holy": 3, "Resto": 2, "Disc": 1}))

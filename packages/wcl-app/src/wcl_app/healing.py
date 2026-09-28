@@ -36,6 +36,9 @@ MAX_WEEKS = 26
 BASELINE_WEEKS = 4
 # Within this many percent of the baseline, the trend is steady.
 STEADY_PERCENT = 2.0
+# The key of the guild's average line on the healers chart. Character names are letters only, so no healer's key
+# (their lower-cased name) can be this.
+AVERAGE_KEY = "guild_average"
 
 
 def week_start(day: date) -> date:
@@ -122,6 +125,16 @@ def _average(values: Sequence[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+def _trend_note(label: str, value: float, baseline: float | None, change: float | None) -> list[str]:
+    """One line saying how ``value`` compares with its baseline, or none when there is no baseline yet."""
+    if not baseline:
+        return []
+    return [
+        f"{label} {compact(value)}: {_trend(change)}, {abs(change or 0):.1f}% "
+        f"{'above' if value >= baseline else 'below'} its {BASELINE_WEEKS}-week average of {compact(baseline)}."
+    ]
+
+
 @dataclass
 class HealingStandard:
     """The latest raided week measured against the guild's own recent weeks: healing per raid and the average per
@@ -152,19 +165,16 @@ class HealingStandard:
         """Average per character against its baseline."""
         return _trend(self.character_vs_baseline_percent)
 
+    def raid_notes(self) -> list[str]:
+        return _trend_note("Per raid", self.healing_per_raid, self.baseline, self.vs_baseline_percent)
+
+    def character_notes(self) -> list[str]:
+        return _trend_note(
+            "Per character", self.healing_per_character, self.character_baseline, self.character_vs_baseline_percent
+        )
+
     def notes(self) -> list[str]:
-        out = []
-        for label, value, baseline, change in (
-            ("Per raid", self.healing_per_raid, self.baseline, self.vs_baseline_percent),
-            ("Per character", self.healing_per_character, self.character_baseline, self.character_vs_baseline_percent),
-        ):
-            if baseline:
-                out.append(
-                    f"{label} {compact(value)}: {_trend(change)}, {abs(change or 0):.1f}% "
-                    f"{'above' if value >= baseline else 'below'} its {BASELINE_WEEKS}-week average of "
-                    f"{compact(baseline)}."
-                )
-        return out
+        return self.raid_notes() + self.character_notes()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -264,13 +274,18 @@ class WeeklyHealing:
         one line per healer. Only the healers with the most healing per raid summed over the weeks are drawn (``top``
         lines in all), so a regular healer outranks a one-off guest."""
         average = [w.per_character for w in self.weeks]
-        series = [Series("average", "Average per character", average, [_display(v) for v in average], emphasis=True)]
+        series = [Series(AVERAGE_KEY, "Average per character", average, [_display(v) for v in average], emphasis=True)]
         series += [
             Series(h.name.lower(), h.name, h.per_raid(), [_display(v) for v in h.per_raid()]) for h in self.healers
         ]
         if not self.healers:
             series = []
         kept, hidden = top_series(series, top)
+        standard = self.standard()
+        references = []
+        if standard and standard.character_baseline and any(s.key == AVERAGE_KEY for s in kept):
+            base = standard.character_baseline
+            references.append(Reference("character_baseline", f"{BASELINE_WEEKS}-week average", base, compact(base)))
         chart = Chart(
             id="healers_weekly",
             title="Healers week on week",
@@ -280,13 +295,20 @@ class WeeklyHealing:
             subtitle="Healing per raid attended as a healer, against the guild's average per character",
             x_label="Week starting",
             y_label="Healing per raid",
-            y_max=y_ceiling(kept),
+            y_max=y_ceiling(kept, references),
+            references=references,
         )
-        if not kept:
+        if not self.healers:
             chart.empty = f"No healers in guild raids in the last {len(self.weeks)} weeks."
+        elif not kept:
+            chart.empty = "No lines to draw."
+        if standard and references:
+            chart.notes.extend(standard.character_notes())
         if hidden:
+            drawn = sum(1 for s in kept if s.key != AVERAGE_KEY)
+            left_out = len(self.healers) - drawn
             chart.notes.append(
-                f"Showing the {len(kept) - 1} healers with the most healing per raid; {hidden} more not drawn."
+                f"Showing the {drawn} healers with the most healing per raid; {left_out} more not drawn."
             )
         return chart.validate()
 
