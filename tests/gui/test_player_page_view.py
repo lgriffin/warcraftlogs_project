@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from warcraftlogs_client.gui.player_page_view import PlayerPageView
+from warcraftlogs_client.services.badges import BadgeRules, PlayerStats
 from warcraftlogs_client.services.lineage import CharacterLineage, Spread
 from warcraftlogs_client.services.player_page import NEW, ON_PAGE, PlayerLog, PlayerPageData, PlayerRef
 
@@ -93,6 +94,24 @@ class TestPlayerPageView:
         assert [table.item(1, c).text() for c in range(6)] == ["Healing", "healer", "100", "200.0", "300", "3"]
         assert view._tabs.tabText(1) == "Lineage (3 raids)"
         assert view._role_combo.currentText() == "healer"
+
+    def test_badges_shown_earned_first_with_a_tooltip(self, qtbot):
+        view = _make_view(qtbot)
+        view._player = PlayerRef.create("Hadur", "spineshatter", "eu")
+        stats = PlayerStats("Hadur", "Priest", raids=16, consumables={"Super Mana Potion": 200})
+        badges = BadgeRules().award(stats)
+        view._on_discovered([], PlayerPageData(player=view._player, badges=badges))
+
+        chips = view._badges.chips
+        assert len(chips) == len(badges.badges)
+        assert [c.badge.id for c in chips[:2]] == ["mana_potions", "attendance"]  # epic, then rare
+        assert chips[0].text() == "🧪"
+        tip = chips[0].toolTip()
+        assert "Mana Guzzler: Epic" in tip and "Earned x20" in tip and "Legendary at 400" in tip
+        assert "not earned yet" in chips[-1].toolTip()
+
+        view._on_discovered([], PlayerPageData(player=view._player))
+        assert view._badges.chips == []
 
     def test_apply_detected_clears_override(self, qtbot):
         view = _make_view(qtbot)

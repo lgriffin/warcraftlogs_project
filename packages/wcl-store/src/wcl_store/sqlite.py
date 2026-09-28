@@ -1921,6 +1921,48 @@ class PerformanceDB:
         )
         return [dict(r) for r in rows]
 
+    # ── Guild totals ──
+
+    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+        """Raids each character has a role row in, by name."""
+        src_sql, src_params = self._lineage_raid_filter(sources)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT c.name, c.player_class, COUNT(DISTINCT x.raid_id) AS raids
+                FROM (SELECT character_id, raid_id FROM healer_performance
+                      UNION SELECT character_id, raid_id FROM tank_performance
+                      UNION SELECT character_id, raid_id FROM dps_performance) x
+                JOIN raids r ON r.id = x.raid_id
+                JOIN characters c ON c.id = x.character_id
+                WHERE {src_sql}
+                GROUP BY c.id, c.name, c.player_class
+                ORDER BY c.name""",
+                src_params,
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
+    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+        """Consumables each character used across raids, by name then consumable."""
+        src_sql, src_params = self._lineage_raid_filter(sources)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT c.name, cu.consumable_name, SUM(cu.count) AS count, COUNT(DISTINCT cu.raid_id) AS raids
+                FROM consumable_usage cu
+                JOIN raids r ON r.id = cu.raid_id
+                JOIN characters c ON c.id = cu.character_id
+                WHERE cu.count > 0 AND {src_sql}
+                GROUP BY c.id, c.name, cu.consumable_name
+                ORDER BY c.name, cu.consumable_name""",
+                src_params,
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
     # ── Raid Group operations ──
 
     def create_raid_group(self, name: str, raid_days: list[str] | None = None) -> RaidGroup:

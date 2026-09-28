@@ -60,6 +60,9 @@ class AppConfig:
     character_region: str = "eu"
     wcl_api_url: str = "https://fresh.warcraftlogs.com/api/v2/client"
 
+    # Toads badge thresholds; ``wcl_app.badges.BadgeRules.from_config`` validates them.
+    badges: dict[str, Any] = field(default_factory=dict)
+
 
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
@@ -147,6 +150,8 @@ class ConfigManager:
             tank_min_taken_10=role_thresholds_data.get("tank_min_taken_10", 300000),
         )
 
+        badges = raw_config.get("badges")
+
         # Create main config with optional settings
         config = AppConfig(
             api=api_config,
@@ -163,6 +168,7 @@ class ConfigManager:
             character_server=raw_config.get("character_server", ""),
             character_region=raw_config.get("character_region", "eu"),
             wcl_api_url=raw_config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"),
+            badges=badges if isinstance(badges, dict) else {},
         )
 
         return config
@@ -227,6 +233,7 @@ def load_config(config_file: str | None = None) -> dict[str, Any]:
         "character_server": config.character_server,
         "character_region": config.character_region,
         "wcl_api_url": config.wcl_api_url,
+        "badges": config.badges,
     }
 
 

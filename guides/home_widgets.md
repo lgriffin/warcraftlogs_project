@@ -49,7 +49,7 @@ Every widget has these fields, plus the fields of its kind:
 |------------|---------------------|-------------------------------------------------------------------------|
 | `id`       | string              | catalogue id, below                                                     |
 | `title`    | string              | heading                                                                 |
-| `kind`     | string              | `stats`, `table`, `list`, `bars` or `actions`                           |
+| `kind`     | string              | `stats`, `table`, `list`, `bars`, `actions` or `badges`                 |
 | `size`     | string              | `full` (a whole row) or `half` (half a row, paired with the next half)  |
 | `subtitle` | string              | context such as the raid it describes; may be empty                     |
 | `link`     | link or null        | what the whole widget opens (an "Open" button)                          |
@@ -63,10 +63,12 @@ Every widget has these fields, plus the fields of its kind:
 | `list`    | `items`               | `{label, detail, link}`                                                         |
 | `bars`    | `bars`                | `{label, value, display}`; scale each bar against the largest `value`           |
 | `actions` | `actions`             | `{id, label, description}`                                                      |
+| `badges`  | `holders`             | `{name, player_class, badges, link}`; `badges` holds badges as in `badges.md`   |
 
 Numbers come twice: `value` / `values` are raw (for sorting and charts) and `display` / `cells` are already
 formatted ("1.2M", "75.0%", "Mon 21 Sep 2026"), so no frontend formats numbers itself. `align` is `left` or
-`right`. A row's `cells` and `values` are keyed by column `key`.
+`right`. A row's `cells` and `values` are keyed by column `key`. A frontend that does not know a widget kind should skip
+that widget.
 
 ## Links
 
@@ -94,6 +96,7 @@ Quick action ids: `raids.download`, `raids.browse`, `raids.diff`, `characters`, 
 | `top_damage`      | table   | half | yes     | top 5 damage in the last raid: rank, name, class, damage, share      |
 | `top_healing`     | table   | half | yes     | top 5 healing in the last raid: rank, name, class, healing, overheal |
 | `attendance`      | table   | half | yes     | top 10 attendance over the last 10 raids                            |
+| `badges`          | badges  | half | yes     | the last raid's roster with the Toads badges each has earned, most tiers first |
 | `boss_kills`      | table   | half | no      | bosses killed in the last raid, in kill order, with kill time       |
 | `class_mix`       | bars    | half | no      | players per class in the last raid                                  |
 | `interrupts`      | table   | half | no      | top 5 interrupt ability casts in the last raid (casts, not hits)    |

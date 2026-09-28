@@ -16,5 +16,12 @@
         "tank_min_mitigation": 40,
         "healer_min_healing_10": 400000,
         "tank_min_taken_10": 300000
+    },
+    "badges": {
+        "thresholds": {
+            "attendance": [5, 15, 40, 100],
+            "mana_potions": [10, 50, 150, 400]
+        },
+        "disabled": []
     }
 }

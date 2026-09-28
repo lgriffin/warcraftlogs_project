@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 import pytest
-from wcl_app import AppContext, HomeLayout, HomeService, JsonLayoutStore
+from wcl_app import AppContext, BadgeRules, HomeLayout, HomeService, JsonLayoutStore
 from wcl_app.home import CATALOGUE, MemoryLayoutStore, compact
 from wcl_store import StorageError
 from wcl_store.sqlite import PerformanceDB
@@ -118,6 +118,7 @@ def test_catalogue_ids_are_unique_and_every_widget_builds_on_an_empty_database(s
     assert all(not w.error for w in page.widgets)
     assert _widget(service, "last_raid").empty
     assert _widget(service, "tracked_players").empty
+    assert _widget(service, "badges").empty == "No raids stored yet."
 
 
 def test_default_layout_is_the_default_widgets_in_catalogue_order(service):
@@ -252,6 +253,33 @@ class TestWidgets:
         assert [(r.values["name"], r.values["used"]) for r in rows] == [("HolyPriest", 3), ("FrostMage", 2)]
         assert rows[0].cells["role"] == "Healer"
 
+    def test_badges_of_the_last_raids_roster(self, storage):
+        rules = BadgeRules.from_config(
+            {"badges": {"thresholds": {"attendance": [2], "mana_potions": [3, 10], "combat_potions": [1]}}}
+        )
+        w = HomeService(storage, now=lambda: NOW, badge_rules=rules).widget("badges")
+        assert w.subtitle == "Gruul's Lair"
+        # TankPaladin came once and used nothing; TankWarrior was not in the last raid.
+        assert [(h.name, h.player_class, [b.id for b in h.badges]) for h in w.holders] == [
+            ("HolyPriest", "Priest", ["attendance", "mana_potions"]),
+            ("FrostMage", "Mage", ["combat_potions"]),
+            ("StabbyRogue", "Rogue", ["attendance"]),
+        ]
+        assert w.holders[0].link.params == {"name": "HolyPriest"}
+        mana = w.holders[0].badges[1]
+        assert (mana.quality, mana.value, mana.next_at) == ("uncommon", 3, 10)
+
+    def test_badges_with_nobody_qualifying(self, service):
+        w = _widget(service, "badges")
+        assert w.holders == [] and w.empty == "Nobody in the last raid has a badge yet."
+
+    def test_badge_thresholds_come_from_the_context_config(self, tmp_path, build_analysis):
+        ctx = AppContext(config={"badges": {"thresholds": {"attendance": [1]}}}, db_path=str(tmp_path / "ctx.db"))
+        with ctx.repository() as repo:
+            repo.import_raid(build_analysis(report_id=KARA))
+        holders = HomeService.from_context(ctx).widget("badges").holders
+        assert [h.name for h in holders] == ["HolyPriest", "StabbyRogue", "TankWarrior"]
+
     def test_tracked_players_link_to_the_player_page(self, service):
         row = _widget(service, "tracked_players").rows[0]
         assert row.cells["region"] == "EU"
@@ -263,9 +291,12 @@ class TestWidgets:
         assert data["version"] == 1 and data["generated_at"] == "2026-09-27 12:00:00"
         kind_fields = {"stats": {"tiles"}, "table": {"columns", "rows"}, "list": {"items"}, "bars": {"bars"}}
         kind_fields["actions"] = {"actions"}
+        kind_fields["badges"] = {"holders"}
         common = {"id", "title", "kind", "size", "subtitle", "link", "empty", "error"}
         for w in data["widgets"]:
             assert set(w) == common | kind_fields[w["kind"]], w["id"]
+        badges = next(w for w in data["widgets"] if w["id"] == "badges")
+        assert badges["holders"] == [] and badges["empty"]
         top = next(w for w in data["widgets"] if w["id"] == "top_damage")
         assert top["rows"][0]["link"] == {"kind": "character", "params": {"name": "FrostMage"}}
 

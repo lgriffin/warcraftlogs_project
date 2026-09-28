@@ -90,6 +90,17 @@ class RaidRepository(Protocol):
         """Consumables per raid, in no set order: raid_id, consumable_name, count."""
         ...
 
+    # ── Guild totals ──
+
+    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+        """Raids each character has a role row in, by name: name, player_class, raids."""
+        ...
+
+    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+        """Consumables each character used across raids, by name then consumable: name, consumable_name,
+        count (the sum) and raids (raids it was used in). Consumables never used are left out."""
+        ...
+
     # ── Player pages ──
 
     def get_or_create_player_page(self, name: str, server: str, region: str) -> int:

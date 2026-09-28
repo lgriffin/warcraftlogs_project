@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QLabel, QListWidget, QPushButton, QTableWidget
 
 from warcraftlogs_client.database import PerformanceDB
 from warcraftlogs_client.gui.home_view import CustomiseHomeDialog, HomeView
-from warcraftlogs_client.services import HomeLayout, HomeService
+from warcraftlogs_client.services import BadgeRules, HomeLayout, HomeService
 from warcraftlogs_client.services.home import CATALOGUE, MemoryLayoutStore
 
 NOW = datetime(2023, 11, 20, 12, 0)
@@ -80,6 +80,24 @@ class TestHomeView:
         with qtbot.waitSignal(view.open_player_page) as blocker:
             view.follow(Link(PLAYER_PAGE, {"name": "Hadur", "server": "Spineshatter", "region": "eu"}))
         assert blocker.args == ["Hadur", "Spineshatter", "eu"]
+
+    def test_badges_draw_icons_and_names_open_the_character(self, qtbot, tmp_path, sample_analysis):
+        path = str(tmp_path / "badges.db")
+        with PerformanceDB(path) as db:
+            db.import_raid(sample_analysis)
+        rules = BadgeRules.from_config({"badges": {"thresholds": {"attendance": [1]}}})
+        service = HomeService(lambda: PerformanceDB(path), MemoryLayoutStore(), now=lambda: NOW, badge_rules=rules)
+        view = HomeView(service)
+        qtbot.addWidget(view)
+        view.show_page(service.page(HomeLayout.of(["badges"])))
+
+        card = _card(view, "badges")
+        chip = card.findChild(QLabel, "badge:attendance")
+        assert chip is not None and chip.text() == "🐸" and "Loyal Toad: Uncommon" in chip.toolTip()
+        name = card.findChild(QPushButton, "holder:HolyPriest")
+        with qtbot.waitSignal(view.open_character) as blocker:
+            qtbot.mouseClick(name, Qt.MouseButton.LeftButton)
+        assert blocker.args == ["HolyPriest"]
 
     def test_hiding_a_widget_saves_the_layout(self, view, service, monkeypatch):
         monkeypatch.setattr(view, "refresh", lambda: None)

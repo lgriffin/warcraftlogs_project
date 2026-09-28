@@ -1,13 +1,14 @@
 """
 Home page: a catalogue of widgets, the layout a user picks from it, and the data each widget shows.
 
-Every frontend renders the same payloads. A widget is one of five kinds, and each kind fills its own fields:
+Every frontend renders the same payloads. A widget is one of six kinds, and each kind fills its own fields:
 
     stats    ``tiles``    big numbers (raids stored, days since the last raid, ...)
     table    ``columns`` and ``rows``
     list     ``items``
     bars     ``bars``     one labelled value per bar, drawn as a bar chart
     actions  ``actions``  shortcuts to other parts of the app
+    badges   ``holders``  players and the Toads badges they have earned (``wcl_app.badges``), drawn as small icons
 
 ``HomeWidget.to_dict()`` is the JSON shape the Toads Hub serves, documented in ``guides/home_widgets.md``.
 Values arrive both raw (``value`` / ``values``) and formatted (``display`` / ``cells``), so a frontend never
@@ -32,6 +33,7 @@ from typing import Any, Protocol
 from wcl_core.models import RaidAnalysis
 from wcl_store import RaidRepository, StorageError
 
+from wcl_app.badges import Badge, BadgeRules, PlayerStats, guild_stats
 from wcl_app.context import AppContext, StorageFactory
 
 HOME_SCHEMA_VERSION = 1
@@ -42,6 +44,7 @@ TABLE = "table"
 LIST = "list"
 BARS = "bars"
 ACTIONS = "actions"
+BADGES = "badges"
 
 # Widget sizes: a full-width row, or half a row next to another half widget.
 FULL = "full"
@@ -114,6 +117,14 @@ class Action:
     description: str
 
 
+@dataclass
+class BadgeHolder:
+    name: str
+    player_class: str
+    badges: list[Badge]  # earned badges only, in rule order
+    link: Link | None = None
+
+
 @dataclass(frozen=True)
 class WidgetSpec:
     """A widget a user can put on their home page."""
@@ -135,6 +146,7 @@ _KIND_FIELDS = {
     LIST: ("items",),
     BARS: ("bars",),
     ACTIONS: ("actions",),
+    BADGES: ("holders",),
 }
 
 
@@ -154,6 +166,7 @@ class HomeWidget:
     items: list[ListItem] = field(default_factory=list)
     bars: list[Bar] = field(default_factory=list)
     actions: list[Action] = field(default_factory=list)
+    holders: list[BadgeHolder] = field(default_factory=list)
     empty: str = ""
     error: str = ""
 
@@ -202,6 +215,7 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec("top_damage", "Top damage", "Highest damage dealers in the last raid", TABLE, HALF, True),
     WidgetSpec("top_healing", "Top healing", "Highest healers in the last raid", TABLE, HALF, True),
     WidgetSpec("attendance", "Attendance", f"Who came to the last {ATTENDANCE_WINDOW} raids", TABLE, HALF, True),
+    WidgetSpec("badges", "Toads badges", "Badges earned by the last raid's roster", BADGES, HALF, True),
     WidgetSpec("boss_kills", "Boss kills", "Every boss killed in the last raid and how long it took", TABLE, HALF),
     WidgetSpec("class_mix", "Class mix", "Players of each class in the last raid", BARS, HALF),
     WidgetSpec("interrupts", "Interrupt casts", "Most interrupt abilities cast in the last raid", TABLE, HALF),
@@ -331,6 +345,11 @@ class _Snapshot:
         self.repo = repo
 
     @cached_property
+    def badge_stats(self) -> dict[str, PlayerStats]:
+        """Every character's badge counts over the guild raids, keyed by lower-case name."""
+        return guild_stats(self.repo)
+
+    @cached_property
     def raids(self) -> list[dict[str, Any]]:
         """The newest guild raids, newest first."""
         return self.repo.get_raid_list(limit=_RECENT_RAIDS_READ)
@@ -370,10 +389,12 @@ class HomeService:
         layouts: LayoutStore | None = None,
         *,
         now: Callable[[], datetime] = datetime.now,
+        badge_rules: BadgeRules | None = None,
     ):
         self.storage = storage
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
+        self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
         self._builders: dict[str, Callable[[_Snapshot, HomeWidget], None]] = {
             "quick_actions": self._quick_actions,
             "guild_snapshot": self._guild_snapshot,
@@ -383,6 +404,7 @@ class HomeService:
             "top_damage": self._top_damage,
             "top_healing": self._top_healing,
             "attendance": self._attendance,
+            "badges": self._badges,
             "boss_kills": self._boss_kills,
             "class_mix": self._class_mix,
             "interrupts": self._interrupts,
@@ -393,7 +415,7 @@ class HomeService:
     @classmethod
     def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
         """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(ctx.repository, layouts)
+        return cls(ctx.repository, layouts, badge_rules=BadgeRules.from_config(ctx.config))
 
     # ── Layout ──
 
@@ -614,6 +636,26 @@ class HomeService:
                     _character_link(name),
                 )
             )
+
+    def _badges(self, s: _Snapshot, w: HomeWidget) -> None:
+        roster = s.rosters[0] if s.rosters else []
+        if not roster:
+            w.empty = "No raids stored yet."
+            return
+        w.subtitle = s.last_raid["title"] if s.last_raid else ""
+        ranked: list[tuple[int, dict[str, Any], list[Badge]]] = []
+        for p in {p["name"].lower(): p for p in roster}.values():
+            stats = s.badge_stats.get(p["name"].lower(), PlayerStats(p["name"]))
+            awarded = self.badge_rules.award(stats)
+            if awarded.earned:
+                ranked.append((awarded.score, p, awarded.earned))
+        ranked.sort(key=lambda h: (-h[0], h[1]["name"].lower()))
+        w.holders = [
+            BadgeHolder(p["name"], p.get("player_class") or "", earned, _character_link(p["name"]))
+            for _score, p, earned in ranked
+        ]
+        if not w.holders:
+            w.empty = "Nobody in the last raid has a badge yet."
 
     def _boss_kills(self, s: _Snapshot, w: HomeWidget) -> None:
         a = s.last_analysis
