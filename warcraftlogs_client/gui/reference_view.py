@@ -27,6 +27,10 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
+from ..services import AppContext, ReferenceRequestError, ReferenceService
+from ..services.reference import class_performance as _compute_class_performance
+from ..services.reference import consumable_summary as _compute_consumable_summary
+from ..services.reference import match_encounters as _match_encounters
 from ..user_auth import UserTokenManager, start_oauth_flow
 from .analysis_helpers import (
     NumericSortProxy,
@@ -519,19 +523,6 @@ class ReferenceView(QWidget):
         if not report_id:
             return
 
-        try:
-            with PerformanceDB() as db:
-                existing_source = db.get_raid_source(report_id)
-                if existing_source:
-                    QMessageBox.warning(
-                        self,
-                        "Already Imported",
-                        f"Report {report_id} is already imported as a {existing_source} report.",
-                    )
-                    return
-        except (sqlite3.Error, OSError):
-            pass
-
         user_tm = UserTokenManager()
         if not user_tm.is_authenticated():
             reply = QMessageBox.question(
@@ -554,7 +545,7 @@ class ReferenceView(QWidget):
             return
 
         self._set_importing(True, f"Downloading report {report_id}...")
-        self._worker = ReferenceAnalysisWorker(report_id)
+        self._worker = ReferenceAnalysisWorker(report_id, self._label_input.text().strip())
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_analysis_done)
         self._worker.error.connect(self._on_analysis_error)
@@ -579,18 +570,6 @@ class ReferenceView(QWidget):
         self._progress_label.setText(message)
 
     def _on_analysis_done(self, analysis):
-        self._progress_label.setText("Saving to database...")
-        try:
-            with PerformanceDB() as db:
-                db.import_raid(analysis, source="reference")
-                label = self._label_input.text().strip()
-                if label:
-                    db.update_raid_label(analysis.metadata.report_id, label)
-        except (sqlite3.Error, OSError) as e:
-            self._set_importing(False)
-            self.status_message.emit(f"Import failed: {e}")
-            return
-
         self._set_importing(False)
         self._report_input.clear()
         self._label_input.clear()
@@ -705,9 +684,8 @@ class ReferenceView(QWidget):
             return
 
         try:
-            with PerformanceDB() as db:
-                db.delete_raid(report_id)
-        except (sqlite3.Error, OSError) as e:
+            _service().delete_reference(report_id)
+        except (ReferenceRequestError, sqlite3.Error, OSError) as e:
             self.status_message.emit(f"Delete failed: {e}")
             return
 
@@ -716,8 +694,7 @@ class ReferenceView(QWidget):
 
     def _refresh_manage_tab(self):
         try:
-            with PerformanceDB() as db:
-                raids = db.get_reference_raids()
+            raids = [r.to_dict() for r in _service().references()]
         except (sqlite3.Error, OSError):
             raids = []
 
@@ -808,92 +785,9 @@ class ReferenceView(QWidget):
 # ── Head-to-Head comparison helpers ──
 
 
-def _compute_class_performance(analysis):
-    """Aggregate performance by (class, role) from a RaidAnalysis."""
-    by_class_role = defaultdict(list)
-    for h in analysis.healers:
-        by_class_role[(h.player_class, "healer")].append(h.total_healing)
-    for t in analysis.tanks:
-        by_class_role[(t.player_class, "tank")].append(t.mitigation_percent)
-    for d in analysis.dps:
-        by_class_role[(d.player_class, d.role)].append(d.total_damage)
-
-    results = []
-    for (cls, role), values in sorted(by_class_role.items()):
-        results.append(
-            {
-                "class": cls,
-                "role": role,
-                "count": len(values),
-                "avg_metric": sum(values) / len(values) if values else 0,
-            }
-        )
-    return results
-
-
-def _compute_consumable_summary(analysis):
-    """Aggregate consumable usage by consumable name from a RaidAnalysis."""
-    by_name = defaultdict(lambda: {"users": set(), "total": 0})
-    for cu in analysis.consumables:
-        by_name[cu.consumable_name]["users"].add(cu.player_name)
-        by_name[cu.consumable_name]["total"] += cu.count
-    result = {}
-    for name, data in by_name.items():
-        n_users = len(data["users"])
-        result[name] = {
-            "total_uses": data["total"],
-            "unique_users": n_users,
-        }
-    return result
-
-
-def _match_encounters(guild_analysis, ref_analysis):
-    """Match encounters by encounter_id, falling back to boss name."""
-
-    def _build_enc_data(encounters):
-        by_id = {}
-        by_name = {}
-        for e in encounters or []:
-            total_dmg = sum(p.total_damage for p in e.players) if e.players else 0
-            total_heal = sum(p.total_healing for p in e.players) if e.players else 0
-            data = {
-                "name": e.name,
-                "duration_ms": e.duration_ms,
-                "total_damage": total_dmg,
-                "total_healing": total_heal,
-            }
-            by_id[e.encounter_id] = data
-            by_name[e.name] = data
-        return by_id, by_name
-
-    guild_by_id, guild_by_name = _build_enc_data(guild_analysis.encounters)
-    ref_by_id, ref_by_name = _build_enc_data(ref_analysis.encounters)
-
-    shared_ids = set(guild_by_id.keys()) & set(ref_by_id.keys())
-    rows = []
-    matched_names = set()
-    for eid in sorted(shared_ids):
-        rows.append(
-            {
-                "name": guild_by_id[eid]["name"],
-                "guild": guild_by_id[eid],
-                "ref": ref_by_id[eid],
-            }
-        )
-        matched_names.add(guild_by_id[eid]["name"])
-
-    # Fallback: match remaining encounters by boss name
-    for name in sorted(set(guild_by_name.keys()) & set(ref_by_name.keys())):
-        if name not in matched_names:
-            rows.append(
-                {
-                    "name": name,
-                    "guild": guild_by_name[name],
-                    "ref": ref_by_name[name],
-                }
-            )
-
-    return rows
+def _service() -> ReferenceService:
+    """Reference raids in the desktop database; imports build their own context with the user login."""
+    return ReferenceService(AppContext(config={}))
 
 
 # ── Head-to-Head table models ──
@@ -1396,9 +1290,9 @@ class _HeadToHeadPanel(QWidget):
 
     def populate_combos(self):
         try:
-            with PerformanceDB() as db:
-                ref_raids = db.get_reference_raids()
-                guild_raids = db.get_guild_raids_for_comparison()
+            service = _service()
+            ref_raids = [r.to_dict() for r in service.references()]
+            guild_raids = [r.to_dict() for r in service.guild_raids()]
         except (sqlite3.Error, OSError):
             ref_raids = []
             guild_raids = []

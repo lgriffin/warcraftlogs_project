@@ -550,6 +550,24 @@ class PostgresRaidRepository:
             )
 
     @_storage_errors
+    def get_raids_by_source(self, source: str = "guild", limit: int = 50) -> list[dict[str, Any]]:
+        r = t.raids.c
+        with self._engine.connect() as conn:
+            return _dicts(
+                conn.execute(
+                    select(r.report_id, r.title, r.owner, r.raid_date, r.imported_at, r.zone, r.raid_size, r.label)
+                    .where(r.source == source)
+                    .order_by(_c(r.raid_date).desc())
+                    .limit(limit)
+                )
+            )
+
+    @_storage_errors
+    def set_raid_label(self, report_id: str, label: str | None) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(update(t.raids).where(t.raids.c.report_id == report_id).values(label=label or None))
+
+    @_storage_errors
     def get_raid_source(self, report_id: str) -> str | None:
         with self._engine.connect() as conn:
             return conn.execute(select(t.raids.c.source).where(t.raids.c.report_id == report_id)).scalar_one_or_none()

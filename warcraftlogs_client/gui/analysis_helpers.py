@@ -1,11 +1,13 @@
 """Shared analysis helpers used by both the main raid view and Head-to-Head comparison."""
 
-import dataclasses
 from collections import defaultdict
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QColor
 
+# The shared-encounter scoping moved to the reference service; the Head to Head view imports it from here.
+from ..services.reference import scope_to_window as scope_analysis_to_window  # noqa: F401
+from ..services.reference import shared_encounter_window as compute_shared_encounter_window  # noqa: F401
 from .styles import COLORS
 
 ENGINEERING_ITEMS = {
@@ -148,73 +150,6 @@ def classify_consumable_usage(analysis):
             in_boss = any(s <= ts <= e for s, e in intervals)
             by_name[cu.consumable_name]["boss" if in_boss else "trash"] += 1
     return dict(by_name)
-
-
-def compute_shared_encounter_window(guild_analysis, ref_analysis):
-    """Detect extra guild encounters and compute the shared encounter time window.
-
-    Returns a dict with scoping metadata, or None if either side has no encounters.
-    """
-    guild_encs = guild_analysis.encounters or []
-    ref_encs = ref_analysis.encounters or []
-    if not guild_encs or not ref_encs:
-        return None
-
-    ref_ids = {e.encounter_id for e in ref_encs}
-    ref_names = {e.name for e in ref_encs}
-
-    shared = []
-    extra = []
-    for e in guild_encs:
-        if e.encounter_id in ref_ids or e.name in ref_names:
-            shared.append(e)
-        else:
-            extra.append(e)
-
-    if not extra:
-        return {
-            "has_extra_encounters": False,
-            "guild_extra_names": [],
-            "window_start": None,
-            "window_end": None,
-            "shared_count": len(shared),
-        }
-
-    if not shared:
-        return {
-            "has_extra_encounters": True,
-            "guild_extra_names": sorted(e.name for e in extra),
-            "window_start": None,
-            "window_end": None,
-            "shared_count": 0,
-        }
-
-    return {
-        "has_extra_encounters": True,
-        "guild_extra_names": sorted(e.name for e in extra),
-        "window_start": min(e.start_time for e in shared),
-        "window_end": max(e.end_time for e in shared),
-        "shared_count": len(shared),
-    }
-
-
-def scope_analysis_to_window(analysis, window_start, window_end):
-    """Return a copy of the analysis with consumables and encounters filtered to a time window."""
-    filtered_consumables = []
-    for cu in analysis.consumables or []:
-        ts = [t for t in cu.timestamps if window_start <= t <= window_end]
-        if ts:
-            filtered_consumables.append(dataclasses.replace(cu, timestamps=ts, count=len(ts)))
-
-    filtered_encounters = [
-        e for e in (analysis.encounters or []) if e.start_time >= window_start and e.end_time <= window_end
-    ]
-
-    return dataclasses.replace(
-        analysis,
-        consumables=filtered_consumables,
-        encounters=filtered_encounters,
-    )
 
 
 class TimelineTableModel(QAbstractTableModel):

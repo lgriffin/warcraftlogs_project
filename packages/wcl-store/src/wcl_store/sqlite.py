@@ -3508,22 +3508,30 @@ class PerformanceDB:
 
     # ── Reference report operations ──
 
-    def get_reference_raids(self, limit: int = 50) -> list[dict]:
-        """Get list of all imported reference raids."""
+    def get_raids_by_source(self, source: str = "guild", limit: int = 50) -> list[dict[str, Any]]:
+        """Raids of ``source``, newest first, with zone, size and label."""
         conn = self._get_conn()
         rows = conn.execute(
-            """SELECT report_id, title, owner, raid_date, imported_at, zone, label, raid_size
-               FROM raids WHERE source = 'reference'
+            """SELECT report_id, title, owner, raid_date, imported_at, zone, raid_size, label
+               FROM raids WHERE source = ?
                ORDER BY raid_date DESC LIMIT ?""",
-            (limit,),
+            (source, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_reference_raids(self, limit: int = 50) -> list[dict]:
+        """Get list of all imported reference raids."""
+        return self.get_raids_by_source("reference", limit)
+
+    def set_raid_label(self, report_id: str, label: str | None) -> None:
+        """Label a raid (typically a reference raid); None or "" clears it."""
+        conn = self._get_conn()
+        conn.execute("UPDATE raids SET label = ? WHERE report_id = ?", (label or None, report_id))
+        conn.commit()
+
     def update_raid_label(self, report_id: str, label: str) -> None:
         """Set a user-supplied label on a raid (typically a reference raid)."""
-        conn = self._get_conn()
-        conn.execute("UPDATE raids SET label = ? WHERE report_id = ?", (label, report_id))
-        conn.commit()
+        self.set_raid_label(report_id, label)
 
     def get_raid_source(self, report_id: str) -> str | None:
         """Get the source classification of a raid, or None if not imported."""

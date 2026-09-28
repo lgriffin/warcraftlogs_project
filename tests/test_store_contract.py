@@ -223,6 +223,31 @@ def test_raid_list_is_guild_raids_newest_first(repo):
     assert [r["report_id"] for r in repo.get_raid_list(limit=1)] == [GRUUL]
 
 
+def test_raids_by_source_newest_first_with_zone_size_and_label(repo):
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(REF, start=T0 + DAY, title="Ref Kara"), source="reference")
+    repo.import_raid(_analysis(GRUUL, start=T0 + 2 * DAY, title="Ref Gruul", zone=None), source="reference")
+
+    refs = repo.get_raids_by_source("reference")
+    assert [r["report_id"] for r in refs] == [GRUUL, REF]
+    assert set(refs[0]) == {"report_id", "title", "owner", "raid_date", "imported_at", "zone", "raid_size", "label"}
+    assert refs[1]["zone"] == "Karazhan" and refs[0]["zone"] is None
+    assert refs[1]["raid_size"] == 3 and refs[1]["label"] is None
+    assert [r["report_id"] for r in repo.get_raids_by_source("guild")] == [KARA]
+    assert [r["report_id"] for r in repo.get_raids_by_source("reference", limit=1)] == [GRUUL]
+
+
+def test_raid_label_is_set_kept_and_cleared(repo):
+    repo.import_raid(_analysis(REF), source="reference")
+    repo.set_raid_label(REF, "Best in world")
+    repo.set_raid_label("unknown0000000000", "ignored")
+    repo.import_raid(_analysis(REF), source="reference")  # storing again keeps the label
+    assert repo.get_raids_by_source("reference")[0]["label"] == "Best in world"
+
+    repo.set_raid_label(REF, "")
+    assert repo.get_raids_by_source("reference")[0]["label"] is None
+
+
 def test_count_raids_counts_each_source(repo):
     assert repo.count_raids() == 0
     repo.import_raid(_analysis(KARA, start=T0))
@@ -620,6 +645,7 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
     repo.import_raid(_analysis(GRUUL, start=T0 + DAY, dps_role="ranged", healer="Disc"))
     repo.import_raid(_analysis(REF, start=T0 + 2 * DAY), source="reference")
     repo.replace_raid_analysis(_analysis(GRUUL, start=T0 + DAY, healer="Holy"))
+    repo.set_raid_label(GRUUL, "Gruul night")
     repo.delete_raid(REF)
     page = repo.get_or_create_player_page("Holy", "spineshatter", "eu")
     repo.set_player_page_log(page, KARA, "added", title="Kara", start_time=T0)
@@ -638,6 +664,7 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
     return {
         "imported": sorted(repo.get_imported_report_codes()),
         "raids": rows(repo.get_raid_list()),
+        "by_source": rows(repo.get_raids_by_source("guild")),
         "analysis": [asdict(repo.get_raid_analysis(c)) for c in (KARA, GRUUL)],
         "roster": repo.get_raid_roster(GRUUL),
         "sources": [repo.get_raid_source(c) for c in (KARA, GRUUL, REF)],

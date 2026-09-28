@@ -10,7 +10,14 @@ from wcl_core.cache import load_wowhead_cache, save_wowhead_cache
 from wcl_core.common.errors import WarcraftLogsError
 from wcl_core.models import CharacterProfile, RaidAnalysis
 
-from ..services import AppContext, PlayerService, RaidService, ReferenceAuthRequired
+from ..services import (
+    AppContext,
+    PlayerService,
+    RaidService,
+    ReferenceAuthRequired,
+    ReferenceRequestError,
+    ReferenceService,
+)
 
 
 class AnalysisWorker(QThread):
@@ -40,16 +47,17 @@ class AnalysisWorker(QThread):
 
 
 class ReferenceAnalysisWorker(QThread):
-    """Runs raid analysis using user-level OAuth token for full data access."""
+    """Imports a reference report through ReferenceService, with the user-level OAuth token."""
 
     progress = Signal(str)
     finished = Signal(RaidAnalysis)
     error = Signal(str)
     auth_required = Signal()
 
-    def __init__(self, report_id: str, parent=None):
+    def __init__(self, report_id: str, label: str = "", parent=None):
         super().__init__(parent)
         self.report_id = report_id
+        self.label = label
 
     def run(self):
         try:
@@ -57,13 +65,17 @@ class ReferenceAnalysisWorker(QThread):
             ctx = AppContext.from_config_file()
 
             self.progress.emit("Connecting with user credentials...")
-            result = RaidService(ctx).analyze(self.report_id, reference=True, progress=self.progress.emit)
+            result = ReferenceService(ctx).import_reference(
+                self.report_id, label=self.label or None, progress=self.progress.emit
+            )
 
             self.progress.emit("Analysis complete!")
             self.finished.emit(result)
 
         except ReferenceAuthRequired:
             self.auth_required.emit()
+        except ReferenceRequestError as e:
+            self.error.emit(str(e))
         except Exception as e:
             self.error.emit(f"{type(e).__name__}: {e}")
 

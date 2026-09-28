@@ -29,14 +29,18 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import RaidService as RaidService
     from wcl_app import ReanalysisResult as ReanalysisResult
     from wcl_app import ReferenceAuthRequired as ReferenceAuthRequired
+    from wcl_app import ReferenceComparison as ReferenceComparison
+    from wcl_app import ReferenceRequestError as ReferenceRequestError
+    from wcl_app import ReferenceService as ReferenceService
     from wcl_app import ReportRef as ReportRef
     from wcl_app import RoleOverrideService as RoleOverrideService
     from wcl_app import Spread as Spread
+    from wcl_app import StoredRaid as StoredRaid
     from wcl_app import WidgetSpec as WidgetSpec
     from wcl_app import character_lineage as character_lineage
     from wcl_app import parse_report_code as parse_report_code
     from wcl_app import validate_report_code as validate_report_code
 
-for _name in ("context", "home", "lineage", "player_page", "players", "raids", "roles"):
+for _name in ("context", "home", "lineage", "player_page", "players", "raids", "reference", "roles"):
     sys.modules[f"{__name__}.{_name}"] = importlib.import_module(f"wcl_app.{_name}")
 sys.modules[__name__] = _module

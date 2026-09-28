@@ -50,6 +50,15 @@ class RaidRepository(Protocol):
         """Guild raids, newest ``raid_date`` first: report_id, title, owner, raid_date, imported_at."""
         ...
 
+    def get_raids_by_source(self, source: str = "guild", limit: int = 50) -> list[dict[str, Any]]:
+        """Raids of ``source``, newest ``raid_date`` first: report_id, title, owner, raid_date, imported_at, zone,
+        raid_size and label (None when unset)."""
+        ...
+
+    def set_raid_label(self, report_id: str, label: str | None) -> None:
+        """Label a stored raid, or clear its label with None or ``""``. Unknown codes are ignored."""
+        ...
+
     def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None:
         """Rebuild the stored analysis (source ids are not stored and come back as 0)."""
         ...
