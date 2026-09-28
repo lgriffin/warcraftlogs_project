@@ -154,6 +154,8 @@ class TestChartWidgets:
         ).validate()
         view = build_payload_chart(payload)
         qtbot.addWidget(view)
+        view.show()
+        qtbot.waitExposed(view)
         chart = view.chart()
         assert len(chart.series()) == 3  # two runs of "One", a lone point of "Two"
         visible = [m.label() for m in chart.legend().markers() if m.isVisible()]
