@@ -21,7 +21,8 @@ home.widget("attendance").to_dict()             # one widget, to refresh it alon
 
 Storage comes from `ctx.repository()`, so a headless host (`AppContext.headless(client, storage)`) gets the
 same payloads from Postgres. It reads only `RaidRepository` methods: the newest 100 guild raids, `count_raids()`
-for the total, rosters of the last 10 raids and the last raid's analysis.
+for the total, rosters of the last 10 raids, the last raid's analysis and, for the weekly healing charts,
+`get_healing_by_raid()` over the last 12 weeks (read once however many widgets use it).
 
 A `LayoutStore` has `load() -> HomeLayout | None` and `save(layout | None)`. The desktop uses
 `JsonLayoutStore(<user data dir>/home_layout.json)`. The Hub should keep one layout per member, storing
@@ -49,7 +50,7 @@ Every widget has these fields, plus the fields of its kind:
 |------------|---------------------|-------------------------------------------------------------------------|
 | `id`       | string              | catalogue id, below                                                     |
 | `title`    | string              | heading                                                                 |
-| `kind`     | string              | `stats`, `table`, `list`, `bars` or `actions`                           |
+| `kind`     | string              | `stats`, `table`, `list`, `bars`, `actions` or `chart`                  |
 | `size`     | string              | `full` (a whole row) or `half` (half a row, paired with the next half)  |
 | `subtitle` | string              | context such as the raid it describes; may be empty                     |
 | `link`     | link or null        | what the whole widget opens (an "Open" button)                          |
@@ -63,6 +64,7 @@ Every widget has these fields, plus the fields of its kind:
 | `list`    | `items`               | `{label, detail, link}`                                                         |
 | `bars`    | `bars`                | `{label, value, display}`; scale each bar against the largest `value`           |
 | `actions` | `actions`             | `{id, label, description}`                                                      |
+| `chart`   | `chart`               | one chart payload, drawn as `guides/charts.md` describes                        |
 
 Numbers come twice: `value` / `values` are raw (for sorting and charts) and `display` / `cells` are already
 formatted ("1.2M", "75.0%", "Mon 21 Sep 2026"), so no frontend formats numbers itself. `align` is `left` or
@@ -91,6 +93,8 @@ Quick action ids: `raids.download`, `raids.browse`, `raids.diff`, `characters`, 
 | `last_raid`       | stats   | full | yes     | date, duration, bosses, raid size, total damage and healing |
 | `recent_raids`    | list    | half | yes     | the 8 newest raids                                                   |
 | `raid_activity`   | bars    | half | yes     | raids per week for the last 8 weeks, labelled by the week's Monday   |
+| `healing_weekly`  | chart   | full | yes     | healing per raid by week over 12 weeks, vs baseline and target      |
+| `healers_weekly`  | chart   | full | no      | each healer's healing per raid attended over 12 weeks (line chart)  |
 | `top_damage`      | table   | half | yes     | top 5 damage in the last raid: rank, name, class, damage, share      |
 | `top_healing`     | table   | half | yes     | top 5 healing in the last raid: rank, name, class, healing, overheal |
 | `attendance`      | table   | half | yes     | top 10 attendance over the last 10 raids                            |

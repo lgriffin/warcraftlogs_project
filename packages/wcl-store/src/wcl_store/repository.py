@@ -57,6 +57,12 @@ class RaidRepository(Protocol):
 
     def set_raid_label(self, report_id: str, label: str | None) -> None:
         """Label a stored raid, or clear its label with None or ``""``. Unknown codes are ignored."""
+
+        ...
+
+    def get_healing_by_raid(self, since: str) -> list[dict[str, Any]]:
+        """One row per healer per guild raid with ``raid_date >= since``, oldest raid first, then by name:
+        report_id, raid_date, name, player_class, healing, overhealing. Raids without healers are not listed."""
         ...
 
     def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None:

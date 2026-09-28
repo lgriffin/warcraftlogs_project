@@ -260,6 +260,26 @@ def test_count_raids_counts_each_source(repo):
     assert repo.count_raids("reference") == 1
 
 
+def test_healing_by_raid_lists_guild_healers_since_a_date(repo):
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(GRUUL, start=T0 + 7 * DAY, title="Gruul", healer="Resto"))
+    repo.import_raid(_analysis(REF, start=T0 + 7 * DAY, healer="Guest"), source="reference")
+    rows = repo.get_healing_by_raid("")
+    assert [(r["report_id"], r["name"]) for r in rows] == [(KARA, "Holy"), (GRUUL, "Resto")]
+    assert rows[0] == {
+        "report_id": KARA,
+        "raid_date": rows[0]["raid_date"],
+        "name": "Holy",
+        "player_class": "Priest",
+        "healing": 500_000,
+        "overhealing": 100_000,
+    }
+    assert DATE_RE.match(rows[0]["raid_date"])
+    since = rows[1]["raid_date"]
+    assert [r["report_id"] for r in repo.get_healing_by_raid(since)] == [GRUUL]
+    assert repo.get_healing_by_raid("9999-01-01 00:00:00") == []
+
+
 def test_raid_analysis_round_trips(repo):
     repo.import_raid(_analysis())
     got = repo.get_raid_analysis(KARA)

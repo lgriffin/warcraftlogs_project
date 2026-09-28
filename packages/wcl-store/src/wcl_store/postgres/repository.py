@@ -568,6 +568,25 @@ class PostgresRaidRepository:
             conn.execute(update(t.raids).where(t.raids.c.report_id == report_id).values(label=label or None))
 
     @_storage_errors
+    def get_healing_by_raid(self, since: str) -> list[dict[str, Any]]:
+        r, c, hp = t.raids.c, t.characters.c, t.healer_performance
+        stmt = (
+            select(
+                r.report_id,
+                r.raid_date,
+                c.name,
+                c.player_class,
+                hp.c.total_healing.label("healing"),
+                hp.c.total_overhealing.label("overhealing"),
+            )
+            .select_from(hp.join(t.raids, t.raids.c.id == hp.c.raid_id).join(t.characters, c.id == hp.c.character_id))
+            .where(r.source == "guild", _c(r.raid_date) >= since)
+            .order_by(_c(r.raid_date), _c(r.report_id), _c(c.name))
+        )
+        with self._engine.connect() as conn:
+            return _dicts(conn.execute(stmt))
+
+    @_storage_errors
     def get_raid_source(self, report_id: str) -> str | None:
         with self._engine.connect() as conn:
             return conn.execute(select(t.raids.c.source).where(t.raids.c.report_id == report_id)).scalar_one_or_none()
