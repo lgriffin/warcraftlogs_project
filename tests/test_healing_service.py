@@ -70,6 +70,8 @@ def test_numbers_are_per_raid_so_a_two_raid_week_compares_fairly():
     result = weekly_healing(rows, TODAY, weeks=3)
     first, skipped, last = result.weeks
     assert (first.raids, first.healing, first.per_raid, first.healers) == (2, 1_200_000, 600_000, 2)
+    # Three healers healed across the two raids (Holy twice, Resto once): 1.2M over 3 is 400K per character.
+    assert (first.appearances, first.per_character) == (3, 400_000)
     assert first.change_percent is None
     assert first.overheal_percent == 20.0  # overheal is a quarter of healing: 25 / 125
     assert skipped.raids == 0 and skipped.per_raid is None and skipped.overheal_percent is None
@@ -82,6 +84,7 @@ def test_numbers_are_per_raid_so_a_two_raid_week_compares_fairly():
         "raids": 2,
         "healing": 1_200_000,
         "healing_per_raid": 600_000,
+        "healing_per_character": 400_000,
         "overheal_percent": 20.0,
         "healers": 2,
         "change_percent": None,
@@ -119,7 +122,8 @@ class TestCharts:
         assert chart.series[0].emphasis
         assert chart.y_max == 2_000_000
         assert chart.notes == [
-            "Trend up: 10.0% above the 4-week average of 1.0M.",
+            "Per raid 1.1M: up, 10.0% above its 4-week average of 1.0M.",
+            "Per character 1.1M: up, 10.0% above its 4-week average of 1.0M.",
             "Week of 21 Sep: +10.0% on the week before it raided.",
             "Overheal that week: 20.0%.",
         ]
@@ -143,17 +147,48 @@ class TestCharts:
         chart = weekly_healing(rows, TODAY, weeks=2).healer_chart()
         assert chart.kind == "line"
         assert len(chart.series) == MAX_SERIES
-        assert chart.series[0].name == "Healer10" and chart.series[0].key == "healer10"
-        assert chart.notes == [f"Showing the {MAX_SERIES} healers with the most healing per raid; 3 more not drawn."]
+        average, first = chart.series[:2]
+        assert (average.key, average.name, average.emphasis) == ("guild_average", "Average per character", True)
+        assert first.name == "Healer10" and first.key == "healer10" and not first.emphasis
+        assert chart.notes == [
+            f"Showing the {MAX_SERIES - 1} healers with the most healing per raid; 4 more not drawn."
+        ]
+
+    def test_healer_chart_leads_with_the_average_per_character(self):
+        rows = _raids(("A", "2026-09-15", {"Holy": 300, "Resto": 100}), ("B", "2026-09-22", {"Holy": 600}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart()
+        assert [(s.name, s.values) for s in chart.series] == [
+            ("Average per character", [200, 600]),
+            ("Holy", [300, 600]),
+            ("Resto", [100, None]),
+        ]
+
+    def test_healer_chart_measures_the_average_per_character_on_its_own(self):
+        rows = _raids(("A", "2026-09-15", {"Holy": 300, "Resto": 100}), ("B", "2026-09-22", {"Holy": 600}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart()
+        assert [(r.key, r.label, r.value) for r in chart.references] == [("character_baseline", "4-week average", 200)]
+        assert chart.notes == ["Per character 600: up, 200.0% above its 4-week average of 200."]
+
+    def test_a_healer_named_average_does_not_clash_with_the_guild_line(self):
+        rows = _raids(("A", "2026-09-22", {"Average": 300, "Holy": 100}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart()
+        assert [s.key for s in chart.series] == ["guild_average", "average", "holy"]
+
+    @pytest.mark.parametrize("top", [0, -1])
+    def test_no_room_for_lines_draws_nothing_and_counts_no_healers(self, top):
+        rows = _raids(("A", "2026-09-22", {"Holy": 3, "Resto": 2}))
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart(top=top)
+        assert chart.series == [] and chart.references == [] and chart.empty == "No lines to draw."
+        assert chart.notes == ["Showing the 0 healers with the most healing per raid; 2 more not drawn."]
 
     def test_top_limit_is_honoured(self):
         rows = _raids(("A", "2026-09-22", {"Holy": 3, "Resto": 2, "Disc": 1}))
-        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart(top=2)
-        assert [s.name for s in chart.series] == ["Holy", "Resto"]
+        chart = weekly_healing(rows, TODAY, weeks=2).healer_chart(top=3)
+        assert [s.name for s in chart.series] == ["Average per character", "Holy", "Resto"]
 
 
 class TestStandard:
-    def _weekly(self, per_week, target=None):
+    def _weekly(self, per_week):
         """One raid a week ending this week, healing per week as given, oldest first."""
         mondays = [date(2026, 9, 21) - timedelta(weeks=n) for n in range(len(per_week) - 1, -1, -1)]
         raids = [
@@ -162,10 +197,10 @@ class TestStandard:
             if v
         ]
         rows = _raids(*raids)
-        return weekly_healing(rows, TODAY, weeks=len(per_week), target=target)
+        return weekly_healing(rows, TODAY, weeks=len(per_week))
 
     def test_nothing_raided_has_no_standard(self):
-        result = weekly_healing([], TODAY, weeks=3, target=100)
+        result = weekly_healing([], TODAY, weeks=3)
         assert result.standard() is None and result.to_dict()["standard"] is None
 
     def test_a_first_raid_is_new_with_no_baseline(self):
@@ -183,14 +218,18 @@ class TestStandard:
     def test_trend_is_steady_within_two_percent(self, latest, trend):
         assert self._weekly([1_000, latest]).standard().trend == trend
 
-    def test_target_counts_the_weeks_that_met_it(self):
-        result = self._weekly([1_200, 800, 1_000, 900], target=1_000)
+    def test_the_standard_is_the_guilds_own_average_per_raid_and_per_character(self):
+        # Two healers in every raid but the last, where one heals alone: per raid falls 10% on the four weeks
+        # before it, while the average per character rises 80%.
+        mondays = [date(2026, 9, 21) - timedelta(weeks=n) for n in range(4, -1, -1)]
+        raids = [(f"R{i}", str(m + timedelta(days=1)), {"Holy": 600, "Resto": 400}) for i, m in enumerate(mondays[:-1])]
+        raids.append(("Last", str(mondays[-1] + timedelta(days=1)), {"Holy": 900}))
+        result = weekly_healing(_raids(*raids), TODAY, weeks=5)
         standard = result.standard()
-        assert (standard.on_target, standard.vs_target_percent) == (False, -10.0)
-        assert (standard.weeks_on_target, standard.raided_weeks) == (2, 4)
+        assert (standard.trend, standard.character_trend) == ("down", "up")
         assert standard.notes() == [
-            "Trend down: 10.0% below the 4-week average of 1.0K.",
-            "Target 1.0K per raid missed by 10.0%; met in 2 of 4 raided weeks.",
+            "Per raid 900: down, 10.0% below its 4-week average of 1.0K.",
+            "Per character 900: up, 80.0% above its 4-week average of 500.",
         ]
         assert result.to_dict()["standard"] == {
             "week": "2026-09-21",
@@ -198,22 +237,16 @@ class TestStandard:
             "baseline": 1_000,
             "vs_baseline_percent": -10.0,
             "trend": "down",
-            "target": 1_000,
-            "vs_target_percent": -10.0,
-            "on_target": False,
-            "weeks_on_target": 2,
-            "raided_weeks": 4,
+            "healing_per_character": 900,
+            "character_baseline": 500,
+            "character_vs_baseline_percent": 80.0,
+            "character_trend": "up",
+            "raided_weeks": 5,
         }
 
-    def test_a_target_above_every_week_raises_the_axis_to_show_it(self):
-        chart = self._weekly([1_000, 1_100], target=4_000).raid_chart()
-        assert chart.y_max == 5_000
-        assert chart.references[-1].display == "4.0K"
-
-    @pytest.mark.parametrize("target", [0, -5, None])
-    def test_no_or_nonsense_target_is_ignored(self, target):
-        standard = self._weekly([1_000, 1_100], target=target).standard()
-        assert standard.target is None and standard.on_target is None and standard.weeks_on_target == 0
+    def test_the_raid_chart_has_no_target_line(self):
+        chart = self._weekly([1_000, 1_100]).raid_chart()
+        assert [r.key for r in chart.references] == ["baseline"]
 
 
 # ── Service over storage ──
@@ -238,9 +271,9 @@ def test_service_reads_guild_raids_only(storage, build_analysis):
             build_analysis(report_id="RefRefRefRefRefR", start_time=_ms(start), healer_healing=9_000_000),
             source="reference",
         )
-    service = HealingService(storage, target=1_000_000, now=lambda: datetime(2026, 9, 27, 12, 0))
+    service = HealingService(storage, now=lambda: datetime(2026, 9, 27, 12, 0))
     result = service.weekly(weeks=3)
-    assert result.standard().on_target is False
+    assert result.standard().healing_per_character == 800_000
     assert [w.raids for w in result.weeks] == [0, 0, 1]
     assert result.weeks[-1].healing == 800_000
 

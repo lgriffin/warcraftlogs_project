@@ -231,9 +231,10 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec(
         "healers_weekly",
         "Healers week on week",
-        f"Each healer's healing per raid over the last {HEALING_WEEKS} weeks",
+        f"Average healing per character and each healer's, over the last {HEALING_WEEKS} weeks",
         CHART,
         FULL,
+        True,
     ),
     WidgetSpec("top_damage", "Top damage", "Highest damage dealers in the last raid", TABLE, HALF, True),
     WidgetSpec("top_healing", "Top healing", "Highest healers in the last raid", TABLE, HALF, True),
@@ -356,10 +357,9 @@ def _day(dt: datetime | None, raw: str | None) -> str:
 class _Snapshot:
     """The storage reads a page needs, each done at most once however many widgets use it."""
 
-    def __init__(self, repo: RaidRepository, today: date, healing_target: float | None = None):
+    def __init__(self, repo: RaidRepository, today: date):
         self.repo = repo
         self.today = today
-        self.healing_target = healing_target
 
     @cached_property
     def badge_stats(self) -> dict[str, PlayerStats]:
@@ -387,7 +387,7 @@ class _Snapshot:
     def weekly_healing(self) -> WeeklyHealing:
         """Week-on-week healing over every guild raid in the last ``HEALING_WEEKS`` weeks, read once."""
         rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS))
-        return weekly_healing(rows, self.today, HEALING_WEEKS, self.healing_target)
+        return weekly_healing(rows, self.today, HEALING_WEEKS)
 
     @cached_property
     def rosters(self) -> list[list[dict[str, Any]]]:
@@ -413,11 +413,8 @@ class HomeService:
         *,
         now: Callable[[], datetime] = datetime.now,
         badge_rules: BadgeRules | None = None,
-        healing_target: float | None = None,
     ):
-        """``healing_target`` is the guild's healing per raid the weekly healing chart measures against."""
         self.storage = storage
-        self.healing_target = healing_target
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
         self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
@@ -441,13 +438,9 @@ class HomeService:
         }
 
     @classmethod
-    def from_context(
-        cls, ctx: AppContext, layouts: LayoutStore | None = None, *, healing_target: float | None = None
-    ) -> HomeService:
+    def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
         """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(
-            ctx.repository, layouts, healing_target=healing_target, badge_rules=BadgeRules.from_config(ctx.config)
-        )
+        return cls(ctx.repository, layouts, badge_rules=BadgeRules.from_config(ctx.config))
 
     # ── Layout ──
 
@@ -478,7 +471,7 @@ class HomeService:
         generated_at = self.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             with self.storage() as repo:
-                snapshot = _Snapshot(repo, self.now().date(), self.healing_target)
+                snapshot = _Snapshot(repo, self.now().date())
                 return HomePage([self._build(i, snapshot) for i in ids], generated_at)
         except (StorageError, OSError) as e:
             widgets = [self._blank(i) for i in ids]
