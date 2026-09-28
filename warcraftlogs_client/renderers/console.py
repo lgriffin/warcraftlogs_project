@@ -5,6 +5,7 @@ Takes data model objects and prints formatted output to stdout.
 """
 
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from wcl_core.models import (
     DPSPerformance,
@@ -12,6 +13,9 @@ from wcl_core.models import (
     RaidAnalysis,
     TankPerformance,
 )
+
+if TYPE_CHECKING:
+    from ..services import ReferenceComparison
 
 ROLES = ("tank", "healer", "melee", "ranged")
 
@@ -254,3 +258,46 @@ def _render_tank_summary_tables(tanks: list[TankPerformance]) -> None:
             lookup = {a.spell_name: a.casts for a in t.abilities_used}
             row = f"{t.name:<15}" + "".join(f"{lookup.get(a, 0):>16}" for a in ability_names)
             print(row)
+
+
+def _delta(value: float | None) -> str:
+    return "—" if value is None else f"{value:+.1f}%"
+
+
+def render_reference_comparison(comparison: "ReferenceComparison") -> None:
+    """Our raid against a reference raid, as the Head to Head tab shows it."""
+    g, r = comparison.guild, comparison.reference
+    print(f"=== {g.title} ({g.raid_date[:10]}) vs reference {r.title} ({r.raid_date[:10]}) ===")
+    if comparison.scope.scoped:
+        extra = ", ".join(comparison.scope.guild_extra_encounters)
+        print(f"Consumables and encounters cover the shared bosses only; the reference did not kill: {extra}")
+
+    for title, metrics in (("Overview", comparison.overview), ("Composition", comparison.composition)):
+        print(f"\n{title:<22} {'Ours':>12} {'Reference':>12} {'Delta':>9}")
+        print("-" * 58)
+        for m in metrics:
+            print(f"{m.label:<22} {m.guild_display:>12} {m.reference_display:>12} {_delta(m.delta_percent):>9}")
+
+    if comparison.classes:
+        print(f"\n{'Class':<10} {'Role':<7} {'Metric':<13} {'Ours':>12} {'Reference':>12} {'Delta':>9}")
+        print("-" * 68)
+        for c in comparison.classes:
+            ours = "—" if c.guild_average is None else f"{c.guild_average:,.0f} ({c.guild_count})"
+            ref = "—" if c.reference_average is None else f"{c.reference_average:,.0f} ({c.reference_count})"
+            print(f"{c.player_class:<10} {c.role:<7} {c.metric:<13} {ours:>12} {ref:>12} {_delta(c.delta_percent):>9}")
+
+    if comparison.encounters:
+        print(f"\n{'Boss':<28} {'Ours':>8} {'Reference':>10} {'Delta':>9}")
+        print("-" * 58)
+        for e in comparison.encounters:
+            ours_s, ref_s = e.guild_duration_ms // 1000, e.reference_duration_ms // 1000
+            print(
+                f"{e.name:<28} {ours_s // 60:>5}:{ours_s % 60:02d} {ref_s // 60:>7}:{ref_s % 60:02d}"
+                f" {_delta(e.duration_delta_percent):>9}"
+            )
+
+    if comparison.consumables:
+        print(f"\n{'Consumable':<32} {'Ours':>10} {'Reference':>10}")
+        print("-" * 54)
+        for cons in comparison.consumables:
+            print(f"{cons.name:<32} {cons.guild_uses:>10} {cons.reference_uses:>10}")

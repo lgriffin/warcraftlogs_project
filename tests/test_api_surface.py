@@ -175,7 +175,7 @@ class TestPublicExports:
         for action in parser._subparsers._group_actions:
             subcommands.update(action.choices.keys())
 
-        expected = {"unified", "healer", "tank", "melee", "ranged", "consumes", "history", "player"}
+        expected = {"unified", "healer", "tank", "melee", "ranged", "consumes", "history", "player", "reference"}
         assert subcommands == expected, f"CLI subcommands changed! Got: {subcommands}"
 
     def test_dps_performance_fields(self):

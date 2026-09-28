@@ -12,6 +12,8 @@ import logging
 import secrets
 import time
 import webbrowser
+from collections.abc import Callable
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
@@ -194,6 +196,96 @@ class UserTokenManager:
             "state": state,
         }
         return f"{get_authorize_url()}?{urlencode(params)}"
+
+
+def user_api_url(api_url: str) -> str:
+    """The user-scoped API next to a client API URL: ``.../api/v2/client`` -> ``.../api/v2/user``."""
+    parsed = urlparse(api_url)
+    host = f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else "https://www.warcraftlogs.com"
+    return f"{host}/api/v2/user"
+
+
+def token_url_for(api_url: str) -> str:
+    """The OAuth token endpoint on the same Warcraft Logs site as ``api_url``."""
+    parsed = urlparse(api_url)
+    host = f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else "https://www.warcraftlogs.com"
+    return f"{host}/oauth/token"
+
+
+@dataclass(frozen=True)
+class UserToken:
+    """A user's Warcraft Logs token as a host keeps it. ``expires_at`` is epoch seconds."""
+
+    access_token: SecretStr
+    refresh_token: SecretStr | None
+    expires_at: float
+
+
+class HostedUserToken:
+    """A user token the host stores (the Toads Hub keeps it encrypted in its database), refreshed when it expires.
+
+    Reads no config or token file, unlike ``UserTokenManager``. ``on_refresh`` receives each new token so the host
+    can store it; Warcraft Logs may rotate the refresh token. A refused refresh raises ``AuthenticationError``, and
+    the host should then ask for a new sign-in.
+    """
+
+    def __init__(
+        self,
+        token: UserToken,
+        client_id: str,
+        client_secret: str | SecretStr,
+        token_url: str,
+        on_refresh: Callable[[UserToken], None] | None = None,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self._token = token
+        self._client_id = client_id
+        self._client_secret = as_secret(client_secret)
+        self._token_url = token_url
+        self._on_refresh = on_refresh
+        self._clock = clock
+
+    @property
+    def token(self) -> UserToken:
+        return self._token
+
+    def get_token(self) -> str:
+        if self._clock() < self._token.expires_at:
+            return self._token.access_token.get_secret_value()
+        if self._token.refresh_token is None:
+            raise AuthenticationError("The Warcraft Logs sign-in has expired; sign in again")
+        self._token = self._refresh(self._token.refresh_token)
+        if self._on_refresh is not None:
+            self._on_refresh(self._token)
+        return self._token.access_token.get_secret_value()
+
+    def _refresh(self, refresh_token: SecretStr) -> UserToken:
+        try:
+            response = requests.post(
+                self._token_url,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token.get_secret_value(),
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret.get_secret_value(),
+                },
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            raise AuthenticationError("Cannot reach Warcraft Logs to refresh the sign-in") from e
+        if response.status_code != 200:
+            raise AuthenticationError(f"Warcraft Logs refused the sign-in refresh (HTTP {response.status_code})")
+        try:
+            data = response.json()
+            access = SecretStr(data["access_token"])
+            expires_in = float(data.get("expires_in", 3600))
+        except (ValueError, KeyError, TypeError) as e:
+            raise AuthenticationError("Warcraft Logs sent an unreadable token") from e
+        return UserToken(
+            access_token=access,
+            refresh_token=_optional_secret(data.get("refresh_token")) or refresh_token,
+            expires_at=self._clock() + expires_in - 60,
+        )
 
 
 def _optional_secret(value: str | None) -> SecretStr | None:

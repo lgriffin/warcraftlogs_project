@@ -17,6 +17,7 @@ from wcl_app.lineage import CharacterLineage, Spread, character_lineage
 from wcl_app.player_page import AddResult, PlayerLog, PlayerPageData, PlayerPageService, PlayerRef, parse_report_code
 from wcl_app.players import PlayerService
 from wcl_app.raids import RaidService, ReferenceAuthRequired, ReportRef
+from wcl_app.reference import ReferenceComparison, ReferenceRequestError, ReferenceService, StoredRaid
 from wcl_app.roles import ReanalysisResult, RoleOverrideService
 
 __all__ = [
@@ -46,10 +47,14 @@ __all__ = [
     "RaidService",
     "ReanalysisResult",
     "ReferenceAuthRequired",
+    "ReferenceComparison",
+    "ReferenceRequestError",
+    "ReferenceService",
     "ReportRef",
     "RoleOverrideService",
     "Series",
     "Spread",
+    "StoredRaid",
     "WeeklyHealing",
     "WidgetSpec",
     "character_lineage",

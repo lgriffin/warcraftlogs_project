@@ -262,3 +262,77 @@ class TestOAuthCallbackServer:
 
         assert result is not None
         assert result["error"] == "access_denied"
+
+
+# ── Tokens a host stores (the Toads Hub) ──
+
+
+def _hosted(expires_at, refresh="refresh-1", on_refresh=None, now=1_000.0):
+    from wcl_core.user_auth import HostedUserToken, UserToken
+
+    token = UserToken(SecretStr("access-1"), SecretStr(refresh) if refresh else None, expires_at)
+    return HostedUserToken(
+        token, "cid", "csecret", "https://fresh.warcraftlogs.com/oauth/token", on_refresh, lambda: now
+    )
+
+
+def _token_response(status=200, body=None):
+    response = MagicMock(status_code=status)
+    response.json.return_value = body if body is not None else {"access_token": "access-2", "expires_in": 3600}
+    return response
+
+
+class TestHostedUserToken:
+    @patch("wcl_core.user_auth.requests.post")
+    def test_a_fresh_token_is_used_as_is(self, post):
+        assert _hosted(expires_at=2_000).get_token() == "access-1"
+        post.assert_not_called()
+
+    @patch("wcl_core.user_auth.requests.post")
+    def test_an_expired_token_is_refreshed_and_handed_to_the_host(self, post):
+        post.return_value = _token_response(body={"access_token": "access-2", "refresh_token": "r2", "expires_in": 600})
+        saved = []
+        tokens = _hosted(expires_at=900, on_refresh=saved.append)
+
+        assert tokens.get_token() == "access-2"
+        assert post.call_args.kwargs["data"]["grant_type"] == "refresh_token"
+        assert post.call_args.kwargs["data"]["refresh_token"] == "refresh-1"
+        [new] = saved
+        assert new.refresh_token.get_secret_value() == "r2" and new.expires_at == 1_000 + 600 - 60
+        assert tokens.token is new
+
+    @patch("wcl_core.user_auth.requests.post")
+    def test_the_refresh_token_is_kept_when_none_comes_back(self, post):
+        post.return_value = _token_response()
+        tokens = _hosted(expires_at=0)
+        tokens.get_token()
+        assert tokens.token.refresh_token.get_secret_value() == "refresh-1"
+
+    @pytest.mark.parametrize(
+        "outcome",
+        [
+            _token_response(status=400),
+            _token_response(body={"nope": 1}),
+            requests.ConnectionError("down"),
+        ],
+    )
+    @patch("wcl_core.user_auth.requests.post")
+    def test_a_failed_refresh_asks_for_a_new_sign_in(self, post, outcome):
+        if isinstance(outcome, Exception):
+            post.side_effect = outcome
+        else:
+            post.return_value = outcome
+        with pytest.raises(AuthenticationError):
+            _hosted(expires_at=0).get_token()
+
+    def test_no_refresh_token_means_sign_in_again(self):
+        with pytest.raises(AuthenticationError, match="sign in again"):
+            _hosted(expires_at=0, refresh=None).get_token()
+
+
+def test_user_and_token_urls_follow_the_client_api_site():
+    from wcl_core.user_auth import token_url_for, user_api_url
+
+    assert user_api_url("https://fresh.warcraftlogs.com/api/v2/client") == "https://fresh.warcraftlogs.com/api/v2/user"
+    assert token_url_for("https://fresh.warcraftlogs.com/api/v2/client") == "https://fresh.warcraftlogs.com/oauth/token"
+    assert user_api_url("") == "https://www.warcraftlogs.com/api/v2/user"

@@ -150,7 +150,35 @@ Examples:
     list_parser = player_sub.add_parser("list", help="List player pages")
     list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
+    _add_reference_parser(subparsers)
     return parser
+
+
+def _add_reference_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    ref_parser = subparsers.add_parser("reference", help="Compare our raids against other guilds' reference raids")
+    ref_sub = ref_parser.add_subparsers(dest="reference_command")
+
+    ref_list = ref_sub.add_parser("list", help="List stored reference raids (--guild: our raids to compare)")
+    ref_list.add_argument("--guild", action="store_true", help="List our raids instead")
+    ref_list.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    ref_import = ref_sub.add_parser(
+        "import", help="Import a report as a reference (needs the Warcraft Logs sign-in from the desktop app)"
+    )
+    ref_import.add_argument("report", help="Report code or Warcraft Logs report URL")
+    ref_import.add_argument("--label", help="A name for it, e.g. 'World first Gruul'")
+
+    ref_label = ref_sub.add_parser("label", help="Label a reference raid (an empty label clears it)")
+    ref_label.add_argument("report", help="Report code or URL")
+    ref_label.add_argument("label", help="The label")
+
+    ref_delete = ref_sub.add_parser("delete", help="Delete a reference raid")
+    ref_delete.add_argument("report", help="Report code or URL")
+
+    ref_compare = ref_sub.add_parser("compare", help="Compare one of our raids against a reference raid")
+    ref_compare.add_argument("guild_report", help="Our raid: report code or URL")
+    ref_compare.add_argument("reference_report", help="The reference raid: report code or URL")
+    ref_compare.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
 
 def run_unified_analysis(args: argparse.Namespace, role: str | None = None) -> int:
@@ -470,6 +498,61 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
     return 1
 
 
+def _reference_context(action: str) -> "AppContext":
+    """Imports talk to Warcraft Logs and need the config; everything else reads the database only."""
+    from .services import AppContext
+
+    return AppContext.from_config_file() if action == "import" else AppContext(config={})
+
+
+def run_reference_command(args: argparse.Namespace) -> int:
+    import json
+
+    from .renderers.console import render_reference_comparison
+    from .services import ReferenceAuthRequired, ReferenceService
+
+    action = getattr(args, "reference_command", None)
+    if not action:
+        print("Specify an action: list, import, label, delete or compare.")
+        return 1
+    service = ReferenceService(_reference_context(action))
+
+    if action == "list":
+        raids = service.guild_raids() if args.guild else service.references()
+        if args.json:
+            print(json.dumps([r.to_dict() for r in raids], indent=2))
+        elif not raids:
+            print("No raids stored." if args.guild else "No reference raids yet. Add one with: reference import CODE")
+        for r in [] if args.json else raids:
+            label = f"  [{r.label}]" if r.label else ""
+            print(f"{r.report_id:<18} {r.raid_date[:10]:<11} {r.zone or '':<22} {r.title}{label}")
+        return 0
+    if action == "import":
+        try:
+            analysis = service.import_reference(args.report, label=args.label, progress=print)
+        except ReferenceAuthRequired:
+            print("Sign in to Warcraft Logs first: desktop app > Reference > Authenticate.")
+            return 1
+        print(f"Imported '{analysis.metadata.title}' as a reference raid.")
+        return 0
+    if action == "label":
+        service.set_label(args.report, args.label)
+        print("Label saved." if args.label.strip() else "Label cleared.")
+        return 0
+    if action == "delete":
+        service.delete_reference(args.report)
+        print("Reference raid deleted.")
+        return 0
+    if action == "compare":
+        comparison = service.compare(args.guild_report, args.reference_report)
+        if args.json:
+            print(json.dumps(comparison.to_dict(), indent=2))
+        else:
+            render_reference_comparison(comparison)
+        return 0
+    return 1
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -496,6 +579,7 @@ def main() -> int:
         "consumes": run_consumes_analysis,
         "history": run_history_query,
         "player": run_player_command,
+        "reference": run_reference_command,
     }
 
     handler = commands.get(args.command)
