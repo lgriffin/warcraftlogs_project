@@ -176,3 +176,22 @@ class TestChartWidgets:
         (bars,) = view.chart().series()
         assert [s.label() for s in bars.barSets()] == ["One"]
         assert not view.chart().legend().isVisible()
+
+    def test_payload_references_are_drawn_as_named_lines(self, qtbot):
+        from warcraftlogs_client.gui.charts import build_payload_chart
+        from warcraftlogs_client.services.charts import Chart, Reference, Series
+
+        payload = Chart(
+            id="demo",
+            title="Demo",
+            kind="bar",
+            categories=["a", "b"],
+            series=[Series("one", "One", [1, 2], ["1", "2"])],
+            y_max=5.0,
+            references=[Reference("target", "Target", 4.0, "4")],
+        ).validate()
+        view = build_payload_chart(payload)
+        qtbot.addWidget(view)
+        _bars, target = view.chart().series()
+        assert target.name() == "Target (4)"
+        assert [p.y() for p in target.points()] == [4.0, 4.0]

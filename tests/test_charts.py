@@ -6,7 +6,20 @@ import json
 import math
 
 import pytest
-from wcl_app.charts import BAR, LINE, MAX_POINTS, MAX_SERIES, Chart, ChartError, Series, nice_ceiling, top_series
+from wcl_app.charts import (
+    BAR,
+    LINE,
+    MAX_POINTS,
+    MAX_REFERENCES,
+    MAX_SERIES,
+    Chart,
+    ChartError,
+    Reference,
+    Series,
+    nice_ceiling,
+    top_series,
+    y_ceiling,
+)
 
 
 def _series(key: str, values: list[float | None], emphasis: bool = False) -> Series:
@@ -27,7 +40,7 @@ def _chart(**overrides) -> Chart:
 
 
 def test_a_valid_chart_round_trips_through_json():
-    chart = _chart(notes=["one note"], subtitle="sub")
+    chart = _chart(notes=["one note"], subtitle="sub", references=[Reference("target", "Target", 4.0, "4")])
     data = json.loads(json.dumps(chart.to_dict()))
     assert data["version"] == 1
     assert data["series"][0] == {
@@ -37,7 +50,10 @@ def test_a_valid_chart_round_trips_through_json():
         "display": ["1", "-", "3"],
         "emphasis": False,
     }
+    assert data["references"] == [{"key": "target", "label": "Target", "value": 4.0, "display": "4"}]
     assert Chart.from_dict(data) == chart
+    del data["references"]
+    assert Chart.from_dict(data).references == []
 
 
 @pytest.mark.parametrize(
@@ -51,6 +67,10 @@ def test_a_valid_chart_round_trips_through_json():
         ({"series": [_series("one", [1, 2])]}, "does not match"),
         ({"series": [_series("one", [1, 2, 6])]}, "above y_max"),
         ({"series": [_series("one", [1, 2, math.nan])]}, "not finite"),
+        ({"references": [Reference(f"r{i}", "R", 1, "1") for i in range(MAX_REFERENCES + 1)]}, "references; at most"),
+        ({"references": [Reference("r", "R", 6, "6")]}, "between 0 and y_max"),
+        ({"references": [Reference("r", "R", -1, "-1")]}, "between 0 and y_max"),
+        ({"references": [Reference("r", "x" * 121, 1, "1")]}, "text longer than"),
     ],
 )
 def test_validate_refuses_a_chart_that_breaks_the_contract(overrides, message):
@@ -94,3 +114,9 @@ def test_top_series_never_keeps_more_than_the_limit():
     kept, hidden = top_series(series, 100)
     assert len(kept) == MAX_SERIES and hidden == 20 - MAX_SERIES
     assert top_series(series, -1) == ([], 20)
+
+
+def test_y_ceiling_covers_series_and_references():
+    assert y_ceiling([_series("one", [1, None, 3])]) == 5
+    assert y_ceiling([_series("one", [1, None, 3])], [Reference("t", "T", 7, "7")]) == 10
+    assert y_ceiling([]) == 0

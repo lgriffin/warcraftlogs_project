@@ -7,7 +7,7 @@ The service tests run on SQLite and on Postgres; the Postgres half is skipped wi
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 from wcl_app import AppContext, HealingService
@@ -127,7 +127,14 @@ class TestCharts:
         assert chart.series[0].display == ["-", "-", "1.0M", "1.1M"]
         assert chart.series[0].emphasis
         assert chart.y_max == 2_000_000
-        assert chart.notes == ["Week of 21 Sep: +10.0% on the week before it raided.", "Overheal that week: 20.0%."]
+        assert chart.notes == [
+            "Trend up: 10.0% above the 4-week average of 1.0M.",
+            "Week of 21 Sep: +10.0% on the week before it raided.",
+            "Overheal that week: 20.0%.",
+        ]
+        assert [(r.key, r.label, r.value, r.display) for r in chart.references] == [
+            ("baseline", "4-week average", 1_000_000, "1.0M")
+        ]
 
     def test_raid_chart_with_one_raided_week_has_no_change_note(self, build_analysis):
         rows, load = _raids(build_analysis, ("A", "2026-09-22", {"Holy": 100}))
@@ -154,6 +161,70 @@ class TestCharts:
         assert [s.name for s in chart.series] == ["Holy", "Resto"]
 
 
+class TestStandard:
+    def _weekly(self, build_analysis, per_week, target=None):
+        """One raid a week ending this week, healing per week as given, oldest first."""
+        mondays = [date(2026, 9, 21) - timedelta(weeks=n) for n in range(len(per_week) - 1, -1, -1)]
+        raids = [
+            (f"R{i}", str(m + timedelta(days=1)), {"Holy": v})
+            for i, (m, v) in enumerate(zip(mondays, per_week, strict=True))
+            if v
+        ]
+        rows, load = _raids(build_analysis, *raids)
+        return weekly_healing(rows, load, TODAY, weeks=len(per_week), target=target)
+
+    def test_nothing_raided_has_no_standard(self):
+        result = weekly_healing([], lambda _: None, TODAY, weeks=3, target=100)
+        assert result.standard() is None and result.to_dict()["standard"] is None
+
+    def test_a_first_raid_is_new_with_no_baseline(self, build_analysis):
+        standard = self._weekly(build_analysis, [0, 1_000]).standard()
+        assert standard.baseline is None and standard.trend == "new" and standard.notes() == []
+
+    def test_baseline_averages_the_raided_weeks_before_the_latest_only(self, build_analysis):
+        # Six raided weeks and one skipped: the baseline is the 4 raided weeks before the latest (200..500).
+        standard = self._weekly(build_analysis, [100, 200, 300, 0, 400, 500, 350]).standard()
+        assert standard.week == date(2026, 9, 21)
+        assert standard.baseline == 350
+        assert standard.trend == "steady" and standard.vs_baseline_percent == 0.0
+
+    @pytest.mark.parametrize(("latest", "trend"), [(1_030, "up"), (1_020, "steady"), (980, "steady"), (970, "down")])
+    def test_trend_is_steady_within_two_percent(self, build_analysis, latest, trend):
+        assert self._weekly(build_analysis, [1_000, latest]).standard().trend == trend
+
+    def test_target_counts_the_weeks_that_met_it(self, build_analysis):
+        result = self._weekly(build_analysis, [1_200, 800, 1_000, 900], target=1_000)
+        standard = result.standard()
+        assert (standard.on_target, standard.vs_target_percent) == (False, -10.0)
+        assert (standard.weeks_on_target, standard.raided_weeks) == (2, 4)
+        assert standard.notes() == [
+            "Trend down: 10.0% below the 4-week average of 1.0K.",
+            "Target 1.0K per raid missed by 10.0%; met in 2 of 4 raided weeks.",
+        ]
+        assert result.to_dict()["standard"] == {
+            "week": "2026-09-21",
+            "healing_per_raid": 900,
+            "baseline": 1_000,
+            "vs_baseline_percent": -10.0,
+            "trend": "down",
+            "target": 1_000,
+            "vs_target_percent": -10.0,
+            "on_target": False,
+            "weeks_on_target": 2,
+            "raided_weeks": 4,
+        }
+
+    def test_a_target_above_every_week_raises_the_axis_to_show_it(self, build_analysis):
+        chart = self._weekly(build_analysis, [1_000, 1_100], target=4_000).raid_chart()
+        assert chart.y_max == 5_000
+        assert chart.references[-1].display == "4.0K"
+
+    @pytest.mark.parametrize("target", [0, -5, None])
+    def test_no_or_nonsense_target_is_ignored(self, build_analysis, target):
+        standard = self._weekly(build_analysis, [1_000, 1_100], target=target).standard()
+        assert standard.target is None and standard.on_target is None and standard.weeks_on_target == 0
+
+
 # ── Service over storage ──
 
 
@@ -176,8 +247,9 @@ def test_service_reads_guild_raids_only(storage, build_analysis):
             build_analysis(report_id="RefRefRefRefRefR", start_time=_ms(start), healer_healing=9_000_000),
             source="reference",
         )
-    service = HealingService(storage, now=lambda: datetime(2026, 9, 27, 12, 0))
+    service = HealingService(storage, target=1_000_000, now=lambda: datetime(2026, 9, 27, 12, 0))
     result = service.weekly(weeks=3)
+    assert result.standard().on_target is False
     assert [w.raids for w in result.weeks] == [0, 0, 1]
     assert result.weeks[-1].healing == 800_000
 

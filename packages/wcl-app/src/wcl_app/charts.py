@@ -31,6 +31,8 @@ KINDS = (LINE, BAR)
 MAX_SERIES = 8
 # A year of weekly points; wider than that and labels no longer fit a phone screen.
 MAX_POINTS = 52
+# Reference lines: a standard, a target, a baseline; more and they read as data.
+MAX_REFERENCES = 3
 # Labels and notes are one line.
 MAX_TEXT = 120
 
@@ -57,6 +59,16 @@ class Series:
 
 
 @dataclass
+class Reference:
+    """A horizontal line to measure the series against, such as a target or a recent average."""
+
+    key: str
+    label: str
+    value: float
+    display: str
+
+
+@dataclass
 class Chart:
     id: str
     title: str
@@ -66,8 +78,10 @@ class Chart:
     subtitle: str = ""
     x_label: str = ""
     y_label: str = ""
-    # A round number at or above every value, so each frontend draws the same axis.
+    # A round number at or above every value and reference, so each frontend draws the same axis.
     y_max: float = 0.0
+    # Horizontal lines to measure against, drawn dashed and labelled.
+    references: list[Reference] = field(default_factory=list)
     # What the reader should know about the numbers, such as series left out by the limits.
     notes: list[str] = field(default_factory=list)
     # Why there is nothing to draw; categories and series may then be empty.
@@ -81,7 +95,13 @@ class Chart:
             raise ChartError(f"{len(self.series)} series; at most {MAX_SERIES} are drawn")
         if len(self.categories) > MAX_POINTS:
             raise ChartError(f"{len(self.categories)} categories; at most {MAX_POINTS} are drawn")
-        for text in (self.title, self.subtitle, self.x_label, self.y_label, *self.categories, *self.notes):
+        if len(self.references) > MAX_REFERENCES:
+            raise ChartError(f"{len(self.references)} references; at most {MAX_REFERENCES} are drawn")
+        for ref in self.references:
+            if not math.isfinite(ref.value) or not 0 <= ref.value <= self.y_max:
+                raise ChartError(f"reference {ref.key!r} is not between 0 and y_max")
+        labels = [r.label for r in self.references]
+        for text in (self.title, self.subtitle, self.x_label, self.y_label, *self.categories, *self.notes, *labels):
             if len(text) > MAX_TEXT:
                 raise ChartError(f"text longer than {MAX_TEXT} characters: {text[:20]!r}...")
         keys = [s.key for s in self.series]
@@ -102,8 +122,9 @@ class Chart:
         """Read a payload back, checking it against the contract. Raises ``ChartError``."""
         try:
             series = [Series(**s) for s in data["series"]]
-            fields = {k: v for k, v in data.items() if k not in ("version", "series")}
-            chart = cls(series=series, **fields)
+            references = [Reference(**r) for r in data.get("references", [])]
+            fields = {k: v for k, v in data.items() if k not in ("version", "series", "references")}
+            chart = cls(series=series, references=references, **fields)
         except (KeyError, TypeError) as e:
             raise ChartError(f"not a chart payload: {e}") from e
         return chart.validate()
@@ -131,8 +152,9 @@ def nice_ceiling(value: float) -> float:
     return float(10 * magnitude)  # pragma: no cover - the loop always returns
 
 
-def y_ceiling(series: Sequence[Series]) -> float:
-    return nice_ceiling(max((v for s in series for v in s.values if v is not None), default=0.0))
+def y_ceiling(series: Sequence[Series], references: Sequence[Reference] = ()) -> float:
+    values = [v for s in series for v in s.values if v is not None] + [r.value for r in references]
+    return nice_ceiling(max(values, default=0.0))
 
 
 def top_series(series: Sequence[Series], limit: int = MAX_SERIES) -> tuple[list[Series], int]:

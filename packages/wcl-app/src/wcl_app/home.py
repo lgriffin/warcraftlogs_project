@@ -342,9 +342,10 @@ def _day(dt: datetime | None, raw: str | None) -> str:
 class _Snapshot:
     """The storage reads a page needs, each done at most once however many widgets use it."""
 
-    def __init__(self, repo: RaidRepository, today: date):
+    def __init__(self, repo: RaidRepository, today: date, healing_target: float | None = None):
         self.repo = repo
         self.today = today
+        self.healing_target = healing_target
 
     @cached_property
     def raids(self) -> list[dict[str, Any]]:
@@ -375,7 +376,7 @@ class _Snapshot:
                 loaded[report_id] = self.repo.get_raid_analysis(report_id)
             return loaded[report_id]
 
-        return weekly_healing(self.raids, load, self.today, HEALING_WEEKS)
+        return weekly_healing(self.raids, load, self.today, HEALING_WEEKS, self.healing_target)
 
     @cached_property
     def rosters(self) -> list[list[dict[str, Any]]]:
@@ -400,8 +401,11 @@ class HomeService:
         layouts: LayoutStore | None = None,
         *,
         now: Callable[[], datetime] = datetime.now,
+        healing_target: float | None = None,
     ):
+        """``healing_target`` is the guild's healing per raid the weekly healing chart measures against."""
         self.storage = storage
+        self.healing_target = healing_target
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
         self._builders: dict[str, Callable[[_Snapshot, HomeWidget], None]] = {
@@ -423,9 +427,11 @@ class HomeService:
         }
 
     @classmethod
-    def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
+    def from_context(
+        cls, ctx: AppContext, layouts: LayoutStore | None = None, *, healing_target: float | None = None
+    ) -> HomeService:
         """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(ctx.repository, layouts)
+        return cls(ctx.repository, layouts, healing_target=healing_target)
 
     # ── Layout ──
 
@@ -456,7 +462,7 @@ class HomeService:
         generated_at = self.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             with self.storage() as repo:
-                snapshot = _Snapshot(repo, self.now().date())
+                snapshot = _Snapshot(repo, self.now().date(), self.healing_target)
                 return HomePage([self._build(i, snapshot) for i in ids], generated_at)
         except (StorageError, OSError) as e:
             widgets = [self._blank(i) for i in ids]

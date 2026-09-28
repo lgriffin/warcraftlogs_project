@@ -9,6 +9,10 @@ per raid, so a week with two raids compares fairly with a week with one:
 - the raid's **overheal** share of all healing done,
 - each healer's **healing per raid attended** as a healer that week.
 
+It is a standard to measure against, not only a record: the latest raided week is compared with the average of
+the ``BASELINE_WEEKS`` raided weeks before it (the trend) and, when the guild has set one, a target healing per
+raid (``HealingStandard``). Both are drawn as reference lines on the chart.
+
 Guild raids only; reference logs are never counted. ``WeeklyHealing.raid_chart`` and ``healer_chart`` turn the
 numbers into ``wcl_app.charts`` payloads with the chart limits applied.
 """
@@ -22,13 +26,17 @@ from typing import Any
 
 from wcl_core.models import RaidAnalysis
 
-from wcl_app.charts import BAR, LINE, MAX_SERIES, Chart, Series, compact, top_series, y_ceiling
+from wcl_app.charts import BAR, LINE, MAX_SERIES, Chart, Reference, Series, compact, top_series, y_ceiling
 from wcl_app.context import AppContext, StorageFactory
 
 DEFAULT_WEEKS = 12
 MIN_WEEKS = 2
 # Half a year: a season's trend, and a bounded number of raids read per page.
 MAX_WEEKS = 26
+# Raided weeks averaged for the baseline the latest week is measured against.
+BASELINE_WEEKS = 4
+# Within this many percent of the baseline, the trend is steady.
+STEADY_PERCENT = 2.0
 # Newest guild raids read: several raids a week for MAX_WEEKS weeks.
 RAIDS_READ = 150
 
@@ -92,17 +100,108 @@ class HealerWeeks:
         return [h / n if n else None for n, h in self.weeks]
 
 
+def _percent(value: float, against: float | None) -> float | None:
+    return round((value - against) / against * 100, 1) if against else None
+
+
+@dataclass
+class HealingStandard:
+    """The latest raided week measured against the recent baseline and the guild's target."""
+
+    week: date
+    healing_per_raid: float
+    # Average healing per raid over up to BASELINE_WEEKS raided weeks before ``week``; None if it is the first.
+    baseline: float | None
+    target: float | None = None
+    # Raided weeks in the window at or above the target.
+    weeks_on_target: int = 0
+    raided_weeks: int = 0
+
+    @property
+    def vs_baseline_percent(self) -> float | None:
+        return _percent(self.healing_per_raid, self.baseline)
+
+    @property
+    def vs_target_percent(self) -> float | None:
+        return _percent(self.healing_per_raid, self.target)
+
+    @property
+    def on_target(self) -> bool | None:
+        return None if not self.target else self.healing_per_raid >= self.target
+
+    @property
+    def trend(self) -> str:
+        """``up``, ``down`` or ``steady`` against the baseline, or ``new`` with nothing to compare."""
+        change = self.vs_baseline_percent
+        if change is None:
+            return "new"
+        if abs(change) <= STEADY_PERCENT:
+            return "steady"
+        return "up" if change > 0 else "down"
+
+    def notes(self) -> list[str]:
+        out = []
+        if self.baseline:
+            out.append(
+                f"Trend {self.trend}: {abs(self.vs_baseline_percent or 0):.1f}% "
+                f"{'above' if self.healing_per_raid >= self.baseline else 'below'} the "
+                f"{BASELINE_WEEKS}-week average of {compact(self.baseline)}."
+            )
+        if self.target:
+            verdict = "met" if self.on_target else f"missed by {abs(self.vs_target_percent or 0):.1f}%"
+            out.append(
+                f"Target {compact(self.target)} per raid {verdict}; "
+                f"met in {self.weeks_on_target} of {self.raided_weeks} raided weeks."
+            )
+        return out
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "week": self.week.isoformat(),
+            "healing_per_raid": round(self.healing_per_raid),
+            "baseline": None if self.baseline is None else round(self.baseline),
+            "vs_baseline_percent": self.vs_baseline_percent,
+            "trend": self.trend,
+            "target": self.target,
+            "vs_target_percent": self.vs_target_percent,
+            "on_target": self.on_target,
+            "weeks_on_target": self.weeks_on_target,
+            "raided_weeks": self.raided_weeks,
+        }
+
+
 @dataclass
 class WeeklyHealing:
     weeks: list[HealingWeek]  # oldest first, every week in the window, raided or not
     healers: list[HealerWeeks] = field(default_factory=list)  # most healing first
+    # The guild's target healing per raid, if it has set one.
+    target: float | None = None
 
     @property
     def raids(self) -> int:
         return sum(w.raids for w in self.weeks)
 
+    def standard(self) -> HealingStandard | None:
+        """The latest raided week against the baseline and target; None when no week in the window raided."""
+        raided = [(w, w.per_raid) for w in self.weeks if w.per_raid is not None]
+        if not raided:
+            return None
+        latest, value = raided[-1]
+        before = [v for _, v in raided[-1 - BASELINE_WEEKS : -1]]
+        target = self.target if self.target and self.target > 0 else None
+        return HealingStandard(
+            week=latest.start,
+            healing_per_raid=value,
+            baseline=sum(before) / len(before) if before else None,
+            target=target,
+            weeks_on_target=sum(1 for _, v in raided if target and v >= target),
+            raided_weeks=len(raided),
+        )
+
     def to_dict(self) -> dict[str, Any]:
+        standard = self.standard()
         return {
+            "standard": standard.to_dict() if standard else None,
             "weeks": [w.to_dict() for w in self.weeks],
             "healers": [
                 {
@@ -119,9 +218,17 @@ class WeeklyHealing:
         return [week_label(w.start) for w in self.weeks]
 
     def raid_chart(self) -> Chart:
-        """Healing per raid, one bar per week, with the latest week-on-week change in the notes."""
+        """Healing per raid, one bar per week, measured against the baseline and target (reference lines), with
+        the latest week's change, trend and target in the notes."""
         values = [w.per_raid for w in self.weeks]
         series = [Series("healing_per_raid", "Healing per raid", values, [_display(v) for v in values], emphasis=True)]
+        standard = self.standard()
+        references = []
+        if standard and standard.baseline:
+            label = f"{BASELINE_WEEKS}-week average"
+            references.append(Reference("baseline", label, standard.baseline, compact(standard.baseline)))
+        if standard and standard.target:
+            references.append(Reference("target", "Target", standard.target, compact(standard.target)))
         chart = Chart(
             id="healing_weekly",
             title="Weekly healing",
@@ -131,12 +238,14 @@ class WeeklyHealing:
             subtitle=f"Effective healing per raid, weeks from Monday, last {len(self.weeks)} weeks",
             x_label="Week starting",
             y_label="Healing per raid",
-            y_max=y_ceiling(series),
+            y_max=y_ceiling(series, references),
+            references=references,
         )
-        if not self.raids:
+        if standard is None:
             chart.empty = f"No guild raids in the last {len(self.weeks)} weeks."
             return chart.validate()
         latest = next(w for w in reversed(self.weeks) if w.raids)
+        chart.notes.extend(standard.notes())
         if latest.change_percent is not None:
             chart.notes.append(
                 f"Week of {week_label(latest.start)}: {latest.change_percent:+.1f}% on the week before it raided."
@@ -181,6 +290,7 @@ def weekly_healing(
     load: Callable[[str], RaidAnalysis | None],
     today: date,
     weeks: int = DEFAULT_WEEKS,
+    target: float | None = None,
 ) -> WeeklyHealing:
     """Week-on-week healing for the ``weeks`` weeks up to and including ``today``'s. ``raids`` are guild raid rows
     (``report_id``, ``raid_date``); ``load`` reads one raid's analysis and is called only for raids in the window."""
@@ -218,7 +328,7 @@ def weekly_healing(
             week.change_percent = round((week.per_raid - previous.per_raid) / previous.per_raid * 100, 1)
         previous = week
     ranked = sorted(healers.values(), key=lambda h: (-h.total, h.name.lower()))
-    return WeeklyHealing(table, ranked)
+    return WeeklyHealing(table, ranked, target)
 
 
 def _parse_date(value: str | None) -> datetime | None:
@@ -231,17 +341,26 @@ def _parse_date(value: str | None) -> datetime | None:
 class HealingService:
     """Week-on-week healing from storage."""
 
-    def __init__(self, storage: StorageFactory, *, now: Callable[[], datetime] = datetime.now):
+    def __init__(
+        self,
+        storage: StorageFactory,
+        *,
+        target: float | None = None,
+        now: Callable[[], datetime] = datetime.now,
+    ):
+        """``target`` is the guild's healing per raid to measure each week against; None measures against the
+        recent baseline only."""
         self.storage = storage
+        self.target = target
         self.now = now
 
     @classmethod
-    def from_context(cls, ctx: AppContext) -> HealingService:
-        return cls(ctx.repository)
+    def from_context(cls, ctx: AppContext, target: float | None = None) -> HealingService:
+        return cls(ctx.repository, target=target)
 
     def weekly(self, weeks: int = DEFAULT_WEEKS) -> WeeklyHealing:
         """The last ``weeks`` weeks (clamped to ``MIN_WEEKS``..``MAX_WEEKS``), this week included. Raises
         ``wcl_store.StorageError`` if storage fails."""
         with self.storage() as repo:
             raids = repo.get_raid_list(limit=RAIDS_READ)
-            return weekly_healing(raids, repo.get_raid_analysis, self.now().date(), weeks)
+            return weekly_healing(raids, repo.get_raid_analysis, self.now().date(), weeks, self.target)

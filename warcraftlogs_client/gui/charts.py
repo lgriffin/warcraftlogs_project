@@ -2544,7 +2544,8 @@ class CooldownSynergyWidget(QWidget):
 
 def build_payload_chart(payload: Chart) -> QChartView:
     """Draw a ``wcl_app.charts.Chart`` as the payload says: its categories, series, y range and colours in order,
-    the emphasised series in the accent colour. Gaps (``None``) leave out a bar or break a line."""
+    the emphasised series in the accent colour, references as dashed lines. Gaps (``None``) leave out a bar or
+    break a line."""
     from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet
 
     chart = _make_chart(payload.title)
@@ -2575,7 +2576,24 @@ def build_payload_chart(payload: Chart) -> QChartView:
     else:
         for s, colour in zip(payload.series, colours, strict=True):
             _add_line_runs(chart, s.name, s.values, colour, s.emphasis, x_axis, y_axis)
+    for ref in payload.references:
+        _add_reference_line(chart, ref.label, ref.display, ref.value, len(payload.categories), x_axis, y_axis)
     return make_chart_view(chart)
+
+
+def _add_reference_line(chart: QChart, label: str, display: str, value: float, width: int, x_axis, y_axis) -> None:
+    """A dashed horizontal line across the chart, named in the legend with its value."""
+    line = QLineSeries()
+    line.setName(f"{label} ({display})")
+    pen = QPen(QColor(COLORS["text_dim"]), 2)
+    pen.setStyle(Qt.PenStyle.DashLine)
+    line.setPen(pen)
+    line.append(QPointF(-0.5, value))
+    line.append(QPointF(max(width, 1) - 0.5, value))
+    chart.addSeries(line)
+    line.attachAxis(x_axis)
+    line.attachAxis(y_axis)
+    chart.legend().setVisible(True)
 
 
 def _payload_colours(series: list) -> list[QColor]:

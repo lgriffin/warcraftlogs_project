@@ -13,6 +13,7 @@ A chart is capped so it stays readable on a phone and its payload stays small:
 |--------------|-------|------------------------------------------------------------------|
 | `MAX_SERIES` | 8     | a longer legend stops being readable and colours start to repeat |
 | `MAX_POINTS` | 52    | a year of weekly points; more labels no longer fit a narrow axis |
+| `MAX_REFERENCES` | 3 | reference lines (a target, a baseline); more read as data        |
 | `MAX_TEXT`   | 120   | titles, labels, categories and notes stay on one line            |
 
 Builders apply them (`top_series` keeps emphasised series, then the largest) and say what they dropped in
@@ -36,6 +37,7 @@ not line up, so a host that stores or relays a chart can refuse a bad one at the
      "display": ["-", "4.1M", "..."], "emphasis": true}
   ],
   "y_max": 5000000.0,
+  "references": [{"key": "baseline", "label": "4-week average", "value": 3900000.0, "display": "3.9M"}],
   "notes": ["Week of 21 Sep: +4.2% on the week before it raided.", "Overheal that week: 31.5%."],
   "empty": ""
 }
@@ -51,6 +53,7 @@ not line up, so a host that stores or relays a chart can refuse a bad one at the
 | `display`    | the same numbers formatted for tooltips and labels ("4.1M", "-" for a gap)               |
 | `emphasis`   | the headline series: draw it stronger or in the accent colour                            |
 | `y_max`      | a round number (1, 2, 2.5 or 5 times a power of ten) at or above every value; the y axis runs 0 to `y_max` |
+| `references` | at most 3 horizontal lines to measure against, `{key, label, value, display}`; draw them dashed and name them with their `display` |
 | `notes`      | short lines to show under the chart, such as series left out by the limits              |
 | `empty`      | when set, draw this message instead of the chart                                         |
 
@@ -58,14 +61,23 @@ Colours are the frontend's: give series colours in order, with the emphasised se
 
 ## Week-on-week healing
 
-`wcl_app.healing` is the guild's standard healing view. Weeks start on Monday (by the raid's local start) and
+`wcl_app.healing` is the guild's standard healing view, the number the guild holds itself to while it aims to be a
+high-energy guild. Every week is measured two ways:
+
+- **Trend**: the latest raided week against the average of the 4 raided weeks before it: `up`, `down`, or `steady`
+  within 2%, or `new` when there is nothing before it.
+- **Target**: when the guild sets a healing-per-raid target (`HealingService(storage, target=...)`,
+  `HomeService(..., healing_target=...)`), whether the latest week met it and in how many raided weeks it was met.
+
+Both are drawn as reference lines on the `healing_weekly` chart and spelled out in its notes. Weeks start on Monday (by the raid's local start) and
 every number is per raid, so a week with two raids compares fairly with a week with one. Guild raids only.
 
 ```python
 from wcl_app import HealingService
 
-weekly = HealingService.from_context(ctx).weekly(weeks=12)   # clamped to 2..26 weeks, this week included
-weekly.to_dict()          # the numbers: per week raids, healing, healing_per_raid, overheal_percent, healers,
+weekly = HealingService.from_context(ctx, target=4_000_000).weekly(weeks=12)   # clamped to 2..26 weeks, this week included
+weekly.standard()         # HealingStandard: latest week, baseline, trend, target, on_target, weeks_on_target
+weekly.to_dict()          # "standard" as above, then the numbers: per week raids, healing, healing_per_raid, overheal_percent, healers,
                           # change_percent; per healer healing and healing_per_raid by week
 weekly.raid_chart()       # bar chart "healing_weekly": healing per raid by week, latest change in the notes
 weekly.healer_chart()     # line chart "healers_weekly": the top 8 healers' healing per raid attended

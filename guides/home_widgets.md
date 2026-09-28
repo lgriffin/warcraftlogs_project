@@ -93,7 +93,7 @@ Quick action ids: `raids.download`, `raids.browse`, `raids.diff`, `characters`, 
 | `last_raid`       | stats   | full | yes     | date, duration, bosses, raid size, total damage and healing |
 | `recent_raids`    | list    | half | yes     | the 8 newest raids                                                   |
 | `raid_activity`   | bars    | half | yes     | raids per week for the last 8 weeks, labelled by the week's Monday   |
-| `healing_weekly`  | chart   | full | yes     | healing per raid, week on week, over 12 weeks (bar chart)           |
+| `healing_weekly`  | chart   | full | yes     | healing per raid by week over 12 weeks, against the 4-week average and target |
 | `healers_weekly`  | chart   | full | no      | each healer's healing per raid attended over 12 weeks (line chart)  |
 | `top_damage`      | table   | half | yes     | top 5 damage in the last raid: rank, name, class, damage, share      |
 | `top_healing`     | table   | half | yes     | top 5 healing in the last raid: rank, name, class, healing, overheal |
