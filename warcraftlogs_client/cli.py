@@ -13,12 +13,17 @@ This module provides a single entry point for all analysis modes:
 import argparse
 import logging
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 import requests
 from wcl_core.common.errors import WarcraftLogsError
 
 from .version import __version__
+
+if TYPE_CHECKING:
+    from .database import PerformanceDB
+    from .services import AppContext, PlayerLog, PlayerRef, Spread
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -97,7 +102,7 @@ Examples:
     player_parser = subparsers.add_parser("player", help="Discover and collect the reports a character is in")
     player_sub = player_parser.add_subparsers(dest="player_command", metavar="ACTION")
 
-    def _player_args(p, name_required=True):
+    def _player_args(p: argparse.ArgumentParser, name_required: bool = True) -> None:
         p.add_argument("name", nargs=None if name_required else "?", help="Character name")
         p.add_argument("--server", "-s", help="Server (default: the character's page, else config default_server)")
         p.add_argument("--region", "-r", help="Region (default: the character's page, else config default_region)")
@@ -149,7 +154,7 @@ Examples:
     return parser
 
 
-def _add_reference_parser(subparsers) -> None:
+def _add_reference_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     ref_parser = subparsers.add_parser("reference", help="Compare our raids against other guilds' reference raids")
     ref_sub = ref_parser.add_subparsers(dest="reference_command")
 
@@ -176,7 +181,7 @@ def _add_reference_parser(subparsers) -> None:
     ref_compare.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
 
-def run_unified_analysis(args, role: str | None = None) -> int:
+def run_unified_analysis(args: argparse.Namespace, role: str | None = None) -> int:
     from wcl_core.spell_manager import reset_spell_manager
 
     from .renderers.console import render_raid_analysis
@@ -204,11 +209,11 @@ def run_unified_analysis(args, role: str | None = None) -> int:
     return 0
 
 
-def run_role_analysis(args) -> int:
+def run_role_analysis(args: argparse.Namespace) -> int:
     return run_unified_analysis(args, role=args.command)
 
 
-def run_consumes_analysis(args) -> int:
+def run_consumes_analysis(args: argparse.Namespace) -> int:
     try:
         from wcl_core.consumes_analysis import run_consumes_analysis as _run
 
@@ -220,7 +225,7 @@ def run_consumes_analysis(args) -> int:
         return 1
 
 
-def run_history_query(args) -> int:  # noqa: C901
+def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
     from .database import PerformanceDB
 
     with PerformanceDB() as db:
@@ -303,7 +308,7 @@ def run_history_query(args) -> int:  # noqa: C901
     return 0
 
 
-def _resolve_player(db, args, config):
+def _resolve_player(db: "PerformanceDB", args: argparse.Namespace, config: dict[str, Any]) -> "PlayerRef":
     """Build a PlayerRef from args, filling server/region from an existing page or config."""
     from .services.player_page import PlayerRef
 
@@ -322,7 +327,7 @@ def _resolve_player(db, args, config):
     return PlayerRef.create(args.name, server, region)
 
 
-def _print_logs(logs) -> None:
+def _print_logs(logs: Sequence["PlayerLog"]) -> None:
     if not logs:
         print("No reports found.")
         return
@@ -333,7 +338,7 @@ def _print_logs(logs) -> None:
         print(f"{log.date_formatted:<12} {log.code:<18} {log.status:<10} {imported:<9} {log.zone[:21]:<22} {log.title}")
 
 
-def _run_player_role(ctx, db, args) -> int:
+def _run_player_role(ctx: "AppContext", db: "PerformanceDB", args: argparse.Namespace) -> int:
     import json
 
     from .services import RoleOverrideService, parse_report_code
@@ -372,7 +377,7 @@ def _run_player_role(ctx, db, args) -> int:
     return 0 if all(r.ok for r in results) else 1
 
 
-def _run_player_lineage(db, args) -> int:
+def _run_player_lineage(db: "PerformanceDB", args: argparse.Namespace) -> int:
     import json
 
     from .services import character_lineage
@@ -389,7 +394,7 @@ def _run_player_lineage(db, args) -> int:
     roles = ", ".join(f"{n} {r}" for r, n in lineage.role_counts.items())
     print(f"=== {lineage.character}: {lineage.raids} raids ({roles}), {lineage.first_raid} to {lineage.last_raid} ===")
 
-    def table(title, spreads):
+    def table(title: str, spreads: Sequence["Spread"]) -> None:
         if not spreads:
             return
         print(f"\n{title:<34} {'Role':<7} {'Min':>11} {'Mean':>11} {'Max':>11} {'Raids':>6}")
@@ -406,7 +411,7 @@ def _run_player_lineage(db, args) -> int:
     return 0
 
 
-def run_player_command(args) -> int:  # noqa: C901
+def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
     import json
 
     from .services import AppContext, PlayerPageService
@@ -493,14 +498,14 @@ def run_player_command(args) -> int:  # noqa: C901
     return 1
 
 
-def _reference_context(action: str):
+def _reference_context(action: str) -> "AppContext":
     """Imports talk to Warcraft Logs and need the config; everything else reads the database only."""
     from .services import AppContext
 
     return AppContext.from_config_file() if action == "import" else AppContext(config={})
 
 
-def run_reference_command(args) -> int:
+def run_reference_command(args: argparse.Namespace) -> int:
     import json
 
     from .renderers.console import render_reference_comparison

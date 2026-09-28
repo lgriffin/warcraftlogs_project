@@ -273,7 +273,7 @@ def render_cross_analysis(  # noqa: C901
 
     if historical:
 
-        def _fmt(val):
+        def _fmt(val: float | None) -> str:
             if val is None:
                 return "N/A"
             if abs(val) >= 1_000_000:
@@ -282,7 +282,7 @@ def render_cross_analysis(  # noqa: C901
                 return f"{val / 1_000:.1f}K"
             return f"{val:,.0f}"
 
-        def _dur(ms):
+        def _dur(ms: float | None) -> str:
             if not ms or ms <= 0:
                 return "N/A"
             s = ms / 1000
@@ -290,7 +290,7 @@ def render_cross_analysis(  # noqa: C901
             m = int((s % 3600) // 60)
             return f"{h}h {m}m" if h else f"{m}m"
 
-        def _pct(cur, avg):
+        def _pct(cur: float, avg: float | None) -> str:
             if not avg:
                 return "—"
             p = (cur - avg) / avg * 100

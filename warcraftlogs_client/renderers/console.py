@@ -15,7 +15,7 @@ from wcl_core.models import (
 )
 
 if TYPE_CHECKING:
-    from ..services.reference import ReferenceComparison
+    from ..services import ReferenceComparison
 
 ROLES = ("tank", "healer", "melee", "ranged")
 
@@ -290,14 +290,14 @@ def render_reference_comparison(comparison: "ReferenceComparison") -> None:
         print(f"\n{'Boss':<28} {'Ours':>8} {'Reference':>10} {'Delta':>9}")
         print("-" * 58)
         for e in comparison.encounters:
-            ours, ref = e.guild_duration_ms // 1000, e.reference_duration_ms // 1000
+            ours_s, ref_s = e.guild_duration_ms // 1000, e.reference_duration_ms // 1000
             print(
-                f"{e.name:<28} {ours // 60:>5}:{ours % 60:02d} {ref // 60:>7}:{ref % 60:02d}"
+                f"{e.name:<28} {ours_s // 60:>5}:{ours_s % 60:02d} {ref_s // 60:>7}:{ref_s % 60:02d}"
                 f" {_delta(e.duration_delta_percent):>9}"
             )
 
     if comparison.consumables:
         print(f"\n{'Consumable':<32} {'Ours':>10} {'Reference':>10}")
         print("-" * 54)
-        for c in comparison.consumables:
-            print(f"{c.name:<32} {c.guild_uses:>10} {c.reference_uses:>10}")
+        for cons in comparison.consumables:
+            print(f"{cons.name:<32} {cons.guild_uses:>10} {cons.reference_uses:>10}")
