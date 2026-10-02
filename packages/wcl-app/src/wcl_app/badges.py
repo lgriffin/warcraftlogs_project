@@ -1,10 +1,11 @@
 """
 Toads badges: small awards for turning up to raids and for coming prepared.
 
-Every badge counts one thing across every stored guild raid: raids attended, or consumables used from one family
-(mana potions, combat potions, drums, ...). Each badge has up to four tiers, named after WoW item quality
-(uncommon, rare, epic, legendary), and a badge is earned at its first tier. ``stacks`` says how many times the
-first tier has been reached, so 200 mana potions against a first tier of 10 reads as "x20".
+Every badge counts one thing across every stored guild raid: raids attended, raids come prepared with a flask or a
+battle and guardian elixir pair, or consumables used from one family (mana potions, combat potions, drums, ...).
+Each badge has up to four tiers, named after WoW item quality (uncommon, rare, epic, legendary), and a badge is
+earned at its first tier. ``stacks`` says how many times the first tier has been reached, so 200 mana potions
+against a first tier of 10 reads as "x20".
 
 Default thresholds are in ``DEFAULT_RULES``. A host changes them with a ``badges`` section in its config::
 
@@ -26,6 +27,8 @@ from dataclasses import asdict, dataclass, field, replace
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
+from wcl_core.flasks import FlaskCatalog, load_catalog, preparation
+
 from wcl_app.context import AppContext, StorageFactory
 
 if TYPE_CHECKING:
@@ -38,6 +41,7 @@ BADGES_SCHEMA_VERSION = 1
 # What a badge counts.
 RAIDS = "raids"  # raids attended
 CONSUMABLES = "consumables"  # consumables used; ``items`` narrows it to one family
+FLASKED = "flasked"  # raids with a flask, or a battle and a guardian elixir (``wcl_core.flasks``)
 
 # Tier n (1-based) has quality QUALITIES[n - 1]; tier 0 means not earned yet.
 QUALITIES = ("uncommon", "rare", "epic", "legendary")
@@ -66,6 +70,8 @@ class BadgeRule:
     def count(self, stats: PlayerStats) -> int:
         if self.metric == RAIDS:
             return stats.raids
+        if self.metric == FLASKED:
+            return stats.flasked_raids
         if not self.items:
             return sum(stats.consumables.values())
         return sum(n for name, n in stats.consumables.items() if name.lower() in self.items)
@@ -234,6 +240,16 @@ DEFAULT_RULES: tuple[BadgeRule, ...] = (
         (5, 20, 50, 120),
         items=SCROLLS,
     ),
+    BadgeRule(
+        "flasked",
+        "Flask Bearer",
+        "Raids with a flask, or a battle and a guardian elixir",
+        "flask",
+        "⚗️",
+        "raids",
+        (5, 15, 40, 100),
+        FLASKED,
+    ),
 )
 
 
@@ -315,12 +331,14 @@ class Badge:
 
 @dataclass
 class PlayerStats:
-    """What badges count for one player: raids attended and consumables used, by consumable name."""
+    """What badges count for one player: raids attended, raids prepared (``flasked_raids``) and consumables used, by
+    consumable name."""
 
     name: str
     player_class: str = ""
     raids: int = 0
     consumables: dict[str, int] = field(default_factory=dict)
+    flasked_raids: int = 0
 
 
 @dataclass
@@ -352,13 +370,23 @@ class PlayerBadges:
 # ── Reading storage ──
 
 
+def _prepared_raids(rows: Iterable[Mapping[str, Any]], catalog: FlaskCatalog) -> int:
+    """Raids with a flask or an elixir pair, from rows with ``raid_id`` and ``consumable_name``."""
+    names_by_raid: dict[Any, set[str]] = {}
+    for row in rows:
+        names_by_raid.setdefault(row["raid_id"], set()).add(row["consumable_name"])
+    return sum(1 for names in names_by_raid.values() if preparation(names, catalog))
+
+
 def character_stats(repo: RaidRepository, name: str, sources: tuple[str, ...] = GUILD_SOURCES) -> PlayerStats:
     """One character's counts, matched case-insensitively."""
     raids = {r["raid_id"] for r in repo.get_character_raid_roles(name, sources)}
+    rows = repo.get_character_consumable_counts(name, sources)
     consumables: dict[str, int] = {}
-    for row in repo.get_character_consumable_counts(name, sources):
+    for row in rows:
         consumables[row["consumable_name"]] = consumables.get(row["consumable_name"], 0) + row["count"]
-    return PlayerStats(name, raids=len(raids), consumables=consumables)
+    flasked = _prepared_raids((r for r in rows if r["count"] > 0), load_catalog())
+    return PlayerStats(name, raids=len(raids), consumables=consumables, flasked_raids=flasked)
 
 
 def guild_stats(repo: RaidRepository, sources: tuple[str, ...] = GUILD_SOURCES) -> dict[str, PlayerStats]:
@@ -369,6 +397,13 @@ def guild_stats(repo: RaidRepository, sources: tuple[str, ...] = GUILD_SOURCES) 
     for row in repo.get_consumable_totals(sources):
         player = stats.setdefault(row["name"].lower(), PlayerStats(row["name"]))
         player.consumables[row["consumable_name"]] = row["count"]
+    catalog = load_catalog()
+    rows_by_name: dict[str, list[dict[str, Any]]] = {}
+    for row in repo.get_consumable_raids(catalog.names, sources):
+        rows_by_name.setdefault(row["name"].lower(), []).append(row)
+    for key, rows in rows_by_name.items():
+        player = stats.setdefault(key, PlayerStats(rows[0]["name"]))
+        player.flasked_raids = _prepared_raids(rows, catalog)
     return stats
 
 

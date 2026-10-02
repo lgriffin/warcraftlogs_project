@@ -31,6 +31,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Protocol
 
+from wcl_core.flasks import NOT_PREPARED, PREPARED_ELIXIRS, PREPARED_FLASK, load_catalog, preparation
 from wcl_core.models import RaidAnalysis
 from wcl_store import RaidRepository, StorageError
 
@@ -244,9 +245,14 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec("class_mix", "Class mix", "Players of each class in the last raid", BARS, HALF),
     WidgetSpec("interrupts", "Interrupt casts", "Most interrupt abilities cast in the last raid", TABLE, HALF),
     WidgetSpec("consumables", "Consumables", "Most consumables used in the last raid", TABLE, HALF),
+    WidgetSpec(
+        "flasks", "Flasks and elixirs", "Who had a flask or a battle and guardian elixir in the last raid", TABLE, HALF
+    ),
     WidgetSpec("tracked_players", "Tracked players", "Characters you follow with a player page", TABLE, HALF),
 )
 _SPECS = {s.id: s for s in CATALOGUE}
+
+_PREPARED_LABELS = {PREPARED_FLASK: "Flask", PREPARED_ELIXIRS: "Elixirs", NOT_PREPARED: "None"}
 
 
 # ── Layout ──
@@ -434,6 +440,7 @@ class HomeService:
             "class_mix": self._class_mix,
             "interrupts": self._interrupts,
             "consumables": self._consumables,
+            "flasks": self._flasks,
             "tracked_players": self._tracked_players,
         }
 
@@ -760,6 +767,44 @@ class HomeService:
                 Row(
                     {"name": name, "role": role, "used": str(n)},
                     {"name": name, "role": roles[name], "used": n},
+                    _character_link(name),
+                )
+            )
+
+    def _flasks(self, s: _Snapshot, w: HomeWidget) -> None:
+        a = s.last_analysis
+        catalog = load_catalog()
+        using: dict[str, set[str]] = {}
+        for c in a.consumables if a else []:
+            if c.count > 0 and catalog.kind_of(c.consumable_name):
+                using.setdefault(c.player_name, set()).add(c.consumable_name)
+        if a is None or not using:
+            w.empty = "No flasks or elixirs recorded in the last raid."
+            return
+        roster = {p.name: p.role for p in a.composition.all_players}
+        roster.update({name: roster.get(name, "") for name in using})
+        prepared = {name: preparation(using.get(name, ()), catalog) for name in roster}
+        title = s.last_raid["title"] if s.last_raid else a.metadata.title
+        ready = sum(1 for p in prepared.values() if p)
+        w.subtitle = f"{title}: {ready} of {len(roster)} prepared"
+        w.columns = [
+            Column("name", "Name"),
+            Column("role", "Role"),
+            Column("prepared", "Prepared"),
+            Column("using", "Flasks and elixirs"),
+        ]
+        order = {NOT_PREPARED: 0, PREPARED_ELIXIRS: 1, PREPARED_FLASK: 2}
+        for name in sorted(roster, key=lambda n: (order[prepared[n]], n)):
+            items = sorted(using.get(name, ()))
+            w.rows.append(
+                Row(
+                    {
+                        "name": name,
+                        "role": roster[name].capitalize(),
+                        "prepared": _PREPARED_LABELS[prepared[name]],
+                        "using": ", ".join(items) or "-",
+                    },
+                    {"name": name, "role": roster[name], "prepared": prepared[name], "using": ", ".join(items)},
                     _character_link(name),
                 )
             )

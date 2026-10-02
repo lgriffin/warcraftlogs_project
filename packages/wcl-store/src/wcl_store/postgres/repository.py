@@ -1076,6 +1076,21 @@ class PostgresRaidRepository:
         with self._engine.connect() as conn:
             return [{**row, "count": int(row["count"])} for row in _dicts(conn.execute(stmt))]
 
+    @_storage_errors
+    def get_consumable_raids(
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
+    ) -> list[dict[str, Any]]:
+        if not consumable_names:
+            return []
+        c, r, cu = t.characters, t.raids, t.consumable_usage
+        stmt = (
+            select(c.c.name, cu.c.raid_id, cu.c.consumable_name)
+            .select_from(cu.join(r, r.c.id == cu.c.raid_id).join(c, c.c.id == cu.c.character_id))
+            .where(cu.c.count > 0, cu.c.consumable_name.in_(consumable_names), r.c.source.in_(sources))
+        )
+        with self._engine.connect() as conn:
+            return _dicts(conn.execute(stmt))
+
     # ── Player pages ──
 
     @_storage_errors

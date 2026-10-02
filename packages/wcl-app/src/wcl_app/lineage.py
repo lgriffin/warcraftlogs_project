@@ -5,7 +5,9 @@ For each metric this gives min, mean and max over the raids it applies to, plus
 the raid count, so a player can see their typical night next to their best and
 worst. Spell casts are averaged over raids in the role that spell was recorded
 for (a healer's Flash Heal isn't diluted by their dps nights). Consumables are
-averaged over every raid attended, counting a raid where they used none as 0.
+averaged over every raid attended, counting a raid where they used none as 0. "Flask or elixir pair" is 1 for a raid
+with a flask or a battle and a guardian elixir and 0 otherwise, so its mean is the share of raids prepared; it only
+appears once the character has a flask or elixir on record.
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from wcl_core.flasks import load_catalog, preparation
 
 if TYPE_CHECKING:
     from wcl_store import RaidRepository
@@ -126,5 +130,22 @@ def character_lineage(
     for item, by_raid in per_item.items():
         lineage.consumables.append(Spread.of(item, [by_raid.get(raid_id, 0.0) for raid_id in raid_role]))
     lineage.consumables.sort(key=lambda s: (-s.mean, s.name))
+    _add_flask_metric(lineage, per_item, list(raid_role))
 
     return lineage
+
+
+FLASK_METRIC = "Flask or elixir pair"
+
+
+def _add_flask_metric(lineage: CharacterLineage, per_item: dict[str, dict[int, float]], raid_ids: list[int]) -> None:
+    """1 per raid with a flask or an elixir pair, else 0; left out when no flask or elixir was ever recorded."""
+    catalog = load_catalog()
+    used = {item: by_raid for item, by_raid in per_item.items() if catalog.kind_of(item)}
+    if not used:
+        return
+    values = [
+        1.0 if preparation((item for item, by_raid in used.items() if by_raid.get(raid_id)), catalog) else 0.0
+        for raid_id in raid_ids
+    ]
+    lineage.metrics.append(Spread.of(FLASK_METRIC, values))

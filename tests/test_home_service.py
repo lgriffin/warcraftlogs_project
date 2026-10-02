@@ -271,6 +271,48 @@ class TestWidgets:
         assert [(r.values["name"], r.values["used"]) for r in rows] == [("HolyPriest", 3), ("FrostMage", 2)]
         assert rows[0].cells["role"] == "Healer"
 
+    def test_flasks_lists_the_roster_unprepared_first(self, service):
+        w = _widget(service, "flasks")
+        assert w.subtitle == "Gruul's Lair: 1 of 4 prepared"
+        assert [(r.values["name"], r.values["prepared"]) for r in w.rows] == [
+            ("HolyPriest", ""),
+            ("StabbyRogue", ""),
+            ("TankPaladin", ""),
+            ("FrostMage", "flask"),
+        ]
+        frost = w.rows[-1]
+        assert (frost.cells["prepared"], frost.cells["using"], frost.values["using"]) == (
+            "Flask",
+            "Flask of Supreme Power",
+            "Flask of Supreme Power",
+        )
+        assert (w.rows[0].cells["prepared"], w.rows[0].cells["using"], w.rows[0].cells["role"]) == (
+            "None",
+            "-",
+            "Healer",
+        )
+
+    def test_flasks_counts_a_battle_and_guardian_elixir_pair(self, storage, build_analysis):
+        code = "ElixirRaid000000"
+        elixirs = [
+            ConsumableUsage("HolyPriest", "healer", code, "Elixir of Healing Power", 1),
+            ConsumableUsage("HolyPriest", "healer", code, "Elixir of Draenic Wisdom", 1),
+            ConsumableUsage("StabbyRogue", "melee", code, "Elixir of Major Agility", 1),
+        ]
+        with storage() as repo:
+            repo.import_raid(build_analysis(report_id=code, start_time=_ms(NOW) - 60_000, consumables=elixirs))
+        w = HomeService(storage, now=lambda: NOW).widget("flasks")
+        prepared = {r.values["name"]: r.values["prepared"] for r in w.rows}
+        assert prepared["HolyPriest"] == "elixirs" and prepared["StabbyRogue"] == ""
+        assert w.rows[-1].cells["using"] == "Elixir of Draenic Wisdom, Elixir of Healing Power"
+
+    def test_flasks_is_empty_when_the_last_raid_recorded_none(self, storage, build_analysis):
+        code = "NoFlaskRaid00000"
+        with storage() as repo:
+            repo.import_raid(build_analysis(report_id=code, start_time=_ms(NOW) - 60_000))
+        w = HomeService(storage, now=lambda: NOW).widget("flasks")
+        assert (w.empty, w.rows) == ("No flasks or elixirs recorded in the last raid.", [])
+
     def test_badges_of_the_last_raids_roster(self, storage):
         rules = BadgeRules.from_config(
             {"badges": {"thresholds": {"attendance": [2], "mana_potions": [3, 10], "combat_potions": [1]}}}

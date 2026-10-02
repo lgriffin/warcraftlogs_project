@@ -1981,6 +1981,28 @@ class PerformanceDB:
         )
         return [dict(r) for r in rows]
 
+    def get_consumable_raids(
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
+    ) -> list[dict]:
+        """Which raids each character used any of these consumables in: name, raid_id, consumable_name."""
+        if not consumable_names:
+            return []
+        src_sql, src_params = self._lineage_raid_filter(sources)
+        marks = ", ".join("?" for _ in consumable_names)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT c.name, cu.raid_id, cu.consumable_name
+                FROM consumable_usage cu
+                JOIN raids r ON r.id = cu.raid_id
+                JOIN characters c ON c.id = cu.character_id
+                WHERE cu.count > 0 AND cu.consumable_name IN ({marks}) AND {src_sql}""",
+                (*consumable_names, *src_params),
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
     # ── Raid Group operations ──
 
     def create_raid_group(self, name: str, raid_days: list[str] | None = None) -> RaidGroup:

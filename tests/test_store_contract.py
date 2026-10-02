@@ -584,6 +584,24 @@ def test_consumable_totals_sum_across_raids(repo):
     assert [(r["name"], r["count"], r["raids"]) for r in both] == [("Holy", 9, 3), ("Stab", 3, 3)]
 
 
+def test_consumable_raids_lists_each_raid_a_named_consumable_was_used_in(repo):
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(GRUUL, start=T0 + DAY))
+    repo.import_raid(_analysis(REF, start=T0 + 2 * DAY), source="reference")
+    unused = _analysis("UnusedUnusedUnus", start=T0 + 3 * DAY)
+    unused.consumables = [ConsumableUsage("Stab", "melee", "UnusedUnusedUnus", "Haste Potion", 0, [])]
+    repo.import_raid(unused)
+    raid_ids = {r["report_id"]: r["raid_id"] for r in repo.get_character_raid_roles("Stab")}
+
+    rows = repo.get_consumable_raids(("Haste Potion", "Flask of Relentless Assault"))
+    assert sorted((r["name"], r["raid_id"], r["consumable_name"]) for r in rows) == sorted(
+        ("Stab", raid_ids[code], "Haste Potion") for code in (KARA, GRUUL)
+    )
+    assert len(repo.get_consumable_raids(("Haste Potion",), ("guild", "reference"))) == 3
+    assert repo.get_consumable_raids(("haste potion",)) == []  # exact names
+    assert repo.get_consumable_raids(()) == []
+
+
 # ── Player pages ──
 
 
@@ -730,6 +748,7 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
         "consumables": unordered(repo.get_character_consumable_counts("Disc")),
         "attendance": repo.get_raid_attendance(("guild", "reference")),
         "consumable_totals": repo.get_consumable_totals(("guild", "reference")),
+        "consumable_raids": unordered(repo.get_consumable_raids(("Super Mana Potion", "Haste Potion"))),
         "pages": rows(repo.find_player_pages()),
         "page_logs": rows(repo.get_player_page_logs(page)),
         "overrides": rows(repo.get_role_overrides()),

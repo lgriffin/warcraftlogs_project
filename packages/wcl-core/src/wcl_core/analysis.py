@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 import requests
 
 from .client import WarcraftLogsClient
+from .flasks import FlaskCatalog, boss_pulls, flask_coverage
 from .models import (
     RESOURCE_TYPES,
     AuraBand,
@@ -34,6 +35,7 @@ from .models import (
     DPSPerformance,
     EncounterPerformance,
     EncounterSummary,
+    FlaskCoverage,
     HealerPerformance,
     HeroismWindow,
     InterruptUsage,
@@ -162,7 +164,9 @@ def analyze_raid(
     logger.info("  dps analyzed: %d melee, %d ranged", len(melee_dps), len(ranged_dps))
 
     _progress("Analyzing consumables...")
-    consumables, consume_warns = _analyze_consumables(client, report_id, composition)
+    consumables, flask_cov, consume_warns = _analyze_consumables_and_flasks(
+        client, report_id, composition, boss_pulls(fights or [])
+    )
     all_warnings.extend(consume_warns)
 
     _progress("Analyzing interrupts...")
@@ -231,6 +235,7 @@ def analyze_raid(
         tanks=tanks,
         dps=melee_dps + ranged_dps,
         consumables=consumables,
+        flask_coverage=flask_cov,
         interrupts=interrupts,
         cancelled_casts=cancelled_casts,
         aura_uptimes=aura_uptimes,
@@ -759,71 +764,103 @@ def _analyze_consumables(
     report_id: str,
     composition: RaidComposition,
 ) -> tuple[list[ConsumableUsage], list[str]]:
-    config = _load_consumes_config()
+    consumables, _coverage, warnings = _analyze_consumables_and_flasks(client, report_id, composition, [])
+    return consumables, warnings
 
+
+def _analyze_consumables_and_flasks(
+    client: WarcraftLogsClient,
+    report_id: str,
+    composition: RaidComposition,
+    pulls: list[int],
+) -> tuple[list[ConsumableUsage], list[FlaskCoverage], list[str]]:
+    """Consumables per player, and which ``pulls`` (boss pull start times) each had a flask or elixir pair for.
+
+    Flasks and elixirs are auras, so they are read from the same buffs table as ``buff_consumables`` and recorded
+    as consumables too; coverage is only worked out when there are boss pulls.
+    """
+    config = _load_consumes_config()
+    catalog = FlaskCatalog.from_config(config)
     buff_ids: dict[int, str] = {int(sid): name for sid, name in config.get("buff_consumables", {}).items()}
+    buff_ids.update({aura_id: name for aura_id, (name, _kind) in catalog.auras.items()})
     cast_ids: dict[int, str] = {int(sid): name for sid, name in config.get("cast_consumables", {}).items()}
 
     results: list[ConsumableUsage] = []
+    coverage: list[FlaskCoverage] = []
     warnings: list[str] = []
 
     for player in composition.all_players:
         try:
-            table_data = client.get_buffs_table(report_id, player.source_id)
-            if isinstance(table_data, str):
-                table_data = json.loads(table_data)
-
-            auras = table_data.get("data", {}).get("auras", [])
-            if not auras:
-                auras = table_data.get("auras", [])
-            for aura in auras:
-                ability_id = aura.get("guid")
-                if ability_id in buff_ids:
-                    count = aura.get("totalUses", 0)
-                    if count > 0:
-                        bands = aura.get("bands", [])
-                        timestamps = sorted(b.get("startTime", 0) for b in bands)
-                        results.append(
-                            ConsumableUsage(
-                                player_name=player.name,
-                                player_role=player.role,
-                                report_id=report_id,
-                                consumable_name=buff_ids[ability_id],
-                                count=count,
-                                timestamps=timestamps,
-                            )
-                        )
+            auras = _player_auras(client, report_id, player.source_id)
+            results.extend(_buff_consumables(player, report_id, auras, buff_ids))
+            if pulls:
+                coverage.append(flask_coverage(player, report_id, auras, pulls, catalog))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing buff consumables for %s: %s", player.name, e)
             warnings.append(f"Failed to analyze consumables for {player.name}: {e}")
 
         try:
-            cast_events = client.get_cast_events_paginated(report_id, player.source_id)
-            cast_data: dict[int, list[int]] = defaultdict(list)
-            for event in cast_events:
-                if event.get("type") == "begincast":
-                    continue
-                aid = event.get("abilityGameID")
-                if aid in cast_ids:
-                    ts = event.get("timestamp", 0)
-                    cast_data[aid].append(ts)
-
-            for spell_id, timestamps in cast_data.items():
-                results.append(
-                    ConsumableUsage(
-                        player_name=player.name,
-                        player_role=player.role,
-                        report_id=report_id,
-                        consumable_name=cast_ids[spell_id],
-                        count=len(timestamps),
-                        timestamps=sorted(timestamps),
-                    )
-                )
+            results.extend(_cast_consumables(client, report_id, player, cast_ids))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing cast consumables for %s: %s", player.name, e)
             warnings.append(f"Failed to analyze consumables for {player.name}: {e}")
 
-    return results, warnings
+    return results, coverage, warnings
+
+
+def _player_auras(client: WarcraftLogsClient, report_id: str, source_id: int) -> list[dict]:
+    table_data = client.get_buffs_table(report_id, source_id)
+    if isinstance(table_data, str):
+        table_data = json.loads(table_data)
+    auras = table_data.get("data", {}).get("auras", [])
+    return auras or table_data.get("auras", [])
+
+
+def _buff_consumables(
+    player: PlayerIdentity, report_id: str, auras: list[dict], buff_ids: dict[int, str]
+) -> list[ConsumableUsage]:
+    results = []
+    for aura in auras:
+        ability_id = aura.get("guid")
+        if ability_id not in buff_ids:
+            continue
+        count = aura.get("totalUses", 0)
+        if count > 0:
+            timestamps = sorted(b.get("startTime", 0) for b in aura.get("bands", []))
+            results.append(
+                ConsumableUsage(
+                    player_name=player.name,
+                    player_role=player.role,
+                    report_id=report_id,
+                    consumable_name=buff_ids[ability_id],
+                    count=count,
+                    timestamps=timestamps,
+                )
+            )
+    return results
+
+
+def _cast_consumables(
+    client: WarcraftLogsClient, report_id: str, player: PlayerIdentity, cast_ids: dict[int, str]
+) -> list[ConsumableUsage]:
+    cast_data: dict[int, list[int]] = defaultdict(list)
+    for event in client.get_cast_events_paginated(report_id, player.source_id):
+        if event.get("type") == "begincast":
+            continue
+        aid = event.get("abilityGameID")
+        if aid in cast_ids:
+            cast_data[aid].append(event.get("timestamp", 0))
+    return [
+        ConsumableUsage(
+            player_name=player.name,
+            player_role=player.role,
+            report_id=report_id,
+            consumable_name=cast_ids[spell_id],
+            count=len(timestamps),
+            timestamps=sorted(timestamps),
+        )
+        for spell_id, timestamps in cast_data.items()
+    ]
 
 
 def _load_interrupt_config() -> dict[int, str]:
