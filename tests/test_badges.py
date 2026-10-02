@@ -200,3 +200,102 @@ def test_from_context_reads_thresholds_from_config(tmp_path, build_analysis):
     service = BadgeService.from_context(ctx)
     assert service.catalogue()[0].thresholds == (1,)
     assert _by_id(service.for_character("TankWarrior"))["attendance"].tier_name == "Uncommon"
+
+
+# ── Flask Bearer ──
+
+FLASKED_RULE = next(r for r in DEFAULT_RULES if r.id == "flasked")
+
+
+class TestFlaskBearer:
+    def test_counts_raids_prepared_with_the_attendance_thresholds(self):
+        badge = FLASKED_RULE.award(PlayerStats("Holy", raids=20, flasked_raids=16))
+        assert (badge.id, badge.name, badge.icon, badge.glyph, FLASKED_RULE.unit) == (
+            "flasked",
+            "Flask Bearer",
+            "flask",
+            "⚗️",
+            "raids",
+        )
+        assert (badge.value, badge.tier, badge.tier_name, badge.display) == (16, 2, "Rare", "16 raids")
+        assert FLASKED_RULE.thresholds == (5, 15, 40, 100)
+
+    def test_consumable_counts_do_not_count_towards_it(self):
+        stats = PlayerStats("Holy", raids=9, consumables={"Flask of Blinding Light": 9})
+        assert FLASKED_RULE.award(stats).value == 0  # only flasked_raids counts
+
+    def test_well_stocked_leaves_flasks_and_elixirs_out(self):
+        well_stocked = next(r for r in DEFAULT_RULES if r.id == "well_stocked")
+        stats = PlayerStats(
+            "Holy", consumables={"Flask of Blinding Light": 9, "ELIXIR OF HEALING POWER": 4, "Super Mana Potion": 3}
+        )
+        assert well_stocked.award(stats).value == 3
+
+    def test_it_can_be_disabled_like_any_badge(self):
+        rules = BadgeRules.from_config({"badges": {"disabled": ["flasked"], "thresholds": {}}})
+        assert "flasked" not in {r.id for r in rules.rules}
+
+
+@pytest.fixture
+def flask_raids(storage, build_analysis):
+    """Six guild raids. HolyPriest: an elixir pair in four, one elixir alone in the fifth, a flask in the sixth.
+    StabbyRogue: a flask in two. A reference raid where HolyPriest flasks does not count."""
+
+    def usage(name, role, code, *items):
+        return [ConsumableUsage(name, role, code, item, 1, [0]) for item in items]
+
+    with storage() as repo:
+        for n in range(6):
+            code = f"FlaskRaid{n:07d}"
+            if n < 4:
+                holy = usage("HolyPriest", "healer", code, "Elixir of Healing Power", "Elixir of Major Mageblood")
+            elif n == 4:
+                holy = usage("HolyPriest", "healer", code, "Elixir of Healing Power")
+            else:
+                holy = usage("HolyPriest", "healer", code, "Flask of Mighty Restoration", "Super Mana Potion")
+            stab = usage("StabbyRogue", "melee", code, "Flask of Relentless Assault") if n < 2 else []
+            repo.import_raid(build_analysis(report_id=code, start_time=T0 + n * DAY, consumables=holy + stab))
+        ref = "FlaskReference00"
+        repo.import_raid(
+            build_analysis(
+                report_id=ref,
+                start_time=T0 + 9 * DAY,
+                consumables=usage("HolyPriest", "healer", ref, "Flask of Mighty Restoration"),
+            ),
+            source="reference",
+        )
+
+
+@pytest.mark.usefixtures("flask_raids")
+class TestFlaskBearerService:
+    def test_a_flask_or_an_elixir_pair_counts_a_raid_once(self, storage):
+        with storage() as repo:
+            holy = character_stats(repo, "HolyPriest")
+            everyone = guild_stats(repo)
+        assert holy.flasked_raids == 5  # four pairs and a flask; the lone elixir does not count
+        assert everyone["holypriest"].flasked_raids == 5
+        assert everyone["stabbyrogue"].flasked_raids == 2
+        assert everyone["tankwarrior"].flasked_raids == 0
+
+    def test_badge_for_character_and_guild(self, storage):
+        holy = _by_id(BadgeService(storage).for_character("HolyPriest"))["flasked"]
+        assert (holy.value, holy.tier, holy.quality) == (5, 1, "uncommon")
+        guild = {p.name: _by_id(p)["flasked"].value for p in BadgeService(storage).for_guild()}
+        assert guild["HolyPriest"] == 5 and guild["StabbyRogue"] == 2
+
+    def test_other_sources_can_be_counted(self, storage):
+        holy = _by_id(BadgeService(storage, sources=("guild", "reference")).for_character("HolyPriest"))
+        assert holy["flasked"].value == 6
+
+
+def test_flask_names_stored_in_any_case_count_for_character_and_guild(storage, build_analysis):
+    """Stored names are matched ignoring case, the way ``preparation`` classifies them."""
+    with storage() as repo:
+        for n, items in enumerate(
+            (["FLASK OF MIGHTY RESTORATION"], ["elixir of healing power", "Elixir Of Major Mageblood"])
+        ):
+            code = f"CaseRaid{n:08d}"
+            consumables = [ConsumableUsage("HolyPriest", "healer", code, item, 1) for item in items]
+            repo.import_raid(build_analysis(report_id=code, start_time=T0 + n * DAY, consumables=consumables))
+        assert character_stats(repo, "HolyPriest").flasked_raids == 2
+        assert guild_stats(repo)["holypriest"].flasked_raids == 2

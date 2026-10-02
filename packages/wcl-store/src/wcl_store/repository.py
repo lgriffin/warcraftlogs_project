@@ -116,6 +116,14 @@ class RaidRepository(Protocol):
         count (the sum) and raids (raids it was used in). Consumables never used are left out."""
         ...
 
+    def get_consumable_raids(
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
+    ) -> list[dict[str, Any]]:
+        """Which raids each character used any of ``consumable_names`` in, in no set order: name, raid_id and
+        consumable_name as stored. Names match ignoring ASCII case, like character names. Rows with a count of 0 are
+        left out; no names means no rows."""
+        ...
+
     # ── Player pages ──
 
     def get_or_create_player_page(self, name: str, server: str, region: str) -> int:

@@ -178,6 +178,45 @@ class ConsumableUsage:
 
 
 @dataclass
+class FlaskCoverage:
+    """Whether one player had a flask, or a battle and a guardian elixir, up as each boss pull of a raid began.
+
+    Boss pulls are every fight with an encounter id, kills and wipes. A flask counts as both elixirs, so a pull is
+    covered by ``flask_pulls`` or ``elixir_pair_pulls``, never both. The names are every flask and elixir the player
+    had at any point in the raid. Worked out from the buffs table at analysis time; not stored yet.
+    """
+
+    player_name: str
+    player_role: str
+    report_id: str
+    boss_pulls: int = 0
+    flask_pulls: int = 0
+    elixir_pair_pulls: int = 0
+    flasks: list[str] = field(default_factory=list)
+    battle_elixirs: list[str] = field(default_factory=list)
+    guardian_elixirs: list[str] = field(default_factory=list)
+
+    @property
+    def prepared_pulls(self) -> int:
+        """Boss pulls with a flask or an elixir pair up."""
+        return self.flask_pulls + self.elixir_pair_pulls
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.player_name,
+            "role": self.player_role,
+            "report_id": self.report_id,
+            "boss_pulls": self.boss_pulls,
+            "prepared_pulls": self.prepared_pulls,
+            "flask_pulls": self.flask_pulls,
+            "elixir_pair_pulls": self.elixir_pair_pulls,
+            "flasks": list(self.flasks),
+            "battle_elixirs": list(self.battle_elixirs),
+            "guardian_elixirs": list(self.guardian_elixirs),
+        }
+
+
+@dataclass
 class PotionSpike:
     timestamp_ms: int
     potion_name: str
@@ -284,6 +323,8 @@ class RaidAnalysis:
     tanks: list[TankPerformance] = field(default_factory=list)
     dps: list[DPSPerformance] = field(default_factory=list)
     consumables: list[ConsumableUsage] = field(default_factory=list)
+    # Not stored: a raid loaded back from storage has none (prepared raids come from ``consumables`` instead).
+    flask_coverage: list[FlaskCoverage] = field(default_factory=list)
     interrupts: list[InterruptUsage] = field(default_factory=list)
     cancelled_casts: list[CancelledCastSummary] = field(default_factory=list)
     aura_uptimes: list[AuraUptime] = field(default_factory=list)

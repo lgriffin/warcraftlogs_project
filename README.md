@@ -148,6 +148,8 @@ Tracks consumable usage per player per raid:
   - Destruction Potion, Super Mana Potion, Haste Potion
   - Master Healthstone (all rank variants unified under one name)
   - Fel Iron Bomb, Goblin Sapper Charge
+  - Flasks and battle/guardian elixirs, read from the buffs table; a player with a flask or an elixir pair counts
+    as prepared (Home `flasks` widget, Flask Bearer badge)
 
 Consumables to track are configured in `packages/wcl-core/src/wcl_core/data/consumes_config.json`.
 
@@ -301,7 +303,7 @@ Markdown reports are saved to the `reports/` directory.
 | `config.example.json` | Template for local setup (committed) |
 | `config.json` | Local API credentials and settings (**gitignored** — copy from example) |
 | `user_token.json` | OAuth user token for reference reports (**gitignored**) |
-| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell ID mappings (buff-based and cast-based) |
+| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell IDs: buffs, casts, flasks, elixirs |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_names.json` | Spell ID to name mappings by category |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 

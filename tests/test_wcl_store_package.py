@@ -58,7 +58,7 @@ def test_app_context_opens_injected_storage(tmp_path, sample_raid_analysis):
 def test_contract_module_calls_every_protocol_method():
     """A method added to RaidRepository must be exercised by the contract module too."""
     methods = sorted(n for n, v in vars(RaidRepository).items() if not n.startswith("_") and callable(v))
-    assert len(methods) == 30
+    assert len(methods) == 31
     contract = (ROOT / "tests" / "test_store_contract.py").read_text(encoding="utf-8")
     missing = [m for m in methods if f".{m}(" not in contract]
     assert not missing, f"tests/test_store_contract.py never calls: {missing}"

@@ -233,6 +233,22 @@ class TestLineage:
         assert pots.name == "Super Mana Potion"
         assert (pots.min, pots.mean, pots.max, pots.raids, pots.raids_used) == (0, 2, 4, 3, 2)
 
+    def test_no_flask_metric_without_a_flask_or_elixir_on_record(self, history):
+        assert "Flask or elixir pair" not in {m.name for m in character_lineage(history, "HolyPriest").metrics}
+
+    def test_flask_metric_is_the_share_of_raids_prepared(self, db, build_analysis):
+        prep = {
+            CODE_A: ["Flask of Mighty Restoration"],
+            CODE_B: ["Elixir of Healing Power", "Elixir of Major Mageblood"],
+            CODE_C: ["Elixir of Healing Power"],  # a battle elixir alone is not a pair
+        }
+        for code, items in prep.items():
+            a = build_analysis(report_id=code)
+            a.consumables = [ConsumableUsage("HolyPriest", "healer", code, item, 1) for item in items]
+            db.import_raid(a)
+        flask = next(m for m in character_lineage(db, "HolyPriest").metrics if m.name == "Flask or elixir pair")
+        assert (flask.min, flask.max, flask.raids, flask.raids_used, flask.total) == (0, 1, 3, 2, 2)
+
     def test_sources_filter_and_unknown_character(self, history):
         assert character_lineage(history, "Nobody") is None
         assert character_lineage(history, "HolyPriest", sources=("reference",)) is None
