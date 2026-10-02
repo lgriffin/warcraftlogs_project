@@ -79,8 +79,8 @@ share of raids prepared) once a character has any flask or elixir on record.
 
 At analysis time `RaidAnalysis.flask_coverage` also says, per player, which boss pulls (kills and wipes) began with a
 flask or an elixir pair up (within 5 seconds of the pull). Each player is scored only on the pulls the fight's
-`friendlyPlayers` list puts them in, so `boss_pulls` is their own pull count. It is not stored yet, so a raid read back from storage has an
-empty list. `FlaskCoverage.to_dict()`:
+`friendlyPlayers` list puts them in, so `boss_pulls` is their own pull count. It is not stored yet, so a raid read
+back from storage has an empty list. `FlaskCoverage.to_dict()`:
 
 ```json
 {
