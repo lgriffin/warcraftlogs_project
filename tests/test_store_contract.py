@@ -598,7 +598,9 @@ def test_consumable_raids_lists_each_raid_a_named_consumable_was_used_in(repo):
         ("Stab", raid_ids[code], "Haste Potion") for code in (KARA, GRUUL)
     )
     assert len(repo.get_consumable_raids(("Haste Potion",), ("guild", "reference"))) == 3
-    assert repo.get_consumable_raids(("haste potion",)) == []  # exact names
+    folded = repo.get_consumable_raids(("HASTE potion",))
+    assert {r["consumable_name"] for r in folded} == {"Haste Potion"}  # ASCII case ignored, stored name returned
+    assert len(folded) == 2
     assert repo.get_consumable_raids(()) == []
 
 

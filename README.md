@@ -303,7 +303,7 @@ Markdown reports are saved to the `reports/` directory.
 | `config.example.json` | Template for local setup (committed) |
 | `config.json` | Local API credentials and settings (**gitignored** — copy from example) |
 | `user_token.json` | OAuth user token for reference reports (**gitignored**) |
-| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell ID mappings (buff-based, cast-based, flasks, battle and guardian elixirs) |
+| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell IDs: buffs, casts, flasks, elixirs |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_names.json` | Spell ID to name mappings by category |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 

@@ -66,6 +66,7 @@ class BadgeRule:
     thresholds: tuple[int, ...]
     metric: str = CONSUMABLES
     items: frozenset[str] = frozenset()  # lower-case consumable names; empty counts every consumable
+    exclude: frozenset[str] = frozenset()  # lower-case names an empty ``items`` leaves out
 
     def count(self, stats: PlayerStats) -> int:
         if self.metric == RAIDS:
@@ -73,7 +74,7 @@ class BadgeRule:
         if self.metric == FLASKED:
             return stats.flasked_raids
         if not self.items:
-            return sum(stats.consumables.values())
+            return sum(n for name, n in stats.consumables.items() if name.lower() not in self.exclude)
         return sum(n for name, n in stats.consumables.items() if name.lower() in self.items)
 
     def award(self, stats: PlayerStats) -> Badge:
@@ -171,12 +172,22 @@ WEAPON_ENHANCEMENTS = _items(
     "Adamantite Sharpening Stone",
     "Adamantite Weightstone",
 )
+# Flasks and elixirs have their own badge, and a flask's aura can be applied many times a raid, so Well Stocked
+# leaves them out.
+FLASKS_AND_ELIXIRS = _items(*load_catalog().names)
 SCROLLS = _items("Scroll of Agility V", "Scroll of Agility IV", "Scroll of Strength V", "Scroll of Strength IV")
 
 DEFAULT_RULES: tuple[BadgeRule, ...] = (
     BadgeRule("attendance", "Loyal Toad", "Raids attended", "attendance", "🐸", "raids", (5, 15, 40, 100), RAIDS),
     BadgeRule(
-        "well_stocked", "Well Stocked", "Consumables used", "consumables", "🎒", "consumables", (50, 250, 750, 2000)
+        "well_stocked",
+        "Well Stocked",
+        "Consumables used, not counting flasks and elixirs",
+        "consumables",
+        "🎒",
+        "consumables",
+        (50, 250, 750, 2000),
+        exclude=FLASKS_AND_ELIXIRS,
     ),
     BadgeRule(
         "mana_potions",

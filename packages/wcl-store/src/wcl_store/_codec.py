@@ -121,3 +121,11 @@ def dump_bands(bands: list[AuraBand]) -> str | None:
 
 def load_bands(raw: str | None) -> list[AuraBand]:
     return [AuraBand(start_time=b["start"], end_time=b["end"]) for b in load_list(raw)]
+
+
+_ASCII_FOLD = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+
+def ascii_lower(text: str) -> str:
+    """Fold ASCII letters only, as SQLite's ``LOWER``/``NOCASE`` and the Postgres ``nocase`` do."""
+    return text.translate(_ASCII_FOLD)

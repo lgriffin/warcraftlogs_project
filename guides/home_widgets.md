@@ -104,14 +104,15 @@ Quick action ids: `raids.download`, `raids.browse`, `raids.diff`, `characters`, 
 | `boss_kills`      | table   | half | no      | bosses killed in the last raid, in kill order, with kill time       |
 | `class_mix`       | bars    | half | no      | players per class in the last raid                                  |
 | `interrupts`      | table   | half | no      | top 5 interrupt ability casts in the last raid (casts, not hits)    |
-| `consumables`     | table   | half | no      | top 5 consumable users in the last raid: name, role, used           |
-| `flasks`          | table   | half | no      | the last raid's roster: name, role, prepared, flasks and elixirs; unprepared first |
+| `consumables`     | table   | half | no      | top 5 consumable users in the last raid (no flasks or elixirs)     |
+| `flasks`          | table   | half | no      | last raid's roster: name, role, prepared, flasks and elixirs  |
 | `tracked_players` | table   | half | no      | player pages: name, server, region, logs added                      |
 
 In `flasks`, a row's raw `prepared` is `"flask"`, `"elixirs"` (a battle and a guardian elixir) or `""` (cells
-`Flask`, `Elixirs`, `None`), `using` is the flask and elixir names joined with ", " (cell `-` when none), and the
-subtitle reads "<raid title>: N of M prepared". It is empty when the last raid recorded no flask or elixir at all, as
-raids imported before flasks were tracked do (`guides/badges.md`, Flasks and elixirs).
+`Flask`, `Elixirs`, `None`), `using` is the flask and elixir names joined with ", " (cell `-` when none), the
+subtitle reads "<raid title>: N of M prepared", and rows run unprepared first, then elixirs, then flask. It is empty
+when the last raid recorded no flask or elixir at all, as raids imported before flasks were tracked do
+(`guides/badges.md`, Flasks and elixirs). `consumables` leaves flasks and elixirs out of its totals.
 
 "Raids" means guild raids; reference reports are left out. Adding a widget means a `WidgetSpec` in
 `CATALOGUE`, a builder in `HomeService`, a test in `tests/test_home_service.py` and a row in this table.

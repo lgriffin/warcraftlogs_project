@@ -1984,11 +1984,13 @@ class PerformanceDB:
     def get_consumable_raids(
         self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
     ) -> list[dict]:
-        """Which raids each character used any of these consumables in: name, raid_id, consumable_name."""
+        """Which raids each character used any of these consumables in (ASCII case ignored, as SQLite's LOWER does):
+        name, raid_id, consumable_name."""
         if not consumable_names:
             return []
         src_sql, src_params = self._lineage_raid_filter(sources)
         marks = ", ".join("?" for _ in consumable_names)
+        folded = tuple(_codec.ascii_lower(n) for n in consumable_names)
         rows = (
             self._get_conn()
             .execute(
@@ -1996,8 +1998,8 @@ class PerformanceDB:
                 FROM consumable_usage cu
                 JOIN raids r ON r.id = cu.raid_id
                 JOIN characters c ON c.id = cu.character_id
-                WHERE cu.count > 0 AND cu.consumable_name IN ({marks}) AND {src_sql}""",
-                (*consumable_names, *src_params),
+                WHERE cu.count > 0 AND LOWER(cu.consumable_name) IN ({marks}) AND {src_sql}""",
+                (*folded, *src_params),
             )
             .fetchall()
         )

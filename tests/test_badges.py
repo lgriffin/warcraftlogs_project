@@ -224,6 +224,13 @@ class TestFlaskBearer:
         stats = PlayerStats("Holy", raids=9, consumables={"Flask of Blinding Light": 9})
         assert FLASKED_RULE.award(stats).value == 0  # only flasked_raids counts
 
+    def test_well_stocked_leaves_flasks_and_elixirs_out(self):
+        well_stocked = next(r for r in DEFAULT_RULES if r.id == "well_stocked")
+        stats = PlayerStats(
+            "Holy", consumables={"Flask of Blinding Light": 9, "ELIXIR OF HEALING POWER": 4, "Super Mana Potion": 3}
+        )
+        assert well_stocked.award(stats).value == 3
+
     def test_it_can_be_disabled_like_any_badge(self):
         rules = BadgeRules.from_config({"badges": {"disabled": ["flasked"], "thresholds": {}}})
         assert "flasked" not in {r.id for r in rules.rules}
@@ -279,3 +286,16 @@ class TestFlaskBearerService:
     def test_other_sources_can_be_counted(self, storage):
         holy = _by_id(BadgeService(storage, sources=("guild", "reference")).for_character("HolyPriest"))
         assert holy["flasked"].value == 6
+
+
+def test_flask_names_stored_in_any_case_count_for_character_and_guild(storage, build_analysis):
+    """Stored names are matched ignoring case, the way ``preparation`` classifies them."""
+    with storage() as repo:
+        for n, items in enumerate(
+            (["FLASK OF MIGHTY RESTORATION"], ["elixir of healing power", "Elixir Of Major Mageblood"])
+        ):
+            code = f"CaseRaid{n:08d}"
+            consumables = [ConsumableUsage("HolyPriest", "healer", code, item, 1) for item in items]
+            repo.import_raid(build_analysis(report_id=code, start_time=T0 + n * DAY, consumables=consumables))
+        assert character_stats(repo, "HolyPriest").flasked_raids == 2
+        assert guild_stats(repo)["holypriest"].flasked_raids == 2

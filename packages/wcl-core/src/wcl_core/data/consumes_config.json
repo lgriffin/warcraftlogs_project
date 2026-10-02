@@ -1,5 +1,9 @@
 {
-  "_comment": "Aura/spell ids as WarcraftLogs reports them (the buff's spell id, not the item id). flasks, battle_elixirs and guardian_elixirs are counted from the buffs table like buff_consumables, and a player with a flask, or one battle and one guardian elixir, counts as prepared (wcl_core.flasks).",
+  "_comment": [
+    "Aura/spell ids as WarcraftLogs reports them (the buff's spell id, not the item id).",
+    "flasks, battle_elixirs and guardian_elixirs are read from the buffs table like buff_consumables;",
+    "a flask, or one battle and one guardian elixir, counts as prepared (wcl_core.flasks)."
+  ],
   "buff_consumables": {
     "28508": "Destruction Potion",
     "28507": "Haste Potion",

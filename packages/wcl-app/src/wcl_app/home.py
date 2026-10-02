@@ -244,7 +244,9 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec("boss_kills", "Boss kills", "Every boss killed in the last raid and how long it took", TABLE, HALF),
     WidgetSpec("class_mix", "Class mix", "Players of each class in the last raid", BARS, HALF),
     WidgetSpec("interrupts", "Interrupt casts", "Most interrupt abilities cast in the last raid", TABLE, HALF),
-    WidgetSpec("consumables", "Consumables", "Most consumables used in the last raid", TABLE, HALF),
+    WidgetSpec(
+        "consumables", "Consumables", "Most consumables used in the last raid, not counting flasks", TABLE, HALF
+    ),
     WidgetSpec(
         "flasks", "Flasks and elixirs", "Who had a flask or a battle and guardian elixir in the last raid", TABLE, HALF
     ),
@@ -751,9 +753,12 @@ class HomeService:
 
     def _consumables(self, s: _Snapshot, w: HomeWidget) -> None:
         a = s.last_analysis
+        catalog = load_catalog()
         counts: Counter = Counter()
         roles: dict[str, str] = {}
         for c in a.consumables if a else []:
+            if catalog.kind_of(c.consumable_name):
+                continue  # flasks and elixirs have their own widget
             counts[c.player_name] += c.count
             roles[c.player_name] = c.player_role
         if not counts:

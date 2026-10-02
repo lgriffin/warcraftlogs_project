@@ -47,7 +47,7 @@ as "x20".
 | id                    | name           | counts                                            | thresholds        |
 |-----------------------|----------------|---------------------------------------------------|-------------------|
 | `attendance`          | Loyal Toad     | raids attended                                    | 5, 15, 40, 100    |
-| `well_stocked`        | Well Stocked   | every consumable                                  | 50, 250, 750, 2000 |
+| `well_stocked`        | Well Stocked   | every consumable except flasks and elixirs        | 50, 250, 750, 2000 |
 | `mana_potions`        | Mana Guzzler   | mana potions, Bottled Nethergon Energy, Dreamless Sleep | 10, 50, 150, 400 |
 | `healing_potions`     | Survivor       | healing and rejuvenation potions, healthstones, Nightmare Seed | 10, 40, 100, 250 |
 | `combat_potions`      | Liquid Courage | Destruction, Haste, Heroic, Insane Strength, Ironshield, Mad Alchemist's, Mighty Rage | 10, 50, 150, 400 |
@@ -56,10 +56,11 @@ as "x20".
 | `explosives`          | Sapper         | sapper charges, grenades, bombs, flame turrets    | 10, 50, 150, 400  |
 | `weapon_enhancements` | Sharpened      | weapon oils and stones                            | 5, 20, 50, 120    |
 | `scrolls`             | Scholar        | Scrolls of Agility and Strength                   | 5, 20, 50, 120    |
-| `flasked`             | Flask Bearer   | raids with a flask, or a battle and a guardian elixir (below) | 5, 15, 40, 100 |
+| `flasked`             | Flask Bearer   | raids with a flask or an elixir pair (below)      | 5, 15, 40, 100    |
 
 Consumable names are those `wcl_core/data/consumes_config.json` records, matched ignoring case. Flask Bearer's
-catalogue entry is `{"id": "flasked", "name": "Flask Bearer", "icon": "flask", "glyph": "⚗️", "unit": "raids", ...}`.
+catalogue entry is `{"id": "flasked", "name": "Flask Bearer", "icon": "flask", "glyph": "⚗️", "unit": "raids"}`
+plus its tiers.
 
 ## Flasks and elixirs
 
@@ -67,7 +68,8 @@ catalogue entry is `{"id": "flasked", "name": "Flask Bearer", "icon": "flask", "
 `battle_elixirs`, `guardian_elixirs`) by the aura id WarcraftLogs reports. They are drunk before the pull, so they are
 read from each player's buffs table (the same call the buff consumables use), not from casts, and stored as ordinary
 consumable rows: `count` is how many times the aura was applied, `timestamps` when. They therefore show up in the
-`consumables` and `flasks` Home widgets, the reference comparison and the lineage consumables with no extra work.
+`flasks` Home widget, the reference comparison and the lineage consumables with no extra work. Well Stocked and the
+`consumables` Home widget leave them out, since a flask aura can be applied several times a raid.
 
 A player is **prepared** for a raid with a flask, or with a battle elixir and a guardian elixir together (in TBC a
 flask counts as both). `wcl_core.flasks.preparation(names, catalog)` returns `"flask"`, `"elixirs"` or `""`, and
@@ -76,7 +78,8 @@ Flask Bearer counts prepared raids; lineage adds a "Flask or elixir pair" metric
 share of raids prepared) once a character has any flask or elixir on record.
 
 At analysis time `RaidAnalysis.flask_coverage` also says, per player, which boss pulls (kills and wipes) began with a
-flask or an elixir pair up (within 5 seconds of the pull). It is not stored yet, so a raid read back from storage has an
+flask or an elixir pair up (within 5 seconds of the pull). Each player is scored only on the pulls the fight's
+`friendlyPlayers` list puts them in, so `boss_pulls` is their own pull count. It is not stored yet, so a raid read back from storage has an
 empty list. `FlaskCoverage.to_dict()`:
 
 ```json

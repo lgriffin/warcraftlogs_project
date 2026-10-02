@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 import requests
 
 from .client import WarcraftLogsClient
-from .flasks import FlaskCatalog, boss_pulls, flask_coverage
+from .flasks import BossPull, FlaskCatalog, boss_pulls, flask_coverage, pull_starts_for
 from .models import (
     RESOURCE_TYPES,
     AuraBand,
@@ -164,6 +164,9 @@ def analyze_raid(
     logger.info("  dps analyzed: %d melee, %d ranged", len(melee_dps), len(ranged_dps))
 
     _progress("Analyzing consumables...")
+    if fights is None:
+        # Retry now rather than in encounter analysis, so flask coverage gets the pulls too.
+        fights = _retry_fights(client, report_id, all_warnings)
     consumables, flask_cov, consume_warns = _analyze_consumables_and_flasks(
         client, report_id, composition, boss_pulls(fights or [])
     )
@@ -759,6 +762,19 @@ def _load_consumes_config() -> dict:
         return json.load(f)
 
 
+def _retry_fights(client: WarcraftLogsClient, report_id: str, warnings: list[str]) -> list[dict] | None:
+    """The report's fights, or None (with a warning) if the fetch fails again.
+
+    Encounter analysis then tries once more on its own.
+    """
+    try:
+        return client.get_fights(report_id)
+    except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+        logger.error("  fight fetch failed again: %s", e)
+        warnings.append(f"Fight fetch failed, so flask coverage was skipped: {e}")
+        return None
+
+
 def _analyze_consumables(
     client: WarcraftLogsClient,
     report_id: str,
@@ -772,9 +788,9 @@ def _analyze_consumables_and_flasks(
     client: WarcraftLogsClient,
     report_id: str,
     composition: RaidComposition,
-    pulls: list[int],
+    pulls: list[BossPull],
 ) -> tuple[list[ConsumableUsage], list[FlaskCoverage], list[str]]:
-    """Consumables per player, and which ``pulls`` (boss pull start times) each had a flask or elixir pair for.
+    """Consumables per player, and which of the boss ``pulls`` they were in each had a flask or elixir pair for.
 
     Flasks and elixirs are auras, so they are read from the same buffs table as ``buff_consumables`` and recorded
     as consumables too; coverage is only worked out when there are boss pulls.
@@ -794,7 +810,8 @@ def _analyze_consumables_and_flasks(
             auras = _player_auras(client, report_id, player.source_id)
             results.extend(_buff_consumables(player, report_id, auras, buff_ids))
             if pulls:
-                coverage.append(flask_coverage(player, report_id, auras, pulls, catalog))
+                starts = pull_starts_for(pulls, player.source_id)
+                coverage.append(flask_coverage(player, report_id, auras, starts, catalog))
         except (requests.RequestException, KeyError, TypeError, ValueError) as e:
             logger.error("Error analyzing buff consumables for %s: %s", player.name, e)
             warnings.append(f"Failed to analyze consumables for {player.name}: {e}")

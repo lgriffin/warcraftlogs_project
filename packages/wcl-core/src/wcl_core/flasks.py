@@ -8,7 +8,8 @@ battle elixir and one guardian elixir together. The aura ids and names are the `
 Flasks and elixirs are drunk before the pull and last one to two hours, so they never show in cast events and are read
 from the buffs table instead: each aura there has ``bands`` (``startTime``/``endTime``, report-relative ms), and WCL
 opens a band at the start of a fight for an aura the player already had when it began. A boss pull is covered when a
-band is up within ``PULL_GRACE_MS`` of the pull starting.
+band is up within ``PULL_GRACE_MS`` of the pull starting. Each player is scored only on the pulls they were in, from the
+fight's ``friendlyPlayers`` (actor ids); a fight without that list counts for everyone.
 """
 
 from __future__ import annotations
@@ -95,9 +96,32 @@ def preparation(names: Iterable[str], catalog: FlaskCatalog) -> str:
     return preparation_of_kinds({catalog.kind_of(n) for n in names})
 
 
-def boss_pulls(fights: Iterable[Mapping[str, Any]]) -> list[int]:
-    """Start times of every boss pull (a fight with an encounter id, killed or not), in order."""
-    return sorted(int(f.get("startTime") or 0) for f in fights if f.get("encounterID"))
+@dataclass(frozen=True)
+class BossPull:
+    """One boss pull: when it began and the actor ids in it (None when the fight did not say)."""
+
+    start: int
+    players: frozenset[int] | None = None
+
+    def includes(self, source_id: int) -> bool:
+        return self.players is None or source_id in self.players
+
+
+def boss_pulls(fights: Iterable[Mapping[str, Any]]) -> list[BossPull]:
+    """Every boss pull (a fight with an encounter id, killed or not), in start order."""
+    pulls = []
+    for f in fights:
+        if not f.get("encounterID"):
+            continue
+        friendly = f.get("friendlyPlayers")
+        players = frozenset(int(p) for p in friendly) if isinstance(friendly, list) else None
+        pulls.append(BossPull(int(f.get("startTime") or 0), players))
+    return sorted(pulls, key=lambda p: p.start)
+
+
+def pull_starts_for(pulls: Iterable[BossPull], source_id: int) -> list[int]:
+    """Start times of the pulls the actor ``source_id`` was in."""
+    return [p.start for p in pulls if p.includes(source_id)]
 
 
 def _up_at(band: Mapping[str, Any], start: int) -> bool:
@@ -111,7 +135,8 @@ def flask_coverage(
     pulls: list[int],
     catalog: FlaskCatalog,
 ) -> FlaskCoverage:
-    """Which boss pulls ``player`` had a flask or an elixir pair up for, from their buffs-table ``auras``."""
+    """Which of ``pulls`` (start times of the pulls ``player`` was in) they had a flask or an elixir pair up for, from
+    their buffs-table ``auras``."""
     tracked = [(catalog.auras[a["guid"]], a.get("bands") or []) for a in auras if a.get("guid") in catalog.auras]
     coverage = FlaskCoverage(player.name, player.role, report_id, boss_pulls=len(pulls))
     by_kind: dict[str, list[str]] = {FLASK: [], BATTLE_ELIXIR: [], GUARDIAN_ELIXIR: []}

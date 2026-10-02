@@ -1086,7 +1086,11 @@ class PostgresRaidRepository:
         stmt = (
             select(c.c.name, cu.c.raid_id, cu.c.consumable_name)
             .select_from(cu.join(r, r.c.id == cu.c.raid_id).join(c, c.c.id == cu.c.character_id))
-            .where(cu.c.count > 0, cu.c.consumable_name.in_(consumable_names), r.c.source.in_(sources))
+            .where(
+                cu.c.count > 0,
+                nocase(cu.c.consumable_name).in_([_codec.ascii_lower(n) for n in consumable_names]),
+                r.c.source.in_(sources),
+            )
         )
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))

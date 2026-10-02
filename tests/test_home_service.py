@@ -268,7 +268,8 @@ class TestWidgets:
 
     def test_consumables(self, service):
         rows = _widget(service, "consumables").rows
-        assert [(r.values["name"], r.values["used"]) for r in rows] == [("HolyPriest", 3), ("FrostMage", 2)]
+        # FrostMage's Flask of Supreme Power is left out: flasks and elixirs have their own widget.
+        assert [(r.values["name"], r.values["used"]) for r in rows] == [("HolyPriest", 3), ("FrostMage", 1)]
         assert rows[0].cells["role"] == "Healer"
 
     def test_flasks_lists_the_roster_unprepared_first(self, service):
