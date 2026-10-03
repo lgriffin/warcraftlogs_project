@@ -499,6 +499,8 @@ class MainWindow(QMainWindow):
 
     def _on_profile_changed(self, name: str):
         self._refresh_scoped_views()
+        self.raids_hub.download_view.profile_changed()
+        self._load_guild_info()
         # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
         # views' own messages.
         self.status_bar.showMessage(f"Raid profile: {name}")
@@ -555,22 +557,17 @@ class MainWindow(QMainWindow):
             self._load_guild_info()
 
     def _load_guild_info(self):
-        try:
-            from wcl_core.config import load_config
+        """Show the guild imports come from: the active profile's, else the configured one."""
+        from .worker import GuildInfoWorker, import_guild
 
-            config = load_config()
-            guild_id = config.get("guild_id", 0)
-            client_id = config.get("client_id", "")
-            if not guild_id or not client_id:
-                return
-        except Exception:
+        guild_id = import_guild()
+        if guild_id is None:
             return
-
-        from .worker import GuildInfoWorker
-
         if getattr(self, "_guild_info_worker", None) and self._guild_info_worker.isRunning():
+            self._guild_info_stale = True  # a switch while it runs: ask again when it lands
             return
 
+        self._guild_info_stale = False
         self._guild_info_worker = GuildInfoWorker(guild_id)
         self._guild_info_worker.finished.connect(self._on_guild_info_loaded)
         self._guild_info_worker.start()
@@ -605,6 +602,8 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _on_guild_info_loaded(self, info: dict):
+        if getattr(self, "_guild_info_stale", False):
+            QTimer.singleShot(0, self._load_guild_info)
         name = info.get("name", "")
         server = info.get("server", "")
         if name and server:

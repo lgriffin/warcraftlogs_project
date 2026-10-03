@@ -61,6 +61,27 @@ Feature: Raid profiles and Discord identity
     When the CLI runs the consumes command
     Then the command should import from "https://classic.warcraftlogs.com/api/v2/client"
 
+  @ears_state_driven
+  Scenario: PROF-10 While a profile is active, the guild list shall show only its guild and era
+    Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
+    When the "The Burning Crusade" profile for guild 9 becomes active
+    Then the guild report list should hold Karazhan and Nowhere Keep, asked of guild 9
+
+  @ears_event_driven @database
+  Scenario: PROF-11 When a profile imports a raid, the profile shall list it without a backfill
+    Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
+    And no raid is stored
+    When the "The Burning Crusade" profile for guild 9 becomes active
+    And Karazhan is fetched from Warcraft Logs and saved
+    Then Karazhan should be on "fresh" in "The Burning Crusade"
+    And the profile's raid list should hold Karazhan only
+
+  @ears_unwanted_behavior
+  Scenario: PROF-12 If a profile's site is not the client's, then the service shall import nothing
+    Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
+    When a profile on "forever" is activated
+    Then importing the guild's new reports should fail without asking Warcraft Logs anything
+
   @ears_ubiquitous @auth
   Scenario: IDENT-01 The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, holding no client secret
     When the user signs in with Discord in the browser for the application "app"

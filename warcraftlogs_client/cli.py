@@ -25,7 +25,7 @@ from .version import __version__
 
 if TYPE_CHECKING:
     from .database import PerformanceDB
-    from .services import AppContext, PlayerLog, PlayerRef, Profile, ProfileService, Spread
+    from .services import AppContext, PlayerLog, PlayerRef, Profile, ProfileService, RaidService, Spread
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -175,6 +175,9 @@ def _add_profile_parser(subparsers: "argparse._SubParsersAction[argparse.Argumen
     create_parser.add_argument("--since", help="Earliest raid date, YYYY-MM-DD")
     create_parser.add_argument("--until", help="Raid date to stop before, YYYY-MM-DD")
     create_parser.add_argument("--guild-id", type=int, help="Guild to import from (default: config)")
+    create_parser.add_argument(
+        "--api-url", help="Warcraft Logs API URL to import from (default: the game version's site, else config)"
+    )
     create_parser.add_argument("--use", action="store_true", help="Make it the active profile")
 
     use_parser = profile_sub.add_parser("use", help="Pick the active profile; no name means every raid")
@@ -187,6 +190,9 @@ def _add_profile_parser(subparsers: "argparse._SubParsersAction[argparse.Argumen
     delete_parser.add_argument("slug", help="Profile slug")
 
     profile_sub.add_parser("backfill", help="Tag stored raids with their game version and expansion")
+
+    import_parser = profile_sub.add_parser("import", help="Import the guild's new reports in the active profile's era")
+    import_parser.add_argument("--list", action="store_true", help="Only list them")
 
 
 def _add_discord_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -640,9 +646,11 @@ def run_profile_command(args: argparse.Namespace) -> int:
 
     action = getattr(args, "profile_command", None)
     if not action:
-        print("Specify an action: list, create, use, show, delete or backfill.")
+        print("Specify an action: list, create, use, show, delete, backfill or import.")
         return 1
-    service = _profile_service(need_config=action == "backfill")
+    service = _profile_service(need_config=action in ("backfill", "import"))
+    if action == "import" and service.ctx is not None:
+        return _profile_import(RaidService(service.ctx), only_list=args.list)
 
     if action == "list":
         profiles = service.profiles()
@@ -662,6 +670,7 @@ def run_profile_command(args: argparse.Namespace) -> int:
             since=_day_start(args.since),
             until=_day_start(args.until),
             guild_id=args.guild_id,
+            wcl_api_url=args.api_url,
             activate=args.use,
         )
         print(f"Created profile '{created.name}' ({created.slug}){' and made it active' if args.use else ''}.")
@@ -693,6 +702,23 @@ def run_profile_command(args: argparse.Namespace) -> int:
         print(f"Tagged {changed} raid(s) with a game version and expansion.")
         return 0
     return 1
+
+
+def _profile_import(raids: "RaidService", *, only_list: bool) -> int:
+    """``profile import``: the guild's reports in the active profile's era that are not stored yet."""
+    from .services import ProfileSiteUnknown
+
+    try:
+        new = raids.new_guild_reports()
+        if not only_list:
+            raids.import_missing([r["code"] for r in new], progress=print)
+    except (ProfileSiteUnknown, WarcraftLogsError, requests.RequestException, ValueError) as e:
+        print(f"Import failed: {e}")
+        return 1
+    for r in new:
+        print(f"{r['code']:<18} {r.get('zone') or '':<22} {r.get('expansion') or '':<22} {r['title']}")
+    print(f"{len(new)} new report(s){' to import' if only_list else ' imported'}.")
+    return 0
 
 
 def run_discord_command(args: argparse.Namespace) -> int:

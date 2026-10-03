@@ -20,6 +20,16 @@ from ..services import (
 )
 
 
+def import_guild() -> int | None:
+    """The guild the Download view and the header follow: the saved profile's, else config's. None until there is
+    one and the Warcraft Logs keys are set."""
+    try:
+        ctx = AppContext.desktop()
+    except (OSError, ValueError, KeyError, WarcraftLogsError):
+        return None
+    return ctx.guild_id if ctx.config.get("client_id") else None
+
+
 class AnalysisWorker(QThread):
     """Runs raid analysis in a background thread."""
 
@@ -99,12 +109,12 @@ class GuildInfoWorker(QThread):
 
 
 class GuildReportsWorker(QThread):
-    """Fetches guild report list in a background thread."""
+    """Fetches guild report list in a background thread: the active profile's guild and era unless given one."""
 
     finished = Signal(list)
     error = Signal(str)
 
-    def __init__(self, guild_id: int, parent=None):
+    def __init__(self, guild_id: int | None = None, parent=None):
         super().__init__(parent)
         self.guild_id = guild_id
 

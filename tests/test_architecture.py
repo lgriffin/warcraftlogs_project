@@ -56,7 +56,6 @@ KNOWN_VIOLATIONS = {
     # Desktop views still reach past services
     ("gui.boss_insights_view", "database"),
     ("gui.character_view", "database"),
-    ("gui.download_view", "config"),
     ("gui.download_view", "database"),
     ("gui.encounter_deep_dive_view", "client"),
     ("gui.encounter_worker", "analysis"),

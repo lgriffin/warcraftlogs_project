@@ -1,6 +1,6 @@
 # Discord identity and raid profiles
 
-Plan revision 3, 2026-10-03. Phase 1 merged as PR #144 (341b049); phase 2.1 in review.
+Plan revision 4, 2026-10-03. Phases 1, 2.1 to 2.3 and Q merged (PRs #144 to #158); phase 3 in review.
 Status: **experimental**. Order of precedence, as in ESI.ts: running code and CI are the fact, the requirements
 below are the intent, this guide is the how, the phase map is the order.
 
@@ -70,10 +70,17 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | PROF-09 | The desktop shall show and switch the active profile and its raid count. | Enforced | see below |
+| PROF-10 | While a profile is active, the guild list shall show only its guild and era. | Enforced | see below |
+| PROF-11 | When a profile imports a raid, the profile shall list it without a backfill. | Enforced | see below |
+| PROF-12 | If a profile's site is not the client's, then the service shall import nothing. | Enforced | see below |
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
 PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
 contract tests on both backends.
+PROF-10 evidence: `tests/test_import_by_profile.py` and
+`test_a_scope_admits_exactly_the_raids_the_store_returns_for_it` on both backends. PROF-11 evidence:
+`test_a_raid_imported_under_a_profile_is_listed_by_it_without_a_backfill`. PROF-12 evidence:
+`test_a_profile_whose_site_is_unknown_refuses_to_import`.
 PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence:
 `tests/gui/test_profile_switcher.py`, `test_the_home_page_follows_a_later_profile_switch` and
 `tests/gui/test_characters_hub.py`.
@@ -199,11 +206,11 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1 to 2.3b merged; 2.3c in review | PROF-07 to PROF-09 |
-| 3 | Import by profile | Planned | |
+| 2 | Scoped services and frontends | 2.1 to 2.3 merged (#145 to #149); 2.4 planned | PROF-07 to PROF-09 |
+| 3 | Import by profile | 3.1 and 3.2 in review; 3.3 waits on Warcraft Logs | PROF-10 to PROF-12 |
 | 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05, IDENT-06 |
 | 5 | Retire the single-host config | Planned | |
-| Q | Quality bar: the ESI.ts gates in Python | Planned, runs alongside 2 to 5 | section below |
+| Q | Quality bar: the ESI.ts gates in Python | Merged (#150 to #158) | section below, `guides/CHARTER.md` |
 
 Each phase is a set of PRs that merge alone, one concern per PR, with a definition of done checkable from CI.
 
@@ -248,10 +255,21 @@ profile's name and count; `KNOWN_VIOLATIONS` is no larger.
 
 ### Phase 3: import by profile
 
+Decided 2026-10-03: an import under a profile pulls only that profile's era. A player may later opt into several
+game versions; that is a profile with several game versions, not a change to this rule.
+
 Order:
-1. The download view and `import_missing` fetch the guild list from the profile's guild and host.
-2. Imports tag the era from the API, so `backfill_eras()` becomes a one-off for old databases.
-3. `HOSTS` gains `forever` when Warcraft Logs announces its site; a Forever profile then imports from it.
+1. The download view, the CLI's `profile import` and `RaidService.guild_reports()` / `new_guild_reports()` /
+   `import_new()` read the profile's guild and host and keep only the reports inside its scope.
+   `RaidScope.admits` is the store's scope rule for a raid not stored yet (the contract checks they agree on both
+   backends); the guild list asks Warcraft Logs for each report's `zone { expansion }`. A profile switch drops the
+   download view's list.
+2. Imports tag the era from the API (`get_report_metadata`), so `backfill_eras()` is a one-off for old databases.
+   An import, a guild list or a guild analysis under a profile whose game version is not the client's site raises
+   `ProfileSiteUnknown` before any request, rather than filing Forever raids under `fresh`. `profile create
+   --api-url` gives a profile its own site.
+3. `HOSTS` gains `forever` when Warcraft Logs announces its site; a Forever profile then imports from it with no
+   other change. Until then a Forever profile can read but not import.
 Definition of done: a profile with its own guild id imports only that guild's reports; a raid imported under a
 profile is listed by it without a backfill.
 
