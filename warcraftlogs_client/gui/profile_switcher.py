@@ -114,6 +114,11 @@ class ProfileSwitcher(QWidget):
         worker.deleteLater()
 
     def wait_for_counts(self, msecs: int = 5000) -> None:
-        """Let running counts finish; the window calls this on close."""
+        """Let running counts finish before the switcher (their parent) goes away; a running QThread must not be
+        destroyed."""
         for worker in list(self._workers):
             worker.wait(msecs)
+
+    def closeEvent(self, event):
+        self.wait_for_counts()
+        super().closeEvent(event)

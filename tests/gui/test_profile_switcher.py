@@ -28,8 +28,13 @@ def service(tmp_path, build_analysis):
 def _switcher(qtbot, service):
     switcher = ProfileSwitcher(service)
     qtbot.addWidget(switcher)
-    qtbot.waitUntil(lambda: switcher.count_label.text() not in ("", "counting..."))
+    _settle(qtbot, switcher)
     return switcher
+
+
+def _settle(qtbot, switcher):
+    """Wait until every count has landed and its worker has finished, so teardown never meets a running thread."""
+    qtbot.waitUntil(lambda: switcher.count_label.text() not in ("", "counting...") and not switcher._workers)
 
 
 def test_count_text():
@@ -50,9 +55,10 @@ class TestProfileSwitcher:
             switcher.combo.setCurrentIndex(1)
         assert changed.args == ["TBC"]
         assert service.active().slug == "tbc" and service.ctx.profile is not None
-        qtbot.waitUntil(lambda: switcher.count_label.text() == "1 raid")
-        with qtbot.waitSignal(switcher.count_changed):
-            switcher.combo.setCurrentIndex(0)
+        _settle(qtbot, switcher)
+        assert switcher.count_label.text() == "1 raid"
+        switcher.combo.setCurrentIndex(0)
+        _settle(qtbot, switcher)
         assert service.active() is None and switcher.count_label.text() == "2 raids"
 
     def test_a_count_for_an_earlier_switch_is_dropped(self, qtbot, service):
@@ -66,4 +72,3 @@ class TestProfileSwitcher:
         assert switcher.combo.currentText() == "TBC"
         assert switcher.active_name() == "TBC"
         assert switcher.count_label.text() == "1 raid"
-        switcher.wait_for_counts()
