@@ -262,8 +262,11 @@ def run_consumes_analysis(args: argparse.Namespace) -> int:
     try:
         from wcl_core.consumes_analysis import run_consumes_analysis as _run
 
+        from .services import AppContext
+
         md_path = getattr(args, "md", None)
-        _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path)
+        client = AppContext.desktop().wcl_client  # the saved profile's host, like every other command
+        _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path, client=client)
         return 0
     except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running consumes analysis: {e}")

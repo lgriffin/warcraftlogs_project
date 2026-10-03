@@ -579,15 +579,20 @@ class ConsumesAnalyzer:
 
 
 def run_consumes_analysis(
-    raid_ids: list[str], output_csv: str | None = None, include_healers: bool = False, markdown_path: str | None = None
+    raid_ids: list[str],
+    output_csv: str | None = None,
+    include_healers: bool = False,
+    markdown_path: str | None = None,
+    client: WarcraftLogsClient | None = None,
 ) -> None:
-    """Run consumables analysis for multiple raid IDs."""
-    from .auth import TokenManager
-    from .config import load_config
+    """Run consumables analysis for multiple raid IDs, on ``client`` or one built from the config file."""
+    if client is None:
+        from .auth import TokenManager
+        from .config import load_config
 
-    config = load_config()
-    token_mgr = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
+        config = load_config()
+        token_mgr = TokenManager(config["client_id"], config["client_secret"])
+        client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
 
     analyzer = ConsumesAnalyzer(include_healers=include_healers)
 
