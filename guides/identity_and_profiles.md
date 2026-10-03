@@ -302,8 +302,9 @@ with no profile on, or under a profile that names no site or guild of its own.
 
 Order:
 1. (built) `wcl_core.config.configured_api_url` / `configured_guild_id` are the only readers of the raw keys, and
-   `AppContext.api_url` / `guild_id` put the active profile in front of them. Report links follow the raid's own
-   game version, with the configured site only for raids stored before eras were read.
+   `AppContext.api_url` / `guild_id` put the active profile in front of them. A stored raid reloads with its zone and
+   era (both backends), so report links follow its own game version, with the configured site only for raids
+   stored before eras were read.
    `AppContext.client_for(game_version)` gives a client on a stored raid's site, so the encounter deep dive reads a
    Classic raid from Classic whatever profile is on; the window no longer builds a client from config, and three
    `KNOWN_VIOLATIONS` entries go. The Warcraft Logs sign-in for reference reports stays on the configured site.

@@ -205,3 +205,44 @@ class TestAClientForARaidsSite:
         assert AppContext(config={"guild_id": "not a number"}).guild_id is None
         assert AppContext(config={"guild_id": "42", "wcl_api_url": " "}).guild_id == 42
         assert AppContext(config={"wcl_api_url": " "}).api_url is None
+
+
+class TestTheSiteARaidCameFrom:
+    CONFIG = TestAClientForARaidsSite.CONFIG
+
+    def test_a_raid_without_an_era_came_from_the_configured_site_whatever_profile_is_on(self):
+        from wcl_app import AppContext
+        from wcl_app.profiles import Profile
+
+        ctx = AppContext(config=dict(self.CONFIG))
+        ctx.use_profile(Profile("era", "Era", game_version="classic"))
+        assert ctx.wcl_client.api_url == "https://classic.warcraftlogs.com/api/v2/client"
+        assert ctx.client_for(None).api_url == "https://fresh.warcraftlogs.com/api/v2/client"
+        assert ctx.client_for("forever").api_url == "https://fresh.warcraftlogs.com/api/v2/client"
+        assert ctx.client_for("classic") is ctx.wcl_client
+
+    def test_the_profiles_own_host_serves_its_own_game_version(self):
+        from wcl_app import AppContext
+        from wcl_app.profiles import Profile
+
+        ctx = AppContext(config=dict(self.CONFIG))
+        ctx.use_profile(Profile("mirror", "Mirror", game_version="classic", wcl_api_url="https://wcl.pond.test/api"))
+        assert ctx.client_for("classic") is ctx.wcl_client
+        assert ctx.wcl_client.api_url == "https://wcl.pond.test/api"
+        assert ctx.client_for("sod").api_url == "https://sod.warcraftlogs.com/api/v2/client"
+
+    def test_with_nothing_configured_the_main_site_is_the_source(self):
+        from wcl_app import AppContext
+
+        ctx = AppContext(config={"client_id": "id", "client_secret": "secret"})
+        assert ctx.client_for(None) is ctx.wcl_client
+        assert ctx.client_for(None).api_url == "https://www.warcraftlogs.com/api/v2/client"
+
+
+def test_a_malformed_configured_url_signs_in_on_the_main_site(monkeypatch):
+    from wcl_core import config, user_auth
+
+    monkeypatch.setattr(config, "load_config", lambda: {"wcl_api_url": "https://[broken/api/v2/client"})
+    assert user_auth._get_base_url() == "https://www.warcraftlogs.com"
+    monkeypatch.setattr(config, "load_config", lambda: {"wcl_api_url": "https://classic.warcraftlogs.com/api"})
+    assert user_auth._get_base_url() == "https://classic.warcraftlogs.com"

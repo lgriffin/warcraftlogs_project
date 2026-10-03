@@ -3140,6 +3140,9 @@ class PerformanceDB:
             owner=raid_row["owner"] or "",
             start_time=raid_row["start_time"],
             end_time=raid_row["end_time"],
+            zone=raid_row["zone"],
+            game_version=raid_row["game_version"],
+            expansion=raid_row["expansion"],
         )
 
         healers = self._load_healers_for_raid(conn, raid_id)

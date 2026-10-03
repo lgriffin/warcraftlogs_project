@@ -687,6 +687,9 @@ class PostgresRaidRepository:
                 owner=raid.owner or "",
                 start_time=raid.start_time,
                 end_time=raid.end_time,
+                zone=raid.zone,
+                game_version=raid.game_version,
+                expansion=raid.expansion,
             )
             healers = self._load_healers(conn, raid.id)
             tanks = self._load_tanks(conn, raid.id)

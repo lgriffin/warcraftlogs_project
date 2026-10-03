@@ -200,13 +200,24 @@ class AppContext:
     def client_for(self, game_version: str | None) -> WarcraftLogsClient:
         """A client on the site a raid of *game_version* was fetched from, for reading more of that raid.
 
-        The context's own client when that is the same site, the site is unknown (``forever`` until it is
-        announced, or a raid stored before eras were read) or the host is headless and brings its own client.
+        The active profile's own host for its own game version (it may name a custom API URL); otherwise the
+        version's site. A raid stored before eras were read, or of a version whose site is not announced yet, came
+        from the configured site. The context's own client is reused when the site is the same, and a headless host
+        always gets the client it brought.
         """
-        url = api_url_for(game_version) if game_version else None
-        if url is None or self._headless or url == (self.api_url or DEFAULT_API_URL).rstrip("/"):
+        if self._headless:
+            return self.wcl_client
+        url = self._source_url(game_version).rstrip("/")
+        if url == (self.api_url or DEFAULT_API_URL).rstrip("/"):
             return self.wcl_client
         return WarcraftLogsClient(self._token_manager(), api_url=url)
+
+    def _source_url(self, game_version: str | None) -> str:
+        profile = self.profile
+        if game_version and profile is not None and profile.game_version == game_version and profile.api_url:
+            return profile.api_url
+        known = api_url_for(game_version) if game_version else None
+        return known or configured_api_url(self.config) or DEFAULT_API_URL
 
     def _token_manager(self) -> "TokenManager":
         from wcl_core.auth import TokenManager
