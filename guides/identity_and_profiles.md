@@ -54,18 +54,19 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 
 | ID | Requirement | Status | Evidence |
 | --- | --- | --- | --- |
-| PROF-01 | When a raid is imported, the store shall record its game version and expansion, and shall never blank a stored value with an unknown one. | Enforced | `tests/test_store_contract.py::test_import_stores_the_era_and_keeps_it_when_stored_again` |
-| PROF-02 | When a read takes a `RaidScope`, the store shall return only raids inside it, and a raid whose era is unknown shall match every scope on that axis. | Enforced | `test_scope_filters_raids_by_era_and_unknown_eras_match_every_scope`, both backends |
+| PROF-01 | When a raid is imported, the store shall record its game version and expansion without blanking a stored value with an unknown one. | Enforced | `tests/test_store_contract.py::test_import_stores_the_era_and_keeps_it_when_stored_again` |
+| PROF-02 | When a read takes a `RaidScope`, the store shall return only raids inside it, counting a raid whose era is unknown as inside every scope on that axis. | Enforced | `test_scope_filters_raids_by_era_and_unknown_eras_match_every_scope`, both backends |
 | PROF-03 | When no profile is active, every service shall behave exactly as before profiles existed. | Enforced | `scope=None` keeps each method's historic path; `test_count_raids_counts_each_source` and the rest of the contract run unchanged |
-| PROF-04 | When a profile names a game version with a known site, the context shall import from that site; otherwise it shall keep the configured host. | Enforced | `tests/test_profiles.py::test_switching_profiles_rebuilds_the_client_for_the_host`, `test_api_url_follows_the_game_version_unless_given` |
+| PROF-04 | When a profile names a game version whose site is known, the context shall import from that site; any other profile keeps the configured host. | Enforced | `tests/test_profiles.py::test_switching_profiles_rebuilds_the_client_for_the_host`, `test_api_url_follows_the_game_version_unless_given` |
 | PROF-05 | When a profile is created while an identity is linked, the profile shall carry that Discord id as its owner. | Enforced | `test_create_activate_and_delete` |
-| PROF-06 | When raids stored before this change are backfilled, the service shall tag each from its zone and the configured host, and shall leave an unknown zone's expansion unset. | Enforced | `test_backfill_tags_stored_raids_from_the_zone_and_the_configured_host` |
+| PROF-06 | When raids stored before this change are backfilled, the service shall tag each from its zone and the configured host, leaving an unknown zone's expansion unset. | Enforced | `test_backfill_tags_stored_raids_from_the_zone_and_the_configured_host` |
 | PROF-07 | Each raid-reading service shall use the active scope at read time. | Enforced | see below |
-| IDENT-01 | The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, and shall hold no client secret. | Enforced | `tests/test_discord_auth.py::TestPkce`, `test_complete_auth_exchanges_the_code_with_the_verifier_and_reads_who` |
+| IDENT-01 | The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, holding no client secret. | Enforced | `tests/test_discord_auth.py::TestPkce`, `test_complete_auth_exchanges_the_code_with_the_verifier_and_reads_who` |
 | IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
 | IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
 | IDENT-04 | When `DISCORD_OAUTH_URL` is set, the flow shall use that site, so the Toads fake Discord serves development. | Enforced | `test_oauth_url_can_point_at_the_fake_discord` |
-| IDENT-05 | A linked app shall be able to register with the Toads Hub and the bot shall resolve a Discord user to their profile. | Gap | Phase 4 |
+| IDENT-05 | A linked app shall be able to register with the Toads Hub. | Gap | Phase 4 |
+| IDENT-06 | When the bot sees a Discord user, it shall resolve them to their profile. | Gap | Phase 4 |
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | PROF-09 | The desktop shall show and switch the active profile and its raid count. | Enforced | see below |
@@ -200,7 +201,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
 | 2 | Scoped services and frontends | 2.1 to 2.3b merged; 2.3c in review | PROF-07 to PROF-09 |
 | 3 | Import by profile | Planned | |
-| 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
+| 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05, IDENT-06 |
 | 5 | Retire the single-host config | Planned | |
 | Q | Quality bar: the ESI.ts gates in Python | Planned, runs alongside 2 to 5 | section below |
 
@@ -261,8 +262,8 @@ Order:
    access token; the Hub checks the id against its members) and exposes the profile list for that member.
 2. Hub side (in the Toads repo, pinned to this one): resolve a Discord user to their profiles; bot commands take a
    profile slug.
-Definition of done: IDENT-05 Enforced by a contract test against a fake Hub, the way `DISCORD_OAUTH_URL` points at
-the fake Discord.
+Definition of done: IDENT-05 and IDENT-06 Enforced by contract tests against a fake Hub, the way
+`DISCORD_OAUTH_URL` points at the fake Discord.
 
 ### Phase 5: retire the single-host config
 
@@ -282,7 +283,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Coverage floors below measured, only up | `fail_under = 70` in `pyproject.toml`, documented as only going up | Raise toward the measured value; add branch coverage |
 | Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
-| EARS specification, one `shall` per Rule, `spec:audit` | `tests/features/` Gherkin with pytest-bdd | A `Rule:` per requirement with the ID (`PROF-01`), an audit script that checks one `shall` per Rule and that every ID in this guide has a scenario |
+| EARS specification, one `shall` per Rule, `spec:audit` | Enforced for form and evidence, see below | A scenario for each PROF and IDENT ID |
 | Mock only at the transport seam (`lint:bdd-seam`) | step defs mock `requests.post` and services variously | A fake `WarcraftLogsClient` transport in a shipped `wcl_core.testing` module; BDD steps use it, nothing patches a service method |
 | `./testing` export: `createMockTransport`, `TestDataFactory` | `tests/conftest.py` fixtures only | `wcl_core.testing` (fake GraphQL transport, `RaidAnalysis` factory) so the Hub tests the same way |
 | API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
@@ -304,9 +305,15 @@ says why, every test function asserts (or uses `pytest.raises`, a mock's `assert
 module helper that asserts), and no `except Exception`/bare `except`/`suppress(Exception)` drops the exception. It
 has no allow-list; each rule has its own test on a small source.
 
+`tests/test_spec_audit.py` audits the specification. Each scenario in `tests/features/` holds one `shall`, carries
+one `@ears_*` tag, and opens with that pattern's word (When, While, If, Where, or none for ubiquitous). Every feature
+file is bound by a step module. Every row of the requirements table above holds one `shall` and a known status, and an
+Enforced row names tests that exist.
+
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
-EARS audit over `tests/features/`; `wcl_core.testing` with the fake transport; export coverage and the surface
-snapshot; mutation on `wcl_core` with a floor; the clock lint; the charter.
+EARS audit over `tests/features/` (done; a scenario per PROF and IDENT ID is next); `wcl_core.testing` with the fake
+transport; export coverage and the surface snapshot; mutation on `wcl_core` with a floor; the clock lint; the
+charter.
 
 ## Open questions
 
