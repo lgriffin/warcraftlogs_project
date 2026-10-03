@@ -38,6 +38,7 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage-postgres.xml
 *.cover
 .hypothesis/
 .pytest_cache/

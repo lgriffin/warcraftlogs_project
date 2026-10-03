@@ -25,7 +25,6 @@ from sqlalchemy import (
     null,
     or_,
     select,
-    text,
     union,
     union_all,
     update,
@@ -932,59 +931,61 @@ class PostgresRaidRepository:
     # ── Characters ──
 
     @_storage_errors
-    def get_character_history(self, character_name: str, source: str = "guild") -> CharacterHistory | None:
+    def get_character_history(
+        self, character_name: str, source: str = "guild", scope: RaidScope | None = None
+    ) -> CharacterHistory | None:
         with self._engine.connect() as conn:
             char = conn.execute(
                 select(t.characters).where(_nocase_eq(t.characters.c.name, character_name))
             ).one_or_none()
             if char is None:
                 return None
-            params = {"cid": char.id, "source": source}
-            role_tables = ("healer_performance", "tank_performance", "dps_performance")
+            terms = _scope_terms(scope, (source,))
+            r = t.raids
+            roles = (t.healer_performance, t.tank_performance, t.dps_performance)
 
-            def one(sql: str) -> Any:
-                return conn.execute(text(sql), params).scalar()
-
-            raid_count = one(
-                "SELECT COUNT(DISTINCT raid_id) FROM ("
-                + " UNION ".join(
-                    f"SELECT p.raid_id FROM {tbl} p JOIN raids r ON r.id = p.raid_id "
-                    "WHERE p.character_id = :cid AND r.source = :source"
-                    for tbl in role_tables
+            def scoped(tbl: Any, *columns: Any) -> Any:
+                """``columns`` of the character's rows in ``tbl`` whose raid is inside the scope."""
+                return (
+                    select(*columns)
+                    .select_from(tbl.join(r, r.c.id == tbl.c.raid_id))
+                    .where(tbl.c.character_id == char.id, *terms)
                 )
-                + ") x"
-            )
 
-            def avg(tbl: str, col: str) -> float | None:
-                value = one(
-                    f"SELECT AVG(p.{col}) FROM {tbl} p JOIN raids r ON r.id = p.raid_id "
-                    "WHERE p.character_id = :cid AND r.source = :source"
-                )
+            raids = union(*(scoped(tbl, tbl.c.raid_id, r.c.raid_date) for tbl in roles)).subquery()
+            raid_count, first, last = conn.execute(
+                select(func.count(raids.c.raid_id), func.min(_c(raids.c.raid_date)), func.max(_c(raids.c.raid_date)))
+            ).one()
+            if scope is not None and not raid_count:
+                return None
+
+            def avg(tbl: Any, column: Any) -> float | None:
+                rows = scoped(tbl, column).subquery()
+                value = conn.execute(select(func.avg(rows.c[column.name]))).scalar()
                 return float(value) if value is not None else None
 
-            avg_healing = avg("healer_performance", "total_healing")
-            avg_damage = avg("dps_performance", "total_damage")
-            avg_mit = avg("tank_performance", "mitigation_percent")
-            total_consumes = one(
-                "SELECT COALESCE(SUM(cu.count), 0) FROM consumable_usage cu JOIN raids r ON r.id = cu.raid_id "
-                "WHERE cu.character_id = :cid AND r.source = :source"
-            )
-            avg_at = one(
-                "SELECT AVG(active_time_percent) FROM ("
-                + " UNION ALL ".join(
-                    f"SELECT p.active_time_percent FROM {tbl} p JOIN raids r ON r.id = p.raid_id "
-                    "WHERE p.character_id = :cid AND r.source = :source AND p.active_time_percent > 0"
-                    for tbl in role_tables
-                )
-                + ") x"
-            )
+            avg_healing = avg(t.healer_performance, t.healer_performance.c.total_healing)
+            avg_damage = avg(t.dps_performance, t.dps_performance.c.total_damage)
+            avg_mit = avg(t.tank_performance, t.tank_performance.c.mitigation_percent)
+            cu = t.consumable_usage
+            total_consumes = conn.execute(
+                select(func.coalesce(func.sum(cu.c["count"]), 0))
+                .select_from(cu.join(r, r.c.id == cu.c.raid_id))
+                .where(cu.c.character_id == char.id, *terms)
+            ).scalar()
+            active = union_all(
+                *(scoped(tbl, tbl.c.active_time_percent).where(tbl.c.active_time_percent > 0) for tbl in roles)
+            ).subquery()
+            avg_at = conn.execute(select(func.avg(active.c.active_time_percent))).scalar()
 
+        # With a scope, first and last seen come from the raids inside it; without one, from the character row.
+        first_seen, last_seen = (first, last) if scope is not None else (char.first_seen, char.last_seen)
         return CharacterHistory(
             name=char.name,
             player_class=char.player_class,
             total_raids=int(raid_count),
-            first_seen=datetime.fromisoformat(char.first_seen),
-            last_seen=datetime.fromisoformat(char.last_seen),
+            first_seen=datetime.fromisoformat(first_seen),
+            last_seen=datetime.fromisoformat(last_seen),
             avg_healing=round(avg_healing, 1) if avg_healing else None,
             avg_damage=round(avg_damage, 1) if avg_damage else None,
             avg_mitigation_percent=round(avg_mit, 2) if avg_mit else None,

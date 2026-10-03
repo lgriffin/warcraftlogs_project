@@ -186,6 +186,8 @@ jobs:
       WCL_STORE_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # diff-cover compares against origin/master
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -196,9 +198,8 @@ jobs:
       - name: Storage contract, migrations and REQ-CORE-STORE-001 scenarios on both backends, with no skips
         shell: bash
         run: |
-          pytest --tb=short -v -rs tests/test_store_contract.py tests/test_wcl_store_package.py \
-            tests/test_wcl_app_package.py tests/test_home_service.py tests/test_badges.py tests/step_defs/test_storage.py \
-            | tee pg.log
+          set -o pipefail
+          python scripts/dev.py pgcov | tee pg.log
           ! grep -q "SKIPPED" pg.log
 
   gui-test:

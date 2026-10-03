@@ -140,6 +140,44 @@ class TestProfileCommand:
         assert cli.run_profile_command(parser.parse_args(["profile"])) == 1
 
 
+class TestHistoryCommand:
+    def test_history_follows_the_saved_profile(self, monkeypatch, tmp_path, capsys, build_analysis):
+        from wcl_app.profiles import JsonProfileStore, Profile, ProfileSet
+        from wcl_core import paths
+
+        from warcraftlogs_client import cli, database
+
+        db_path = tmp_path / "history.db"
+        with database.PerformanceDB(str(db_path)) as db:
+            for code, expansion in (("ClassicRaid00000", "Classic"), ("TbcRaid000000000", "The Burning Crusade")):
+                db.import_raid(build_analysis(report_id=code))
+                db.set_raid_era(code, "fresh", expansion)
+        real = database.PerformanceDB
+        monkeypatch.setattr(database, "PerformanceDB", lambda: real(str(db_path)))
+        parser = cli.create_parser()
+
+        assert cli.run_history_query(parser.parse_args(["history", "HolyPriest"])) == 0
+        assert "Raids tracked: 2" in capsys.readouterr().out
+        tbc = Profile("tbc", "TBC", expansions=("The Burning Crusade",))
+        JsonProfileStore(paths.get_profiles_path()).save(ProfileSet(profiles=[tbc], active="tbc"))
+        assert cli.run_history_query(parser.parse_args(["history", "HolyPriest"])) == 0
+        assert "Raids tracked: 1" in capsys.readouterr().out
+        assert cli.run_history_query(parser.parse_args(["history", "--raids"])) == 0
+        out = capsys.readouterr().out
+        assert "TbcRaid000000000" in out and "ClassicRaid00000" not in out
+        assert cli.run_history_query(parser.parse_args(["history", "--all"])) == 0
+        holy = next(line for line in capsys.readouterr().out.splitlines() if line.startswith("HolyPriest"))
+        assert holy.split()[2] == "1"
+
+        tbc_scope = tbc.scope
+        with real(str(db_path)) as db:
+            for trend in (db.get_healer_trend, db.get_tank_trend, db.get_dps_trend):
+                assert len(trend("HolyPriest")) in (0, 2)
+                assert {r["report_id"] for r in trend("HolyPriest", scope=tbc_scope)} <= {"TbcRaid000000000"}
+            assert [r["report_id"] for r in db.get_healer_trend("HolyPriest", scope=tbc_scope)] == ["TbcRaid000000000"]
+            assert db.get_all_characters(scope=Profile("z", "Z", zones=("Nowhere",)).scope) == []
+
+
 def _service(tmp_path):
     from warcraftlogs_client.services import AppContext, JsonProfileStore, ProfileService
 
