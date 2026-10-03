@@ -133,7 +133,7 @@ wcl_app.Chart.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -
 wcl_app.ChartError: class ChartError(ValueError)
 wcl_app.DiscordNotConfigured: class DiscordNotConfigured(Exception)
 wcl_app.HealingService: class HealingService
-wcl_app.HealingService.__init__: def __init__(self, storage: StorageFactory, *, now: Callable[[], datetime]=datetime.now, scope: ScopeSource=None)
+wcl_app.HealingService.__init__: def __init__(self, storage: StorageFactory, *, now: Callable[[], datetime]=clock.now, scope: ScopeSource=None)
 wcl_app.HealingService.scope: @property def scope(self) -> RaidScope | None
 wcl_app.HealingService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> HealingService
 wcl_app.HealingService.weekly: def weekly(self, weeks: int=DEFAULT_WEEKS) -> WeeklyHealing
@@ -151,7 +151,7 @@ wcl_app.HomePage.widgets: list[HomeWidget]
 wcl_app.HomePage.generated_at: str
 wcl_app.HomePage.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.HomeService: class HomeService
-wcl_app.HomeService.__init__: def __init__(self, storage: StorageFactory, layouts: LayoutStore | None=None, *, now: Callable[[], datetime]=datetime.now, badge_rules: BadgeRules | None=None, scope: ScopeSource=None)
+wcl_app.HomeService.__init__: def __init__(self, storage: StorageFactory, layouts: LayoutStore | None=None, *, now: Callable[[], datetime]=clock.now, badge_rules: BadgeRules | None=None, scope: ScopeSource=None)
 wcl_app.HomeService.scope: @property def scope(self) -> RaidScope | None
 wcl_app.HomeService.from_context: @classmethod def from_context(cls, ctx: AppContext, layouts: LayoutStore | None=None) -> HomeService
 wcl_app.HomeService.catalogue: @staticmethod def catalogue() -> list[WidgetSpec]
@@ -449,6 +449,18 @@ wcl_store.RaidScope.unfiltered: @property def unfiltered(self) -> bool
 wcl_store.RaidScope.with_sources: def with_sources(self, sources: tuple[str, ...]) -> RaidScope
 wcl_store.StorageError: class StorageError(Exception)
 wcl_store.narrowed: def narrowed(scope: RaidScope | None, sources: tuple[str, ...]) -> RaidScope | None
+[wcl_core.clock]
+wcl_core.clock.Clock: @runtime_checkable class Clock(Protocol)
+wcl_core.clock.Clock.time: def time(self) -> float
+wcl_core.clock.Clock.monotonic: def monotonic(self) -> float
+wcl_core.clock.Clock.now: def now(self) -> datetime
+wcl_core.clock.Clock.sleep: def sleep(self, seconds: float) -> None
+wcl_core.clock.monotonic: def monotonic() -> float
+wcl_core.clock.now: def now() -> datetime
+wcl_core.clock.sleep: def sleep(seconds: float) -> None
+wcl_core.clock.time: def time() -> float
+wcl_core.clock.today: def today() -> date
+wcl_core.clock.use: @contextmanager def use(clock: Clock) -> Iterator[Clock]
 [wcl_core.http]
 wcl_core.http.Response: @runtime_checkable class Response(Protocol)
 wcl_core.http.Response.status_code: @property def status_code(self) -> int
@@ -462,6 +474,17 @@ wcl_core.http.get: def get(url: str, *, timeout: float, **kwargs: Any) -> Respon
 wcl_core.http.post: def post(url: str, *, timeout: float, **kwargs: Any) -> Response
 wcl_core.http.use: @contextmanager def use(transport: Transport) -> Iterator[Transport]
 [wcl_core.testing]
+wcl_core.testing.FakeClock: class FakeClock
+wcl_core.testing.FakeClock.__init__: def __init__(self, start: datetime=datetime(2026, 11, 3, 20, 0)) -> None
+wcl_core.testing.FakeClock.install: @contextmanager def install(self) -> Iterator[FakeClock]
+wcl_core.testing.FakeClock.advance: def advance(self, seconds: float) -> FakeClock
+wcl_core.testing.FakeClock.time: def time(self) -> float
+wcl_core.testing.FakeClock.monotonic: def monotonic(self) -> float
+wcl_core.testing.FakeClock.now: def now(self) -> datetime
+wcl_core.testing.FakeClock.sleep: def sleep(self, seconds: float) -> None
+wcl_core.testing.FakeClock.start: set in __init__
+wcl_core.testing.FakeClock.elapsed: set in __init__
+wcl_core.testing.FakeClock.sleeps: list[float]
 wcl_core.testing.FakeDiscord: class FakeDiscord(_FakeHost)
 wcl_core.testing.FakeDiscord.__init__: def __init__(self) -> None
 wcl_core.testing.FakeDiscord.token: def token(self, *replies: Reply) -> FakeDiscord

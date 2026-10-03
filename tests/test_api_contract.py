@@ -20,7 +20,7 @@ import pytest
 
 TESTS = Path(__file__).parent
 SNAPSHOT = TESTS / "api_surface.txt"
-PACKAGES = ("wcl_app", "wcl_store", "wcl_core.http", "wcl_core.testing")
+PACKAGES = ("wcl_app", "wcl_store", "wcl_core.clock", "wcl_core.http", "wcl_core.testing")
 
 
 def _exports(package: str) -> list[str]:

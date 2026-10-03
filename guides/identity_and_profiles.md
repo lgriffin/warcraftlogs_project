@@ -285,11 +285,11 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
 | EARS specification, one `shall` per Rule, `spec:audit` | Enforced, see below | None |
 | Mock only at the HTTP seam (`lint:bdd-seam`) | A ratchet, see below | Empty `KNOWN_STEP_MOCKS` (4 step modules) |
-| `./testing`: mock transport, data factory | `FakeWarcraftLogs`, `FakeDiscord` | A `RaidAnalysis` factory |
+| `./testing`: mock transport, data factory | `FakeWarcraftLogs`, `FakeDiscord`, `FakeClock` | A `RaidAnalysis` factory |
 | API surface snapshot + semver diff | Enforced, see below | Nested payload dataclasses; a `!` commit check |
 | Export coverage: every public export referenced by a test | Enforced, see below | None |
 | Suite health: no skip/only, no assertion-free tests | Enforced, see below | None |
-| Determinism: time only via a clock module | `HomeService(now=...)`, `HostedUserToken(clock=...)` | A `wcl_core.clock` and a lint that `time.time`/`datetime.now` appear nowhere else in packages |
+| Determinism: time only via a clock module | Enforced, see below | The desktop app (`updater.py`, GUI) |
 | Error taxonomy with guards | `wcl_core.common.errors` (`WarcraftLogsError`, `AuthenticationError`, `ConfigurationError`), `wcl_store.StorageError` | Document the tree in a guide; add `retryable` on API errors; every service error is a subclass |
 | Schemas tolerate additive change | `pydantic` only for `SecretStr`; GraphQL parsed by hand | pydantic models with `extra="allow"` for every API response the analyzer reads |
 | Conventional commits, release-please, semver classification | `build_release.sh` bumps versions by hand | Conventional commit check on PR titles, then release automation |
@@ -306,7 +306,7 @@ module helper that asserts), and no `except Exception`/bare `except`/`suppress(E
 rules have no allow-list; each has its own test on a small source.
 
 `tests/test_api_contract.py` guards the API the Toads Hub and bot build on: `wcl_app`, `wcl_store`,
-`wcl_core.http` and `wcl_core.testing`. Every name in their `__all__` is named by a test, and every public method of
+`wcl_core.clock`, `wcl_core.http` and `wcl_core.testing`. Every name in their `__all__` is named by a test, and every public method of
 an exported `*Service` and of `RaidRepository` is called by one. `tests/api_surface.txt` records one line per export,
 dataclass field and signature, read from the source; any change fails until the file is regenerated with
 `WCL_UPDATE_SURFACE=1 pytest tests/test_api_contract.py`, and the failure lists the lines that are gone as breaking.
@@ -326,6 +326,12 @@ and `/users/@me` endpoints, both record every request and fail on one they canno
 instead of `unittest.mock` or a patched `requests`/`wcl_app`; `test_step_definitions_mock_only_at_the_http_seam` in
 the suite-health lint holds the step modules that still mock to `KNOWN_STEP_MOCKS`, which may only shrink.
 
+The shared packages read the time only through `wcl_core.clock` (`time`, `monotonic`, `now`, `today`, `sleep`),
+the system clock unless `clock.use(...)` swaps one in. `wcl_core.testing.FakeClock` moves only on `sleep` or
+`advance` and records each wait, so token expiry, retry backoff and "this week" are tested without waiting or
+depending on the day. `tests/test_clock.py` fails on any other `time.time`/`monotonic`/`sleep`/`perf_counter` or
+`datetime.now`/`utcnow`/`today` in `packages/`, with no allow-list.
+
 `tests/test_spec_audit.py` audits the specification. Each scenario in `tests/features/` holds one `shall`, carries
 one `@ears_*` tag, and opens with that pattern's word (When, While, If, Where, or none for ubiquitous). Every feature
 file is bound by a step module. Every row of the requirements table above holds one `shall` and a known status, and an
@@ -335,7 +341,7 @@ Enforced row names tests that exist. Every Enforced row also has a scenario titl
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
 EARS audit over `tests/features/` with a scenario per requirement (done); `wcl_core.testing` with the fake
 transport (done); export coverage and the surface snapshot (done); mutation on `wcl_core` with a floor (done); the clock
-lint; the charter.
+lint (done); the charter.
 
 ## Open questions
 
