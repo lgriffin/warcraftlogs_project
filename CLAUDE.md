@@ -49,11 +49,11 @@ python scripts/dev.py types imports -k   # any tasks, in order; -k keeps going a
 pre-commit install              # run the same pinned tools on every commit
 ```
 
-Tasks: `format lint spelling imports deadcode types security test` (together, `check`), plus `audit`, `diffcov`
+Tasks: `format lint spelling imports deadcode types security test mutation` (together, `check`), plus `audit`, `diffcov`
 (coverage of lines changed since origin/master, after `test`), `pgcov` (the storage tests on both backends and the
 Postgres backend's changed-line coverage, which `diffcov` leaves out; CI's `storage-postgres` job runs it), `fuzz`,
-`gui`. The coverage floor in `pyproject.toml`
-only goes up.
+`gui`. The coverage floor in `pyproject.toml` only goes up, and so do the mutation floors in `[tool.wcl.mutation]`
+(`python scripts/mutate.py <module> -v` lists the mutants a module's tests miss).
 
 CI's `ci-success` job is the one required check: it needs every other job and fails if any failed, was cancelled or was
 skipped (`scripts/ci_gate.py`). A new CI job goes in its `needs` and either lists its `dev.py` tasks in `JOB_TASKS` or

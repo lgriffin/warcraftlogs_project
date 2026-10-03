@@ -29,6 +29,7 @@ JOB_TASKS = {
     "storage-postgres": {"pgcov"},
     "gui-test": {"gui"},
     "fuzz": {"fuzz"},
+    "mutation": {"mutation"},
     "type-check": {"types"},
     "security": {"security", "audit"},
 }
