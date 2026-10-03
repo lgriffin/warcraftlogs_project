@@ -81,7 +81,8 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `tests/` — unit, BDD (`tests/features/` + `tests/step_defs/`), fuzz (`tests/fuzz/`), GUI (`tests/gui/`)
 - `packages/wcl-core/` — `wcl_core`: WCL client, auth (client credentials and the user OAuth flow), analysis, models,
   spell data and role configs (no Qt, no SQLite). `warcraftlogs_client/<module>.py` files for moved modules are import
-  aliases
+  aliases. All its HTTP goes through `wcl_core.http`; tests fake it with `wcl_core.testing` (`FakeWarcraftLogs`,
+  `FakeDiscord`), not `unittest.mock`
 - `packages/wcl-core/src/wcl_core/data/` — spell name mappings and consumes/interrupt/debuff/totem/cooldown configs
 - `packages/wcl-store/` — `wcl_store`: the `RaidRepository` protocol and `StorageError`, the SQLite backend
   (`wcl_store.sqlite.PerformanceDB`, formerly `database.py`, which stays as an import alias) and the Postgres backend

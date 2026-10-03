@@ -28,7 +28,7 @@ from urllib.parse import urlencode
 import requests
 from pydantic import SecretStr
 
-from . import paths
+from . import http, paths
 from .common.errors import AuthenticationError
 from .user_auth import OAuthCallbackServer, _optional_secret, _reveal
 
@@ -157,7 +157,7 @@ class DiscordIdentityStore:
         # Never log the code or anything from the token response.
         logger.info("Discord token exchange: POST %s", token_url)
         try:
-            response = requests.post(
+            response = http.post(
                 token_url,
                 data={
                     "grant_type": "authorization_code",
@@ -191,7 +191,7 @@ class DiscordIdentityStore:
 def fetch_identity(access_token: SecretStr) -> DiscordIdentity:
     """``GET /users/@me`` with a user token."""
     try:
-        response = requests.get(
+        response = http.get(
             f"{oauth_base_url()}/api/users/@me",
             headers={"Authorization": f"Bearer {access_token.get_secret_value()}"},
             timeout=30,

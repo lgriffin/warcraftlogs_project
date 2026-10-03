@@ -284,8 +284,8 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
 | EARS specification, one `shall` per Rule, `spec:audit` | Enforced, see below | None |
-| Mock only at the transport seam (`lint:bdd-seam`) | step defs mock `requests.post` and services variously | A fake `WarcraftLogsClient` transport in a shipped `wcl_core.testing` module; BDD steps use it, nothing patches a service method |
-| `./testing` export: `createMockTransport`, `TestDataFactory` | `tests/conftest.py` fixtures only | `wcl_core.testing` (fake GraphQL transport, `RaidAnalysis` factory) so the Hub tests the same way |
+| Mock only at the transport seam (`lint:bdd-seam`) | Enforced as a ratchet, see below; `KNOWN_STEP_MOCKS` lists 4 step modules | Move the encounter, raid analysis and headless host steps onto the fake until the list is empty |
+| `./testing` export: `createMockTransport`, `TestDataFactory` | `wcl_core.testing`: `FakeWarcraftLogs`, `FakeDiscord` | A `RaidAnalysis` factory beside the fakes, so the Hub builds test raids the same way |
 | API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
 | Export coverage: every public export referenced by a test | none | A test that every name in `wcl_app.__all__` and `RaidRepository` appears in `tests/` (the store already has this for the contract) |
 | Suite health: no skip/only, no assertion-free tests | Enforced, see below | None |
@@ -302,8 +302,15 @@ runs exactly its `dev.py` tasks (`JOB_TASKS`) or is listed in `OUTSIDE_DEV` with
 
 `tests/test_suite_health.py` lints `tests/`: every skip or xfail mark and every `pytest.skip`/`xfail`/`fail` call
 says why, every test function asserts (or uses `pytest.raises`, a mock's `assert_*`, a pytest-qt signal wait, or a
-module helper that asserts), and no `except Exception`/bare `except`/`suppress(Exception)` drops the exception. It
-has no allow-list; each rule has its own test on a small source.
+module helper that asserts), and no `except Exception`/bare `except`/`suppress(Exception)` drops the exception. These
+rules have no allow-list; each has its own test on a small source.
+
+Every request wcl-core makes goes through `wcl_core.http` (`post`/`get`, each with a timeout); a test checks that no
+module in `packages/` calls `requests` directly. `wcl_core.testing` ships fakes for that seam: `FakeWarcraftLogs`
+answers the token endpoint and GraphQL queries (matched by a substring of the query), `FakeDiscord` the Discord token
+and `/users/@me` endpoints, both record every request and fail on one they cannot answer. Step definitions use them
+instead of `unittest.mock` or a patched `requests`/`wcl_app`; `test_step_definitions_mock_only_at_the_http_seam` in
+the suite-health lint holds the step modules that still mock to `KNOWN_STEP_MOCKS`, which may only shrink.
 
 `tests/test_spec_audit.py` audits the specification. Each scenario in `tests/features/` holds one `shall`, carries
 one `@ears_*` tag, and opens with that pattern's word (When, While, If, Where, or none for ubiquitous). Every feature
@@ -313,7 +320,7 @@ Enforced row names tests that exist. Every Enforced row also has a scenario titl
 
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
 EARS audit over `tests/features/` with a scenario per requirement (done); `wcl_core.testing` with the fake
-transport; export coverage and the surface snapshot; mutation on `wcl_core` with a floor; the clock lint; the
+transport (done); export coverage and the surface snapshot; mutation on `wcl_core` with a floor; the clock lint; the
 charter.
 
 ## Open questions

@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import requests
 from pydantic import SecretStr
 
-from . import paths
+from . import http, paths
 from .common.errors import AuthenticationError
 from .config import as_secret
 
@@ -104,7 +104,7 @@ class UserTokenManager:
 
         token_url = get_token_url()
         try:
-            response = requests.post(
+            response = http.post(
                 token_url,
                 data={
                     "grant_type": "refresh_token",
@@ -148,7 +148,7 @@ class UserTokenManager:
         logger.info("Token exchange: POST %s (redirect_uri=%s)", token_url, redirect_uri)
 
         try:
-            response = requests.post(
+            response = http.post(
                 token_url,
                 data={
                     "grant_type": "authorization_code",
@@ -261,7 +261,7 @@ class HostedUserToken:
 
     def _refresh(self, refresh_token: SecretStr) -> UserToken:
         try:
-            response = requests.post(
+            response = http.post(
                 self._token_url,
                 data={
                     "grant_type": "refresh_token",

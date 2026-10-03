@@ -275,7 +275,7 @@ class TestFromContext:
 
 @pytest.mark.api
 class TestClientCharacterReports:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_parses_reports(self, mock_post):
         from warcraftlogs_client.client import WarcraftLogsClient
 
@@ -328,7 +328,7 @@ class TestClientCharacterReports:
             "page": 2,
         }
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_unknown_character_raises(self, mock_post):
         from warcraftlogs_client.client import WarcraftLogsClient
 

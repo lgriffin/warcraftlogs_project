@@ -35,7 +35,7 @@ class TestThrottle:
 
 
 class TestRetryOn429:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     @patch("warcraftlogs_client.client.time.sleep")
     def test_retries_on_429(self, mock_sleep, mock_post, client):
         rate_limited = MagicMock(status_code=429)
@@ -50,7 +50,7 @@ class TestRetryOn429:
         assert result == {"data": {}}
         assert mock_post.call_count == 2
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     @patch("warcraftlogs_client.client.time.sleep")
     def test_retries_on_500(self, mock_sleep, mock_post, client):
         server_error = MagicMock(status_code=500)
@@ -65,7 +65,7 @@ class TestRetryOn429:
         assert result == {"data": {"ok": True}}
         assert mock_post.call_count == 2
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     @patch("warcraftlogs_client.client.time.sleep")
     def test_exponential_backoff(self, mock_sleep, mock_post, client):
         error = MagicMock(status_code=429)
@@ -83,7 +83,7 @@ class TestRetryOn429:
         assert backoff_calls[0] == call(1)
         assert backoff_calls[1] == call(2)
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     @patch("warcraftlogs_client.client.time.sleep")
     def test_max_retries_exhausted_raises(self, mock_sleep, mock_post, client):
         error_response = MagicMock(status_code=429)
@@ -96,7 +96,7 @@ class TestRetryOn429:
 
 
 class TestNoRetryOnClientError:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     @patch("warcraftlogs_client.client.time.sleep")
     def test_400_raises_immediately(self, mock_sleep, mock_post, client):
         bad_request = MagicMock(status_code=400)
