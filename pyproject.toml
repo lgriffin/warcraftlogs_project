@@ -34,6 +34,7 @@ dev = [
     "codespell==2.4.3",
     "diff-cover==9.2.0",
     "import-linter==2.15",
+    "pyyaml>=6.0",  # tests/test_dev_tasks.py reads ci.yml
 ]
 
 [project.scripts]
