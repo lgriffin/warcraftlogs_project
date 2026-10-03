@@ -94,9 +94,10 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
   `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, lineage); depends only
   on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it. Headless hosts use
   `AppContext.headless(client, storage)`
-- `guides/` — project documentation; `guides/home_widgets.md` is the Home widget payload contract the Toads Hub
-  shares, `guides/badges.md` the Toads badge payload and its thresholds, and `guides/reference_comparison.md` the
-  reference comparison payload
+- `guides/` — project documentation; `guides/CHARTER.md` is the engineering charter (requirement IDs and statuses,
+  audited by `tests/test_charter.py`; change a status in the pull request that changes the check),
+  `guides/home_widgets.md` the Home widget payload contract the Toads Hub shares, `guides/badges.md` the Toads badge
+  payload and its thresholds, and `guides/reference_comparison.md` the reference comparison payload
 
 ## Conventions
 
