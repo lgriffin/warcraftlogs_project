@@ -164,3 +164,35 @@ def test_character_history_follows_the_profile(ctx):
         assert page.get_page(holy).history["total_raids"] == 2
     ctx.use_profile(Profile("z", "Z", zones=("Nowhere",)))
     assert players.history("HolyPriest") is None
+
+
+def test_the_home_page_follows_a_later_profile_switch(ctx):
+    from wcl_app import HomeService
+
+    home = HomeService.from_context(ctx)
+    assert home.scope is None
+    ctx.use_profile(TBC_ONLY)
+    assert home.scope == TBC_ONLY.scope
+
+
+def test_the_desktop_profile_service_switches_and_counts_on_the_shared_context(ctx):
+    profiles = ProfileService.desktop(ctx)
+    assert profiles.store.path == paths.get_profiles_path()
+    assert profiles.raid_count() == 3
+    profiles.create("TBC", expansions=(TBC,), activate=True)
+    assert ctx.profile is not None and profiles.raid_count() == 2  # Kara and the untagged Gruul
+    profiles.activate(None)
+    assert profiles.raid_count() == 3
+    assert ProfileService.desktop().ctx is not None
+    with pytest.raises(ValueError, match="needs a context"):
+        ProfileService(profiles.store).raid_count()
+
+
+def test_a_storage_failure_gives_no_raid_count(ctx):
+    from wcl_store import StorageError
+
+    def broken():
+        raise StorageError("database is locked")
+
+    ctx.storage = broken
+    assert ProfileService.desktop(ctx).raid_count() is None

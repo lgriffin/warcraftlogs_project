@@ -37,7 +37,7 @@ from wcl_store import RaidRepository, RaidScope, StorageError
 
 from wcl_app.badges import Badge, BadgeRules, PlayerStats, guild_stats
 from wcl_app.charts import Chart, compact
-from wcl_app.context import AppContext, StorageFactory
+from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
 from wcl_app.healing import WeeklyHealing, weekly_healing, window_start
 
 HOME_SCHEMA_VERSION = 1
@@ -422,14 +422,15 @@ class HomeService:
         *,
         now: Callable[[], datetime] = datetime.now,
         badge_rules: BadgeRules | None = None,
-        scope: RaidScope | None = None,
+        scope: ScopeSource = None,
     ):
         self.storage = storage
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
         self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
-        # The active profile's scope for the raid list, count and healing reads; None sees every guild raid.
-        self.scope = scope
+        # A scope, or a callable giving the active profile's at read time, for the raid list, count and healing
+        # reads; None sees every guild raid.
+        self._scope = scope
         self._builders: dict[str, Callable[[_Snapshot, HomeWidget], None]] = {
             "quick_actions": self._quick_actions,
             "guild_snapshot": self._guild_snapshot,
@@ -450,10 +451,15 @@ class HomeService:
             "tracked_players": self._tracked_players,
         }
 
+    @property
+    def scope(self) -> RaidScope | None:
+        return resolve_scope(self._scope)
+
     @classmethod
     def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
-        """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(ctx.repository, layouts, badge_rules=BadgeRules.from_config(ctx.config), scope=ctx.scope)
+        """Home pages over the context's storage (the desktop database, or the host's own), following its profile."""
+        rules = BadgeRules.from_config(ctx.config)
+        return cls(ctx.repository, layouts, badge_rules=rules, scope=lambda: ctx.scope)
 
     # ── Layout ──
 
