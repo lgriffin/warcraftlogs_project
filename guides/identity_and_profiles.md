@@ -1,6 +1,7 @@
 # Discord identity and raid profiles
 
-Plan revision 4, 2026-10-03. Phases 1, 2.1 to 2.3 and Q merged (PRs #144 to #158); phase 3 in review.
+Plan revision 5, 2026-10-03. Every phase built here is merged (PRs #144 to #161). What is left waits outside this
+repo: Forever's Warcraft Logs site (3.3) and the Toads Hub and bot port (4.2).
 Status: **experimental**. Order of precedence, as in ESI.ts: running code and CI are the fact, the requirements
 below are the intent, this guide is the how, the phase map is the order.
 
@@ -210,10 +211,10 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1 to 2.3 merged (#145 to #149); 2.4 in review | PROF-07 to PROF-09 |
+| 2 | Scoped services and frontends | Merged (#145 to #149, 2.4 in #161) | PROF-07 to PROF-09 |
 | 3 | Import by profile | 3.1 and 3.2 merged (#159); 3.3 waits on Warcraft Logs | PROF-10 to PROF-12 |
 | 4 | Bridge to the Toads Hub and bot | 4.1 merged (#160); 4.2 is the Toads port | IDENT-05 to IDENT-07 |
-| 5 | Retire the single-host config | 5.1 and 5.2 in review | PROF-13, ARCH-P3 |
+| 5 | Retire the single-host config | Merged (#161) | PROF-13, ARCH-P3 |
 | Q | Quality bar: the ESI.ts gates in Python | Merged (#150 to #158) | section below, `guides/CHARTER.md` |
 
 Each phase is a set of PRs that merge alone, one concern per PR, with a definition of done checkable from CI.
