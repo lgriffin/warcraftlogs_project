@@ -49,9 +49,9 @@ def default_home_service() -> HomeService:
     Badge thresholds come from config.json when it loads; without it the defaults apply.
     """
     try:
-        ctx = AppContext.from_config_file()
+        ctx = AppContext.desktop()
     except ConfigurationError:
-        ctx = AppContext(config={})
+        ctx = AppContext.desktop(with_config=False)
     return HomeService.from_context(ctx, JsonLayoutStore(get_user_data_dir() / LAYOUT_FILE))
 
 

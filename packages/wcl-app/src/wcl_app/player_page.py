@@ -23,7 +23,7 @@ from wcl_core.common.errors import WarcraftLogsError
 from wcl_store import RaidScope
 
 from wcl_app.badges import BadgeRules, PlayerBadges, character_stats
-from wcl_app.context import AnalysisThresholds, AppContext, validate_report_code
+from wcl_app.context import AnalysisThresholds, AppContext, ScopeSource, resolve_scope, validate_report_code
 from wcl_app.lineage import CharacterLineage, character_lineage
 
 if TYPE_CHECKING:
@@ -175,15 +175,20 @@ class PlayerPageService:
         analyze: AnalyzeFn | None = None,
         import_source: str = "guild",
         badge_rules: BadgeRules | None = None,
-        scope: RaidScope | None = None,
+        scope: ScopeSource = None,
     ):
         self.db = db
         self.client = client
         self._analyze = analyze
         self.import_source = import_source
         self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
-        # The active profile's scope for the page's badges and lineage; None counts every guild raid.
-        self.scope = scope
+        # A scope, or a callable giving the active profile's at read time, for the page's badges and lineage;
+        # None counts every guild raid.
+        self._scope = scope
+
+    @property
+    def scope(self) -> RaidScope | None:
+        return resolve_scope(self._scope)
 
     @classmethod
     def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool = True) -> PlayerPageService:
@@ -194,10 +199,10 @@ class PlayerPageService:
         """
         rules = BadgeRules.from_config(ctx.config)
         if not with_api:
-            return cls(db, badge_rules=rules, scope=ctx.scope)
+            return cls(db, badge_rules=rules, scope=lambda: ctx.scope)
         from wcl_app.raids import RaidService
 
-        return cls(db, ctx.wcl_client, analyze=RaidService(ctx).analyze, badge_rules=rules, scope=ctx.scope)
+        return cls(db, ctx.wcl_client, analyze=RaidService(ctx).analyze, badge_rules=rules, scope=lambda: ctx.scope)
 
     # ── Pages ──
 

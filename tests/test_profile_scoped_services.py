@@ -8,7 +8,8 @@ import pytest
 from wcl_app import AppContext, BadgeService, HealingService, PlayerPageService, ReferenceService
 from wcl_app.home import _Snapshot
 from wcl_app.lineage import character_lineage
-from wcl_app.profiles import Profile
+from wcl_app.profiles import JsonProfileStore, Profile, ProfileService, ProfileSet
+from wcl_core import paths
 
 from warcraftlogs_client.models import ConsumableUsage
 
@@ -114,3 +115,36 @@ def test_player_page_lineage_and_badges_follow_the_profile(ctx):
         assert character_lineage(repo, "HolyPriest", ("reference",), scope=ctx.scope).raids == 1
         assert character_lineage(repo, "HolyPriest", scope=CLASSIC_DAYS.scope).raids == 2
         assert character_lineage(repo, "HolyPriest", scope=Profile("z", "Z", zones=("Nowhere",)).scope) is None
+
+
+def test_services_built_once_follow_a_later_profile_switch(ctx, tmp_path):
+    """A frontend builds a service at start-up; switching profile afterwards still reaches it (PROF-07)."""
+    from wcl_app import PlayerRef
+
+    holy = PlayerRef.create("HolyPriest", "spineshatter", "eu")
+    badges = BadgeService.from_context(ctx)
+    healing = HealingService.from_context(ctx)
+    healing.now = lambda: NOW
+    profiles = ProfileService(JsonProfileStore(tmp_path / "switch.json"), ctx)
+    profiles.create("TBC", expansions=(TBC,))
+    with ctx.repository() as repo:
+        page = PlayerPageService.from_context(ctx, repo, with_api=False)
+        assert (_holy(badges), healing.weekly().raids, page.get_page(holy).lineage.raids) == ((3, 6), 3, 3)
+        profiles.activate("tbc")
+        assert (_holy(badges), healing.weekly().raids, page.get_page(holy).lineage.raids) == ((2, 5), 2, 2)
+        profiles.activate(None)
+        assert (_holy(badges), healing.weekly().raids) == ((3, 6), 3)
+
+
+def test_a_fixed_scope_stays_fixed_when_the_profile_switches(ctx):
+    service = BadgeService(ctx.repository, scope=CLASSIC_DAYS.scope)
+    ctx.use_profile(TBC_ONLY)
+    assert _holy(service) == (2, 4)
+
+
+def test_the_desktop_context_starts_in_the_saved_profile(ctx):
+    assert AppContext.desktop(with_config=False).profile is None  # nothing saved: the plain app
+    JsonProfileStore(paths.get_profiles_path()).save(ProfileSet(profiles=[TBC_ONLY], active="tbc"))
+    desktop = AppContext.desktop(with_config=False, db_path=ctx.db_path)
+    assert desktop.profile == TBC_ONLY
+    assert [r.report_id for r in ReferenceService(desktop).guild_raids()] == [GRUUL, KARA]

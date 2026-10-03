@@ -233,7 +233,7 @@ def run_unified_analysis(args: argparse.Namespace, role: str | None = None) -> i
     from .services import AppContext, RaidService
 
     reset_spell_manager()
-    ctx = AppContext.from_config_file()
+    ctx = AppContext.desktop()
     report_id = args.report_id if hasattr(args, "report_id") and args.report_id else ctx.config["report_id"]
     raids = RaidService(ctx)
 
@@ -422,13 +422,13 @@ def _run_player_role(ctx: "AppContext", db: "PerformanceDB", args: argparse.Name
     return 0 if all(r.ok for r in results) else 1
 
 
-def _run_player_lineage(db: "PerformanceDB", args: argparse.Namespace) -> int:
+def _run_player_lineage(ctx: "AppContext", db: "PerformanceDB", args: argparse.Namespace) -> int:
     import json
 
     from .services import character_lineage
 
     sources = ("guild", "reference") if args.include_reference else ("guild",)
-    lineage = character_lineage(db, args.name, sources)
+    lineage = character_lineage(db, args.name, sources, scope=ctx.scope)
     if lineage is None:
         print(f"No raids stored for '{args.name}'.")
         return 1
@@ -466,7 +466,7 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
         print("Specify an action: discover, add, show, remove, dismiss, role, lineage or list.")
         return 1
 
-    ctx = AppContext.from_config_file()
+    ctx = AppContext.desktop()
     with ctx.db() as db:
         if action == "list":
             pages = PlayerPageService(db).list_pages()
@@ -482,7 +482,7 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
         if action == "role":
             return _run_player_role(ctx, db, args)
         if action == "lineage":
-            return _run_player_lineage(db, args)
+            return _run_player_lineage(ctx, db, args)
 
         player = _resolve_player(db, args, ctx.config)
         needs_api = action in ("add",) or (action == "discover" and not args.local)
@@ -547,7 +547,7 @@ def _reference_context(action: str) -> "AppContext":
     """Imports talk to Warcraft Logs and need the config; everything else reads the database only."""
     from .services import AppContext
 
-    return AppContext.from_config_file() if action == "import" else AppContext(config={})
+    return AppContext.desktop(with_config=action == "import")
 
 
 def run_reference_command(args: argparse.Namespace) -> int:
@@ -603,7 +603,7 @@ def _profile_service(need_config: bool) -> "ProfileService":
 
     from .services import AppContext, IdentityService, JsonProfileStore, ProfileService
 
-    ctx = AppContext.from_config_file() if need_config else AppContext(config={})
+    ctx = AppContext.desktop(with_config=need_config)
     identity = IdentityService().current()
     service = ProfileService.from_context(
         ctx, JsonProfileStore(get_profiles_path()), owner=identity.id if identity else None

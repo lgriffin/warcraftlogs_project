@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 from wcl_core.flasks import FlaskCatalog, load_catalog, preparation
 from wcl_store import RaidScope, narrowed
 
-from wcl_app.context import AppContext, StorageFactory
+from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
 
 if TYPE_CHECKING:
     from wcl_store import RaidRepository
@@ -436,18 +436,22 @@ class BadgeService:
         storage: StorageFactory,
         rules: BadgeRules | None = None,
         sources: tuple[str, ...] = GUILD_SOURCES,
-        scope: RaidScope | None = None,
+        scope: ScopeSource = None,
     ):
         self.storage = storage
         self.rules = rules if rules is not None else BadgeRules()
         self.sources = sources
-        # The active profile's scope; None counts every raid of ``sources``.
-        self.scope = scope
+        # A scope, or a callable giving the active profile's at read time; None counts every raid of ``sources``.
+        self._scope = scope
+
+    @property
+    def scope(self) -> RaidScope | None:
+        return resolve_scope(self._scope)
 
     @classmethod
     def from_context(cls, ctx: AppContext) -> BadgeService:
         """Badges over the context's storage and active profile, with thresholds from its config."""
-        return cls(ctx.repository, BadgeRules.from_config(ctx.config), scope=ctx.scope)
+        return cls(ctx.repository, BadgeRules.from_config(ctx.config), scope=lambda: ctx.scope)
 
     def catalogue(self) -> list[BadgeRule]:
         return list(self.rules.rules)

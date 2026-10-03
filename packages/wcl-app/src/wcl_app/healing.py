@@ -28,7 +28,7 @@ from typing import Any
 from wcl_store import RaidScope
 
 from wcl_app.charts import BAR, LINE, MAX_SERIES, Chart, Reference, Series, compact, top_series, y_ceiling
-from wcl_app.context import AppContext, StorageFactory
+from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
 
 DEFAULT_WEEKS = 12
 MIN_WEEKS = 2
@@ -391,16 +391,20 @@ class HealingService:
         storage: StorageFactory,
         *,
         now: Callable[[], datetime] = datetime.now,
-        scope: RaidScope | None = None,
+        scope: ScopeSource = None,
     ):
         self.storage = storage
         self.now = now
-        # The active profile's scope; None reads every guild raid.
-        self.scope = scope
+        # A scope, or a callable giving the active profile's at read time; None reads every guild raid.
+        self._scope = scope
+
+    @property
+    def scope(self) -> RaidScope | None:
+        return resolve_scope(self._scope)
 
     @classmethod
     def from_context(cls, ctx: AppContext) -> HealingService:
-        return cls(ctx.repository, scope=ctx.scope)
+        return cls(ctx.repository, scope=lambda: ctx.scope)
 
     def weekly(self, weeks: int = DEFAULT_WEEKS) -> WeeklyHealing:
         """The last ``weeks`` weeks (clamped to ``MIN_WEEKS``..``MAX_WEEKS``), this week included. Raises
