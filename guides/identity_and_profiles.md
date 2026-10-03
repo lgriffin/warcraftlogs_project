@@ -277,8 +277,8 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | ESI.ts gate | Here today | Gap to close |
 | --- | --- | --- |
 | `lint:layers`, empty shrink-only baseline | `tests/test_architecture.py` + `lint-imports`; `KNOWN_VIOLATIONS` has 36 desktop edges | Move views onto services until the list is empty; then forbid the list growing by construction (it already does) |
-| `ci-success` single required check, no job-level `if`, skipped = failed | `ci.yml` has several jobs | One fan-in job that `needs` every job and fails on skip |
-| `check:local` mirrors CI, with a test that parses `ci.yml` | `scripts/dev.py check` | A test that every blocking CI job is a `dev.py` task or excluded with a written reason |
+| `ci-success` single required check, no job-level `if`, skipped = failed | Enforced: `ci-success` needs every job and fails on skipped (`scripts/ci_gate.py`); `test_dev_tasks.py` checks the needs and that no other job has an `if:` | Make `ci-success` the one required check in branch protection |
+| `check:local` mirrors CI, with a test that parses `ci.yml` | Enforced: `test_every_job_runs_a_dev_task_or_says_why_not` | None |
 | Coverage floors below measured, only up | `fail_under = 70` in `pyproject.toml`, documented as only going up | Raise toward the measured value; add branch coverage |
 | Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
@@ -295,7 +295,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Dependency audit, expiring exceptions | `pip-audit` task (needs network) | Run it in CI nightly; exceptions with `expires` dates |
 | Charter with IDs and statuses, each Enforced row names its check | this section and the requirements table | A `guides/CHARTER.md` for the whole repo, with an audit that every Enforced row's evidence exists |
 
-Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test; suite-health lint; the EARS audit
+Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint; the EARS audit
 over `tests/features/`; `wcl_core.testing` with the fake transport; export coverage and the surface snapshot;
 mutation on `wcl_core` with a floor; the clock lint; the charter.
 
