@@ -429,6 +429,9 @@ class SettingsView(QWidget):
             from wcl_core.config import get_config_manager
 
             get_config_manager(self.CONFIG_PATH)
+            panel = getattr(self, "identity_panel", None)
+            if panel is not None:
+                panel.use_config(config)
 
             QMessageBox.information(self, "Saved", "Settings saved successfully.")
             self.status_message.emit("Settings saved")

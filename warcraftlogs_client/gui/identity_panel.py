@@ -64,7 +64,9 @@ class IdentityPanel(QWidget):
     """The Discord account and raid era sections of Settings."""
 
     status_message = Signal(str)
-    raids_tagged = Signal(int)  # how many raids changed, so the profile count and views can refresh
+    # A tag pass changed raids, or may have: each raid is saved as it is tagged, so a pass that fails part way
+    # through has still changed the ones before. The window recounts the profile and refreshes the scoped views.
+    eras_changed = Signal()
 
     def __init__(self, identity: IdentityService, profiles: ProfileService, parent=None):
         super().__init__(parent)
@@ -182,6 +184,12 @@ class IdentityPanel(QWidget):
         self.discord_status.setStyleSheet(f"color: {COLORS['error']}; font-size: 13px;")
         self.status_message.emit("Discord sign-in failed")
 
+    def use_config(self, config: dict) -> None:
+        """Pick up a newly saved config.json: the Discord app id for sign-in, the configured host for tagging."""
+        self._identity.config = dict(config)
+        if self._profiles.ctx is not None:
+            self._profiles.ctx.config.update(config)
+
     # ── Raid eras ──
 
     def _start_tagging(self) -> None:
@@ -200,11 +208,12 @@ class IdentityPanel(QWidget):
         self.tag_status.setText(tagged_text(count))
         self.status_message.emit(tagged_text(count))
         if count:
-            self.raids_tagged.emit(count)
+            self.eras_changed.emit()
 
     def _on_tag_failed(self, error: str) -> None:
         self.tag_status.setText(f"Tagging failed: {error}")
         self.status_message.emit("Tagging stored raids failed")
+        self.eras_changed.emit()
 
     def _on_tag_finished(self) -> None:
         if self._tag_worker is not None:

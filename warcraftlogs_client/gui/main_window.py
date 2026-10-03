@@ -300,7 +300,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
-        self.settings_view.identity_panel.raids_tagged.connect(self._on_raids_tagged)
+        self.settings_view.identity_panel.eras_changed.connect(self._on_eras_changed)
         self.profile_switcher.profile_changed.connect(self._on_profile_changed)
 
         self._load_guild_info()
@@ -498,13 +498,7 @@ class MainWindow(QMainWindow):
         pass
 
     def _on_profile_changed(self, name: str):
-        from .character_history_widget import CharacterHistoryWidget
-
-        self.home_view.refresh()
-        self.characters_hub.refresh()
-        for view in self.stack.drill_views():
-            if isinstance(view, CharacterHistoryWidget):
-                view.refresh()
+        self._refresh_scoped_views()
         # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
         # views' own messages.
         self.status_bar.showMessage(f"Raid profile: {name}")
@@ -540,11 +534,20 @@ class MainWindow(QMainWindow):
         else:
             self.guild_logo_label.setText("")
 
-    def _on_raids_tagged(self, _count: int):
-        # Tagged raids leave the profiles they don't belong to, so the count and the scoped views change.
-        self.profile_switcher.reload()
+    def _refresh_scoped_views(self):
+        """Re-read every view that counts only the active profile's raids, including pushed history views."""
+        from .character_history_widget import CharacterHistoryWidget
+
         self.home_view.refresh()
         self.characters_hub.refresh()
+        for view in self.stack.drill_views():
+            if isinstance(view, CharacterHistoryWidget):
+                view.refresh()
+
+    def _on_eras_changed(self):
+        # Tagged raids leave the profiles they don't belong to, so the count and the scoped views change.
+        self.profile_switcher.reload()
+        self._refresh_scoped_views()
 
     def _on_settings_saved(self, msg: str):
         self.status_bar.showMessage(msg)

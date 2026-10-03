@@ -1,5 +1,7 @@
 """Settings' Discord account and raid era sections (phase 2.3)."""
 
+import sqlite3
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -108,12 +110,35 @@ class TestDiscordAccount:
 class TestRaidEras:
     def test_tagging_fills_in_eras_once(self, qtbot, profiles):
         panel = _panel(qtbot, profiles)
-        with qtbot.waitSignal(panel.raids_tagged) as tagged:
+        with qtbot.waitSignal(panel.eras_changed):
             panel.tag_button.click()
-        assert tagged.args == [1]
         qtbot.waitUntil(lambda: panel._tag_worker is None)
         assert panel.tag_status.text() == tagged_text(1)
         assert panel.tag_button.text() == TAG_RAIDS and panel.tag_button.isEnabled()
 
+        changed: list[bool] = []
+        panel.eras_changed.connect(lambda: changed.append(True))
         panel.tag_button.click()
         qtbot.waitUntil(lambda: panel._tag_worker is None and panel.tag_status.text() == tagged_text(0))
+        assert changed == []  # nothing to tag, nothing to refresh
+
+    def test_a_failed_pass_still_refreshes(self, qtbot, profiles, monkeypatch):
+        """Each raid is saved as it is tagged, so a pass that fails part way may have changed some."""
+
+        def broken():
+            raise sqlite3.OperationalError("database is locked")
+
+        monkeypatch.setattr(profiles, "backfill_eras", broken)
+        panel = _panel(qtbot, profiles)
+        with qtbot.waitSignal(panel.eras_changed):
+            panel.tag_button.click()
+        qtbot.waitUntil(lambda: panel._tag_worker is None)
+        assert panel.tag_status.text() == "Tagging failed: database is locked"
+
+    def test_a_saved_config_reaches_sign_in_and_tagging(self, qtbot, profiles):
+        identity = FakeIdentity()
+        identity.config = {}
+        panel = _panel(qtbot, profiles, identity)
+        panel.use_config({"discord_client_id": "42", "wcl_api_url": "https://fresh.warcraftlogs.com/api/v2/client"})
+        assert identity.config["discord_client_id"] == "42"
+        assert profiles.ctx.config["wcl_api_url"] == "https://fresh.warcraftlogs.com/api/v2/client"
