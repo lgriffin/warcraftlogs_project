@@ -1014,17 +1014,19 @@ class PostgresRaidRepository:
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))
 
-    def _for_character(self, stmt: Any, table: Any, character_name: str, sources: tuple[str, ...]) -> Any:
+    def _for_character(
+        self, stmt: Any, table: Any, character_name: str, sources: tuple[str, ...], scope: RaidScope | None
+    ) -> Any:
         r, c = t.raids, t.characters
         return (
             stmt.join(r, r.c.id == table.c.raid_id)
             .join(c, c.c.id == table.c.character_id)
-            .where(_nocase_eq(c.c.name, character_name), r.c.source.in_(sources))
+            .where(_nocase_eq(c.c.name, character_name), *_scope_terms(scope, sources))
         )
 
     @_storage_errors
     def get_character_raid_roles(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         r = t.raids.c
         hp, tp, dp = t.healer_performance, t.tank_performance, t.dps_performance
@@ -1058,7 +1060,8 @@ class PostgresRaidRepository:
             null().cast(real),
         ).select_from(dp)
         parts = [
-            self._for_character(q, tbl, character_name, sources) for q, tbl in ((healer, hp), (tank, tp), (dps, dp))
+            self._for_character(q, tbl, character_name, sources, scope)
+            for q, tbl in ((healer, hp), (tank, tp), (dps, dp))
         ]
         stmt = union_all(*parts).subquery()
         with self._engine.connect() as conn:
@@ -1066,7 +1069,7 @@ class PostgresRaidRepository:
 
     @_storage_errors
     def get_character_spell_casts(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         hp, tp, dp = t.healer_performance, t.tank_performance, t.dps_performance
         hs, ta, da = t.healer_spells, t.tank_abilities, t.dps_abilities
@@ -1080,18 +1083,21 @@ class PostgresRaidRepository:
             da.join(dp, dp.c.id == da.c.dps_performance_id)
         )
         stmt = union_all(
-            *(self._for_character(q, tbl, character_name, sources) for q, tbl in ((healer, hp), (tank, tp), (dps, dp)))
+            *(
+                self._for_character(q, tbl, character_name, sources, scope)
+                for q, tbl in ((healer, hp), (tank, tp), (dps, dp))
+            )
         )
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))
 
     @_storage_errors
     def get_character_consumable_counts(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         cu = t.consumable_usage
         stmt = self._for_character(
-            select(cu.c.raid_id, cu.c.consumable_name, cu.c.count).select_from(cu), cu, character_name, sources
+            select(cu.c.raid_id, cu.c.consumable_name, cu.c.count).select_from(cu), cu, character_name, sources, scope
         )
         with self._engine.connect() as conn:
             return _dicts(conn.execute(stmt))
@@ -1120,7 +1126,9 @@ class PostgresRaidRepository:
             return _dicts(conn.execute(stmt))
 
     @_storage_errors
-    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+    def get_consumable_totals(
+        self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
         c, r, cu = t.characters, t.raids, t.consumable_usage
         stmt = (
             select(
@@ -1130,7 +1138,7 @@ class PostgresRaidRepository:
                 func.count(cu.c.raid_id.distinct()).label("raids"),
             )
             .select_from(cu.join(r, r.c.id == cu.c.raid_id).join(c, c.c.id == cu.c.character_id))
-            .where(cu.c.count > 0, r.c.source.in_(sources))
+            .where(cu.c.count > 0, *_scope_terms(scope, sources))
             .group_by(c.c.id, c.c.name, cu.c.consumable_name)
             .order_by(_c(c.c.name), _c(cu.c.consumable_name))
         )
@@ -1139,7 +1147,7 @@ class PostgresRaidRepository:
 
     @_storage_errors
     def get_consumable_raids(
-        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         if not consumable_names:
             return []
@@ -1150,7 +1158,7 @@ class PostgresRaidRepository:
             .where(
                 cu.c.count > 0,
                 nocase(cu.c.consumable_name).in_([_codec.ascii_lower(n) for n in consumable_names]),
-                r.c.source.in_(sources),
+                *_scope_terms(scope, sources),
             )
         )
         with self._engine.connect() as conn:

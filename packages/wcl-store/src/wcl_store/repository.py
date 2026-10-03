@@ -107,20 +107,20 @@ class RaidRepository(Protocol):
         ...
 
     def get_character_raid_roles(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """One row per raid and role, oldest first: raid_id, report_id, title, raid_date, zone, role, healing,
         overheal_percent, damage, damage_taken, mitigation_percent (None where the role has no such number)."""
         ...
 
     def get_character_spell_casts(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """Casts per spell per raid, in no set order: raid_id, role, spell_id, spell_name, casts."""
         ...
 
     def get_character_consumable_counts(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """Consumables per raid, in no set order: raid_id, consumable_name, count."""
         ...
@@ -133,13 +133,15 @@ class RaidRepository(Protocol):
         """Raids each character has a role row in, by name: name, player_class, raids."""
         ...
 
-    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+    def get_consumable_totals(
+        self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
         """Consumables each character used across raids, by name then consumable: name, consumable_name,
         count (the sum) and raids (raids it was used in). Consumables never used are left out."""
         ...
 
     def get_consumable_raids(
-        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """Which raids each character used any of ``consumable_names`` in, in no set order: name, raid_id and
         consumable_name as stored. Names match ignoring ASCII case, like character names. Rows with a count of 0 are

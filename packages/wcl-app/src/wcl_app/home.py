@@ -373,7 +373,7 @@ class _Snapshot:
     @cached_property
     def badge_stats(self) -> dict[str, PlayerStats]:
         """Every character's badge counts over the guild raids, keyed by lower-case name."""
-        return guild_stats(self.repo)
+        return guild_stats(self.repo, scope=self.scope)
 
     @cached_property
     def raids(self) -> list[dict[str, Any]]:

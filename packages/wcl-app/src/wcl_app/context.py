@@ -24,6 +24,16 @@ from wcl_core.client import DEFAULT_API_URL, WarcraftLogsClient
 from wcl_core.common.errors import ConfigurationError
 from wcl_store import RaidRepository, RaidScope
 
+# A fixed scope, or a callable a service asks at read time (``lambda: ctx.scope``) so a profile switch on the
+# context reaches services built before it.
+ScopeSource = RaidScope | Callable[[], RaidScope | None] | None
+
+
+def resolve_scope(source: ScopeSource) -> RaidScope | None:
+    """The scope ``source`` stands for right now."""
+    return source() if callable(source) else source
+
+
 if TYPE_CHECKING:
     from wcl_store.sqlite import PerformanceDB
 
@@ -107,6 +117,20 @@ class AppContext:
         from wcl_core.config import load_config
 
         return cls(config=load_config(config_file), db_path=db_path)
+
+    @classmethod
+    def desktop(
+        cls, config_file: str | None = None, db_path: str | None = None, *, with_config: bool = True
+    ) -> "AppContext":
+        """The desktop and CLI context: the config file (or none, for database-only work) with the saved active
+        profile applied, so every scoped read starts in the profile the user last picked."""
+        from wcl_app.profiles import saved_active_profile
+
+        ctx = cls.from_config_file(config_file, db_path) if with_config else cls(config={}, db_path=db_path)
+        profile = saved_active_profile()
+        if profile is not None:
+            ctx.use_profile(profile)
+        return ctx
 
     @classmethod
     def headless(

@@ -165,6 +165,14 @@ class JsonProfileStore:
         self.path.write_text(json.dumps(profiles.to_dict(), indent=2), encoding="utf-8")
 
 
+def saved_active_profile(path: str | Path | None = None) -> Profile | None:
+    """The desktop's saved active profile (from ``get_profiles_path()`` unless ``path`` is given), or None."""
+    from wcl_core import paths
+
+    profiles = JsonProfileStore(path if path is not None else paths.get_profiles_path()).load()
+    return profiles.active_profile if profiles is not None else None
+
+
 class ProfileService:
     """List, create, pick and apply profiles; ``owner`` is the linked Discord id the host passes in."""
 
