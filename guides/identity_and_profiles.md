@@ -198,7 +198,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1, 2.2, 2.3a merged; 2.3b in review | PROF-07 to PROF-09 |
+| 2 | Scoped services and frontends | 2.1 to 2.3b merged; 2.3c in review | PROF-07 to PROF-09 |
 | 3 | Import by profile | Planned | |
 | 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
 | 5 | Retire the single-host config | Planned | |
@@ -232,11 +232,14 @@ Order, one PR each:
    raids" action that runs `backfill_eras()`. No view reads the profile file itself.
    2.3a (merged, #147): the top bar's profile switcher (`gui/profile_switcher.py`) over
    `ProfileService.desktop(ctx)`, sharing the window's context with the Home page so a switch refreshes it in place.
-   2.3b: `wcl_app.characters.CharacterService` (roster, dossier, comparison) reads the desktop-only character
+   2.3b (merged, #148): `wcl_app.characters.CharacterService` (roster, dossier, comparison) reads the desktop-only character
    queries, which now all take `scope=`, under the context's profile at read time. The Characters hub's list, its
    history panel, the pushed history view and the compare view use it and re-read on a switch, so three entries leave
    `KNOWN_VIOLATIONS`. `character_view` (My Character) still reads the database for peers and imports; it moves with
-   the insight views. Next: the Discord sign-in and "Tag stored raids" in Settings.
+   the insight views.
+   2.3c: Settings' `gui/identity_panel.py`. "Discord Account" links and unlinks through `IdentityService` (the
+   browser wait runs on a daemon thread so closing the app never blocks on it); "Raid Eras" runs `backfill_eras()`
+   on a worker with the window's context, then the switcher recounts and the scoped views refresh.
 4. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
    contract (`guides/home_widgets.md` style page for the profile payload).
 Definition of done: every service read that lists or aggregates raids takes the scope; the desktop shows the active

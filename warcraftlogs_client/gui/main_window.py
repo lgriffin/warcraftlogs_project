@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         self.characters_hub = CharactersHub(characters=self._characters)
         self.insights_view = InsightsView()
         self.raid_group_view = RaidGroupView()
-        self.settings_view = SettingsView()
+        self.settings_view = SettingsView(ctx=self._ctx)
 
         self.stack.addWidget(self.home_view)
         self.stack.addWidget(self.raids_hub)
@@ -300,6 +300,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
+        self.settings_view.identity_panel.raids_tagged.connect(self._on_raids_tagged)
         self.profile_switcher.profile_changed.connect(self._on_profile_changed)
 
         self._load_guild_info()
@@ -539,6 +540,12 @@ class MainWindow(QMainWindow):
         else:
             self.guild_logo_label.setText("")
 
+    def _on_raids_tagged(self, _count: int):
+        # Tagged raids leave the profiles they don't belong to, so the count and the scoped views change.
+        self.profile_switcher.reload()
+        self.home_view.refresh()
+        self.characters_hub.refresh()
+
     def _on_settings_saved(self, msg: str):
         self.status_bar.showMessage(msg)
         if "saved" in msg.lower():
@@ -568,6 +575,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self._console_dock.cleanup()
         self.profile_switcher.wait_for_counts()
+        self.settings_view.identity_panel.wait_for_tagging()
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
