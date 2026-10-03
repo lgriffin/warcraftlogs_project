@@ -81,3 +81,18 @@ def test_every_target_has_tests_and_a_floor_that_exist():
 def test_an_unknown_module_is_refused():
     with pytest.raises(SystemExit, match="not a mutation target"):
         list(mutate._selected(mutate._config(), ["nope"]))
+
+
+def test_class_decorators_are_mutated_like_function_decorators():
+    source = "@dataclass(frozen=True)\nclass C:\n    x: int\n"
+    assert [m.change for m in mutate.mutants(source)] == ["True -> False"]
+    assert "frozen=False" in mutate.mutate(source, 0)
+
+
+def test_the_default_worker_count_is_capped():
+    assert 1 <= mutate.DEFAULT_JOBS <= 4
+
+
+def test_a_failing_baseline_prints_pytest_output(capsys):
+    assert not mutate._pytest(["tests/no_such_test_file.py"], mutate.CORE_SRC, timeout=60, show_failure=True)
+    assert "no_such_test_file.py" in capsys.readouterr().err

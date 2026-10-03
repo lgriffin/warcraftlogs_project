@@ -32,6 +32,9 @@ except ModuleNotFoundError:  # Python 3.10
 
 ROOT = Path(__file__).resolve().parent.parent
 CORE_SRC = ROOT / "packages" / "wcl-core" / "src"
+# Each worker is a pytest process with its own package copy; past a few, contention only stretches runs toward
+# the timeout. -j overrides it.
+DEFAULT_JOBS = min(os.cpu_count() or 1, 4)
 
 SWAPS: dict[type, type] = {
     ast.Eq: ast.NotEq,
@@ -92,6 +95,7 @@ class _Mutator(ast.NodeTransformer):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
         node.body = _docstring(node.body) + [self.visit(s) for s in _without_docstring(node.body)]
+        node.decorator_list = [self.visit(d) for d in node.decorator_list]
         return node
 
     def visit_Assign(self, node: ast.Assign) -> ast.AST:
@@ -223,8 +227,8 @@ def _imports_the_copy(src: Path) -> bool:
     return run.returncode == 0 and src.resolve() in Path(run.stdout.strip()).resolve().parents
 
 
-def _pytest(tests: list[str], src: Path, timeout: float) -> bool:
-    """True when the tests pass against the package copy in ``src``."""
+def _pytest(tests: list[str], src: Path, timeout: float, *, show_failure: bool = False) -> bool:
+    """True when the tests pass against the package copy in ``src``; ``show_failure`` prints pytest's output."""
     env = _env(src)
     command = [
         sys.executable,
@@ -242,7 +246,11 @@ def _pytest(tests: list[str], src: Path, timeout: float) -> bool:
     try:
         run = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired:
+        if show_failure:
+            print(f"pytest timed out after {timeout:.0f}s", file=sys.stderr)
         return False
+    if run.returncode and show_failure:
+        sys.stderr.write(run.stdout.decode(errors="replace") + run.stderr.decode(errors="replace"))
     return run.returncode == 0
 
 
@@ -250,6 +258,7 @@ def run_module(module: str, tests: list[str], jobs: int) -> Result:
     path = CORE_SRC / "wcl_core" / f"{module}.py"
     source = path.read_text(encoding="utf-8")
     sites = mutants(source)
+    jobs = max(1, min(jobs, len(sites)))
     with tempfile.TemporaryDirectory() as scratch:
         copies = []
         for worker in range(jobs):
@@ -259,7 +268,7 @@ def run_module(module: str, tests: list[str], jobs: int) -> Result:
         if not _imports_the_copy(copies[0]):
             raise SystemExit("the installed wcl_core shadows the mutated copy; check PYTHONPATH")
         start = time.monotonic()
-        if not _pytest(tests, copies[0], timeout=600):
+        if not _pytest(tests, copies[0], timeout=600, show_failure=True):
             raise SystemExit(f"{module}: the tests fail before any mutation: {' '.join(tests)}")
         timeout = max(10.0, 3 * (time.monotonic() - start))
 
@@ -291,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("modules", nargs="*", help="wcl_core modules to mutate (default: every target)")
     parser.add_argument("-v", "--verbose", action="store_true", help="list surviving mutants")
-    parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1, help="parallel test runs")
+    parser.add_argument("-j", "--jobs", type=int, default=DEFAULT_JOBS, help="parallel test runs")
     args = parser.parse_args(argv)
     config = _config()
     below = []

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -73,6 +74,13 @@ class TestCatalogue:
         )
         assert "Ignoring flasks entry" in caplog.text
         assert FlaskCatalog.from_config({"flasks": "nope"}).names == ()
+
+    def test_the_catalog_and_pulls_are_immutable(self):
+        """One catalog is shared by every analysis, and pulls are reused across players: neither may change."""
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            CATALOG.auras = {}  # type: ignore[misc]
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            BossPull(100).start = 200  # type: ignore[misc]
 
 
 class TestPreparation:
