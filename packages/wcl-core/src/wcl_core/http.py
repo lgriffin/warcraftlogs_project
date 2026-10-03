@@ -17,8 +17,11 @@ import requests
 class Response(Protocol):
     """What wcl-core reads from a response."""
 
-    status_code: int
-    text: str
+    @property
+    def status_code(self) -> int: ...
+
+    @property
+    def text(self) -> str: ...
 
     def json(self) -> Any: ...
 
