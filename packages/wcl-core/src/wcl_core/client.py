@@ -114,7 +114,7 @@ class WarcraftLogsClient:
 
     def __init__(self, token_manager: TokenSource, cache_enabled: bool = True, api_url: str | None = None) -> None:
         self.token_manager = token_manager
-        self._last_request_time = 0.0
+        self._last_request_time: float | None = None  # no request yet
         self.cache_enabled = cache_enabled
         self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
 
@@ -128,6 +128,8 @@ class WarcraftLogsClient:
         self.api_url = value.rstrip("/")
 
     def _throttle(self) -> None:
+        if self._last_request_time is None:
+            return
         elapsed = clock.monotonic() - self._last_request_time
         if elapsed < self.MIN_REQUEST_INTERVAL:
             clock.sleep(self.MIN_REQUEST_INTERVAL - elapsed)

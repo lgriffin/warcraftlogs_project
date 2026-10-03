@@ -2,12 +2,14 @@
 
 By default these are the system clock (``time.time``, ``time.monotonic``, ``time.sleep``, ``datetime.now``).
 ``use(clock)`` swaps in another clock for a block, process-wide like ``wcl_core.http.use`` so worker threads see it
-too; ``wcl_core.testing.FakeClock`` is the one tests use, so token expiry, retry backoff and "this week" run without
-waiting or depending on the day. ``tests/test_suite_health.py`` fails on any other clock read in the packages.
+too. The newest clock still in use wins, and blocks may end in any order (two test threads, say) without leaving a
+clock behind. ``wcl_core.testing.FakeClock`` is the one tests use, so token expiry, retry backoff and "this week"
+run without waiting or depending on the day. ``tests/test_clock.py`` fails on any other clock read in the packages.
 """
 
 from __future__ import annotations
 
+import threading
 import time as _time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -34,19 +36,28 @@ class Clock(Protocol):
     def sleep(self, seconds: float) -> None: ...
 
 
-_clock: Clock | None = None
+_clocks: list[Clock] = []  # every clock in use, newest last
+_lock = threading.Lock()
+
+
+def _current() -> Clock | None:
+    clocks = _clocks
+    return clocks[-1] if clocks else None
 
 
 def time() -> float:
-    return _time.time() if _clock is None else _clock.time()
+    clock = _current()
+    return _time.time() if clock is None else clock.time()
 
 
 def monotonic() -> float:
-    return _time.monotonic() if _clock is None else _clock.monotonic()
+    clock = _current()
+    return _time.monotonic() if clock is None else clock.monotonic()
 
 
 def now() -> datetime:
-    return datetime.now() if _clock is None else _clock.now()
+    clock = _current()
+    return datetime.now() if clock is None else clock.now()
 
 
 def today() -> date:
@@ -54,18 +65,25 @@ def today() -> date:
 
 
 def sleep(seconds: float) -> None:
-    if _clock is None:
+    clock = _current()
+    if clock is None:
         _time.sleep(seconds)
     else:
-        _clock.sleep(seconds)
+        clock.sleep(seconds)
 
 
 @contextmanager
 def use(clock: Clock) -> Iterator[Clock]:
-    """Read the time from *clock* in the block; the one in place before comes back afterwards."""
-    global _clock
-    before, _clock = _clock, clock
+    """Read the time from *clock* in the block; afterwards the newest clock still in use, or the system's."""
+    global _clocks
+    with _lock:
+        _clocks = [*_clocks, clock]
     try:
         yield clock
     finally:
-        _clock = before
+        with _lock:
+            # Drop this block's entry, wherever it now sits: another thread's block may have ended first.
+            for i in range(len(_clocks) - 1, -1, -1):
+                if _clocks[i] is clock:
+                    _clocks = _clocks[:i] + _clocks[i + 1 :]
+                    break

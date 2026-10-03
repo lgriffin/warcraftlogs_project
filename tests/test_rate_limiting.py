@@ -28,10 +28,9 @@ def client(wcl):
 
 
 class TestThrottle:
-    def test_first_call_no_delay(self, client, fake_clock):
-        fake_clock.advance(10)
-        client._last_request_time = 0.0
-        client._throttle()
+    def test_first_call_no_delay(self, wcl, client, fake_clock):
+        wcl.answer("test", {"ok": True})
+        client.run_query("{ test }")
         assert fake_clock.sleeps == []
 
     def test_enforces_interval(self, client, fake_clock):
@@ -42,7 +41,6 @@ class TestThrottle:
 
     def test_back_to_back_queries_are_spaced(self, wcl, client, fake_clock):
         wcl.answer("test", {"ok": True})
-        fake_clock.advance(10)
         client.run_query("{ test }")
         client.run_query("{ test }")
         assert fake_clock.sleeps == [pytest.approx(0.5)]
@@ -57,7 +55,6 @@ class TestRetryOn429:
         assert len(wcl.queries) == 2
 
     def test_exponential_backoff(self, wcl, client, fake_clock):
-        client.MIN_REQUEST_INTERVAL = 0
         wcl.answer("test", status(429), status(429), {})
         client.run_query("{ test }")
         assert fake_clock.sleeps == [1, 2]

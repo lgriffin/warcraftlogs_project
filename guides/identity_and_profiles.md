@@ -306,8 +306,8 @@ module helper that asserts), and no `except Exception`/bare `except`/`suppress(E
 rules have no allow-list; each has its own test on a small source.
 
 `tests/test_api_contract.py` guards the API the Toads Hub and bot build on: `wcl_app`, `wcl_store`,
-`wcl_core.clock`, `wcl_core.http` and `wcl_core.testing`. Every name in their `__all__` is named by a test, and every public method of
-an exported `*Service` and of `RaidRepository` is called by one. `tests/api_surface.txt` records one line per export,
+`wcl_core.clock`, `wcl_core.http` and `wcl_core.testing`. Every name in their `__all__` is named by a test, and
+every public method of an exported `*Service` and of `RaidRepository` is called by one. `tests/api_surface.txt` records one line per export,
 dataclass field and signature, read from the source; any change fails until the file is regenerated with
 `WCL_UPDATE_SURFACE=1 pytest tests/test_api_contract.py`, and the failure lists the lines that are gone as breaking.
 `master` requires `ci-success` through a ruleset.
