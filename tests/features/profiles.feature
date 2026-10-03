@@ -62,13 +62,13 @@ Feature: Raid profiles and Discord identity
     Then the command should import from "https://classic.warcraftlogs.com/api/v2/client"
 
   @ears_state_driven
-  Scenario: PROF-10 While a profile is active, the guild report list shall hold only the reports of the profile's guild inside its scope
+  Scenario: PROF-10 While a profile is active, the guild list shall show only its guild and era
     Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
     When the "The Burning Crusade" profile for guild 9 becomes active
     Then the guild report list should hold Karazhan and Nowhere Keep, asked of guild 9
 
   @ears_event_driven @database
-  Scenario: PROF-11 When a raid is imported under a profile, the client shall tag it from its site and zone, so the profile lists it without a backfill
+  Scenario: PROF-11 When a profile imports a raid, the profile shall list it without a backfill
     Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
     And no raid is stored
     When the "The Burning Crusade" profile for guild 9 becomes active
@@ -77,7 +77,7 @@ Feature: Raid profiles and Discord identity
     And the profile's raid list should hold Karazhan only
 
   @ears_unwanted_behavior
-  Scenario: PROF-12 If the active profile names a game version the client is not on, then the service shall import nothing
+  Scenario: PROF-12 If a profile's site is not the client's, then the service shall import nothing
     Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
     When a profile on "forever" is activated
     Then importing the guild's new reports should fail without asking Warcraft Logs anything

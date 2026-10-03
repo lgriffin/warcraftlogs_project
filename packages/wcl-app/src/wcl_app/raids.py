@@ -111,23 +111,24 @@ class RaidService:
         """The guild's reports on Warcraft Logs, for the active profile's guild unless one is given.
 
         Under a profile only the reports of its era come back (``RaidScope.admits``, the rule its raid list
-        uses), so importing them all imports nothing the profile would not show.
+        uses), so importing them all imports nothing the profile would not show. The client pages past newer
+        reports from other eras to find them.
         """
         guild = self._guild(guild_id)
         scope = self.ctx.scope
         if scope is None:
             return self.ctx.wcl_client.get_guild_reports(guild)
         self.check_profile_site()
-        return [
-            r
-            for r in self.ctx.wcl_client.get_guild_reports(guild)
-            if scope.admits(
+
+        def inside(r: dict[str, Any]) -> bool:
+            return scope.admits(
                 game_version=r.get("game_version"),
                 expansion=r.get("expansion"),
                 zone=r.get("zone"),
                 raid_date=_raid_date(r.get("start_time")),
             )
-        ]
+
+        return self.ctx.wcl_client.get_guild_reports(guild, keep=inside)
 
     def new_guild_reports(self, guild_id: int | None = None) -> list[dict[str, Any]]:
         """``guild_reports`` not stored yet, newest first as Warcraft Logs lists them."""

@@ -6,6 +6,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QCheckBox, QLineEdit
 
 from warcraftlogs_client.gui.download_view import DownloadView
@@ -94,9 +95,44 @@ class TestDownloadView:
             view.profile_changed()  # hidden: the next show fetches the new profile's list
         fetch.assert_not_called()
         assert (view._guild_reports_raw, view._auto_fetched, view._table_model.rowCount()) == ([], False, 0)
+        assert not view._analyze_new_btn.isEnabled()
+
+    def test_a_list_fetched_for_the_old_profile_is_dropped(self, qtbot):
+        view = _make_download_view(qtbot)
+        view._cached_codes = {}
+        before = view._generation
+        view.profile_changed()
+        view._on_guild_loaded([{"start_time": 1700006400000, "code": "OLD123"}], before)
+        assert view._guild_reports_raw == [] and view._fetch_btn.isEnabled()
+        view._on_guild_loaded([{"start_time": 1700006400000, "code": "NEW123"}], view._generation)
+        assert [r["code"] for r in view._guild_reports_raw] == ["NEW123"]
 
     def test_the_fetch_asks_for_the_active_profiles_guild(self, qtbot):
         view = _make_download_view(qtbot)
         with patch("warcraftlogs_client.gui.download_view.GuildReportsWorker") as worker:
             view._fetch_guild_reports()
         worker.assert_called_once_with()
+
+    @pytest.mark.parametrize(("guild", "fetches"), [(None, False), (9, True)])
+    def test_showing_fetches_once_there_is_a_guild(self, qtbot, guild, fetches):
+        view = _make_download_view(qtbot)
+        with (
+            patch("warcraftlogs_client.gui.download_view.import_guild", return_value=guild),
+            patch.object(DownloadView, "_fetch_guild_reports") as fetch,
+            patch.object(DownloadView, "_refresh_cached_codes"),
+        ):
+            DownloadView.showEvent(view, QShowEvent())
+        assert fetch.called is fetches and view._auto_fetched is fetches
+
+    def test_a_code_opens_the_report_on_the_site_it_came_from(self, qtbot):
+        view = _make_download_view(qtbot)
+        view._cached_codes = {}
+        url = "https://classic.warcraftlogs.com/reports/ABC123"
+        view._guild_reports_raw = [{"start_time": 1700006400000, "code": "ABC123", "url": url}]
+        for cb in view._day_checkboxes.values():
+            cb.setChecked(True)
+        view._apply_day_filter()
+        column = view._table_model._columns.index("code") + (1 if view._table_model._checkable else 0)
+        with patch("warcraftlogs_client.gui.download_view.webbrowser.open") as opened:
+            view._on_click(view._table_model.index(0, column))
+        opened.assert_called_once_with(url)

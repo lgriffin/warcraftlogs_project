@@ -7,7 +7,9 @@ extracted data (not raw JSON wrappers), with consistent signatures.
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,24 @@ def _extract_report(result: dict) -> dict:
 
 
 DEFAULT_API_URL = "https://www.warcraftlogs.com/api/v2/client"
+
+_GUILD_REPORTS_QUERY = """
+query($guildID: Int!, $limit: Int!, $page: Int!) {
+  reportData {
+    reports(guildID: $guildID, limit: $limit, page: $page) {
+      data {
+        code
+        title
+        owner { name }
+        startTime
+        endTime
+        zone { name expansion { name } }
+      }
+      has_more_pages
+    }
+  }
+}
+"""
 
 # End timestamp used for "whole report" queries (report-relative milliseconds).
 FULL_REPORT_END = 999999999
@@ -298,56 +318,54 @@ class WarcraftLogsClient:
             "server": server.get("name", ""),
         }
 
-    def get_guild_reports(self, guild_id: int, total: int = 350) -> list[dict]:
-        """Fetch recent reports for a guild, paginating to collect *total* reports.
+    @property
+    def site_url(self) -> str:
+        """The Warcraft Logs site this client's API is on, for report links: ``https://fresh.warcraftlogs.com``."""
+        parsed = urlparse(self.api_url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    def get_guild_reports(
+        self,
+        guild_id: int,
+        total: int = 350,
+        keep: Callable[[dict], bool] | None = None,
+        scan: int = 2000,
+    ) -> list[dict]:
+        """Fetch a guild's newest reports, paginating to collect *total* of them.
 
         Each carries its era like ``get_report_metadata``: ``game_version`` is this client's site, ``expansion`` the
-        zone's (None when the report has no zone or the zone is unknown).
+        zone's (None when the report has no zone or the zone is unknown), and ``url`` its page on the site. With
+        *keep*, only reports it accepts count towards *total*, and paging goes on through up to *scan* reports, so
+        a profile's era is not hidden behind a run of newer reports from another.
         """
-        all_reports: list[dict] = []
-        page = 1
-        per_page = min(total, 100)
-        query = """
-        query($guildID: Int!, $limit: Int!, $page: Int!) {
-          reportData {
-            reports(guildID: $guildID, limit: $limit, page: $page) {
-              data {
-                code
-                title
-                owner { name }
-                startTime
-                endTime
-                zone { name expansion { name } }
-              }
-              has_more_pages
-            }
-          }
-        }
-        """
-
-        while len(all_reports) < total:
+        kept: list[dict] = []
+        per_page = min(total, 100) if keep is None else 100
+        limit = total if keep is None else max(total, scan)
+        seen, page = 0, 1
+        while len(kept) < total and seen < limit:
             variables = {"guildID": guild_id, "limit": per_page, "page": page}
-            result = self.run_query(query, use_cache=False, variables=variables)
-            page_data = result["data"]["reportData"]["reports"]
-            for r in page_data["data"]:
-                zone = r.get("zone") or {}
-                all_reports.append(
-                    {
-                        "code": r["code"],
-                        "title": r["title"],
-                        "owner": r["owner"]["name"] if r.get("owner") else "",
-                        "start_time": r["startTime"],
-                        "end_time": r.get("endTime"),
-                        "zone": zone.get("name") or "",
-                        "game_version": self.game_version,
-                        "expansion": (zone.get("expansion") or {}).get("name") or expansion_for_zone(zone.get("name")),
-                    }
-                )
-            if not page_data.get("has_more_pages"):
+            page_data = self.run_query(_GUILD_REPORTS_QUERY, use_cache=False, variables=variables)["data"]["reportData"]
+            reports = [self._guild_report(r) for r in page_data["reports"]["data"]]
+            seen += len(reports)
+            kept += [r for r in reports if keep is None or keep(r)]
+            if not page_data["reports"].get("has_more_pages") or not reports:
                 break
             page += 1
+        return kept[:total]
 
-        return all_reports[:total]
+    def _guild_report(self, r: dict) -> dict:
+        zone = r.get("zone") or {}
+        return {
+            "code": r["code"],
+            "title": r["title"],
+            "owner": r["owner"]["name"] if r.get("owner") else "",
+            "start_time": r["startTime"],
+            "end_time": r.get("endTime"),
+            "zone": zone.get("name") or "",
+            "game_version": self.game_version,
+            "expansion": (zone.get("expansion") or {}).get("name") or expansion_for_zone(zone.get("name")),
+            "url": f"{self.site_url}/reports/{r['code']}",
+        }
 
     def get_master_data(self, report_id: str) -> list[dict]:
         return [a for a in self.get_all_actors(report_id) if a["type"] == "Player"]

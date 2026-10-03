@@ -83,6 +83,44 @@ def test_the_guild_list_carries_each_reports_era(wcl, tmp_path):
     ]
     assert wcl.queries[0].variables["guildID"] == 7
     assert "expansion { name }" in wcl.queries[0].query
+    assert reports[0]["url"] == f"https://fresh.warcraftlogs.com/reports/{KARA}"
+
+
+def _pages(*pages):
+    """Guild report pages by number; every page but the last says there are more."""
+
+    def answer(_query, variables):
+        n = variables["page"]
+        return {"reportData": {"reports": {"data": pages[n - 1], "has_more_pages": n < len(pages)}}}
+
+    return answer
+
+
+def test_a_profile_pages_past_newer_reports_from_other_eras(wcl, tmp_path):
+    classic = [_report(f"MoltenCore{i:06d}", "Molten Core", "Classic") for i in range(100)]
+    tbc = [_report(f"Karazhan{i:08d}", "Karazhan", TBC) for i in range(3)]
+    wcl.answer("reports(guildID", _pages(classic, tbc))
+    reports = RaidService(_ctx(wcl, tmp_path, Profile("tbc", "TBC", expansions=(TBC,)))).guild_reports()
+    assert len(reports) == 3 and [q.variables["page"] for q in wcl.queries] == [1, 2]
+    assert all(q.variables["limit"] == 100 for q in wcl.queries)
+
+
+def test_the_client_keeps_paging_only_as_far_as_asked(wcl):
+    classic = [_report(f"MoltenCore{i:06d}", "Molten Core", "Classic") for i in range(100)]
+    wcl.answer("reports(guildID", _pages(*[classic] * 9))
+    client = wcl.client(FRESH)
+    assert client.get_guild_reports(9, total=2, keep=lambda r: r["expansion"] == TBC, scan=250) == []
+    assert len(wcl.queries) == 3  # 300 scanned: past the 250 asked for, and no further
+    kept = client.get_guild_reports(9, total=2, keep=lambda r: True)
+    assert [r["code"] for r in kept] == ["MoltenCore000000", "MoltenCore000001"] and len(wcl.queries) == 4
+    plain = client.get_guild_reports(9, total=150)
+    assert len(plain) == 150 and [q.variables["limit"] for q in wcl.queries[4:]] == [100, 100]
+
+
+def test_an_empty_page_ends_the_scan(wcl):
+    wcl.answer("reports(guildID", {"reportData": {"reports": {"data": [], "has_more_pages": True}}})
+    assert wcl.client(FRESH).get_guild_reports(9, keep=lambda r: True) == []
+    assert len(wcl.queries) == 1
 
 
 def test_a_profile_fetches_only_its_eras_reports_from_its_guild(wcl, tmp_path):

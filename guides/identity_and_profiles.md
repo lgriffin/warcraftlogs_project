@@ -70,13 +70,17 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | PROF-09 | The desktop shall show and switch the active profile and its raid count. | Enforced | see below |
-| PROF-10 | While a profile is active, the guild report list shall hold only the reports of the profile's guild inside its scope. | Enforced | `tests/test_import_by_profile.py`, `test_a_scope_admits_exactly_the_raids_the_store_returns_for_it` on both backends |
-| PROF-11 | When a raid is imported under a profile, the client shall tag it from its site and zone, so the profile lists it without a backfill. | Enforced | `test_a_raid_imported_under_a_profile_is_listed_by_it_without_a_backfill` |
-| PROF-12 | If the active profile names a game version the client is not on, then the service shall import nothing. | Enforced | `test_a_profile_whose_site_is_unknown_refuses_to_import` |
+| PROF-10 | While a profile is active, the guild list shall show only its guild and era. | Enforced | see below |
+| PROF-11 | When a profile imports a raid, the profile shall list it without a backfill. | Enforced | see below |
+| PROF-12 | If a profile's site is not the client's, then the service shall import nothing. | Enforced | see below |
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
 PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
 contract tests on both backends.
+PROF-10 evidence: `tests/test_import_by_profile.py` and
+`test_a_scope_admits_exactly_the_raids_the_store_returns_for_it` on both backends. PROF-11 evidence:
+`test_a_raid_imported_under_a_profile_is_listed_by_it_without_a_backfill`. PROF-12 evidence:
+`test_a_profile_whose_site_is_unknown_refuses_to_import`.
 PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence:
 `tests/gui/test_profile_switcher.py`, `test_the_home_page_follows_a_later_profile_switch` and
 `tests/gui/test_characters_hub.py`.
