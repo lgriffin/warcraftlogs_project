@@ -60,15 +60,18 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | PROF-04 | When a profile names a game version with a known site, the context shall import from that site; otherwise it shall keep the configured host. | Enforced | `tests/test_profiles.py::test_switching_profiles_rebuilds_the_client_for_the_host`, `test_api_url_follows_the_game_version_unless_given` |
 | PROF-05 | When a profile is created while an identity is linked, the profile shall carry that Discord id as its owner. | Enforced | `test_create_activate_and_delete` |
 | PROF-06 | When raids stored before this change are backfilled, the service shall tag each from its zone and the configured host, and shall leave an unknown zone's expansion unset. | Enforced | `test_backfill_tags_stored_raids_from_the_zone_and_the_configured_host` |
-| PROF-07 | Every service that reads raids shall use the active profile's scope at read time. | Enforced, except character history | `tests/test_profile_scoped_services.py`; history is phase 2.2 |
+| PROF-07 | Each raid-reading service shall use the active scope at read time. | Enforced but history | see below |
 | IDENT-01 | The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, and shall hold no client secret. | Enforced | `tests/test_discord_auth.py::TestPkce`, `test_complete_auth_exchanges_the_code_with_the_verifier_and_reads_who` |
 | IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
 | IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
 | IDENT-04 | When `DISCORD_OAUTH_URL` is set, the flow shall use that site, so the Toads fake Discord serves development. | Enforced | `test_oauth_url_can_point_at_the_fake_discord` |
 | IDENT-05 | A linked app shall be able to register with the Toads Hub and the bot shall resolve a Discord user to their profile. | Gap | Phase 4 |
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
-| PROF-08 | When the desktop or CLI starts, the context shall begin in the saved active profile. | Enforced | `test_the_desktop_context_starts_in_the_saved_profile` |
+| PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
+
+PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change; character history
+is scoped in phase 2.2. PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`.
 
 ## Layering (per `tests/test_architecture.py`)
 
