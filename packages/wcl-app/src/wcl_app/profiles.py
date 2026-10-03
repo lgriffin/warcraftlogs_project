@@ -65,7 +65,8 @@ class Profile:
 
     @property
     def api_url(self) -> str | None:
-        """The client API URL imports should use, or None to keep the configured one."""
+        """The client API URL imports should use, or None to keep the configured one (also when the game
+        version's site is not announced yet, as for ``forever``)."""
         if self.wcl_api_url:
             return self.wcl_api_url
         return api_url_for(self.game_version) if self.game_version else None

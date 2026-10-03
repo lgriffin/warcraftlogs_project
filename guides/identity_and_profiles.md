@@ -1,14 +1,29 @@
 # Discord identity and raid profiles
 
-Status: **experimental** (branch `claude/experimental-discord-identity-fs3zou`). This guide is the plan; the
-sections marked *built* describe what the branch already carries, the rest is the roadmap.
+Plan revision 2, 2026-10-03. Measured at draft PR #144 (branch `claude/experimental-discord-identity-fs3zou`).
+Status: **experimental**. Order of precedence, as in ESI.ts: running code and CI are the fact, the requirements
+below are the intent, this guide is the how, the phase map is the order.
+
+## Decisions
+
+- Decided 2026-10-03: **Forever is its own game version** (`forever`). It launches in November 2026; Warcraft Logs
+  has not announced its site, so `wcl_core.game_version.HOSTS` has no entry for it yet and a Forever profile keeps
+  the configured host for imports until one is added. Classic Era and Hardcore stay `classic`.
+- Decided 2026-10-03: **Reuse the Toads Hub's Discord application.** The desktop is a public client with PKCE on a
+  loopback redirect; the Hub owner adds `http://127.0.0.1:8765/callback` as a redirect and enables the public client.
+  The code needs only the application id (`discord_client_id` or `DISCORD_CLIENT_ID`).
+- Decided 2026-10-03: **Python first, port to Toads later.** Every phase lands in this repo; the Hub takes the
+  packages by pinning a commit, as it does today. Nothing here needs the Hub's session code.
+- Decided 2026-10-03: **The ESI.ts standard is the bar**: world-class testing, architecture and scalability, in
+  Python. The quality section below says what that means here and what is still missing.
+- Decided 2026-10-03: one database with views, never one database per profile, so a report is imported once.
 
 ## Why
 
 The analyzer takes any Warcraft Logs report and stores it. One guild anchored on top of it has lived through
-Classic and then The Burning Crusade on the Anniversary ("fresh") realms, and may run Classic Era ("forever") or
-Season of Discovery characters too. Everything lands in one database with no way to say "show me TBC" or
-"show me the Classic days", and every frontend treats the whole database as the guild.
+Classic and then The Burning Crusade on the Anniversary ("fresh") realms, and may run Classic Era, Season of
+Discovery or Forever characters too. Everything lands in one database with no way to say "show me TBC" or "show me
+the Classic days", and every frontend treats the whole database as the guild.
 
 The second gap is identity. The desktop app has a Warcraft Logs sign-in but no notion of *whose* app it is. The
 Toads Hub signs members in with Discord, and the Toads bot talks to the Hub over `/api/bots`. For the analyzer to
@@ -23,14 +38,36 @@ model and a thin vertical slice, then each frontend adapts.
 
 | Term | Meaning | Where it lives |
 | --- | --- | --- |
-| **Game version** | Which Warcraft Logs site a report is on: `fresh` (Anniversary realms, Classic through TBC), `classic` (Classic Era and Hardcore, "forever"), `sod`, `retail`. Derived from the API host the report was fetched through. | `wcl_core.game_version`, stored on `raids.game_version` |
+| **Game version** | Which Warcraft Logs site a report is on: `fresh` (Anniversary realms, Classic through TBC), `classic` (Classic Era and Hardcore), `sod`, `forever` (November 2026, site not announced), `retail`. Derived from the API host the report was fetched through. | `wcl_core.game_version`, stored on `raids.game_version` |
 | **Expansion** | The content era of the report's zone: `Classic`, `The Burning Crusade`, `Wrath of the Lich King`, ... Read from the API's `zone { expansion { name } }`, or from the zone name for raids stored before this change. | `wcl_core.game_version`, stored on `raids.expansion` |
 | **Scope** | The filter the services hand the repository: sources, game versions, expansions, zones, a date window. Empty means everything, which is today's behaviour. | `wcl_store.RaidScope` |
-| **Profile** | A named, user-facing view that produces a scope and picks the Warcraft Logs host and guild to import from: "TBC", "Classic days", "Era forever". No active profile means the plain, unfiltered app. | `wcl_app.profiles` |
+| **Profile** | A named, user-facing view that produces a scope and picks the Warcraft Logs host and guild to import from: "TBC", "Classic days", "Forever". No active profile means the plain, unfiltered app. | `wcl_app.profiles` |
 | **Identity** | The Discord user this app instance belongs to: id, username, display name, avatar. Linked once with Discord OAuth (PKCE), then stamped on the profiles the user creates. | `wcl_core.discord_auth`, `wcl_app.identity` |
 
 Game version and expansion are two axes on purpose. The Anniversary guild's Classic and TBC raids share a host
 (`fresh`) and differ by expansion; Era and Anniversary Classic raids share an expansion and differ by host.
+
+## Requirements
+
+EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enforced** (a named check proves it),
+**Practised** (done, not yet gated) or **Gap**.
+
+| ID | Requirement | Status | Evidence |
+| --- | --- | --- | --- |
+| PROF-01 | When a raid is imported, the store shall record its game version and expansion, and shall never blank a stored value with an unknown one. | Enforced | `tests/test_store_contract.py::test_import_stores_the_era_and_keeps_it_when_stored_again` |
+| PROF-02 | When a read takes a `RaidScope`, the store shall return only raids inside it, and a raid whose era is unknown shall match every scope on that axis. | Enforced | `test_scope_filters_raids_by_era_and_unknown_eras_match_every_scope`, both backends |
+| PROF-03 | When no profile is active, every service shall behave exactly as before profiles existed. | Enforced | `scope=None` keeps each method's historic path; `test_count_raids_counts_each_source` and the rest of the contract run unchanged |
+| PROF-04 | When a profile names a game version with a known site, the context shall import from that site; otherwise it shall keep the configured host. | Enforced | `tests/test_profiles.py::test_switching_profiles_rebuilds_the_client_for_the_host`, `test_api_url_follows_the_game_version_unless_given` |
+| PROF-05 | When a profile is created while an identity is linked, the profile shall carry that Discord id as its owner. | Enforced | `test_create_activate_and_delete` |
+| PROF-06 | When raids stored before this change are backfilled, the service shall tag each from its zone and the configured host, and shall leave an unknown zone's expansion unset. | Enforced | `test_backfill_tags_stored_raids_from_the_zone_and_the_configured_host` |
+| PROF-07 | The Home, player, badge, healing and reference services shall pass the active scope to every raid read they make. | Gap (Home done) | Phase 2 |
+| IDENT-01 | The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, and shall hold no client secret. | Enforced | `tests/test_discord_auth.py::TestPkce`, `test_complete_auth_exchanges_the_code_with_the_verifier_and_reads_who` |
+| IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
+| IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
+| IDENT-04 | When `DISCORD_OAUTH_URL` is set, the flow shall use that site, so the Toads fake Discord serves development. | Enforced | `test_oauth_url_can_point_at_the_fake_discord` |
+| IDENT-05 | A linked app shall be able to register with the Toads Hub and the bot shall resolve a Discord user to their profile. | Gap | Phase 4 |
+| ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
+| ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
 ## Layering (per `tests/test_architecture.py`)
 
@@ -55,7 +92,7 @@ through `AppContext.repository()`; no new `KNOWN_VIOLATIONS`.
 
 ## Data model
 
-### Raids (*built*)
+### Raids (built)
 
 Two nullable text columns on `raids`: `game_version` and `expansion`. `import_raid` writes both from
 `RaidMetadata`; a re-import never blanks a value that is already stored. Existing rows are backfilled by
@@ -66,7 +103,7 @@ is shown by every profile, so an unknown zone never disappears.
 
 Postgres gets the same columns in Alembic revision `0002_raid_era`.
 
-### Scope (*built*)
+### Scope (built)
 
 ```python
 @dataclass(frozen=True)
@@ -83,14 +120,14 @@ Raids whose `game_version` or `expansion` is `NULL` match every scope on that ax
 lists or aggregates raids takes `scope: RaidScope | None = None`; `None` keeps the method's old behaviour so
 nothing that exists changes until it opts in.
 
-### Profiles (*built*)
+### Profiles (built)
 
 ```python
 @dataclass(frozen=True)
 class Profile:
     slug: str                 # "tbc", "classic-days"; the stable id
     name: str                 # what the user sees
-    game_version: str | None  # fresh | classic | sod | retail; None = the configured host
+    game_version: str | None  # fresh | classic | sod | forever | retail; None = the configured host
     expansions: tuple[str, ...] = ()
     zones: tuple[str, ...] = ()
     since: str | None = None
@@ -100,14 +137,14 @@ class Profile:
     owner: str | None = None          # Discord user id that created it
 ```
 
-`ProfileStore` is a protocol (`load() -> ProfileSet`, `save(ProfileSet)`); `JsonProfileStore` keeps it in
+`ProfileStore` is a protocol (`load() -> ProfileSet | None`, `save(ProfileSet)`); `JsonProfileStore` keeps it in
 `profiles.json` next to the home layout on the desktop, and the Toads Hub keeps one per member in its own database,
 the same split as `HomeLayout`. `ProfileSet` is the list plus the active slug.
 
 A profile is a view, not a partition: the database stays one store and a raid can appear under several profiles.
 That is what keeps "normal usage" intact: with no active profile every service behaves exactly as today.
 
-### Identity (*built*)
+### Identity (built)
 
 `DiscordIdentity(id, username, global_name, avatar)` plus the OAuth tokens, kept in `discord_identity.json`
 under the user data directory (same place and same `SecretStr` handling as the Warcraft Logs user token). The
@@ -124,44 +161,117 @@ Toads' `require()` for the Hub, nothing for a single-user desktop.
 
 - `AppContext.profile` is the active profile (or `None`); `AppContext.scope` is its `RaidScope`. `wcl_client`
   builds the Warcraft Logs client for the profile's host when it names one, so a "TBC on Anniversary" and an
-  "Era" profile import from the right site. `AppContext.headless(...)` takes `profile=` for the Hub.
-- `ProfileService`: `list()`, `active()`, `create(...)`, `delete(slug)`, `activate(slug | None)`, `scope()`,
-  `backfill_eras()`. A profile created while an identity is linked gets `owner` stamped.
+  "Era" profile import from the right site. `AppContext.headless(...)` takes `profile=` for the Hub and keeps the
+  host's own client whatever the profile names.
+- `ProfileService`: `list()`, `active()`, `create(...)`, `update(slug, ...)`, `delete(slug)`,
+  `activate(slug | None)`, `scope()`, `apply()`, `backfill_eras()`. A profile created while an identity is linked
+  gets `owner` stamped.
 - `IdentityService`: `current()`, `link(open_browser=...)`, `unlink()`.
-- `RaidService.list_raids()` and `count` honour the context scope (*built*); `HomeService`, `PlayerService`,
-  `BadgeService`, `ReferenceService` follow in the next step, each by passing `ctx.scope` to the repository
-  reads they already make.
+- `RaidService.list_raids()` and `count_raids()` and `HomeService` honour the context scope (built);
+  `PlayerService`, `BadgeService`, `HealingService`, `ReferenceService` follow in phase 2, each by passing
+  `ctx.scope` to the repository reads they already make.
 
 ## Beyond the desktop
 
 `wcl_app` is the core API. There is no separate "API package" to build: a host wires `AppContext.headless(client,
-storage, profile=...)` with the signed-in member's profile and calls the same services the CLI calls.
+storage, profile=...)` with the signed-in member's profile and calls the same services the CLI calls. This mirrors
+ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per-identity view on top.
 
 - **Toads Hub** already has Discord OAuth and sessions. It maps its session's Discord id to the profile owner and
   stores `ProfileSet` per member. Nothing in the analyzer needs the Hub's session code.
 - **Toads bot**: `/api/bots` is the bridge. The desktop app, once linked, can register with the Hub as "Leigh's
-  app" (a later phase: `POST /api/bots/apps` with the Discord identity, the Hub verifies the id against its own
-  member list). Until then the identity is local only.
+  app" (phase 4: `POST /api/bots/apps` with the Discord identity, the Hub verifies the id against its own member
+  list). Until then the identity is local only.
 - **Headless CLI/bot use**: `warcraftlogs --profile tbc ...` picks a profile for one run; a bot command maps a
   Discord user to the profile they own.
 
-## Roadmap
+## Phase map
 
-1. **Foundation (this branch)**: vocabulary, columns and migration, `RaidScope`, profiles with the JSON store,
-   Discord identity, `AppContext` wiring, CLI commands, contract tests. Draft PR, marked experimental.
-2. **Scoped services**: Home, players, badges, healing and reference reads pass the scope. Desktop gets a profile
-   switcher in the toolbar and Discord sign-in in Settings; the Hub gets per-member profiles.
-3. **Import by profile**: the download view and `import_missing` fetch the guild list from the profile's host and
-   guild; the era is tagged at import so backfill becomes a one-off.
-4. **Bridge**: register a linked app with the Toads Hub; bot commands resolve a Discord user to their profile.
-5. **Retire the single-host config**: once every frontend goes through profiles, `wcl_api_url` and `guild_id` in
-   `config.json` become the defaults of the implicit "All" profile.
+| Phase | Name | State | Evidence |
+| --- | --- | --- | --- |
+| 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | In review | PR #144 |
+| 2 | Scoped services and frontends | Planned | PROF-07 |
+| 3 | Import by profile | Planned | |
+| 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
+| 5 | Retire the single-host config | Planned | |
+| Q | Quality bar: the ESI.ts gates in Python | Planned, runs alongside 2 to 5 | section below |
 
-## Open questions for Leigh
+Each phase is a set of PRs that merge alone, one concern per PR, with a definition of done checkable from CI.
 
-- Discord application: reuse the Toads Hub's Discord app (add a loopback redirect, enable the public client) or
-  register a second one for the desktop? The code only needs an id either way.
-- Should "forever" (Classic Era) be a game version or just a profile name? The code models it as the `classic`
-  host, which also covers Hardcore.
-- Does the desktop keep one database per profile, or one database with views? This design says one database, so
-  a report never has to be imported twice.
+### Phase 1: foundation (PR #144)
+
+Scope: everything marked *built* above, the `profile` and `discord` CLI commands, this guide.
+Definition of done: CI green including the `storage-postgres` job; PROF-01 to PROF-06 and IDENT-01 to IDENT-04
+Enforced.
+
+### Phase 2: scoped services and frontends
+
+Order, one PR each:
+1. `PlayerService`, `BadgeService`, `HealingService`, `ReferenceService` pass `ctx.scope`; contract tests for every
+   read that gains `scope=`. Closes PROF-07.
+2. Desktop: a profile switcher in the toolbar (reads `ProfileService`, calls `apply()`), a Settings section for
+   Discord sign-in (`IdentityService.link()` on a worker thread, like the Warcraft Logs sign-in), and a "Tag stored
+   raids" action that runs `backfill_eras()`. No view reads the profile file itself.
+3. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
+   contract (`guides/home_widgets.md` style page for the profile payload).
+Definition of done: every service read that lists or aggregates raids takes the scope; the desktop shows the active
+profile's name and count; `KNOWN_VIOLATIONS` is no larger.
+
+### Phase 3: import by profile
+
+Order:
+1. The download view and `import_missing` fetch the guild list from the profile's guild and host.
+2. Imports tag the era from the API, so `backfill_eras()` becomes a one-off for old databases.
+3. `HOSTS` gains `forever` when Warcraft Logs announces its site; a Forever profile then imports from it.
+Definition of done: a profile with its own guild id imports only that guild's reports; a raid imported under a
+profile is listed by it without a backfill.
+
+### Phase 4: bridge
+
+Order:
+1. A `wcl_app.bridge` service that registers a linked app with the Hub (`POST /api/bots/apps`, bearer = the Discord
+   access token; the Hub checks the id against its members) and exposes the profile list for that member.
+2. Hub side (in the Toads repo, pinned to this one): resolve a Discord user to their profiles; bot commands take a
+   profile slug.
+Definition of done: IDENT-05 Enforced by a contract test against a fake Hub, the way `DISCORD_OAUTH_URL` points at
+the fake Discord.
+
+### Phase 5: retire the single-host config
+
+`wcl_api_url` and `guild_id` in `config.json` become the defaults of the implicit "All" profile; the settings view
+edits profiles, not raw keys. Definition of done: no module reads `config["wcl_api_url"]` outside `AppContext`.
+
+## Quality bar: the ESI.ts standard in Python
+
+What ESI.ts enforces and what this repo has, so phase Q can close the gaps one PR at a time. Every gate is a
+one-way ratchet: a floor never goes down, a baseline only shrinks, an exception expires.
+
+| ESI.ts gate | Here today | Gap to close |
+| --- | --- | --- |
+| `lint:layers`, empty shrink-only baseline | `tests/test_architecture.py` + `lint-imports`; `KNOWN_VIOLATIONS` has 36 desktop edges | Move views onto services until the list is empty; then forbid the list growing by construction (it already does) |
+| `ci-success` single required check, no job-level `if`, skipped = failed | `ci.yml` has several jobs | One fan-in job that `needs` every job and fails on skip |
+| `check:local` mirrors CI, with a test that parses `ci.yml` | `scripts/dev.py check` | A test that every blocking CI job is a `dev.py` task or excluded with a written reason |
+| Coverage floors below measured, only up | `fail_under = 70` in `pyproject.toml`, documented as only going up | Raise toward the measured value; add branch coverage |
+| Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
+| Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
+| EARS specification, one `shall` per Rule, `spec:audit` | `tests/features/` Gherkin with pytest-bdd | A `Rule:` per requirement with the ID (`PROF-01`), an audit script that checks one `shall` per Rule and that every ID in this guide has a scenario |
+| Mock only at the transport seam (`lint:bdd-seam`) | step defs mock `requests.post` and services variously | A fake `WarcraftLogsClient` transport in a shipped `wcl_core.testing` module; BDD steps use it, nothing patches a service method |
+| `./testing` export: `createMockTransport`, `TestDataFactory` | `tests/conftest.py` fixtures only | `wcl_core.testing` (fake GraphQL transport, `RaidAnalysis` factory) so the Hub tests the same way |
+| API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
+| Export coverage: every public export referenced by a test | none | A test that every name in `wcl_app.__all__` and `RaidRepository` appears in `tests/` (the store already has this for the contract) |
+| Suite health: no skip/only, no assertion-free tests | none | A lint over `tests/` for `pytest.mark.skip` without a reason, tests with no `assert`, and swallowed exceptions |
+| Determinism: time only via a clock module | `HomeService(now=...)`, `HostedUserToken(clock=...)` | A `wcl_core.clock` and a lint that `time.time`/`datetime.now` appear nowhere else in packages |
+| Error taxonomy with guards | `wcl_core.common.errors` (`WarcraftLogsError`, `AuthenticationError`, `ConfigurationError`), `wcl_store.StorageError` | Document the tree in a guide; add `retryable` on API errors; every service error is a subclass |
+| Schemas tolerate additive change | `pydantic` only for `SecretStr`; GraphQL parsed by hand | pydantic models with `extra="allow"` for every API response the analyzer reads |
+| Conventional commits, release-please, semver classification | `build_release.sh` bumps versions by hand | Conventional commit check on PR titles, then release automation |
+| Dependency audit, expiring exceptions | `pip-audit` task (needs network) | Run it in CI nightly; exceptions with `expires` dates |
+| Charter with IDs and statuses, each Enforced row names its check | this section and the requirements table | A `guides/CHARTER.md` for the whole repo, with an audit that every Enforced row's evidence exists |
+
+Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test; suite-health lint; the EARS audit
+over `tests/features/`; `wcl_core.testing` with the fake transport; export coverage and the surface snapshot;
+mutation on `wcl_core` with a floor; the clock lint; the charter.
+
+## Open questions
+
+- Which Warcraft Logs site Forever will use. Until known, `forever` profiles keep the configured host.
+- Whether the Hub registers desktop apps per member or per Discord account (phase 4; per account is the default).

@@ -3,8 +3,9 @@
 Two axes, kept apart on purpose (see ``guides/identity_and_profiles.md``):
 
 - a **game version** is a Warcraft Logs site: ``fresh`` (Anniversary realms, which went from Classic into The
-  Burning Crusade), ``classic`` (Classic Era and Hardcore), ``sod`` (Season of Discovery) and ``retail``. It
-  is derived from the API host a report was fetched through.
+  Burning Crusade), ``classic`` (Classic Era and Hardcore), ``sod`` (Season of Discovery), ``forever`` (the
+  version launching in November 2026; its Warcraft Logs host is not announced yet, so it has no entry in
+  ``HOSTS`` until it is) and ``retail``. It is derived from the API host a report was fetched through.
 - an **expansion** is the content era of a report's zone: ``Classic``, ``The Burning Crusade`` and so on. The
   API reports it as ``zone { expansion { name } }``; raids stored before that was read are backfilled from the
   zone name through ``ZONE_EXPANSIONS``.
@@ -19,11 +20,13 @@ from urllib.parse import urlparse
 FRESH = "fresh"
 CLASSIC = "classic"
 SOD = "sod"
+FOREVER = "forever"
 RETAIL = "retail"
 
-GAME_VERSIONS: tuple[str, ...] = (FRESH, CLASSIC, SOD, RETAIL)
+GAME_VERSIONS: tuple[str, ...] = (FRESH, CLASSIC, SOD, FOREVER, RETAIL)
 
-# Warcraft Logs site per game version, for building API URLs and report links.
+# Warcraft Logs site per game version, for building API URLs and report links. A version missing here (forever,
+# until Warcraft Logs announces its site) has no host: imports keep the configured ``wcl_api_url``.
 HOSTS: dict[str, str] = {
     FRESH: "https://fresh.warcraftlogs.com",
     CLASSIC: "https://classic.warcraftlogs.com",
@@ -71,19 +74,20 @@ def game_version_for_url(api_url: str | None) -> str:
     """The game version of a Warcraft Logs API or site URL; an unknown or empty host is ``retail``."""
     host = (urlparse(api_url or "").hostname or "").lower()
     first = host.split(".", 1)[0] if host else ""
-    if first in (FRESH, CLASSIC, SOD):
+    if first in (FRESH, CLASSIC, SOD, FOREVER):
         return first
     return RETAIL
 
 
-def api_url_for(game_version: str) -> str:
-    """The client-credentials API URL of a game version's site."""
-    return f"{host_for(game_version)}/api/v2/client"
+def api_url_for(game_version: str) -> str | None:
+    """The client-credentials API URL of a game version's site, or None when the site is not known yet."""
+    host = host_for(game_version)
+    return f"{host}/api/v2/client" if host else None
 
 
-def host_for(game_version: str) -> str:
-    """The site of a game version; an unknown version falls back to retail."""
-    return HOSTS.get(game_version, HOSTS[RETAIL])
+def host_for(game_version: str) -> str | None:
+    """The site of a game version, or None when Warcraft Logs has not announced one (``forever``, unknown names)."""
+    return HOSTS.get(game_version)
 
 
 def expansion_for_zone(zone: str | None) -> str | None:

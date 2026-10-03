@@ -10,6 +10,7 @@ from wcl_core import game_version as gv
         ("https://fresh.warcraftlogs.com/api/v2/client", "fresh"),
         ("https://classic.warcraftlogs.com/api/v2/user", "classic"),
         ("https://sod.warcraftlogs.com/", "sod"),
+        ("https://forever.warcraftlogs.com/api/v2/client", "forever"),
         ("https://www.warcraftlogs.com/api/v2/client", "retail"),
         ("https://FRESH.warcraftlogs.com", "fresh"),
         ("", "retail"),
@@ -21,11 +22,17 @@ def test_game_version_comes_from_the_host(url, expected):
     assert gv.game_version_for_url(url) == expected
 
 
-def test_every_game_version_round_trips_through_its_api_url():
-    for version in gv.GAME_VERSIONS:
-        assert gv.game_version_for_url(gv.api_url_for(version)) == version
-        assert gv.api_url_for(version).endswith("/api/v2/client")
-    assert gv.host_for("nope") == gv.HOSTS[gv.RETAIL]
+def test_every_hosted_game_version_round_trips_through_its_api_url():
+    for version in gv.HOSTS:
+        url = gv.api_url_for(version)
+        assert url is not None and url.endswith("/api/v2/client")
+        assert gv.game_version_for_url(url) == version
+
+
+def test_forever_is_a_game_version_without_a_host_yet():
+    assert gv.FOREVER in gv.GAME_VERSIONS
+    assert gv.host_for(gv.FOREVER) is None and gv.api_url_for(gv.FOREVER) is None
+    assert gv.host_for("nope") is None
 
 
 @pytest.mark.parametrize(

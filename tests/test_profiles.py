@@ -39,6 +39,7 @@ class TestProfile:
             "https://example"
         )
         assert Profile("all", "All").api_url is None
+        assert Profile("forever", "Forever", game_version="forever").api_url is None  # no site announced yet
 
     def test_unknown_game_version_is_refused(self):
         with pytest.raises(ValueError, match="Unknown game version"):

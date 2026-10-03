@@ -301,7 +301,7 @@ imports come from. With no active profile the app behaves as it always has.
 ```bash
 python -m warcraftlogs_client.cli profile backfill                     # Tag stored raids with their expansion
 python -m warcraftlogs_client.cli profile create TBC --expansion "The Burning Crusade" --use
-python -m warcraftlogs_client.cli profile create "Era forever" --game-version classic
+python -m warcraftlogs_client.cli profile create Forever --game-version forever
 python -m warcraftlogs_client.cli profile list                         # * marks the active profile
 python -m warcraftlogs_client.cli profile use                          # Back to every raid
 python -m warcraftlogs_client.cli discord login                        # Link this app to your Discord account
