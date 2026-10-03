@@ -65,8 +65,9 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
 | IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
 | IDENT-04 | When `DISCORD_OAUTH_URL` is set, the flow shall use that site, so the Toads fake Discord serves development. | Enforced | `test_oauth_url_can_point_at_the_fake_discord` |
-| IDENT-05 | A linked app shall be able to register with the Toads Hub. | Gap | Phase 4 |
-| IDENT-06 | When the bot sees a Discord user, it shall resolve them to their profile. | Gap | Phase 4 |
+| IDENT-05 | When a member redeems a one-time code from the Toads bot, the app shall register with the Toads Hub as theirs and publish its profiles. | Enforced | `tests/test_hub_bridge.py::TestLink`, against `FakeHub` |
+| IDENT-06 | When the bot sees a Discord user, the bridge shall resolve them to their named or active profile. | Enforced | `tests/test_hub_bridge.py::TestTheBotResolvesAMember` |
+| IDENT-07 | If a code was issued to another Discord user than the one linked to the app, then the app shall link nothing. | Enforced | `test_a_code_issued_to_someone_else_links_nothing` |
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | PROF-09 | The desktop shall show and switch the active profile and its raid count. | Enforced | see below |
@@ -195,9 +196,9 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 
 - **Toads Hub** already has Discord OAuth and sessions. It maps its session's Discord id to the profile owner and
   stores `ProfileSet` per member. Nothing in the analyzer needs the Hub's session code.
-- **Toads bot**: `/api/bots` is the bridge. The desktop app, once linked, can register with the Hub as "Leigh's
-  app" (phase 4: `POST /api/bots/apps` with the Discord identity, the Hub verifies the id against its own member
-  list). Until then the identity is local only.
+- **Toads bot**: a member gets a one-time code from the bot and pastes it into the desktop, which registers with the
+  Hub as "Leigh's app" and publishes its profiles (phase 4, [hub_bridge.md](hub_bridge.md)). The bot resolves a
+  Discord user to a profile with `member_profile` and runs the services under it.
 - **Headless CLI/bot use**: `warcraftlogs --profile tbc ...` picks a profile for one run; a bot command maps a
   Discord user to the profile they own.
 
@@ -208,7 +209,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
 | 2 | Scoped services and frontends | 2.1 to 2.3 merged (#145 to #149); 2.4 planned | PROF-07 to PROF-09 |
 | 3 | Import by profile | 3.1 and 3.2 in review; 3.3 waits on Warcraft Logs | PROF-10 to PROF-12 |
-| 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05, IDENT-06 |
+| 4 | Bridge to the Toads Hub and bot | 4.1 in review; 4.2 is the Toads port | IDENT-05 to IDENT-07 |
 | 5 | Retire the single-host config | Planned | |
 | Q | Quality bar: the ESI.ts gates in Python | Merged (#150 to #158) | section below, `guides/CHARTER.md` |
 
@@ -275,12 +276,19 @@ profile is listed by it without a backfill.
 
 ### Phase 4: bridge
 
+Decided 2026-10-03: the desktop links to the Hub with a **one-time code from the bot**, pasted into the desktop.
+The wire contract is [hub_bridge.md](hub_bridge.md).
+
 Order:
-1. A `wcl_app.bridge` service that registers a linked app with the Hub (`POST /api/bots/apps`, bearer = the Discord
-   access token; the Hub checks the id against its members) and exposes the profile list for that member.
-2. Hub side (in the Toads repo, pinned to this one): resolve a Discord user to their profiles; bot commands take a
-   profile slug.
-Definition of done: IDENT-05 and IDENT-06 Enforced by contract tests against a fake Hub, the way
+1. (built) `wcl_core.hub` is the Hub client: it redeems a code, publishes profiles and unlinks, through
+   `wcl_core.http`, with the token as a `SecretStr`. `wcl_core.testing.FakeHub` issues codes as the bot would and
+   keeps what apps publish. `wcl_app.bridge.BridgeService` links, publishes and unlinks. When a Discord identity is
+   linked, it refuses a code issued to someone else. `member_profile(directory, discord_id, slug)` is what the bot
+   resolves a member through. Frontends: `warcraftlogs hub link|status|publish|unlink` and Settings' "Toads Hub"
+   section.
+2. Hub side (in the Toads repo, pinned to this one): the three endpoints in `hub_bridge.md`, the bot command that
+   issues a code, and bot commands that take a profile slug.
+Definition of done: IDENT-05 to IDENT-07 Enforced by contract tests against a fake Hub, the way
 `DISCORD_OAUTH_URL` points at the fake Discord.
 
 ### Phase 5: retire the single-host config
@@ -364,4 +372,4 @@ lint (done); the charter (done). What is left of the gap table is the charter's 
 ## Open questions
 
 - Which Warcraft Logs site Forever will use. Until known, `forever` profiles keep the configured host.
-- Whether the Hub registers desktop apps per member or per Discord account (phase 4; per account is the default).
+- Resolved 2026-10-03: the Hub registers apps per Discord account, through a code the bot issues to that account.

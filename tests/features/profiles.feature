@@ -106,3 +106,27 @@ Feature: Raid profiles and Discord identity
     Given DISCORD_OAUTH_URL is "http://localhost:8099/"
     When the user signs in with Discord in the browser for the application "app"
     Then the browser should have opened "http://localhost:8099/oauth2/authorize"
+
+  @ears_event_driven @auth
+  Scenario: IDENT-05 When a member redeems a one-time code from the Toads bot, the app shall register with the Toads Hub as theirs and publish its profiles
+    Given the Toads bot gave "123456789" a link code
+    And this app has the profiles "TBC" and "Era" with "TBC" active
+    When the code is redeemed in this app
+    Then the app should be linked to the Hub as "123456789"
+    And the Hub should hold the profiles "TBC" and "Era" for "123456789"
+
+  @ears_event_driven @auth
+  Scenario: IDENT-06 When the bot sees a Discord user, the bridge shall resolve them to their named or active profile
+    Given the Toads bot gave "123456789" a link code
+    And this app has the profiles "TBC" and "Era" with "TBC" active
+    When the code is redeemed in this app
+    Then the bot should resolve "123456789" to "TBC", and to "Era" when asked for "era"
+    And the bot should resolve "555" to no profile
+
+  @ears_unwanted_behavior @auth
+  Scenario: IDENT-07 If a code was issued to another Discord user than the one linked to the app, then the app shall link nothing
+    Given the Discord account "123456789" is linked
+    And the Toads bot gave "555" a link code
+    When the code is redeemed in this app
+    Then the link should be refused as someone else's
+    And the app should not be linked to the Hub

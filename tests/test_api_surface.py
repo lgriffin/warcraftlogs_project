@@ -189,6 +189,7 @@ class TestPublicExports:
             "reference",
             "profile",
             "discord",
+            "hub",
         }
         assert subcommands == expected, f"CLI subcommands changed! Got: {subcommands}"
 

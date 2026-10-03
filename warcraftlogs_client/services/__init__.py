@@ -16,6 +16,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import AppContext as AppContext
     from wcl_app import BadgeRules as BadgeRules
     from wcl_app import BadgeService as BadgeService
+    from wcl_app import BridgeService as BridgeService
     from wcl_app import CharacterComparison as CharacterComparison
     from wcl_app import CharacterDossier as CharacterDossier
     from wcl_app import CharacterLineage as CharacterLineage
@@ -28,6 +29,8 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import HomePage as HomePage
     from wcl_app import HomeService as HomeService
     from wcl_app import HomeWidget as HomeWidget
+    from wcl_app import HubMemberMismatch as HubMemberMismatch
+    from wcl_app import HubNotLinked as HubNotLinked
     from wcl_app import IdentityService as IdentityService
     from wcl_app import JsonLayoutStore as JsonLayoutStore
     from wcl_app import JsonProfileStore as JsonProfileStore
@@ -38,6 +41,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import PlayerRef as PlayerRef
     from wcl_app import PlayerService as PlayerService
     from wcl_app import Profile as Profile
+    from wcl_app import ProfileDirectory as ProfileDirectory
     from wcl_app import ProfileService as ProfileService
     from wcl_app import ProfileSiteUnknown as ProfileSiteUnknown
     from wcl_app import ProgressCallback as ProgressCallback
@@ -54,11 +58,13 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import WeeklyHealing as WeeklyHealing
     from wcl_app import WidgetSpec as WidgetSpec
     from wcl_app import character_lineage as character_lineage
+    from wcl_app import member_profile as member_profile
     from wcl_app import parse_report_code as parse_report_code
     from wcl_app import validate_report_code as validate_report_code
 
 for _name in (
     "badges",
+    "bridge",
     "characters",
     "charts",
     "context",
