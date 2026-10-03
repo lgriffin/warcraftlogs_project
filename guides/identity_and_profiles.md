@@ -281,7 +281,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | `ci-success` single required check, no job-level `if`, skipped = failed | Enforced, see below | None |
 | `check:local` mirrors CI, with a test that parses `ci.yml` | Enforced, see below | None |
 | Coverage floors below measured, only up | `fail_under = 70` in `pyproject.toml`, documented as only going up | Raise toward the measured value; add branch coverage |
-| Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
+| Mutation ratchet per directory (Stryker) | Enforced on 6 `wcl_core` modules, see below | More modules, `wcl_store` |
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
 | EARS specification, one `shall` per Rule, `spec:audit` | Enforced, see below | None |
 | Mock only at the HTTP seam (`lint:bdd-seam`) | A ratchet, see below | Empty `KNOWN_STEP_MOCKS` (4 step modules) |
@@ -312,6 +312,13 @@ dataclass field and signature, read from the source; any change fails until the 
 `WCL_UPDATE_SURFACE=1 pytest tests/test_api_contract.py`, and the failure lists the lines that are gone as breaking.
 `master` requires `ci-success` through a ruleset.
 
+`scripts/mutate.py` plants one bug at a time in a `wcl_core` module (a flipped comparison or operator, `and`/`or`,
+a dropped `not`, a negated `if`, a changed constant, `return None`) in a scratch copy, and runs that module's tests
+against it. `[tool.wcl.mutation]` in `pyproject.toml` lists each module, its tests and its floor, the share of
+mutants the tests must kill; the `mutation` CI job (`python scripts/dev.py mutation`, also part of `check`) fails a
+module below its floor. Floors only go up. Starting scores: `http` 100%, `game_version` 94%, `dynamic_role_parser`
+91%, `flasks` 88%, `auth` 71%, `cache` 30%; `-v` lists the survivors to aim at.
+
 Every request wcl-core makes goes through `wcl_core.http` (`post`/`get`, each with a timeout); a test checks that no
 module in `packages/` calls `requests` directly. `wcl_core.testing` ships fakes for that seam: `FakeWarcraftLogs`
 answers the token endpoint and GraphQL queries (matched by a substring of the query), `FakeDiscord` the Discord token
@@ -327,7 +334,7 @@ Enforced row names tests that exist. Every Enforced row also has a scenario titl
 
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
 EARS audit over `tests/features/` with a scenario per requirement (done); `wcl_core.testing` with the fake
-transport (done); export coverage and the surface snapshot (done); mutation on `wcl_core` with a floor; the clock
+transport (done); export coverage and the surface snapshot (done); mutation on `wcl_core` with a floor (done); the clock
 lint; the charter.
 
 ## Open questions

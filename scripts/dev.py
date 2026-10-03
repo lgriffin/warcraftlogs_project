@@ -126,11 +126,12 @@ TASKS: dict[str, tuple[str, list[list[str]]]] = {
     ),
     "fuzz": ("hypothesis fuzz tests", [["pytest", "-q", "--tb=short", "tests/fuzz/"]]),
     "gui": ("GUI tests (needs the gui extra and a display)", [["pytest", "-q", "--tb=short", "tests/gui/"]]),
+    "mutation": ("mutation floors on wcl_core (scripts/mutate.py)", [[sys.executable, "scripts/mutate.py"]]),
 }
 
 # What `check` runs: every CI check that needs no network or services, cheapest first so it fails fast.
 # `test` already collects tests/fuzz (as CI's test job does, for coverage), so `fuzz` stays a separate task.
-CHECK = ["format", "lint", "spelling", "imports", "deadcode", "types", "security", "test"]
+CHECK = ["format", "lint", "spelling", "imports", "deadcode", "types", "security", "test", "mutation"]
 
 FIX = [["ruff", "check", "--fix", "."], ["ruff", "format", "."]]
 
