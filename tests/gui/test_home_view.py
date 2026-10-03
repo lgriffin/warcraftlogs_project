@@ -119,6 +119,15 @@ class TestHomeView:
         qtbot.waitUntil(lambda: view._refresh_btn.isEnabled(), timeout=5000)
         assert len(view.cards) == len(HomeLayout.default().widgets)
 
+    def test_a_page_loaded_before_a_profile_switch_is_dropped(self, view, service):
+        view.show_page(service.page(HomeLayout.of(["guild_snapshot"])))
+        view._reload_after = True  # a refresh was asked for while this load ran
+        view._on_page(service.page())
+        assert [c.widget_id for c in view.cards] == ["guild_snapshot"]
+        view._reload_after = False
+        view._on_page(service.page())
+        assert len(view.cards) == len(HomeLayout.default().widgets)
+
 
 @pytest.mark.gui
 class TestCustomiseDialog:

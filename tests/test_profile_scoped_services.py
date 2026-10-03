@@ -186,3 +186,13 @@ def test_the_desktop_profile_service_switches_and_counts_on_the_shared_context(c
     assert ProfileService.desktop().ctx is not None
     with pytest.raises(ValueError, match="needs a context"):
         ProfileService(profiles.store).raid_count()
+
+
+def test_a_storage_failure_gives_no_raid_count(ctx):
+    from wcl_store import StorageError
+
+    def broken():
+        raise StorageError("database is locked")
+
+    ctx.storage = broken
+    assert ProfileService.desktop(ctx).raid_count() is None

@@ -488,11 +488,16 @@ class HomeView(QWidget):
         self._loading = True
         self._refresh_btn.setEnabled(False)
         worker = _PageWorker(self._service, self)
-        worker.loaded.connect(self.show_page)
+        worker.loaded.connect(self._on_page)
         worker.finished.connect(self._on_loaded)
         worker.finished.connect(worker.deleteLater)
         self._worker = worker
         worker.start()
+
+    def _on_page(self, page: HomePage) -> None:
+        if self._reload_after:
+            return  # a refresh was asked for mid-load (a profile switch, a new layout): this page is outdated
+        self.show_page(page)
 
     def _on_loaded(self) -> None:
         self._loading = False

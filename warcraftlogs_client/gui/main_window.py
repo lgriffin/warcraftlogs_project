@@ -496,7 +496,8 @@ class MainWindow(QMainWindow):
         pass
 
     def _on_profile_changed(self, name: str):
-        self.status_bar.showMessage(f"Raid profile: {name} ({self.profile_switcher.count_label.text()})")
+        # The top bar keeps showing the profile and its count; the status bar only notes the switch.
+        self.status_bar.showMessage(f"Raid profile: {name}")
         self.home_view.refresh()
 
     def _on_raid_deleted(self, report_id: str):
@@ -558,6 +559,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._console_dock.cleanup()
+        self.profile_switcher.wait_for_counts()
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
