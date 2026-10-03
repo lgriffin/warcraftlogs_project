@@ -72,8 +72,9 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
 PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
-contract tests on both backends. PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence: `tests/gui/test_profile_switcher.py`
-and `test_the_home_page_follows_a_later_profile_switch`.
+contract tests on both backends.
+PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence:
+`tests/gui/test_profile_switcher.py` and `test_the_home_page_follows_a_later_profile_switch`.
 
 ## Layering (per `tests/test_architecture.py`)
 
