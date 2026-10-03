@@ -65,9 +65,9 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
 | IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
 | IDENT-04 | When `DISCORD_OAUTH_URL` is set, the flow shall use that site, so the Toads fake Discord serves development. | Enforced | `test_oauth_url_can_point_at_the_fake_discord` |
-| IDENT-05 | When a member redeems a one-time code from the Toads bot, the app shall register with the Toads Hub as theirs and publish its profiles. | Enforced | `tests/test_hub_bridge.py::TestLink`, against `FakeHub` |
+| IDENT-05 | When a member redeems a code from the bot, the app shall link to the Hub and publish its profiles. | Enforced | `tests/test_hub_bridge.py::TestLink`, against `FakeHub` |
 | IDENT-06 | When the bot sees a Discord user, the bridge shall resolve them to their named or active profile. | Enforced | `tests/test_hub_bridge.py::TestTheBotResolvesAMember` |
-| IDENT-07 | If a code was issued to another Discord user than the one linked to the app, then the app shall link nothing. | Enforced | `test_a_code_issued_to_someone_else_links_nothing` |
+| IDENT-07 | If a code was issued to another Discord user than the linked one, then the app shall link nothing. | Enforced | `test_a_code_issued_to_someone_else_links_nothing` |
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | PROF-09 | The desktop shall show and switch the active profile and its raid count. | Enforced | see below |

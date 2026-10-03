@@ -108,7 +108,7 @@ Feature: Raid profiles and Discord identity
     Then the browser should have opened "http://localhost:8099/oauth2/authorize"
 
   @ears_event_driven @auth
-  Scenario: IDENT-05 When a member redeems a one-time code from the Toads bot, the app shall register with the Toads Hub as theirs and publish its profiles
+  Scenario: IDENT-05 When a member redeems a code from the bot, the app shall link to the Hub and publish its profiles
     Given the Toads bot gave "123456789" a link code
     And this app has the profiles "TBC" and "Era" with "TBC" active
     When the code is redeemed in this app
@@ -124,7 +124,7 @@ Feature: Raid profiles and Discord identity
     And the bot should resolve "555" to no profile
 
   @ears_unwanted_behavior @auth
-  Scenario: IDENT-07 If a code was issued to another Discord user than the one linked to the app, then the app shall link nothing
+  Scenario: IDENT-07 If a code was issued to another Discord user than the linked one, then the app shall link nothing
     Given the Discord account "123456789" is linked
     And the Toads bot gave "555" a link code
     When the code is redeemed in this app

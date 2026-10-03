@@ -9,7 +9,15 @@ imports (enforced by ``lint-imports`` and ``tests/test_wcl_app_package.py``).
 """
 
 from wcl_app.badges import Badge, BadgeRule, BadgeRules, BadgeService, PlayerBadges
-from wcl_app.bridge import BridgeService, HubMemberMismatch, HubNotLinked, ProfileDirectory, member_profile
+from wcl_app.bridge import (
+    BridgeService,
+    HubLinkedNotPublished,
+    HubMemberMismatch,
+    HubNotLinked,
+    ProfileDirectory,
+    ProfileNotPublished,
+    member_profile,
+)
 from wcl_app.characters import CharacterComparison, CharacterDossier, CharacterService, CharacterTrends
 from wcl_app.charts import Chart, ChartError, Series
 from wcl_app.context import AnalysisThresholds, AppContext, ProgressCallback, validate_report_code
@@ -46,6 +54,7 @@ __all__ = [
     "HomePage",
     "HomeService",
     "HomeWidget",
+    "HubLinkedNotPublished",
     "HubMemberMismatch",
     "HubNotLinked",
     "IdentityService",
@@ -59,6 +68,7 @@ __all__ = [
     "PlayerService",
     "Profile",
     "ProfileDirectory",
+    "ProfileNotPublished",
     "ProfileService",
     "ProfileSet",
     "ProfileSiteUnknown",

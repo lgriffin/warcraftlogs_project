@@ -94,3 +94,12 @@ class TestSettingsView:
         view.status_message.connect(handler)
         view.status_message.emit("test")
         handler.assert_called_once_with("test")
+
+    def test_the_discord_and_hub_sections_share_one_identity(self, qtbot):
+        """A sign-in in the Discord section must reach the Hub section's IDENT-07 check in the same session."""
+        from warcraftlogs_client.services import AppContext, IdentityService
+
+        view = _make_settings_view(qtbot)
+        ctx = AppContext(config={})
+        shared = view._identity(ctx)
+        assert isinstance(shared, IdentityService) and view._identity(ctx) is shared

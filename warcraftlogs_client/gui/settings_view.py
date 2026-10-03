@@ -5,6 +5,7 @@ Settings view — configure credentials, thresholds, and database.
 import json
 import os
 import sqlite3
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QFont
@@ -25,6 +26,9 @@ from PySide6.QtWidgets import (
 from .hub_panel import HubPanel
 from .identity_panel import IdentityPanel
 from .styles import COLORS, COMMON_STYLES
+
+if TYPE_CHECKING:
+    from ..services import IdentityService
 
 
 class SettingsView(QWidget):
@@ -511,26 +515,34 @@ class SettingsView(QWidget):
             self._update_status_label.setText(f"You're up to date (v{__version__})")
             self.status_message.emit("No updates available")
 
+    def _identity(self, ctx) -> "IdentityService":
+        """One Discord identity for every Settings panel, so they agree on who is linked."""
+        if getattr(self, "_shared_identity", None) is None:
+            from ..services import IdentityService
+
+            self._shared_identity = IdentityService(config=ctx.config)
+        return self._shared_identity
+
     def _make_identity_panel(self) -> IdentityPanel:
-        from ..services import IdentityService, ProfileService
+        from ..services import ProfileService
         from .home_view import desktop_context
 
         ctx = self._ctx if self._ctx is not None else desktop_context()
-        panel = IdentityPanel(IdentityService(config=ctx.config), ProfileService.desktop(ctx))
+        panel = IdentityPanel(self._identity(ctx), ProfileService.desktop(ctx))
         panel.status_message.connect(self.status_message)
         return panel
 
     def _make_hub_panel(self) -> HubPanel:
         from wcl_core.paths import get_profiles_path
 
-        from ..services import BridgeService, IdentityService, JsonProfileStore, ProfileService
+        from ..services import BridgeService, JsonProfileStore, ProfileService
         from ..version import __version__
         from .home_view import desktop_context
 
         ctx = self._ctx if self._ctx is not None else desktop_context()
         bridge = BridgeService(
             config=ctx.config,
-            identity=IdentityService(config=ctx.config),
+            identity=self._identity(ctx),  # the panel above's: a sign-in there reaches the IDENT-07 check here
             profiles=ProfileService(JsonProfileStore(get_profiles_path())),
             app_version=__version__,
         )

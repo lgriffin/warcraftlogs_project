@@ -194,6 +194,11 @@ wcl_app.HomeWidget.chart: Chart | None = None
 wcl_app.HomeWidget.empty: str = ''
 wcl_app.HomeWidget.error: str = ''
 wcl_app.HomeWidget.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.HubLinkedNotPublished: class HubLinkedNotPublished(HubError)
+wcl_app.HubLinkedNotPublished.__init__: def __init__(self, message: str, severity: ErrorSeverity=ErrorSeverity.ERROR, details: str | None=None)
+wcl_app.HubLinkedNotPublished.message: set in __init__
+wcl_app.HubLinkedNotPublished.severity: set in __init__
+wcl_app.HubLinkedNotPublished.details: set in __init__
 wcl_app.HubMemberMismatch: class HubMemberMismatch(AuthenticationError)
 wcl_app.HubMemberMismatch.__init__: def __init__(self, message: str, details: str | None=None)
 wcl_app.HubMemberMismatch.message: set in __init__
@@ -293,6 +298,7 @@ wcl_app.Profile.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.Profile.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> Profile
 wcl_app.ProfileDirectory: class ProfileDirectory(Protocol)
 wcl_app.ProfileDirectory.load: def load(self, discord_id: str) -> ProfileSet | dict[str, Any] | None
+wcl_app.ProfileNotPublished: class ProfileNotPublished(LookupError)
 wcl_app.ProfileService: class ProfileService
 wcl_app.ProfileService.__init__: def __init__(self, store: ProfileStore, ctx: AppContext | None=None, owner: str | None=None)
 wcl_app.ProfileService.from_context: @classmethod def from_context(cls, ctx: AppContext, store: ProfileStore, owner: str | None=None) -> ProfileService

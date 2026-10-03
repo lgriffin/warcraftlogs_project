@@ -46,6 +46,7 @@ __all__ = [
 _CODE = re.compile(r"[0-9A-HJKMNP-TV-Z]{8}")
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 TIMEOUT = 30
+_OWNER_ONLY = 0o600  # hub_link.json holds a bearer token
 
 
 class HubError(WarcraftLogsError):
@@ -108,7 +109,7 @@ class HubLink:
                     display_name=member.get("display_name") or None,
                 ),
             )
-        except (KeyError, TypeError) as e:
+        except (KeyError, TypeError, AttributeError) as e:
             raise HubError("The Toads Hub sent an unreadable link", details=str(e)) from e
 
     def to_dict(self) -> dict[str, Any]:
@@ -130,23 +131,31 @@ class HubLinkStore:
     def __init__(self, path: str | Path | None = None) -> None:
         self._path = Path(path) if path else paths.get_hub_link_path()
         self.link: HubLink | None = None
-        with contextlib.suppress(OSError, ValueError, HubError):
+        with contextlib.suppress(OSError, ValueError, HubError):  # a missing or damaged file is no link
             data = json.loads(self._path.read_text(encoding="utf-8"))
-            self.link = HubLink.from_reply(str(data["hub_url"]), data)
+            if isinstance(data, dict) and isinstance(data.get("hub_url"), str):
+                self.link = HubLink.from_reply(data["hub_url"], data)
 
     @property
     def path(self) -> Path:
         return self._path
 
     def save(self, link: HubLink) -> None:
-        self.link = link
+        """Write the link owner-only: the token lets anyone who reads it publish as this member."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(link.to_dict(), indent=2), encoding="utf-8")
+        fd = os.open(self._path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _OWNER_ONLY)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            if hasattr(os, "fchmod"):  # also a file an earlier version left readable; Windows keeps its own ACLs
+                os.fchmod(f.fileno(), _OWNER_ONLY)
+            f.write(json.dumps(link.to_dict(), indent=2))
+        self.link = link
 
     def forget(self) -> None:
-        self.link = None
-        with contextlib.suppress(OSError):
+        """Delete the link file. If it cannot be deleted the OSError propagates and the link stays, so a restart
+        never finds a link the user was told is gone."""
+        with contextlib.suppress(FileNotFoundError):
             self._path.unlink()
+        self.link = None
 
 
 def _post(url: str, what: str, **kwargs: Any) -> http.Response:

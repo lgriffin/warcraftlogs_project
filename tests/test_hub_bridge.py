@@ -6,6 +6,8 @@ Everything runs against ``wcl_core.testing.FakeHub`` at the HTTP seam, so the re
 
 import json
 import logging
+import os
+import stat
 
 import pytest
 import requests
@@ -22,11 +24,13 @@ from warcraftlogs_client import cli
 from warcraftlogs_client.services import (
     AppContext,
     BridgeService,
+    HubLinkedNotPublished,
     HubMemberMismatch,
     HubNotLinked,
     IdentityService,
     Profile,
     ProfileDirectory,
+    ProfileNotPublished,
     ProfileService,
     ProfileSet,
     member_profile,
@@ -124,6 +128,36 @@ class TestLink:
             service.link(code)
         assert not service.is_linked() and not (tmp_path / "hub_link.json").exists()
         assert fake_hub.apps == {} and fake_hub.profiles == {}  # the Hub was told to drop the app
+
+    def test_linking_again_retires_the_previous_registration(self, fake_hub, tmp_path):
+        service = _bridge(tmp_path)
+        first = service.link(fake_hub.issue_code(LEIGH))
+        second = service.link(fake_hub.issue_code(LEIGH))
+        assert service.current() == second != first
+        assert list(fake_hub.apps) == [second.token.get_secret_value()]  # the first token publishes nothing now
+
+    def test_relinking_survives_a_hub_that_cannot_retire_the_old_registration(self, fake_hub, tmp_path):
+        service = _bridge(tmp_path)
+        service.link(fake_hub.issue_code(LEIGH))
+        answer = fake_hub._route
+
+        def route(request):
+            return FakeResponse(503) if request.url.endswith("/unlink") else answer(request)
+
+        fake_hub._route = route
+        second = service.link(fake_hub.issue_code(LEIGH))
+        assert service.current() == second
+
+    def test_a_link_whose_profiles_fail_to_publish_says_it_is_linked(self, fake_hub, tmp_path):
+        service = _bridge(tmp_path)
+        route = fake_hub._route
+        fake_hub._route = lambda request: FakeResponse(503) if request.url.endswith("/profiles") else route(request)
+        with pytest.raises(HubLinkedNotPublished, match="Linked to the Toads Hub as toad, but the raid profiles"):
+            service.link(fake_hub.issue_code(LEIGH))
+        assert service.is_linked()  # the code is spent; publishing again is all that is left
+        fake_hub._route = route
+        service.publish()
+        assert fake_hub.load(LEIGH) == ProfileSet([TBC, ERA], active="tbc").to_dict()
 
     def test_the_linked_discord_account_may_redeem_its_own_code(self, fake_hub, tmp_path):
         assert _bridge(tmp_path, discord_id=LEIGH).link(fake_hub.issue_code(LEIGH)).member.discord_id == LEIGH
@@ -248,8 +282,9 @@ class TestPublishAndUnlink:
     def test_a_broken_link_file_means_no_link(self, tmp_path):
         (tmp_path / "hub_link.json").write_text("{not json", encoding="utf-8")
         assert HubLinkStore(tmp_path / "hub_link.json").link is None
-        (tmp_path / "hub_link.json").write_text(json.dumps({"hub_url": HUB}), encoding="utf-8")
-        assert HubLinkStore(tmp_path / "hub_link.json").link is None
+        for damaged in ({"hub_url": HUB}, {}, [], None, "x", {"hub_url": 3}, {**_reply(), "member": "toad"}):
+            (tmp_path / "hub_link.json").write_text(json.dumps(damaged), encoding="utf-8")
+            assert HubLinkStore(tmp_path / "hub_link.json").link is None
 
 
 class TestTheBotResolvesAMember:
@@ -257,8 +292,14 @@ class TestTheBotResolvesAMember:
         _bridge(tmp_path).link(fake_hub.issue_code(LEIGH))
         assert member_profile(fake_hub, LEIGH) == TBC
         assert member_profile(fake_hub, LEIGH, "era") == ERA
-        assert member_profile(fake_hub, LEIGH, "wotlk") is None
         assert member_profile(fake_hub, "555") is None
+
+    def test_a_profile_the_member_never_published_is_refused_not_widened(self, fake_hub, tmp_path):
+        _bridge(tmp_path).link(fake_hub.issue_code(LEIGH))
+        with pytest.raises(ProfileNotPublished, match="'wotlk'"):
+            member_profile(fake_hub, LEIGH, "wotlk")
+        with pytest.raises(ProfileNotPublished):
+            member_profile(fake_hub, "555", "tbc")  # published nothing at all
 
     def test_the_profile_scopes_the_shared_services(self, fake_hub, tmp_path):
         _bridge(tmp_path).link(fake_hub.issue_code(LEIGH))
@@ -305,6 +346,8 @@ class TestCli:
         assert "eight letters and digits" in capsys.readouterr().out
         assert self._run(monkeypatch, "publish") == 1
         assert "Link this app" in capsys.readouterr().out
+        assert self._run(monkeypatch, "unlink") == 0
+        assert capsys.readouterr().out == "Not linked.\n"
 
 
 class TestWire:
@@ -352,6 +395,26 @@ class TestWire:
         store.forget()
         store.forget()  # twice is fine
         assert not store.path.exists() and store.link is None
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+    def test_only_the_owner_can_read_the_token(self, tmp_path):
+        path = tmp_path / "hub_link.json"
+        path.write_text("{}", encoding="utf-8")
+        path.chmod(0o644)  # a file an older version left readable
+        HubLinkStore(path).save(HubLink.from_reply(HUB, _reply()))
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+    def test_a_link_file_that_cannot_be_deleted_stays_linked(self, tmp_path, monkeypatch):
+        store = HubLinkStore(tmp_path / "hub_link.json")
+        store.save(HubLink.from_reply(HUB, _reply()))
+
+        def refuse(self, missing_ok=False):
+            raise PermissionError("read-only disk")
+
+        monkeypatch.setattr(type(store.path), "unlink", refuse)
+        with pytest.raises(PermissionError):
+            store.forget()
+        assert store.link is not None
 
     def test_links_and_members_are_values(self):
         link = HubLink.from_reply(HUB, _reply())

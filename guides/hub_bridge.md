@@ -10,11 +10,15 @@ contract between an analyzer (desktop or CLI) and the Toads Hub. The Python side
    Hub for a one-time code bound to that member and sends it to them privately.
 2. The member pastes the code into the analyzer: Settings, "Toads Hub", or `warcraftlogs hub link CODE`.
 3. The analyzer redeems the code. The Hub answers with an app id, an app token and the member the code was issued
-   to. The analyzer keeps them in `hub_link.json` next to `discord_identity.json`.
+   to. The analyzer keeps them in `hub_link.json` next to `discord_identity.json`, readable by its owner only. Linking
+   again replaces the old registration and asks the Hub to drop it.
 4. The analyzer publishes its raid profiles (`ProfileSet`). It does so again on `hub publish` or "Publish profiles".
+   If that first publish fails the app is still linked (the code is spent): `HubLinkedNotPublished` says so, and
+   publishing again is all that is left.
 5. When a member runs a bot command, the bot resolves their Discord id to a profile with
    `wcl_app.member_profile(directory, discord_id, slug)`. It then runs the shared services under that profile with
-   `AppContext.headless(client, storage, profile=...)`.
+   `AppContext.headless(client, storage, profile=...)`. No slug means the member's active profile, or none. A slug
+   the member never published raises `ProfileNotPublished`, so a typo never widens a command to every raid.
 
 The code is the proof of identity: only the member the bot gave it to can have it. The analyzer needs no Discord
 sign-in to link. If it has one (`discord login`) and the code was issued to someone else, it links nothing and asks
@@ -75,7 +79,8 @@ the Hub no longer knows the token, and the analyzer says to link again. Anything
 ### `POST /api/apps/unlink`
 
 No body. 200 or 204 is success. 401 also counts as success, because the Hub had already forgotten the app. The
-analyzer forgets the link locally whatever the Hub answers, and reports whether the Hub confirmed.
+analyzer forgets the link locally whatever the Hub answers, and reports whether the Hub confirmed. If the link file
+cannot be deleted, the unlink fails and the app stays linked, rather than finding the link again on the next start.
 
 ## The Hub's side, for the port
 

@@ -802,6 +802,8 @@ def run_hub_command(args: argparse.Namespace) -> int:
         elif action == "publish":
             service.publish()
             print("Raid profiles published to the Toads Hub.")
+        elif action == "unlink" and link is None:
+            print("Not linked.")
         elif action == "unlink":
             confirmed = service.unlink()
             print("Hub link forgotten." if confirmed else "Hub link forgotten here; the Hub could not be told.")
@@ -813,7 +815,7 @@ def run_hub_command(args: argparse.Namespace) -> int:
             )
         else:
             print(f"Linked to {link.hub_url} as {link.member.name}." if link else "Not linked. Run: hub link CODE")
-    except (WarcraftLogsError, ValueError, LookupError) as e:
+    except (WarcraftLogsError, ValueError, LookupError, OSError) as e:
         print(f"Error: {e}")
         return 1
     return 0

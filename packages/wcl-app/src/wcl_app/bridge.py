@@ -21,7 +21,15 @@ from wcl_core.hub import HubError, HubLink, HubLinkStore
 from wcl_app.identity import IdentityService
 from wcl_app.profiles import Profile, ProfileService, ProfileSet
 
-__all__ = ["BridgeService", "HubMemberMismatch", "HubNotLinked", "ProfileDirectory", "member_profile"]
+__all__ = [
+    "BridgeService",
+    "HubLinkedNotPublished",
+    "HubMemberMismatch",
+    "HubNotLinked",
+    "ProfileDirectory",
+    "ProfileNotPublished",
+    "member_profile",
+]
 
 APP_NAME = "WarcraftLogs Analyzer"
 
@@ -32,6 +40,14 @@ class HubNotLinked(LookupError):
 
 class HubMemberMismatch(AuthenticationError):
     """The code belongs to another Discord user than the one linked to this app."""
+
+
+class HubLinkedNotPublished(HubError):
+    """The code linked the app, but the first publish of its profiles failed: ``publish`` again."""
+
+
+class ProfileNotPublished(LookupError):
+    """The member asked for a profile by name and has published none by that name."""
 
 
 class BridgeService:
@@ -67,9 +83,19 @@ class BridgeService:
                 f"That code was issued to {link.member.name}, but this app is linked to {who.display_name}; "
                 "ask the bot for a code from your own Discord account"
             )
+        previous = self.store.link
         self.store.save(link)
+        if previous is not None and previous.token != link.token:
+            with contextlib.suppress(HubError, AuthenticationError):
+                hub.revoke(previous)  # one registration per app: the old token must not keep publishing
         if self.profiles is not None:
-            self.publish()
+            try:
+                self.publish()
+            except (HubError, AuthenticationError) as e:
+                raise HubLinkedNotPublished(
+                    f"Linked to the Toads Hub as {link.member.name}, but the raid profiles were not published ({e}); "
+                    "publish them again"
+                ) from e
         return link
 
     def publish(self, profiles: ProfileSet | None = None) -> None:
@@ -106,11 +132,18 @@ class ProfileDirectory(Protocol):
 def member_profile(directory: ProfileDirectory, discord_id: str, slug: str | None = None) -> Profile | None:
     """The profile the bot runs a member's command under: *slug* when given, else their active one.
 
-    None when the member has no published profiles, no such slug or no active profile; the bot then uses the
-    plain, unfiltered services.
+    None when no slug was asked for and the member has no active profile (or published nothing); the bot then uses
+    the plain, unfiltered services. A slug the member has not published raises ``ProfileNotPublished``, so a typo
+    never widens a command to every raid.
     """
     data = directory.load(discord_id)
     if data is None:
-        return None
-    profiles = data if isinstance(data, ProfileSet) else ProfileSet.from_dict(data)
-    return profiles.get(slug) if slug else profiles.active_profile
+        profiles = ProfileSet()
+    else:
+        profiles = data if isinstance(data, ProfileSet) else ProfileSet.from_dict(data)
+    if not slug:
+        return profiles.active_profile
+    found = profiles.get(slug)
+    if found is None:
+        raise ProfileNotPublished(f"No published raid profile is named {slug!r}")
+    return found

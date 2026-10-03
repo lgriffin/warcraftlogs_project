@@ -29,6 +29,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import HomePage as HomePage
     from wcl_app import HomeService as HomeService
     from wcl_app import HomeWidget as HomeWidget
+    from wcl_app import HubLinkedNotPublished as HubLinkedNotPublished
     from wcl_app import HubMemberMismatch as HubMemberMismatch
     from wcl_app import HubNotLinked as HubNotLinked
     from wcl_app import IdentityService as IdentityService
@@ -42,6 +43,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import PlayerService as PlayerService
     from wcl_app import Profile as Profile
     from wcl_app import ProfileDirectory as ProfileDirectory
+    from wcl_app import ProfileNotPublished as ProfileNotPublished
     from wcl_app import ProfileService as ProfileService
     from wcl_app import ProfileSiteUnknown as ProfileSiteUnknown
     from wcl_app import ProgressCallback as ProgressCallback
