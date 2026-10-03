@@ -129,6 +129,10 @@ Layers, innermost first; each may import only itself and inner layers. `tests/te
 5. **frontends**: CLI, PySide6 desktop, and later the Toads API and bot. Call services only; from core they may use just
    `models`, `common`, `paths`, `version`.
 
+`wcl_api_url` and `guild_id` in config.json are only the defaults of the "All" raid profile: read them through
+`wcl_core.config.configured_api_url` / `configured_guild_id`, or `AppContext.api_url` / `guild_id` (which put the
+active profile first), and a stored raid's site through `AppContext.client_for` (`tests/test_single_host_config.py`).
+
 New features go into a service first, then each frontend adapts it. Charts share presenter payloads, not drawing code.
 Auth/RBAC stays in the frontend adapters. Existing shortcuts are listed in `KNOWN_VIOLATIONS` in the test; the list may
 only shrink, so move a view onto a service and delete its entry rather than adding new ones.

@@ -27,6 +27,7 @@ wcl_app.AppContext.guild_id: @property def guild_id(self) -> int | None
 wcl_app.AppContext.api_url: @property def api_url(self) -> str | None
 wcl_app.AppContext.thresholds: @property def thresholds(self) -> AnalysisThresholds
 wcl_app.AppContext.wcl_client: @property def wcl_client(self) -> WarcraftLogsClient
+wcl_app.AppContext.client_for: def client_for(self, game_version: str | None) -> WarcraftLogsClient
 wcl_app.AppContext.user_client: def user_client(self) -> WarcraftLogsClient | None
 wcl_app.AppContext.db: @contextmanager def db(self) -> Iterator['PerformanceDB']
 wcl_app.AppContext.repository: @contextmanager def repository(self) -> Iterator[RaidRepository]

@@ -302,6 +302,16 @@ def test_import_stores_the_era_and_keeps_it_when_stored_again(repo):
     assert (row["game_version"], row["expansion"]) == ("classic", "Classic")
 
 
+def test_a_stored_raid_reloads_with_its_zone_and_era(repo):
+    """The deep dive and report links read a stored raid's site from its metadata."""
+    repo.import_raid(_analysis(KARA, game_version="classic", expansion=TBC))
+    meta = repo.get_raid_analysis(KARA).metadata
+    assert (meta.zone, meta.game_version, meta.expansion) == ("Karazhan", "classic", TBC)
+    assert meta.url == "https://classic.warcraftlogs.com/reports/" + KARA
+    repo.import_raid(_analysis(MC, start=T0 + DAY, title="MC", zone="Molten Core"))
+    assert repo.get_raid_analysis(MC).metadata.game_version is None
+
+
 def test_raid_era_is_set_and_missing_eras_are_listed(repo):
     repo.import_raid(_analysis(MC, start=T0, title="MC", zone="Molten Core"))
     repo.import_raid(_analysis(KARA, start=T0 + DAY, game_version="fresh", expansion=TBC))

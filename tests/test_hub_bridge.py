@@ -429,3 +429,13 @@ class TestWire:
         monkeypatch.setattr(paths, "get_hub_link_path", lambda: tmp_path / "hub_link.json")
         assert HubLinkStore().path == tmp_path / "hub_link.json"
         assert paths.get_hub_link_path().parent == tmp_path
+
+
+def test_the_wire_contract_names_every_field_of_the_profile_payload():
+    """``guides/hub_bridge.md`` is what the Toads port builds against, so a new profile field must be documented."""
+    from pathlib import Path
+
+    guide = (Path(__file__).resolve().parent.parent / "guides" / "hub_bridge.md").read_text(encoding="utf-8")
+    payload = ProfileSet([TBC], active="tbc").to_dict()
+    fields = set(payload) | set(payload["profiles"][0])
+    assert {field for field in fields if f"| `{field}` |" not in guide} == set()

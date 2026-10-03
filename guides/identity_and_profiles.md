@@ -74,6 +74,8 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | PROF-10 | While a profile is active, the guild list shall show only its guild and era. | Enforced | see below |
 | PROF-11 | When a profile imports a raid, the profile shall list it without a backfill. | Enforced | see below |
 | PROF-12 | If a profile's site is not the client's, then the service shall import nothing. | Enforced | see below |
+| PROF-13 | When the app reads more of a stored raid, the context shall ask the raid's own site. | Enforced | see below |
+| ARCH-P3 | Each module shall read the configured host and guild through the config accessors or the context. | Enforced | `tests/test_single_host_config.py` |
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
 PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
@@ -82,6 +84,7 @@ PROF-10 evidence: `tests/test_import_by_profile.py` and
 `test_a_scope_admits_exactly_the_raids_the_store_returns_for_it` on both backends. PROF-11 evidence:
 `test_a_raid_imported_under_a_profile_is_listed_by_it_without_a_backfill`. PROF-12 evidence:
 `test_a_profile_whose_site_is_unknown_refuses_to_import`.
+PROF-13 evidence: `TestAClientForARaidsSite`; the desktop's encounter deep dive reads through `client_for`.
 PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence:
 `tests/gui/test_profile_switcher.py`, `test_the_home_page_follows_a_later_profile_switch` and
 `tests/gui/test_characters_hub.py`.
@@ -207,10 +210,10 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1 to 2.3 merged (#145 to #149); 2.4 planned | PROF-07 to PROF-09 |
-| 3 | Import by profile | 3.1 and 3.2 in review; 3.3 waits on Warcraft Logs | PROF-10 to PROF-12 |
-| 4 | Bridge to the Toads Hub and bot | 4.1 in review; 4.2 is the Toads port | IDENT-05 to IDENT-07 |
-| 5 | Retire the single-host config | Planned | |
+| 2 | Scoped services and frontends | 2.1 to 2.3 merged (#145 to #149); 2.4 in review | PROF-07 to PROF-09 |
+| 3 | Import by profile | 3.1 and 3.2 merged (#159); 3.3 waits on Warcraft Logs | PROF-10 to PROF-12 |
+| 4 | Bridge to the Toads Hub and bot | 4.1 merged (#160); 4.2 is the Toads port | IDENT-05 to IDENT-07 |
+| 5 | Retire the single-host config | 5.1 and 5.2 in review | PROF-13, ARCH-P3 |
 | Q | Quality bar: the ESI.ts gates in Python | Merged (#150 to #158) | section below, `guides/CHARTER.md` |
 
 Each phase is a set of PRs that merge alone, one concern per PR, with a definition of done checkable from CI.
@@ -249,8 +252,9 @@ Order, one PR each:
    2.3c: Settings' `gui/identity_panel.py`. "Discord Account" links and unlinks through `IdentityService` (the
    browser wait runs on a daemon thread so closing the app never blocks on it); "Raid Eras" runs `backfill_eras()`
    on a worker with the window's context, then the switcher recounts and the scoped views refresh.
-4. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
-   contract (`guides/home_widgets.md` style page for the profile payload).
+4. (built) Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays
+   the contract. The payload's fields are in [hub_bridge.md](hub_bridge.md#the-profile-payload), and
+   `test_the_wire_contract_names_every_field_of_the_profile_payload` fails when a field is added without them.
 Definition of done: every service read that lists or aggregates raids takes the scope; the desktop shows the active
 profile's name and count; `KNOWN_VIOLATIONS` is no larger.
 
@@ -293,8 +297,24 @@ Definition of done: IDENT-05 to IDENT-07 Enforced by contract tests against a fa
 
 ### Phase 5: retire the single-host config
 
-`wcl_api_url` and `guild_id` in `config.json` become the defaults of the implicit "All" profile; the settings view
-edits profiles, not raw keys. Definition of done: no module reads `config["wcl_api_url"]` outside `AppContext`.
+`wcl_api_url` and `guild_id` in `config.json` become the defaults of the implicit "All" profile: what the app uses
+with no profile on, or under a profile that names no site or guild of its own.
+
+Order:
+1. (built) `wcl_core.config.configured_api_url` / `configured_guild_id` are the only readers of the raw keys, and
+   `AppContext.api_url` / `guild_id` put the active profile in front of them. A stored raid reloads with its zone and
+   era (both backends), so report links follow its own game version, with the configured site only for raids
+   stored before eras were read.
+   `AppContext.client_for(game_version)` gives a client on a stored raid's site, so the encounter deep dive reads a
+   Classic raid from Classic whatever profile is on; the window no longer builds a client from config, and three
+   `KNOWN_VIOLATIONS` entries go. The Warcraft Logs sign-in for reference reports stays on the configured site.
+   `tests/test_single_host_config.py` fails on any new raw read (ARCH-P3).
+2. (built) Settings gains "Raid Profiles": add a profile with a name, game version and guild, or delete one. The
+   linked Discord account owns what it adds, and deleting the active profile switches the app back to all raids.
+   Settings' "Default Guild ID" and My Character's WCL API URL stay as the editors of the "All" defaults, the two
+   modules the guard test lists, and that list only shrinks.
+Definition of done: no module outside the accessors, the profile file and the two default editors reads
+`wcl_api_url` or `guild_id`; a stored raid is read from its own site.
 
 ## Quality bar: the ESI.ts standard in Python
 

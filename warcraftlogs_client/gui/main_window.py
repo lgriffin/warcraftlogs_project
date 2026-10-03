@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
-from ..services import CharacterService, ProfileService
+from ..services import AppContext, CharacterService, ProfileService
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
@@ -301,6 +301,7 @@ class MainWindow(QMainWindow):
 
         self.settings_view.status_message.connect(self._on_settings_saved)
         self.settings_view.identity_panel.eras_changed.connect(self._on_eras_changed)
+        self.settings_view.profiles_panel.profiles_changed.connect(self._on_profiles_edited)
         self.profile_switcher.profile_changed.connect(self._on_profile_changed)
 
         self._load_guild_info()
@@ -361,14 +362,8 @@ class MainWindow(QMainWindow):
             self._version_label.setVisible(False)
 
     def _auto_check_updates(self):
-        try:
-            from wcl_core.config import load_config
-
-            config = load_config()
-            if not config.get("auto_check_updates", True):
-                return
-        except Exception:
-            pass
+        if not self._ctx.config.get("auto_check_updates", True):
+            return
         QTimer.singleShot(3000, self._run_update_check)
 
     def _run_update_check(self, force: bool = False):
@@ -440,10 +435,6 @@ class MainWindow(QMainWindow):
         self.stack.push_view(widget)
 
     def _drill_into_deep_dive(self, report_id: str, encounter_index: int):
-        from wcl_core.auth import TokenManager
-        from wcl_core.client import WarcraftLogsClient
-        from wcl_core.config import load_config
-
         from .encounter_deep_dive_view import EncounterDeepDiveView
 
         try:
@@ -458,9 +449,8 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            config = load_config()
-            token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
+            # A fresh context, so credentials saved since start-up apply; the raid's own site, whatever profile is on.
+            client = AppContext.desktop().client_for(analysis.metadata.game_version)
         except Exception as e:
             self.status_bar.showMessage(f"Failed to create API client: {e}")
             return
@@ -504,6 +494,13 @@ class MainWindow(QMainWindow):
         # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
         # views' own messages.
         self.status_bar.showMessage(f"Raid profile: {name}")
+
+    def _on_profiles_edited(self):
+        # Settings added or deleted a profile; deleting the active one switches the app back to all raids.
+        before = self.profile_switcher.combo.currentData()
+        self.profile_switcher.reload()
+        if self.profile_switcher.combo.currentData() != before:
+            self._on_profile_changed(self.profile_switcher.active_name())
 
     def _on_raid_deleted(self, report_id: str):
         pass

@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 
+from wcl_core.config import configured_api_url
 from wcl_core.game_version import GAME_VERSIONS, api_url_for, expansion_for_zone, game_version_for_url
 from wcl_store import RaidScope, StorageError
 
@@ -311,7 +312,7 @@ class ProfileService:
         """
         if self.ctx is None:
             raise RuntimeError("backfill_eras needs a context")
-        default_version = game_version_for_url(self.ctx.config.get("wcl_api_url"))
+        default_version = game_version_for_url(configured_api_url(self.ctx.config))
         changed = 0
         with self.ctx.repository() as repo:
             for row in repo.get_raids_without_era():
