@@ -31,6 +31,12 @@ OPENERS = {o for o in EARS_OPENERS.values() if o}
 REQ_ID = re.compile(r"[A-Z]+(?:-[A-Z0-9]+)+")
 STATUSES = {"Enforced", "Practised", "Gap"}
 SHALL = re.compile(r"\bshall\b", re.IGNORECASE)
+# Enforced requirements proved outside tests/features/, and why. The list only shrinks.
+NO_SCENARIO = {
+    "PROF-09": "a desktop widget requirement; the PySide6 tests in tests/gui/ prove it",
+    "ARCH-P1": "a layering rule over the source tree; test_architecture.py and lint-imports prove it",
+    "ARCH-P2": "a rule for how storage changes land; the contract and migration tests prove it",
+}
 # Evidence that names a test: a test function or class, or a path under tests/.
 EVIDENCE = re.compile(r"`((?:tests/[\w/.-]+\.py)(?:::\w+)?|test_\w+|Test\w+)`")
 
@@ -172,6 +178,29 @@ def _call_name(call: ast.Call) -> str:
     return func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
 
 
+def scenario_problems(rows: list[Requirement], titles: set[str]) -> list[str]:
+    """Why the scenarios and the requirements table disagree: an Enforced requirement with no scenario worded
+    exactly as the table words it, a scenario carrying a table ID with other words, or a stale NO_SCENARIO entry."""
+    expected = {row.id: f"{row.id} {row.text.rstrip('.')}" for row in rows}
+    problems = []
+    for row in rows:
+        if row.status == "Enforced" and row.id not in NO_SCENARIO and expected[row.id] not in titles:
+            problems.append(f"{row.id} is Enforced but no scenario is titled {expected[row.id]!r}")
+    for title in sorted(titles):
+        req_id = title.split(" ", 1)[0]
+        if req_id in expected and title != expected[req_id]:
+            problems.append(f"the {req_id} scenario is worded {title!r}, the guide {expected[req_id]!r}")
+    problems += [
+        f"{req_id} is in NO_SCENARIO but has a scenario" for req_id in NO_SCENARIO if expected.get(req_id) in titles
+    ]
+    problems += [
+        f"{req_id} is in NO_SCENARIO but is not an Enforced requirement"
+        for req_id in NO_SCENARIO
+        if not any(r.id == req_id and r.status == "Enforced" for r in rows)
+    ]
+    return problems
+
+
 def _features() -> list[tuple[str, str]]:
     return [(p.name, p.read_text(encoding="utf-8")) for p in sorted(FEATURES.glob("*.feature"))]
 
@@ -190,6 +219,30 @@ def test_every_feature_file_is_bound_to_step_definitions():
     """pytest-bdd runs a feature only when a step module calls scenarios() on it; an unbound one never fails."""
     bound = set().union(*(bound_features(p.read_text(encoding="utf-8")) for p in STEP_DEFS.glob("*.py")))
     assert {name for name, _ in _features()} - bound == set()
+
+
+def test_every_enforced_requirement_has_its_scenario():
+    rows = requirements(GUIDE.read_text(encoding="utf-8"))
+    titles = {s.title for name, text in _features() for s in scenarios(name, text)}
+    assert scenario_problems(rows, titles) == []
+
+
+def test_the_scenario_rule_matches_titles_to_the_table_word_for_word():
+    rows = [
+        Requirement("A-01", "The app shall start.", "Enforced", "`test_a`"),
+        Requirement("A-02", "The app shall stop.", "Enforced", "`test_b`"),
+        Requirement("A-03", "The app shall fly.", "Gap", "Phase 9"),
+        Requirement("PROF-09", "The desktop shall switch.", "Enforced", "`test_c`"),
+    ]
+    titles = {"A-01 The app shall start", "A-02 The app shall halt", "REQ-X-001 Other things shall work"}
+    assert scenario_problems(rows, titles) == [
+        "A-02 is Enforced but no scenario is titled 'A-02 The app shall stop'",
+        "the A-02 scenario is worded 'A-02 The app shall halt', the guide 'A-02 The app shall stop'",
+        "ARCH-P1 is in NO_SCENARIO but is not an Enforced requirement",
+        "ARCH-P2 is in NO_SCENARIO but is not an Enforced requirement",
+    ]
+    titles.add("PROF-09 The desktop shall switch")
+    assert "PROF-09 is in NO_SCENARIO but has a scenario" in scenario_problems(rows, titles)
 
 
 def test_the_ears_tags_are_the_registered_markers():

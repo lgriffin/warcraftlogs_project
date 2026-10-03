@@ -283,7 +283,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Coverage floors below measured, only up | `fail_under = 70` in `pyproject.toml`, documented as only going up | Raise toward the measured value; add branch coverage |
 | Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
-| EARS specification, one `shall` per Rule, `spec:audit` | Enforced for form and evidence, see below | A scenario for each PROF and IDENT ID |
+| EARS specification, one `shall` per Rule, `spec:audit` | Enforced, see below | None |
 | Mock only at the transport seam (`lint:bdd-seam`) | step defs mock `requests.post` and services variously | A fake `WarcraftLogsClient` transport in a shipped `wcl_core.testing` module; BDD steps use it, nothing patches a service method |
 | `./testing` export: `createMockTransport`, `TestDataFactory` | `tests/conftest.py` fixtures only | `wcl_core.testing` (fake GraphQL transport, `RaidAnalysis` factory) so the Hub tests the same way |
 | API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
@@ -308,10 +308,11 @@ has no allow-list; each rule has its own test on a small source.
 `tests/test_spec_audit.py` audits the specification. Each scenario in `tests/features/` holds one `shall`, carries
 one `@ears_*` tag, and opens with that pattern's word (When, While, If, Where, or none for ubiquitous). Every feature
 file is bound by a step module. Every row of the requirements table above holds one `shall` and a known status, and an
-Enforced row names tests that exist.
+Enforced row names tests that exist. Every Enforced row also has a scenario titled with its ID and its exact words
+(`tests/features/profiles.feature`), except the few in `NO_SCENARIO`, each with the reason another test proves it.
 
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
-EARS audit over `tests/features/` (done; a scenario per PROF and IDENT ID is next); `wcl_core.testing` with the fake
+EARS audit over `tests/features/` with a scenario per requirement (done); `wcl_core.testing` with the fake
 transport; export coverage and the surface snapshot; mutation on `wcl_core` with a floor; the clock lint; the
 charter.
 
