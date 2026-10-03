@@ -55,16 +55,18 @@ Feature: Raid profiles and Discord identity
 
   @ears_ubiquitous
   Scenario: PROF-08 The desktop and CLI shall start in the saved active profile
-    Given "Classic" is saved as the active profile
+    Given "Classic" on "classic" is saved as the active profile
     When the desktop and CLI context starts
     Then its active profile should be "Classic"
+    When the CLI runs the consumes command
+    Then the command should import from "https://classic.warcraftlogs.com/api/v2/client"
 
   @ears_ubiquitous @auth
   Scenario: IDENT-01 The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, holding no client secret
-    When the Discord sign-in starts for the application "app"
-    Then the sign-in should ask for the code with an S256 challenge and the identify scope only
-    When Discord answers with the code "c0de"
-    Then the code should be exchanged with the verifier and no client secret
+    When the user signs in with Discord in the browser for the application "app"
+    Then the browser should have asked for the code with an S256 challenge and the identify scope only
+    And the code should have been exchanged with the challenge's verifier and no client secret
+    And the Discord account "123456789" should be linked
 
   @ears_unwanted_behavior @auth
   Scenario Outline: IDENT-02 If the callback's state differs from the one issued, or carries an error, then the service shall link nothing
@@ -81,5 +83,5 @@ Feature: Raid profiles and Discord identity
   @ears_event_driven @auth
   Scenario: IDENT-04 When `DISCORD_OAUTH_URL` is set, the flow shall use that site, so the Toads fake Discord serves development
     Given DISCORD_OAUTH_URL is "http://localhost:8099/"
-    When the Discord sign-in starts for the application "app"
-    Then the sign-in should open "http://localhost:8099/oauth2/authorize"
+    When the user signs in with Discord in the browser for the application "app"
+    Then the browser should have opened "http://localhost:8099/oauth2/authorize"

@@ -1,21 +1,31 @@
 """Step definitions for the raid profile and Discord identity requirements (PROF-*, IDENT-* in
 guides/identity_and_profiles.md). Each scenario drives the services the desktop, CLI and Toads Hub share."""
 
+import argparse
+import base64
+import hashlib
+import socket
+import threading
+import webbrowser
 from dataclasses import replace
 from urllib.parse import parse_qs, urlparse
+from urllib.request import urlopen
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from wcl_app import AppContext, CharacterService, PlayerService, RaidService
 from wcl_app.identity import IdentityService
 from wcl_app.profiles import JsonProfileStore, MemoryProfileStore, Profile, ProfileService, ProfileSet
-from wcl_core import discord_auth, paths
+from wcl_core import config, consumes_analysis, discord_auth, paths
 from wcl_core.common.errors import AuthenticationError
 from wcl_core.discord_auth import DiscordIdentity, DiscordIdentityStore, PkcePair
+
+from warcraftlogs_client import cli
 
 scenarios("profiles.feature")
 
 FRESH = "https://fresh.warcraftlogs.com/api/v2/client"
+CONFIG = {"client_id": "id", "client_secret": "secret", "wcl_api_url": FRESH}
 TBC = "The Burning Crusade"
 DAY = 86_400_000
 T0 = 1_790_000_000_000
@@ -25,7 +35,6 @@ RAIDS = {  # name: (report id, zone, game version, expansion)
     "Nowhere Keep": ("NowhereKeepNowhe", "Nowhere Keep", None, None),
 }
 CODES = {code: name for name, (code, *_) in RAIDS.items()}
-PORT = 9000
 
 
 def _raid(build_analysis, name: str, n: int = 0, *, game_version=None, expansion=None):
@@ -45,7 +54,7 @@ def _names(rows) -> set[str]:
 )
 def raid_database(tmp_path, build_analysis, monkeypatch):
     monkeypatch.delenv("DISCORD_OAUTH_URL", raising=False)
-    ctx = AppContext(config={"wcl_api_url": FRESH}, db_path=str(tmp_path / "profiles.db"))
+    ctx = AppContext(config=dict(CONFIG), db_path=str(tmp_path / "profiles.db"))
     with ctx.repository() as repo:
         for n, (name, (_, _, version, expansion)) in enumerate(RAIDS.items()):
             repo.import_raid(_raid(build_analysis, name, n, game_version=version, expansion=expansion))
@@ -113,12 +122,14 @@ def matches_unscoped(world):
 
 @when(parsers.parse('a profile on "{version}" is activated'))
 def activate_version(world, version):
-    world["ctx"].use_profile(Profile(version, version, game_version=version))
+    ctx = world["ctx"]
+    assert ctx.wcl_client is not None  # a client built before the switch must not outlive it
+    ctx.use_profile(Profile(version, version, game_version=version))
 
 
 @then(parsers.parse('imports should come from "{url}"'))
 def imports_from(world, url):
-    assert world["ctx"].api_url == url
+    assert world["ctx"].api_url == world["ctx"].wcl_client.api_url == url
 
 
 @given(parsers.parse('the Discord account "{discord_id}" is linked'))
@@ -175,9 +186,9 @@ def scoped_reads(world):
     assert world["characters"].dossier("HolyPriest").history.total_raids == 2
 
 
-@given(parsers.parse('"{name}" is saved as the active profile'))
-def saved_active(name):
-    profile = Profile(name.lower(), name, expansions=(name,))
+@given(parsers.parse('"{name}" on "{version}" is saved as the active profile'))
+def saved_active(name, version):
+    profile = Profile(name.lower(), name, game_version=version, expansions=(name,))
     JsonProfileStore(paths.get_profiles_path()).save(ProfileSet(profiles=[profile], active=profile.slug))
 
 
@@ -192,19 +203,20 @@ def started_in(started, name):
     assert started.scope == started.profile.scope
 
 
-@when(parsers.parse('the Discord sign-in starts for the application "{client_id}"'), target_fixture="sign_in")
-def sign_in_starts(client_id):
-    pkce = PkcePair.generate()
-    url = discord_auth.build_authorize_url(client_id, "st4te", pkce.challenge, PORT)
-    return {"pkce": pkce, "url": url, "client_id": client_id}
+@when("the CLI runs the consumes command")
+def cli_consumes(world, monkeypatch):
+    used = world["consumes"] = {}
+    monkeypatch.setattr(config, "load_config", lambda path=None: dict(CONFIG))
+    monkeypatch.setattr(
+        consumes_analysis, "run_consumes_analysis", lambda *a, client=None, **k: used.update(client=client)
+    )
+    args = argparse.Namespace(raid_ids=["KaraKaraKaraKara"], csv=None, healers=False, md=None)
+    assert cli.run_consumes_analysis(args) == 0
 
 
-@then("the sign-in should ask for the code with an S256 challenge and the identify scope only")
-def asks_with_pkce(sign_in):
-    query = {k: v[0] for k, v in parse_qs(urlparse(sign_in["url"]).query).items()}
-    assert query["response_type"] == "code" and query["scope"] == "identify"
-    assert query["code_challenge"] == sign_in["pkce"].challenge and query["code_challenge_method"] == "S256"
-    assert "client_secret" not in query
+@then(parsers.parse('the command should import from "{url}"'))
+def command_imports_from(world, url):
+    assert world["consumes"]["client"].api_url == url
 
 
 class _Answer:
@@ -216,25 +228,66 @@ class _Answer:
         return self._body
 
 
-@when(parsers.parse('Discord answers with the code "{code}"'))
-def discord_answers(world, sign_in, code, monkeypatch):
-    sent = sign_in["sent"] = {}
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@when(
+    parsers.parse('the user signs in with Discord in the browser for the application "{client_id}"'),
+    target_fixture="sign_in",
+)
+def browser_sign_in(world, client_id, monkeypatch):
+    """The whole desktop sign-in: IdentityService.link starts the real loopback server and opens the authorize URL;
+    the fake browser approves by calling back with a code and the state it was given; Discord's token and user
+    endpoints answer through fake HTTP."""
+    seen: dict = {"sent": {}}
+
+    def browser(url):
+        seen["url"] = url
+        query = parse_qs(urlparse(url).query)
+        callback = f"{query['redirect_uri'][0]}?code=c0de&state={query['state'][0]}"
+        threading.Thread(target=lambda: urlopen(callback, timeout=5).close(), daemon=True).start()  # noqa: S310
+        return True
 
     def post(url, data=None, **kwargs):
-        sent.update(data or {})
+        seen["sent"].update(data or {})
         return _Answer(200, {"access_token": "acc", "refresh_token": "ref"})
 
+    monkeypatch.setattr(webbrowser, "open", browser)
     monkeypatch.setattr(discord_auth.requests, "post", post)
-    monkeypatch.setattr(discord_auth.requests, "get", lambda *a, **k: _Answer(200, {"id": "1", "username": "toad"}))
+    monkeypatch.setattr(
+        discord_auth.requests, "get", lambda *a, **k: _Answer(200, {"id": "123456789", "username": "toadlord"})
+    )
     store = DiscordIdentityStore(world["tmp"] / "identity.json")
-    sign_in["identity"] = store.complete_auth(code, sign_in["client_id"], sign_in["pkce"].verifier, PORT)
+    service = IdentityService(store, config={"discord_client_id": client_id}, redirect_port=_free_port())
+    service.link(open_browser=True, timeout=10)
+    seen["service"] = service
+    return seen
 
 
-@then("the code should be exchanged with the verifier and no client secret")
+@then("the browser should have asked for the code with an S256 challenge and the identify scope only")
+def asked_with_pkce(sign_in):
+    query = {k: v[0] for k, v in parse_qs(urlparse(sign_in["url"]).query).items()}
+    assert query["response_type"] == "code" and query["scope"] == "identify"
+    assert query["code_challenge_method"] == "S256" and "client_secret" not in query
+    sign_in["challenge"] = query["code_challenge"]
+
+
+@then("the code should have been exchanged with the challenge's verifier and no client secret")
 def exchanged(sign_in):
     sent = sign_in["sent"]
-    assert sent["grant_type"] == "authorization_code" and sent["code_verifier"] == sign_in["pkce"].verifier
-    assert "client_secret" not in sent and sign_in["identity"].id == "1"
+    digest = hashlib.sha256(sent["code_verifier"].encode()).digest()
+    assert base64.urlsafe_b64encode(digest).rstrip(b"=").decode() == sign_in["challenge"]
+    assert sent["grant_type"] == "authorization_code" and sent["code"] == "c0de"
+    assert "client_secret" not in sent
+
+
+@then(parsers.parse('the Discord account "{discord_id}" should be linked'))
+def account_linked(sign_in, discord_id):
+    current = sign_in["service"].current()
+    assert sign_in["service"].is_linked() and current is not None and current.id == discord_id
 
 
 ANSWERS = {
@@ -283,6 +336,6 @@ def oauth_url(monkeypatch, url):
     monkeypatch.setenv("DISCORD_OAUTH_URL", url)
 
 
-@then(parsers.parse('the sign-in should open "{prefix}"'))
-def opens(sign_in, prefix):
+@then(parsers.parse('the browser should have opened "{prefix}"'))
+def opened(sign_in, prefix):
     assert sign_in["url"].startswith(prefix + "?")
