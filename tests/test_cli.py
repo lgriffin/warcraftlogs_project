@@ -165,6 +165,17 @@ class TestHistoryCommand:
         assert cli.run_history_query(parser.parse_args(["history", "--raids"])) == 0
         out = capsys.readouterr().out
         assert "TbcRaid000000000" in out and "ClassicRaid00000" not in out
+        assert cli.run_history_query(parser.parse_args(["history", "--all"])) == 0
+        holy = next(line for line in capsys.readouterr().out.splitlines() if line.startswith("HolyPriest"))
+        assert holy.split()[2] == "1"
+
+        tbc_scope = tbc.scope
+        with real(str(db_path)) as db:
+            for trend in (db.get_healer_trend, db.get_tank_trend, db.get_dps_trend):
+                assert len(trend("HolyPriest")) in (0, 2)
+                assert {r["report_id"] for r in trend("HolyPriest", scope=tbc_scope)} <= {"TbcRaid000000000"}
+            assert [r["report_id"] for r in db.get_healer_trend("HolyPriest", scope=tbc_scope)] == ["TbcRaid000000000"]
+            assert db.get_all_characters(scope=Profile("z", "Z", zones=("Nowhere",)).scope) == []
 
 
 def _service(tmp_path):

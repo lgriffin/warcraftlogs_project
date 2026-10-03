@@ -972,80 +972,73 @@ class PerformanceDB:
             avg_active_time=round(avg_at, 1) if avg_at else None,
         )
 
-    def get_all_characters(self) -> list[CharacterHistory]:
-        """Get summary for all tracked characters (guild raids only)."""
-        conn = self._get_conn()
-        rows = conn.execute("""
-            SELECT DISTINCT c.name FROM characters c
-            WHERE EXISTS (
-                SELECT 1 FROM healer_performance hp
-                JOIN raids r ON r.id = hp.raid_id
-                WHERE hp.character_id = c.id AND r.source = 'guild'
-            ) OR EXISTS (
-                SELECT 1 FROM tank_performance tp
-                JOIN raids r ON r.id = tp.raid_id
-                WHERE tp.character_id = c.id AND r.source = 'guild'
-            ) OR EXISTS (
-                SELECT 1 FROM dps_performance dp
-                JOIN raids r ON r.id = dp.raid_id
-                WHERE dp.character_id = c.id AND r.source = 'guild'
-            )
-            ORDER BY c.name
-        """).fetchall()
+    def get_all_characters(self, scope: RaidScope | None = None) -> list[CharacterHistory]:
+        """Summary for every character in a guild raid, or in a raid inside ``scope`` when given."""
+        where, params = self._scope_sql(scope, ("guild",))
+        exists = " OR ".join(
+            f"EXISTS (SELECT 1 FROM {tbl} p JOIN raids r ON r.id = p.raid_id WHERE p.character_id = c.id AND {where})"
+            for tbl in ("healer_performance", "tank_performance", "dps_performance")
+        )
+        rows = self._get_conn().execute(
+            f"SELECT DISTINCT c.name FROM characters c WHERE {exists} ORDER BY c.name", params * 3
+        )
         results = []
-        for row in rows:
-            history = self.get_character_history(row["name"])
+        for row in rows.fetchall():
+            history = self.get_character_history(row["name"], scope=scope)
             if history:
                 results.append(history)
         return results
 
-    def get_healer_trend(self, character_name: str, limit: int = 20) -> list[dict]:
+    def get_healer_trend(self, character_name: str, limit: int = 20, scope: RaidScope | None = None) -> list[dict]:
         """Get healing performance over time for a character."""
         conn = self._get_conn()
+        where, params = self._scope_sql(scope, ("guild",))
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
+            f"""SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       hp.total_healing, hp.total_overhealing, hp.overheal_percent,
                       hp.fear_ward_casts, hp.total_dispels, hp.active_time_percent
                FROM healer_performance hp
                JOIN characters c ON c.id = hp.character_id
                JOIN raids r ON r.id = hp.raid_id
-               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
+               WHERE c.name = ? COLLATE NOCASE AND {where}
                ORDER BY r.raid_date DESC
                LIMIT ?""",
-            (character_name, limit),
+            (character_name, *params, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_tank_trend(self, character_name: str, limit: int = 20) -> list[dict]:
+    def get_tank_trend(self, character_name: str, limit: int = 20, scope: RaidScope | None = None) -> list[dict]:
         """Get tank performance over time for a character."""
         conn = self._get_conn()
+        where, params = self._scope_sql(scope, ("guild",))
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
+            f"""SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       tp.total_damage_taken, tp.total_mitigated, tp.mitigation_percent,
                       tp.active_time_percent
                FROM tank_performance tp
                JOIN characters c ON c.id = tp.character_id
                JOIN raids r ON r.id = tp.raid_id
-               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
+               WHERE c.name = ? COLLATE NOCASE AND {where}
                ORDER BY r.raid_date DESC
                LIMIT ?""",
-            (character_name, limit),
+            (character_name, *params, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_dps_trend(self, character_name: str, limit: int = 20) -> list[dict]:
+    def get_dps_trend(self, character_name: str, limit: int = 20, scope: RaidScope | None = None) -> list[dict]:
         """Get DPS performance over time for a character."""
         conn = self._get_conn()
+        where, params = self._scope_sql(scope, ("guild",))
         rows = conn.execute(
-            """SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
+            f"""SELECT r.raid_date, r.title, r.report_id, r.raid_size, r.zone,
                       dp.role, dp.total_damage, dp.active_time_percent
                FROM dps_performance dp
                JOIN characters c ON c.id = dp.character_id
                JOIN raids r ON r.id = dp.raid_id
-               WHERE c.name = ? COLLATE NOCASE AND r.source = 'guild'
+               WHERE c.name = ? COLLATE NOCASE AND {where}
                ORDER BY r.raid_date DESC
                LIMIT ?""",
-            (character_name, limit),
+            (character_name, *params, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 

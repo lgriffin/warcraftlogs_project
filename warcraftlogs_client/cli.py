@@ -288,7 +288,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
             return 0
 
         if hasattr(args, "all") and args.all:
-            characters = db.get_all_characters()
+            characters = db.get_all_characters(scope=scope)
             if not characters:
                 print("No characters tracked yet. Use --save when running analysis.")
                 return 0
@@ -323,7 +323,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
 
         role = args.role if hasattr(args, "role") and args.role else None
         if role == "healer" or (role is None and history.avg_healing is not None):
-            trend = db.get_healer_trend(args.character_name)
+            trend = db.get_healer_trend(args.character_name, scope=scope)
             if trend:
                 print(f"\n{'Date':<22} {'Raid':<25} {'Healing':>12} {'Overheal%':>10}")
                 print("-" * 72)
@@ -334,7 +334,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
                     )
 
         if role == "tank" or (role is None and history.avg_mitigation_percent is not None):
-            trend = db.get_tank_trend(args.character_name)
+            trend = db.get_tank_trend(args.character_name, scope=scope)
             if trend:
                 print(f"\n{'Date':<22} {'Raid':<25} {'Taken':>12} {'Mitigation%':>12}")
                 print("-" * 75)
@@ -345,7 +345,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
                     )
 
         if role in ("melee", "ranged") or (role is None and history.avg_damage is not None):
-            trend = db.get_dps_trend(args.character_name)
+            trend = db.get_dps_trend(args.character_name, scope=scope)
             if trend:
                 print(f"\n{'Date':<22} {'Raid':<25} {'Role':<8} {'Damage':>12}")
                 print("-" * 70)
