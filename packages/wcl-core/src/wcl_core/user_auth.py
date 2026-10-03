@@ -32,16 +32,12 @@ DEFAULT_REDIRECT_PORT = 8764
 
 
 def _get_base_url() -> str:
-    """Derive the WCL domain from the configured API URL."""
-    from .config import load_config
+    """Derive the WCL domain from the configured API URL; the sign-in stays on the site the user configured."""
+    from .config import configured_api_url
 
-    try:
-        api_url = load_config().get("wcl_api_url", "")
-        parsed = urlparse(api_url)
-        if parsed.hostname:
-            return f"{parsed.scheme}://{parsed.hostname}"
-    except Exception:  # noqa: BLE001, S110 - no readable config means the default domain
-        pass
+    parsed = urlparse(configured_api_url() or "")
+    if parsed.hostname:
+        return f"{parsed.scheme}://{parsed.hostname}"
     return "https://www.warcraftlogs.com"
 
 

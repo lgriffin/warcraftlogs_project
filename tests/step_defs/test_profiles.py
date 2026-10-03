@@ -466,3 +466,18 @@ def refused(world):
 @then("the app should not be linked to the Hub")
 def not_linked(world):
     assert not world["bridge"].is_linked() and world["hub"].apps == {}
+
+
+@when(parsers.parse('a "{first}" raid and a "{second}" raid are read again from Warcraft Logs'))
+def read_again(world, first, second):
+    wcl = FakeWarcraftLogs().answer("report(", {"reportData": {"report": {"title": "Pond"}}})
+    world["asked"] = {}
+    with wcl.install():
+        for version in (first, second):
+            world["ctx"].client_for(version).run_query('query { report(code: "x") { title } }', use_cache=False)
+            world["asked"][version] = wcl.queries[-1].url
+
+
+@then(parsers.parse('the "{version}" raid should be asked of "{url}"'))
+def asked_of(world, version, url):
+    assert world["asked"][version] == url

@@ -254,14 +254,12 @@ class RaidMetadata:
 
     @property
     def url(self) -> str:
-        try:
-            from .config import load_config
+        """The report on the site it was fetched from; a raid stored before that was read uses the configured site."""
+        from .config import configured_api_url
+        from .game_version import RETAIL, game_version_for_url, host_for
 
-            api_url = load_config().get("wcl_api_url", "")
-            base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
-        except Exception:  # noqa: BLE001 - a link must render even without a readable config
-            base = "https://www.warcraftlogs.com"
-        return f"{base}/reports/{self.report_id}"
+        version = self.game_version or game_version_for_url(configured_api_url())
+        return f"{host_for(version) or host_for(RETAIL)}/reports/{self.report_id}"
 
 
 @dataclass

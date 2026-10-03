@@ -36,6 +36,7 @@ NO_SCENARIO = {
     "PROF-09": "a desktop widget requirement; the PySide6 tests in tests/gui/ prove it",
     "ARCH-P1": "a layering rule over the source tree; test_architecture.py and lint-imports prove it",
     "ARCH-P2": "a rule for how storage changes land; the contract and migration tests prove it",
+    "ARCH-P3": "a rule over the source tree; test_single_host_config.py proves it",
 }
 # Evidence that names a test: a test function or class, or a path under tests/.
 EVIDENCE = re.compile(r"`((?:tests/[\w/.-]+\.py)(?:::\w+)?|test_\w+|Test\w+)`")
@@ -240,6 +241,7 @@ def test_the_scenario_rule_matches_titles_to_the_table_word_for_word():
         "the A-02 scenario is worded 'A-02 The app shall halt', the guide 'A-02 The app shall stop'",
         "ARCH-P1 is in NO_SCENARIO but is not an Enforced requirement",
         "ARCH-P2 is in NO_SCENARIO but is not an Enforced requirement",
+        "ARCH-P3 is in NO_SCENARIO but is not an Enforced requirement",
     ]
     titles.add("PROF-09 The desktop shall switch")
     assert "PROF-09 is in NO_SCENARIO but has a scenario" in scenario_problems(rows, titles)

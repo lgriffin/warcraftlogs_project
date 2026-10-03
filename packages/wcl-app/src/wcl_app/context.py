@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 
 from wcl_core.client import DEFAULT_API_URL, WarcraftLogsClient
 from wcl_core.common.errors import ConfigurationError
+from wcl_core.config import configured_api_url, configured_guild_id
+from wcl_core.game_version import api_url_for
 from wcl_store import RaidRepository, RaidScope
 
 # A fixed scope, or a callable a service asks at read time (``lambda: ctx.scope``) so a profile switch on the
@@ -35,6 +37,7 @@ def resolve_scope(source: ScopeSource) -> RaidScope | None:
 
 
 if TYPE_CHECKING:
+    from wcl_core.auth import TokenManager
     from wcl_store.sqlite import PerformanceDB
 
     from wcl_app.profiles import Profile
@@ -174,15 +177,14 @@ class AppContext:
         """The guild imports come from: the profile's, else the configured one."""
         if self.profile is not None and self.profile.guild_id is not None:
             return self.profile.guild_id
-        value = self.config.get("guild_id")
-        return int(value) if value is not None and value != "" else None
+        return configured_guild_id(self.config)
 
     @property
     def api_url(self) -> str | None:
         """The client API URL imports use: the profile's host, else ``wcl_api_url`` from config."""
         if self.profile is not None and self.profile.api_url:
             return self.profile.api_url
-        return self.config.get("wcl_api_url")
+        return configured_api_url(self.config)
 
     @property
     def thresholds(self) -> AnalysisThresholds:
@@ -192,14 +194,27 @@ class AppContext:
     def wcl_client(self) -> WarcraftLogsClient:
         """Client-credentials WCL client, created on first use."""
         if self._client is None:
-            from wcl_core.auth import TokenManager
-
-            try:
-                token_mgr = TokenManager(self.config["client_id"], self.config["client_secret"])
-            except KeyError as e:
-                raise ConfigurationError(f"Missing config value: {e.args[0]}") from e
-            self._client = WarcraftLogsClient(token_mgr, api_url=self.api_url)
+            self._client = WarcraftLogsClient(self._token_manager(), api_url=self.api_url)
         return self._client
+
+    def client_for(self, game_version: str | None) -> WarcraftLogsClient:
+        """A client on the site a raid of *game_version* was fetched from, for reading more of that raid.
+
+        The context's own client when that is the same site, the site is unknown (``forever`` until it is
+        announced, or a raid stored before eras were read) or the host is headless and brings its own client.
+        """
+        url = api_url_for(game_version) if game_version else None
+        if url is None or self._headless or url == (self.api_url or DEFAULT_API_URL).rstrip("/"):
+            return self.wcl_client
+        return WarcraftLogsClient(self._token_manager(), api_url=url)
+
+    def _token_manager(self) -> "TokenManager":
+        from wcl_core.auth import TokenManager
+
+        try:
+            return TokenManager(self.config["client_id"], self.config["client_secret"])
+        except KeyError as e:
+            raise ConfigurationError(f"Missing config value: {e.args[0]}") from e
 
     def user_client(self) -> WarcraftLogsClient | None:
         """User-scoped WCL client for reference reports, or None if the user has not signed in."""

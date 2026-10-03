@@ -588,11 +588,11 @@ def run_consumes_analysis(
     """Run consumables analysis for multiple raid IDs, on ``client`` or one built from the config file."""
     if client is None:
         from .auth import TokenManager
-        from .config import load_config
+        from .config import configured_api_url, load_config
 
         config = load_config()
         token_mgr = TokenManager(config["client_id"], config["client_secret"])
-        client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
+        client = WarcraftLogsClient(token_mgr, api_url=configured_api_url(config))
 
     analyzer = ConsumesAnalyzer(include_healers=include_healers)
 

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from .hub_panel import HubPanel
 from .identity_panel import IdentityPanel
+from .profiles_panel import ProfilesPanel
 from .styles import COLORS, COMMON_STYLES
 
 if TYPE_CHECKING:
@@ -93,7 +94,8 @@ class SettingsView(QWidget):
 
         self.guild_id_input = QLineEdit()
         self.guild_id_input.setPlaceholderText("e.g. 774065")
-        creds_layout.addRow("Guild ID:", self.guild_id_input)
+        self.guild_id_input.setToolTip("The guild imports use when no profile, or a profile without its own, is on")
+        creds_layout.addRow("Default Guild ID:", self.guild_id_input)
 
         self.guild_name_input = QLineEdit()
         self.guild_name_input.setPlaceholderText("e.g. Amicable")
@@ -216,6 +218,8 @@ class SettingsView(QWidget):
         layout.addWidget(self.identity_panel)
         self.hub_panel = self._make_hub_panel()
         layout.addWidget(self.hub_panel)
+        self.profiles_panel = self._make_profiles_panel()
+        layout.addWidget(self.profiles_panel)
 
         # ── Role Thresholds ──
         thresh_group = QGroupBox("Role Detection Thresholds")
@@ -529,6 +533,15 @@ class SettingsView(QWidget):
 
         ctx = self._ctx if self._ctx is not None else desktop_context()
         panel = IdentityPanel(self._identity(ctx), ProfileService.desktop(ctx))
+        panel.status_message.connect(self.status_message)
+        return panel
+
+    def _make_profiles_panel(self) -> ProfilesPanel:
+        from ..services import ProfileService
+        from .home_view import desktop_context
+
+        ctx = self._ctx if self._ctx is not None else desktop_context()
+        panel = ProfilesPanel(ProfileService.desktop(ctx), self._identity(ctx))
         panel.status_message.connect(self.status_message)
         return panel
 

@@ -76,6 +76,28 @@ The body is the analyzer's `ProfileSet.to_dict()` (`{"version": 1, "active": "tb
 profile as `Profile.to_dict()`). It replaces whatever the member published before. 200 or 204 is success. 401 means
 the Hub no longer knows the token, and the analyzer says to link again. Anything else is a `HubError`.
 
+#### The profile payload
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `version` | int | The payload version, `1`. A Hub should store a version it does not know as it is |
+| `active` | string or null | The slug of the member's active profile; null for none, as is a slug no profile has |
+| `profiles` | list | One object per profile, fields below; an entry that is not an object is skipped |
+| `slug` | string | The profile's id, lower case letters, digits and hyphens, unique in the set; what bot commands take |
+| `name` | string | What the member called it |
+| `game_version` | string or null | `fresh`, `classic`, `sod`, `forever` or `retail`; null for the member's configured site |
+| `expansions` | list of strings | Expansion names, `Classic`, `The Burning Crusade` and so on; empty for every one |
+| `zones` | list of strings | Zone names; empty for every one |
+| `since` | string or null | `YYYY-MM-DD HH:MM:SS`, the earliest raid date, inclusive |
+| `until` | string or null | The same, exclusive |
+| `guild_id` | int or null | The Warcraft Logs guild imports come from; null for the member's configured guild |
+| `wcl_api_url` | string or null | A Warcraft Logs API URL that overrides the game version's site |
+| `owner` | string or null | The Discord id linked to the app when the profile was made |
+
+The bot turns a profile into a scope with `Profile.from_dict(...).scope` and runs the shared services under it, so
+it never reads these fields itself. A raid whose game version or expansion is unknown counts as inside every scope
+on that axis.
+
 ### `POST /api/apps/unlink`
 
 No body. 200 or 204 is success. 401 also counts as success, because the Hub had already forgotten the app. The

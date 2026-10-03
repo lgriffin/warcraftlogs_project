@@ -82,6 +82,12 @@ Feature: Raid profiles and Discord identity
     When a profile on "forever" is activated
     Then importing the guild's new reports should fail without asking Warcraft Logs anything
 
+  @ears_event_driven @database
+  Scenario: PROF-13 When the app reads more of a stored raid, the context shall ask the raid's own site
+    When a "classic" raid and a "fresh" raid are read again from Warcraft Logs
+    Then the "classic" raid should be asked of "https://classic.warcraftlogs.com/api/v2/client"
+    And the "fresh" raid should be asked of "https://fresh.warcraftlogs.com/api/v2/client"
+
   @ears_ubiquitous @auth
   Scenario: IDENT-01 The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, holding no client secret
     When the user signs in with Discord in the browser for the application "app"
