@@ -124,7 +124,9 @@ The full-featured PySide6 desktop app provides:
 - **GM/RL Insights** — Cross-raid analytics for guild leaders and raid leaders, with filtering by raid day, raid size, zone, and lookback window.
 - **Boss Insights** — Aggregate boss encounter performance across all imported raids.
 - **Reference Reports** — Import non-guild reports for benchmarking. Head-to-Head comparison shows consumable differences scoped to shared encounters, with Boss vs Trash breakdown, Engineering Stats, and Consumable Timeline.
-- **Settings** — Configure API credentials, role detection thresholds, and manage the local database.
+- **Settings** — Configure API credentials, role detection thresholds, and manage the local database. Link the app
+  to your Discord account, and tag raids stored before eras were recorded so raid profiles can tell Classic, TBC and
+  Era raids apart.
 
 ### Raid Analysis
 

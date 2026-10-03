@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .identity_panel import IdentityPanel
 from .styles import COLORS, COMMON_STYLES
 
 
@@ -32,8 +33,10 @@ class SettingsView(QWidget):
 
     CONFIG_PATH = str(_paths.get_config_path())
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, ctx=None):
         super().__init__(parent)
+        # The window's context, so tagging raids reads the configured host and a sign-in sees the Discord app id.
+        self._ctx = ctx
         self.setStyleSheet(COMMON_STYLES)
         self._build_ui()
         self._load_current_config()
@@ -202,6 +205,10 @@ class SettingsView(QWidget):
 
         layout.addWidget(auth_group)
         self._refresh_auth_status()
+
+        # ── Discord account and raid eras ──
+        self.identity_panel = self._make_identity_panel()
+        layout.addWidget(self.identity_panel)
 
         # ── Role Thresholds ──
         thresh_group = QGroupBox("Role Detection Thresholds")
@@ -422,6 +429,9 @@ class SettingsView(QWidget):
             from wcl_core.config import get_config_manager
 
             get_config_manager(self.CONFIG_PATH)
+            panel = getattr(self, "identity_panel", None)
+            if panel is not None:
+                panel.use_config(config)
 
             QMessageBox.information(self, "Saved", "Settings saved successfully.")
             self.status_message.emit("Settings saved")
@@ -496,6 +506,15 @@ class SettingsView(QWidget):
 
             self._update_status_label.setText(f"You're up to date (v{__version__})")
             self.status_message.emit("No updates available")
+
+    def _make_identity_panel(self) -> IdentityPanel:
+        from ..services import IdentityService, ProfileService
+        from .home_view import desktop_context
+
+        ctx = self._ctx if self._ctx is not None else desktop_context()
+        panel = IdentityPanel(IdentityService(config=ctx.config), ProfileService.desktop(ctx))
+        panel.status_message.connect(self.status_message)
+        return panel
 
     def _refresh_auth_status(self):
         from ..user_auth import UserTokenManager

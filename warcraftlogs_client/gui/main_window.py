@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
         self.characters_hub = CharactersHub(characters=self._characters)
         self.insights_view = InsightsView()
         self.raid_group_view = RaidGroupView()
-        self.settings_view = SettingsView()
+        self.settings_view = SettingsView(ctx=self._ctx)
 
         self.stack.addWidget(self.home_view)
         self.stack.addWidget(self.raids_hub)
@@ -300,6 +300,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
+        self.settings_view.identity_panel.eras_changed.connect(self._on_eras_changed)
         self.profile_switcher.profile_changed.connect(self._on_profile_changed)
 
         self._load_guild_info()
@@ -497,13 +498,7 @@ class MainWindow(QMainWindow):
         pass
 
     def _on_profile_changed(self, name: str):
-        from .character_history_widget import CharacterHistoryWidget
-
-        self.home_view.refresh()
-        self.characters_hub.refresh()
-        for view in self.stack.drill_views():
-            if isinstance(view, CharacterHistoryWidget):
-                view.refresh()
+        self._refresh_scoped_views()
         # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
         # views' own messages.
         self.status_bar.showMessage(f"Raid profile: {name}")
@@ -539,6 +534,21 @@ class MainWindow(QMainWindow):
         else:
             self.guild_logo_label.setText("")
 
+    def _refresh_scoped_views(self):
+        """Re-read every view that counts only the active profile's raids, including pushed history views."""
+        from .character_history_widget import CharacterHistoryWidget
+
+        self.home_view.refresh()
+        self.characters_hub.refresh()
+        for view in self.stack.drill_views():
+            if isinstance(view, CharacterHistoryWidget):
+                view.refresh()
+
+    def _on_eras_changed(self):
+        # Tagged raids leave the profiles they don't belong to, so the count and the scoped views change.
+        self.profile_switcher.reload()
+        self._refresh_scoped_views()
+
     def _on_settings_saved(self, msg: str):
         self.status_bar.showMessage(msg)
         if "saved" in msg.lower():
@@ -568,6 +578,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self._console_dock.cleanup()
         self.profile_switcher.wait_for_counts()
+        self.settings_view.identity_panel.wait_for_tagging()
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
