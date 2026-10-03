@@ -19,6 +19,16 @@ SKIP_CALLS = {"skip", "xfail", "fail"}
 # Calls that check something without a bare assert: pytest's context managers, pytest-qt's signal waits.
 CHECKING_CALLS = {"raises", "warns", "deprecated_call", "waitSignal", "waitSignals", "waitUntil", "assertNotEmitted"}
 BROAD = {"Exception", "BaseException"}
+# Step definitions mock only at the HTTP seam: wcl_core.testing's fakes, never unittest.mock or a patched ``requests``.
+# This list may only shrink; each entry says what it still mocks.
+MOCK_MODULES = {"unittest.mock", "mock"}
+SERVICE_MODULES = ("wcl_app", "warcraftlogs_client.services")
+KNOWN_STEP_MOCKS = {
+    "conftest.py": "the 'a mock WCL client' step behind encounter_analysis.feature",
+    "test_raid_analysis.py": "a MagicMock client for analyze_raid",
+    "test_services_package.py": "its headless host script patches wcl_app.raids.analyze_raid",
+    "test_updater.py": "GitHub releases and subprocess.Popen, not Warcraft Logs",
+}
 
 
 def _name(node: ast.AST) -> str:
@@ -122,6 +132,59 @@ def swallowed_exceptions(tree: ast.AST) -> Iterator[int]:
                 yield node.lineno
 
 
+def _imported_names(tree: ast.AST) -> dict[str, str]:
+    """The module path each imported name stands for: ``from wcl_app import raids as r`` gives ``r -> wcl_app.raids``."""
+    names = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            for alias in node.names:
+                names[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return names
+
+
+def _patch_target(call: ast.Call, imported: dict[str, str]) -> str:
+    """The dotted path a ``patch(...)``, ``patch.object(...)`` or ``monkeypatch.setattr(...)`` call replaces in."""
+    name = _name(call.func)
+    if name not in {"patch", "object", "setattr"} or not call.args:
+        return ""
+    if name == "object" and not (isinstance(call.func, ast.Attribute) and _name(call.func.value) == "patch"):
+        return ""
+    target = call.args[0]
+    if isinstance(target, ast.Constant) and isinstance(target.value, str):
+        return target.value
+    head, _, rest = ast.unparse(target).partition(".")
+    resolved = imported.get(head, head)
+    return f"{resolved}.{rest}" if rest else resolved
+
+
+def _uses_mock(node: ast.AST) -> bool:
+    if isinstance(node, ast.ImportFrom):
+        return node.module in MOCK_MODULES or (node.module == "unittest" and any(a.name == "mock" for a in node.names))
+    if isinstance(node, ast.Import):
+        return any(alias.name in MOCK_MODULES for alias in node.names)
+    if isinstance(node, ast.Attribute):
+        return ast.unparse(node) == "unittest.mock"
+    return isinstance(node, ast.Constant) and isinstance(node.value, str) and "unittest.mock" in node.value
+
+
+def mocks_past_the_seam(tree: ast.AST) -> Iterator[int]:
+    """Lines that mock somewhere other than the HTTP seam: ``unittest.mock`` (imported, or in a script a test runs),
+    or patching ``requests`` or a ``wcl_app`` service, however the target was imported."""
+    imported = _imported_names(tree)
+    for node in ast.walk(tree):
+        if _uses_mock(node):
+            yield node.lineno
+        elif isinstance(node, ast.Call):
+            target = _patch_target(node, imported)
+            if "requests" in target.split(".") or target.startswith(SERVICE_MODULES):
+                yield node.lineno
+
+
 def _sources() -> Iterator[tuple[str, ast.AST]]:
     for path in sorted(TESTS.rglob("*.py")):
         yield path.relative_to(TESTS).as_posix(), ast.parse(path.read_text(encoding="utf-8"))
@@ -140,6 +203,20 @@ def test_every_test_checks_something():
 def test_no_test_swallows_every_exception():
     found = [f"{path}:{line}" for path, tree in _sources() for line in swallowed_exceptions(tree)]
     assert found == [], "catch the exception you expect, or keep it to assert on: " + ", ".join(found)
+
+
+def test_step_definitions_mock_only_at_the_http_seam():
+    """Phase Q's ``lint:bdd-seam``: BDD steps run the real client against ``wcl_core.testing``'s fakes."""
+    steps = TESTS / "step_defs"
+    found = {
+        path.name
+        for path in sorted(steps.glob("*.py"))
+        if any(mocks_past_the_seam(ast.parse(path.read_text(encoding="utf-8"))))
+    }
+    new = sorted(found - KNOWN_STEP_MOCKS.keys())
+    assert new == [], "use wcl_core.testing's FakeWarcraftLogs or FakeDiscord instead of mocking: " + ", ".join(new)
+    gone = sorted(KNOWN_STEP_MOCKS.keys() - found)
+    assert gone == [], "these no longer mock; drop them from KNOWN_STEP_MOCKS: " + ", ".join(gone)
 
 
 def _lines(rule, source: str) -> list:
@@ -229,3 +306,30 @@ try: run()
 except Exception as e: del e
 """
     assert _lines(swallowed_exceptions, source) == [3, 5, 7, 8, 17, 20, 22]
+
+
+def test_the_seam_rule_flags_mock_imports_and_patched_requests_or_services():
+    source = """
+from unittest.mock import MagicMock
+import unittest.mock
+HOST = "from unittest.mock import patch"
+patch("requests.post")
+patch("warcraftlogs_client.client.requests.post")
+monkeypatch.setattr(discord_auth.requests, "post", post)
+monkeypatch.setattr("wcl_app.raids.analyze_raid", fake)
+patch.object(updater.requests, "get")
+from unittest import mock as m
+x = unittest.mock.MagicMock()
+monkeypatch.setattr(RaidService, "analyze_and_save", fake)
+monkeypatch.setattr(svc, "load", fake)
+monkeypatch.setattr(http, "get", fake)
+monkeypatch.setattr(webbrowser, "open", browser)
+monkeypatch.setattr(config, "load_config", load)
+monkeypatch.setenv("DISCORD_OAUTH_URL", url)
+with wcl.install(): run()
+other.object(requests, "get")
+from wcl_app import RaidService
+import wcl_app.characters as svc
+from wcl_core import config, http
+"""
+    assert _lines(mocks_past_the_seam, source) == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]

@@ -4,6 +4,7 @@ import time
 import requests
 from pydantic import SecretStr
 
+from . import http
 from .common.errors import AuthenticationError
 from .config import as_secret
 
@@ -29,7 +30,7 @@ class TokenManager:
         data = {"grant_type": "client_credentials"}
 
         try:
-            response = requests.post(self.TOKEN_URL, headers=headers, data=data, timeout=30)
+            response = http.post(self.TOKEN_URL, headers=headers, data=data, timeout=30)
             response.raise_for_status()
             token_data = response.json()
         except requests.ConnectionError as e:

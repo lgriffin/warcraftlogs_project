@@ -10,10 +10,9 @@ import logging
 import time
 from typing import Any, Protocol
 
-import requests
-
 logger = logging.getLogger(__name__)
 
+from . import http
 from .cache import get_cached_response, save_response_cache
 from .game_version import expansion_for_zone, game_version_for_url
 from .models import (
@@ -157,7 +156,7 @@ class WarcraftLogsClient:
             self._throttle()
             self._last_request_time = time.monotonic()
 
-            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
+            response = http.post(self.api_url, headers=headers, json=payload, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 

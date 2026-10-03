@@ -16,9 +16,10 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from wcl_app import AppContext, CharacterService, PlayerService, RaidService
 from wcl_app.identity import IdentityService
 from wcl_app.profiles import JsonProfileStore, MemoryProfileStore, Profile, ProfileService, ProfileSet
-from wcl_core import config, consumes_analysis, discord_auth, paths
+from wcl_core import config, consumes_analysis, paths
 from wcl_core.common.errors import AuthenticationError
 from wcl_core.discord_auth import DiscordIdentity, DiscordIdentityStore, PkcePair
+from wcl_core.testing import FakeDiscord
 
 from warcraftlogs_client import cli
 
@@ -219,15 +220,6 @@ def command_imports_from(world, url):
     assert world["consumes"]["client"].api_url == url
 
 
-class _Answer:
-    def __init__(self, status_code, body):
-        self.status_code = status_code
-        self._body = body
-
-    def json(self):
-        return self._body
-
-
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -241,8 +233,8 @@ def _free_port() -> int:
 def browser_sign_in(world, client_id, monkeypatch):
     """The whole desktop sign-in: IdentityService.link starts the real loopback server and opens the authorize URL;
     the fake browser approves by calling back with a code and the state it was given; Discord's token and user
-    endpoints answer through fake HTTP."""
-    seen: dict = {"sent": {}}
+    endpoints answer through the fake Discord in wcl_core.testing."""
+    seen: dict = {}
 
     def browser(url):
         seen["url"] = url
@@ -251,19 +243,14 @@ def browser_sign_in(world, client_id, monkeypatch):
         threading.Thread(target=lambda: urlopen(callback, timeout=5).close(), daemon=True).start()  # noqa: S310
         return True
 
-    def post(url, data=None, **kwargs):
-        seen["sent"].update(data or {})
-        return _Answer(200, {"access_token": "acc", "refresh_token": "ref"})
-
+    discord = FakeDiscord().user({"id": "123456789", "username": "toadlord"})
     monkeypatch.setattr(webbrowser, "open", browser)
-    monkeypatch.setattr(discord_auth.requests, "post", post)
-    monkeypatch.setattr(
-        discord_auth.requests, "get", lambda *a, **k: _Answer(200, {"id": "123456789", "username": "toadlord"})
-    )
     store = DiscordIdentityStore(world["tmp"] / "identity.json")
     service = IdentityService(store, config={"discord_client_id": client_id}, redirect_port=_free_port())
-    service.link(open_browser=True, timeout=10)
+    with discord.install():
+        service.link(open_browser=True, timeout=10)
     seen["service"] = service
+    seen["sent"] = discord.requests[0].data
     return seen
 
 
