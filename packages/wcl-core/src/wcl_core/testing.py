@@ -30,6 +30,17 @@ from . import discord_auth, http
 from .auth import TokenManager
 from .client import DEFAULT_API_URL, WarcraftLogsClient
 
+__all__ = [
+    "FakeDiscord",
+    "FakeResponse",
+    "FakeWarcraftLogs",
+    "Request",
+    "UnexpectedRequest",
+    "grant",
+    "invalid_json",
+    "status",
+]
+
 _NO_BODY = object()
 
 Reply = Any  # dict | FakeResponse | BaseException | Callable[[str, dict], Any]

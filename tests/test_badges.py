@@ -11,7 +11,7 @@ import uuid
 from dataclasses import replace
 
 import pytest
-from wcl_app import AppContext, BadgeRules, BadgeService
+from wcl_app import AppContext, Badge, BadgeRules, BadgeService, PlayerBadges
 from wcl_app.badges import CONSUMABLES, DEFAULT_RULES, RAIDS, BadgeRule, PlayerStats, character_stats, guild_stats
 from wcl_store.sqlite import PerformanceDB
 
@@ -162,7 +162,9 @@ def _by_id(player):
 @pytest.mark.usefixtures("raids")
 class TestService:
     def test_character_badges(self, storage):
-        holy = _by_id(BadgeService(storage).for_character("holypriest"))
+        player = BadgeService(storage).for_character("holypriest")
+        assert isinstance(player, PlayerBadges) and all(isinstance(b, Badge) for b in player.badges)
+        holy = _by_id(player)
         assert (holy["attendance"].value, holy["attendance"].tier) == (6, 1)
         assert (holy["mana_potions"].value, holy["mana_potions"].tier) == (24, 1)  # the reference raid is left out
         assert holy["well_stocked"].value == 24

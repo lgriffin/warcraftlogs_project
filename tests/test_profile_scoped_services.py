@@ -200,11 +200,12 @@ def test_a_storage_failure_gives_no_raid_count(ctx):
 
 def test_character_drill_downs_follow_the_profile(ctx):
     """The desktop's character history and compare views read under the profile (PROF-07, phase 2.3b)."""
-    from wcl_app import CharacterService
+    from wcl_app import CharacterComparison, CharacterDossier, CharacterService, CharacterTrends
 
     characters = CharacterService(ctx)
     dossier = characters.dossier("HolyPriest")
-    assert dossier is not None and dossier.history.total_raids == 3
+    assert isinstance(dossier, CharacterDossier) and isinstance(dossier.trends, CharacterTrends)
+    assert dossier.history.total_raids == 3
     assert (len(dossier.trends.healer), len(dossier.trends.consumables), len(dossier.calendar)) == (3, 3, 3)
     assert len(dossier.consumable_summary) == 3 and dossier.compliance["total_raids"] == 3
     assert dossier.spider and dossier.personal_bests and "healing_consistency" in dossier.consistency
@@ -220,7 +221,7 @@ def test_character_drill_downs_follow_the_profile(ctx):
     assert dossier.compliance["total_raids"] == 2 and dossier.compliance["raids_with_consumes"] == 2
     assert {b["report_id"] for b in dossier.personal_bests} <= {KARA, GRUUL}
     comparison = characters.comparison("HolyPriest")
-    assert comparison is not None and comparison.history.total_raids == 2
+    assert isinstance(comparison, CharacterComparison) and comparison.history.total_raids == 2
     assert {r["report_id"] for r in comparison.trends.healer} == {KARA, GRUUL}
 
     ctx.use_profile(Profile("z", "Z", zones=("Nowhere",)))

@@ -8,7 +8,16 @@ import requests
 from pydantic import SecretStr
 from wcl_core import discord_auth, http
 from wcl_core.common.errors import AuthenticationError
-from wcl_core.testing import FakeDiscord, FakeResponse, FakeWarcraftLogs, UnexpectedRequest, grant, invalid_json, status
+from wcl_core.testing import (
+    FakeDiscord,
+    FakeResponse,
+    FakeWarcraftLogs,
+    Request,
+    UnexpectedRequest,
+    grant,
+    invalid_json,
+    status,
+)
 
 REPORT = {"reportData": {"report": {"title": "Karazhan", "owner": {"name": "Toad"}, "startTime": 1, "zone": None}}}
 
@@ -119,6 +128,38 @@ def test_install_puts_back_the_transport_it_found():
             assert http._transport is inner
         assert http._transport is outer
     assert http._transport is None
+
+
+def test_fake_and_real_responses_both_satisfy_the_seam_response():
+    assert isinstance(FakeResponse(200, {}), http.Response)
+    assert isinstance(requests.Response(), http.Response)
+    assert not isinstance(object(), http.Response)
+
+
+def test_each_request_is_recorded_with_what_was_sent():
+    wcl = FakeWarcraftLogs().answer("x", {})
+    with wcl.install():
+        wcl.client().run_query("{ x }", variables={"a": 1})
+    [token, query] = wcl.requests
+    assert isinstance(query, Request) and (query.method, query.timeout) == ("POST", 30)
+    assert (query.query, query.variables) == ("{ x }", {"a": 1})
+    assert token.json is None and token.data == {"grant_type": "client_credentials"}
+
+
+def test_any_transport_can_be_installed():
+    """Hosts can install their own transport (a recording proxy, say), not only the shipped fakes."""
+
+    class Echo:
+        def post(self, url, *, timeout, **kwargs):
+            return FakeResponse(200, {"url": url, "timeout": timeout})
+
+        def get(self, url, *, timeout, **kwargs):
+            return FakeResponse(204)
+
+    transport: http.Transport = Echo()
+    with http.use(transport):
+        assert http.post("https://a", timeout=3).json() == {"url": "https://a", "timeout": 3}
+        assert http.get("https://b", timeout=3).status_code == 204
 
 
 def test_the_seam_without_a_transport_calls_requests(monkeypatch):

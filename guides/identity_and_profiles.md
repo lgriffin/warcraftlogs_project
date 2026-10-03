@@ -278,7 +278,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | ESI.ts gate | Here today | Gap to close |
 | --- | --- | --- |
 | `lint:layers`, empty shrink-only baseline | `tests/test_architecture.py` + `lint-imports`; `KNOWN_VIOLATIONS` has 36 desktop edges | Move views onto services until the list is empty; then forbid the list growing by construction (it already does) |
-| `ci-success` single required check, no job-level `if`, skipped = failed | Enforced, see below | Require it on master |
+| `ci-success` single required check, no job-level `if`, skipped = failed | Enforced, see below | None |
 | `check:local` mirrors CI, with a test that parses `ci.yml` | Enforced, see below | None |
 | Coverage floors below measured, only up | `fail_under = 70` in `pyproject.toml`, documented as only going up | Raise toward the measured value; add branch coverage |
 | Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
@@ -286,8 +286,8 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | EARS specification, one `shall` per Rule, `spec:audit` | Enforced, see below | None |
 | Mock only at the HTTP seam (`lint:bdd-seam`) | A ratchet, see below | Empty `KNOWN_STEP_MOCKS` (4 step modules) |
 | `./testing`: mock transport, data factory | `FakeWarcraftLogs`, `FakeDiscord` | A `RaidAnalysis` factory |
-| API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
-| Export coverage: every public export referenced by a test | none | A test that every name in `wcl_app.__all__` and `RaidRepository` appears in `tests/` (the store already has this for the contract) |
+| API surface snapshot + semver diff | Enforced, see below | Nested payload dataclasses; a `!` commit check |
+| Export coverage: every public export referenced by a test | Enforced, see below | None |
 | Suite health: no skip/only, no assertion-free tests | Enforced, see below | None |
 | Determinism: time only via a clock module | `HomeService(now=...)`, `HostedUserToken(clock=...)` | A `wcl_core.clock` and a lint that `time.time`/`datetime.now` appear nowhere else in packages |
 | Error taxonomy with guards | `wcl_core.common.errors` (`WarcraftLogsError`, `AuthenticationError`, `ConfigurationError`), `wcl_store.StorageError` | Document the tree in a guide; add `retryable` on API errors; every service error is a subclass |
@@ -305,6 +305,13 @@ says why, every test function asserts (or uses `pytest.raises`, a mock's `assert
 module helper that asserts), and no `except Exception`/bare `except`/`suppress(Exception)` drops the exception. These
 rules have no allow-list; each has its own test on a small source.
 
+`tests/test_api_contract.py` guards the API the Toads Hub and bot build on: `wcl_app`, `wcl_store`,
+`wcl_core.http` and `wcl_core.testing`. Every name in their `__all__` is named by a test, and every public method of
+an exported `*Service` and of `RaidRepository` is called by one. `tests/api_surface.txt` records one line per export,
+dataclass field and signature, read from the source; any change fails until the file is regenerated with
+`WCL_UPDATE_SURFACE=1 pytest tests/test_api_contract.py`, and the failure lists the lines that are gone as breaking.
+`master` requires `ci-success` through a ruleset.
+
 Every request wcl-core makes goes through `wcl_core.http` (`post`/`get`, each with a timeout); a test checks that no
 module in `packages/` calls `requests` directly. `wcl_core.testing` ships fakes for that seam: `FakeWarcraftLogs`
 answers the token endpoint and GraphQL queries (matched by a substring of the query), `FakeDiscord` the Discord token
@@ -320,8 +327,8 @@ Enforced row names tests that exist. Every Enforced row also has a scenario titl
 
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
 EARS audit over `tests/features/` with a scenario per requirement (done); `wcl_core.testing` with the fake
-transport (done); export coverage and the surface snapshot; mutation on `wcl_core` with a floor; the clock lint; the
-charter.
+transport (done); export coverage and the surface snapshot (done); mutation on `wcl_core` with a floor; the clock
+lint; the charter.
 
 ## Open questions
 
