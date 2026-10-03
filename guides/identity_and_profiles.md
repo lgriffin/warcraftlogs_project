@@ -284,8 +284,8 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Mutation ratchet per directory (Stryker) | none | `mutmut` on `wcl_core` and `wcl_store` first, per-package floors in `pyproject.toml`, nightly workflow that only raises them |
 | Properties with known-bad implementations (fast-check) | `tests/fuzz/` with hypothesis | Model-based tests for `RaidScope` filtering and `expansion_for_zone`; each must fail against a registered bad implementation |
 | EARS specification, one `shall` per Rule, `spec:audit` | Enforced, see below | None |
-| Mock only at the transport seam (`lint:bdd-seam`) | Enforced as a ratchet, see below; `KNOWN_STEP_MOCKS` lists 4 step modules | Move the encounter, raid analysis and headless host steps onto the fake until the list is empty |
-| `./testing` export: `createMockTransport`, `TestDataFactory` | `wcl_core.testing`: `FakeWarcraftLogs`, `FakeDiscord` | A `RaidAnalysis` factory beside the fakes, so the Hub builds test raids the same way |
+| Mock only at the HTTP seam (`lint:bdd-seam`) | A ratchet, see below | Empty `KNOWN_STEP_MOCKS` (4 step modules) |
+| `./testing`: mock transport, data factory | `FakeWarcraftLogs`, `FakeDiscord` | A `RaidAnalysis` factory |
 | API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
 | Export coverage: every public export referenced by a test | none | A test that every name in `wcl_app.__all__` and `RaidRepository` appears in `tests/` (the store already has this for the contract) |
 | Suite health: no skip/only, no assertion-free tests | Enforced, see below | None |

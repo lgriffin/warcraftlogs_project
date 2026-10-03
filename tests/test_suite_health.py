@@ -22,6 +22,7 @@ BROAD = {"Exception", "BaseException"}
 # Step definitions mock only at the HTTP seam: wcl_core.testing's fakes, never unittest.mock or a patched ``requests``.
 # This list may only shrink; each entry says what it still mocks.
 MOCK_MODULES = {"unittest.mock", "mock"}
+SERVICE_MODULES = ("wcl_app", "warcraftlogs_client.services")
 KNOWN_STEP_MOCKS = {
     "conftest.py": "the 'a mock WCL client' step behind encounter_analysis.feature",
     "test_raid_analysis.py": "a MagicMock client for analyze_raid",
@@ -131,35 +132,56 @@ def swallowed_exceptions(tree: ast.AST) -> Iterator[int]:
                 yield node.lineno
 
 
-def _patch_target(call: ast.Call) -> str:
-    """What a ``patch(...)``, ``patch.object(...)`` or ``monkeypatch.setattr(...)`` call replaces, as source text."""
+def _imported_names(tree: ast.AST) -> dict[str, str]:
+    """The module path each imported name stands for: ``from wcl_app import raids as r`` gives ``r -> wcl_app.raids``."""
+    names = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            for alias in node.names:
+                names[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return names
+
+
+def _patch_target(call: ast.Call, imported: dict[str, str]) -> str:
+    """The dotted path a ``patch(...)``, ``patch.object(...)`` or ``monkeypatch.setattr(...)`` call replaces in."""
     name = _name(call.func)
     if name not in {"patch", "object", "setattr"} or not call.args:
         return ""
     if name == "object" and not (isinstance(call.func, ast.Attribute) and _name(call.func.value) == "patch"):
         return ""
     target = call.args[0]
-    return target.value if isinstance(target, ast.Constant) and isinstance(target.value, str) else ast.unparse(target)
+    if isinstance(target, ast.Constant) and isinstance(target.value, str):
+        return target.value
+    head, _, rest = ast.unparse(target).partition(".")
+    resolved = imported.get(head, head)
+    return f"{resolved}.{rest}" if rest else resolved
 
 
 def _uses_mock(node: ast.AST) -> bool:
     if isinstance(node, ast.ImportFrom):
-        return node.module in MOCK_MODULES
+        return node.module in MOCK_MODULES or (node.module == "unittest" and any(a.name == "mock" for a in node.names))
     if isinstance(node, ast.Import):
         return any(alias.name in MOCK_MODULES for alias in node.names)
+    if isinstance(node, ast.Attribute):
+        return ast.unparse(node) == "unittest.mock"
     return isinstance(node, ast.Constant) and isinstance(node.value, str) and "unittest.mock" in node.value
 
 
 def mocks_past_the_seam(tree: ast.AST) -> Iterator[int]:
     """Lines that mock somewhere other than the HTTP seam: ``unittest.mock`` (imported, or in a script a test runs),
-    or patching ``requests`` or a ``wcl_app`` service."""
+    or patching ``requests`` or a ``wcl_app`` service, however the target was imported."""
+    imported = _imported_names(tree)
     for node in ast.walk(tree):
         if _uses_mock(node):
             yield node.lineno
         elif isinstance(node, ast.Call):
-            target = _patch_target(node)
-            parts = set(target.replace(",", ".").split("."))
-            if "requests" in parts or target.startswith(("wcl_app", "warcraftlogs_client.services")):
+            target = _patch_target(node, imported)
+            if "requests" in target.split(".") or target.startswith(SERVICE_MODULES):
                 yield node.lineno
 
 
@@ -296,10 +318,18 @@ patch("warcraftlogs_client.client.requests.post")
 monkeypatch.setattr(discord_auth.requests, "post", post)
 monkeypatch.setattr("wcl_app.raids.analyze_raid", fake)
 patch.object(updater.requests, "get")
+from unittest import mock as m
+x = unittest.mock.MagicMock()
+monkeypatch.setattr(RaidService, "analyze_and_save", fake)
+monkeypatch.setattr(svc, "load", fake)
+monkeypatch.setattr(http, "get", fake)
 monkeypatch.setattr(webbrowser, "open", browser)
 monkeypatch.setattr(config, "load_config", load)
 monkeypatch.setenv("DISCORD_OAUTH_URL", url)
 with wcl.install(): run()
 other.object(requests, "get")
+from wcl_app import RaidService
+import wcl_app.characters as svc
+from wcl_core import config, http
 """
-    assert _lines(mocks_past_the_seam, source) == [2, 3, 4, 5, 6, 7, 8, 9]
+    assert _lines(mocks_past_the_seam, source) == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
