@@ -497,10 +497,16 @@ class MainWindow(QMainWindow):
         pass
 
     def _on_profile_changed(self, name: str):
-        # The top bar keeps showing the profile and its count; the status bar only notes the switch.
-        self.status_bar.showMessage(f"Raid profile: {name}")
+        from .character_history_widget import CharacterHistoryWidget
+
         self.home_view.refresh()
         self.characters_hub.refresh()
+        for view in self.stack.drill_views():
+            if isinstance(view, CharacterHistoryWidget):
+                view.refresh()
+        # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
+        # views' own messages.
+        self.status_bar.showMessage(f"Raid profile: {name}")
 
     def _on_raid_deleted(self, report_id: str):
         pass

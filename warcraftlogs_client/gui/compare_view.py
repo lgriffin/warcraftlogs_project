@@ -223,6 +223,7 @@ class CompareView(QWidget):
         self._raw_dps_abilities: dict[str, list[dict]] = {}
         self._raw_consumable_trends: dict[str, list[dict]] = {}
         self._cached_consistency: dict[str, dict | None] = {}
+        self._stale = False
         self._build_ui()
 
     def _build_ui(self):
@@ -405,20 +406,33 @@ class CompareView(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._refresh_character_list()
+        if self._stale:
+            self.refresh()
+        else:
+            self._refresh_character_list()
 
     def refresh(self):
         """Re-read the list and every compared character, e.g. after a raid profile switch.
 
-        A character with no raids in the new profile drops out of the comparison.
+        A character with no raids in the new profile drops out of the comparison. While the view is hidden the
+        re-read waits for it to be shown.
         """
+        if not self.isVisible():
+            self._stale = True
+            return
+        self._stale = False
         selected = list(self._selected)
-        for name in selected:
-            self._remove_character(name)
-        self._refresh_character_list()
-        for name in selected:
-            self._load_and_add(name)
-        self._sync_checkboxes()
+        # The re-read removes and re-adds each character; those are not the user's actions, so they stay quiet.
+        self.blockSignals(True)
+        try:
+            for name in selected:
+                self._remove_character(name)
+            self._refresh_character_list()
+            for name in selected:
+                self._load_and_add(name)
+            self._sync_checkboxes()
+        finally:
+            self.blockSignals(False)
 
     def _refresh_character_list(self):
         try:

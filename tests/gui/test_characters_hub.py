@@ -57,30 +57,73 @@ class TestCharactersFollowTheProfile:
         qtbot.addWidget(widget)
         assert widget._title_label.text() == "HolyPriest — No history found"
 
-    def test_compare_refresh_rereads_and_drops_characters_outside_the_profile(self, qtbot, ctx):
+    def test_history_refresh_rereads_after_a_switch(self, qtbot, ctx):
+        widget = CharacterHistoryWidget("HolyPriest", characters=CharacterService(ctx))
+        qtbot.addWidget(widget)
+        assert widget.summary_labels["Raids Tracked"].text() == "2"
+        ctx.use_profile(TBC_ONLY)
+        widget.refresh()
+        assert widget.summary_labels["Raids Tracked"].text() == "1"
+        assert {r["report_id"] for r in widget._all_healer_trend} == {TBC}
+        ctx.use_profile(NOWHERE)
+        widget.refresh()
+        assert widget._title_label.text() == "HolyPriest — No history found"
+        assert widget.summary_labels["Raids Tracked"].text() == "-" and widget._all_healer_trend == []
+        assert widget._spider_widget is None and widget._calendar_widget is None
+
+    def test_compare_refresh_rereads_quietly_and_drops_characters_outside_the_profile(self, qtbot, ctx):
         view = CompareView(characters=CharacterService(ctx))
         qtbot.addWidget(view)
-        view._refresh_character_list()
+        view.show()
         view._load_and_add("HolyPriest")
         assert view._char_stats["HolyPriest"]["total_raids"] == 2
         ctx.use_profile(TBC_ONLY)
+        messages: list[str] = []
+        view.status_message.connect(messages.append)
         view.refresh()
         assert view._selected == ["HolyPriest"] and view._char_stats["HolyPriest"]["total_raids"] == 1
+        assert messages == []
         ctx.use_profile(NOWHERE)
         view.refresh()
         assert view._selected == [] and view._all_characters == []
+
+    def test_a_hidden_compare_view_rereads_when_shown(self, qtbot, ctx):
+        view = CompareView(characters=CharacterService(ctx))
+        qtbot.addWidget(view)
+        view.show()
+        view._load_and_add("HolyPriest")
+        view.hide()
+        ctx.use_profile(TBC_ONLY)
+        view.refresh()
+        assert view._char_stats["HolyPriest"]["total_raids"] == 2  # nothing read while hidden
+        view.show()
+        assert view._char_stats["HolyPriest"]["total_raids"] == 1
 
     def test_hub_refresh_rereads_the_list_and_the_open_history(self, qtbot, ctx, monkeypatch):
         monkeypatch.setattr(characters_hub, "CharacterView", _StubView)
         monkeypatch.setattr(characters_hub, "PlayerPageView", _StubView)
         hub = characters_hub.CharactersHub(characters=CharacterService(ctx))
         qtbot.addWidget(hub)
-        hub._load_characters()
+        hub.show()
         assert "(2 raids)" in _row(hub, "HolyPriest")
         hub._show_character_history("HolyPriest")
+        history = hub._current_history
         hub._show_compare()
         ctx.use_profile(TBC_ONLY)
         hub.refresh()
         assert "(1 raids)" in _row(hub, "HolyPriest")
-        assert hub._current_history.summary_labels["Raids Tracked"].text() == "1"
+        assert hub._current_history is history and history.summary_labels["Raids Tracked"].text() == "1"
         assert hub._right_stack.currentIndex() == 3  # the compare page stays in front
+
+    def test_a_hidden_hub_rereads_when_shown(self, qtbot, ctx, monkeypatch):
+        monkeypatch.setattr(characters_hub, "CharacterView", _StubView)
+        monkeypatch.setattr(characters_hub, "PlayerPageView", _StubView)
+        hub = characters_hub.CharactersHub(characters=CharacterService(ctx))
+        qtbot.addWidget(hub)
+        hub.show()
+        hub.hide()
+        ctx.use_profile(TBC_ONLY)
+        hub.refresh()
+        assert "(2 raids)" in _row(hub, "HolyPriest")  # nothing read while hidden
+        hub.show()
+        assert "(1 raids)" in _row(hub, "HolyPriest")

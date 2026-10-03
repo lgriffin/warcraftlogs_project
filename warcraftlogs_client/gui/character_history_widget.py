@@ -281,6 +281,27 @@ class CharacterHistoryWidget(QWidget):
         table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         return table
 
+    def refresh(self):
+        """Clear what is shown and re-read it, e.g. after a raid profile switch."""
+        for label in self.summary_labels.values():
+            label.setText("-")
+        self._all_healer_trend = []
+        self._all_healer_spell_trend = []
+        self._all_tank_trend = []
+        self._all_dps_trend = []
+        self._all_dps_ability_trend = []
+        self._all_consumable_trend = []
+        self._consumes_trend_model.set_data([], [])
+        self._bests_model.set_data([], [])
+        for widget in (self._spider_widget, self._calendar_widget):
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        self._spider_widget = None
+        self._calendar_widget = None
+        self._apply_raid_size_filter()
+        self._load_data()
+
     def _load_data(self):
         try:
             dossier = self._characters.dossier(self._name)
