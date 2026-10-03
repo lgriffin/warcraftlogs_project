@@ -14,7 +14,6 @@ import difflib
 import importlib
 import inspect
 import os
-import re
 from pathlib import Path
 
 import pytest
@@ -87,7 +86,27 @@ def _members(cls: type) -> list[str]:
             if name not in seen:
                 seen.add(name)
                 lines.append(f"{cls.__name__}.{name}: {line}")
+        for name, line in _instance_attributes(node):
+            if name not in seen:
+                seen.add(name)
+                lines.append(f"{cls.__name__}.{name}: {line}")
     return lines
+
+
+def _instance_attributes(node: ast.ClassDef) -> list[tuple[str, str]]:
+    """Public ``self.<name>`` attributes ``__init__`` sets, with their annotation when it gives one."""
+    init = next((i for i in node.body if isinstance(i, ast.FunctionDef) and i.name == "__init__"), None)
+    found: list[tuple[str, str]] = []
+    for stmt in ast.walk(init) if init else ():
+        targets = (
+            stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target] if isinstance(stmt, ast.AnnAssign) else []
+        )
+        for target in targets:
+            if isinstance(target, ast.Attribute) and ast.unparse(target.value) == "self" and _public(target.attr):
+                kind = ast.unparse(stmt.annotation) if isinstance(stmt, ast.AnnAssign) else "set in __init__"
+                if target.attr not in dict(found):
+                    found.append((target.attr, kind))
+    return found
 
 
 def _describe(package: str, name: str) -> list[str]:
@@ -126,9 +145,21 @@ def test_the_public_surface_matches_the_snapshot():
     )
 
 
-def _test_sources() -> str:
-    skip = {Path(__file__).resolve()}
-    return "\n".join(p.read_text(encoding="utf-8") for p in sorted(TESTS.rglob("*.py")) if p.resolve() not in skip)
+def _test_references() -> tuple[set[str], set[str]]:
+    """The names and the attribute names test code uses: imports, names and ``x.attr``, not comments or strings."""
+    names: set[str] = set()
+    attributes: set[str] = set()
+    for path in sorted(TESTS.rglob("*.py")):
+        if path.resolve() == Path(__file__).resolve():
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Name):
+                names.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                attributes.add(node.attr)
+            elif isinstance(node, ast.alias):
+                names.add(node.asname or node.name.split(".")[-1])
+    return names, attributes
 
 
 def _service_methods() -> list[str]:
@@ -145,17 +176,17 @@ def _service_methods() -> list[str]:
     ]
 
 
-def test_every_export_is_named_by_a_test():
-    """ESI.ts's export coverage: a public name no test mentions is one nothing checks."""
-    tests = _test_sources()
-    unused = [f"{p}.{n}" for p in PACKAGES for n in _exports(p) if not re.search(rf"\b{re.escape(n)}\b", tests)]
+def test_every_export_is_used_by_a_test():
+    """ESI.ts's export coverage: a public name no test code uses is one nothing checks."""
+    names, attributes = _test_references()
+    unused = [f"{p}.{n}" for p in PACKAGES for n in _exports(p) if n not in names and n not in attributes]
     assert unused == [], "add a test that uses these: " + ", ".join(unused)
 
 
-def test_every_service_and_repository_method_is_called_by_a_test():
-    tests = _test_sources()
-    uncalled = [m for m in _service_methods() if not re.search(rf"\.{re.escape(m.split('.')[1])}\b", tests)]
-    assert uncalled == [], "add a test that calls these: " + ", ".join(uncalled)
+def test_every_service_and_repository_method_is_used_by_a_test():
+    _, attributes = _test_references()
+    unused = [m for m in _service_methods() if m.split(".")[1] not in attributes]
+    assert unused == [], "add a test that calls these: " + ", ".join(unused)
 
 
 @pytest.mark.parametrize("package", PACKAGES)

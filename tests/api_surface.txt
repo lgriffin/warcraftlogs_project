@@ -73,6 +73,9 @@ wcl_app.BadgeService.from_context: @classmethod def from_context(cls, ctx: AppCo
 wcl_app.BadgeService.catalogue: def catalogue(self) -> list[BadgeRule]
 wcl_app.BadgeService.for_character: def for_character(self, name: str) -> PlayerBadges
 wcl_app.BadgeService.for_guild: def for_guild(self, names: Iterable[str] | None=None) -> list[PlayerBadges]
+wcl_app.BadgeService.storage: set in __init__
+wcl_app.BadgeService.rules: set in __init__
+wcl_app.BadgeService.sources: set in __init__
 wcl_app.CharacterComparison: @dataclass class CharacterComparison
 wcl_app.CharacterComparison.history: CharacterHistory
 wcl_app.CharacterComparison.trends: CharacterTrends
@@ -103,6 +106,7 @@ wcl_app.CharacterService.scope: @property def scope(self) -> RaidScope | None
 wcl_app.CharacterService.roster: def roster(self) -> list[CharacterHistory]
 wcl_app.CharacterService.dossier: def dossier(self, name: str) -> CharacterDossier | None
 wcl_app.CharacterService.comparison: def comparison(self, name: str) -> CharacterComparison | None
+wcl_app.CharacterService.ctx: set in __init__
 wcl_app.CharacterTrends: @dataclass class CharacterTrends
 wcl_app.CharacterTrends.healer: list[dict[str, Any]] = field(default_factory=list)
 wcl_app.CharacterTrends.healer_spells: list[dict[str, Any]] = field(default_factory=list)
@@ -133,6 +137,8 @@ wcl_app.HealingService.__init__: def __init__(self, storage: StorageFactory, *, 
 wcl_app.HealingService.scope: @property def scope(self) -> RaidScope | None
 wcl_app.HealingService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> HealingService
 wcl_app.HealingService.weekly: def weekly(self, weeks: int=DEFAULT_WEEKS) -> WeeklyHealing
+wcl_app.HealingService.storage: set in __init__
+wcl_app.HealingService.now: set in __init__
 wcl_app.HomeLayout: @dataclass(frozen=True) class HomeLayout
 wcl_app.HomeLayout.widgets: tuple[str, ...]
 wcl_app.HomeLayout.default: @classmethod def default(cls) -> HomeLayout
@@ -154,6 +160,10 @@ wcl_app.HomeService.save_layout: def save_layout(self, widget_ids: Iterable[str]
 wcl_app.HomeService.reset_layout: def reset_layout(self) -> HomeLayout
 wcl_app.HomeService.page: def page(self, layout: HomeLayout | None=None) -> HomePage
 wcl_app.HomeService.widget: def widget(self, widget_id: str) -> HomeWidget
+wcl_app.HomeService.storage: set in __init__
+wcl_app.HomeService.layouts: LayoutStore
+wcl_app.HomeService.now: set in __init__
+wcl_app.HomeService.badge_rules: set in __init__
 wcl_app.HomeWidget: @dataclass class HomeWidget
 wcl_app.HomeWidget.id: str
 wcl_app.HomeWidget.title: str
@@ -179,14 +189,18 @@ wcl_app.IdentityService.is_linked: def is_linked(self) -> bool
 wcl_app.IdentityService.client_id: def client_id(self) -> str | None
 wcl_app.IdentityService.link: def link(self, *, open_browser: bool=True, timeout: float | None=None) -> DiscordIdentity
 wcl_app.IdentityService.unlink: def unlink(self) -> None
+wcl_app.IdentityService.store: set in __init__
+wcl_app.IdentityService.config: set in __init__
 wcl_app.JsonLayoutStore: class JsonLayoutStore
 wcl_app.JsonLayoutStore.__init__: def __init__(self, path: str | Path)
 wcl_app.JsonLayoutStore.load: def load(self) -> HomeLayout | None
 wcl_app.JsonLayoutStore.save: def save(self, layout: HomeLayout | None) -> None
+wcl_app.JsonLayoutStore.path: set in __init__
 wcl_app.JsonProfileStore: class JsonProfileStore
 wcl_app.JsonProfileStore.__init__: def __init__(self, path: str | Path)
 wcl_app.JsonProfileStore.load: def load(self) -> ProfileSet | None
 wcl_app.JsonProfileStore.save: def save(self, profiles: ProfileSet) -> None
+wcl_app.JsonProfileStore.path: set in __init__
 wcl_app.PlayerBadges: @dataclass class PlayerBadges
 wcl_app.PlayerBadges.name: str
 wcl_app.PlayerBadges.player_class: str
@@ -226,6 +240,10 @@ wcl_app.PlayerPageService.discover_reports: def discover_reports(self, player: P
 wcl_app.PlayerPageService.add_reports: def add_reports(self, player: PlayerRef, refs: list[str], verify: bool=True, known: dict[str, PlayerLog] | None=None, progress: Callable[[str], None] | None=None) -> list[AddResult]
 wcl_app.PlayerPageService.dismiss: def dismiss(self, player: PlayerRef, codes: list[str]) -> int
 wcl_app.PlayerPageService.remove: def remove(self, player: PlayerRef, codes: list[str]) -> int
+wcl_app.PlayerPageService.db: set in __init__
+wcl_app.PlayerPageService.client: set in __init__
+wcl_app.PlayerPageService.import_source: set in __init__
+wcl_app.PlayerPageService.badge_rules: set in __init__
 wcl_app.PlayerRef: @dataclass(frozen=True) class PlayerRef
 wcl_app.PlayerRef.name: str
 wcl_app.PlayerRef.server: str
@@ -238,6 +256,8 @@ wcl_app.PlayerService.profile: def profile(self, name: str, server: str, region:
 wcl_app.PlayerService.discover_reports: def discover_reports(self, name: str, server: str, region: str, api_url: str | None=None) -> list[ReportRef]
 wcl_app.PlayerService.add_reports: def add_reports(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
 wcl_app.PlayerService.history: def history(self, name: str) -> CharacterHistory | None
+wcl_app.PlayerService.ctx: set in __init__
+wcl_app.PlayerService.raids: set in __init__
 wcl_app.Profile: @dataclass(frozen=True) class Profile
 wcl_app.Profile.slug: str
 wcl_app.Profile.name: str
@@ -269,6 +289,9 @@ wcl_app.ProfileService.activate: def activate(self, slug: str | None) -> Profile
 wcl_app.ProfileService.scope: def scope(self) -> RaidScope | None
 wcl_app.ProfileService.apply: def apply(self) -> Profile | None
 wcl_app.ProfileService.backfill_eras: def backfill_eras(self) -> int
+wcl_app.ProfileService.store: set in __init__
+wcl_app.ProfileService.ctx: set in __init__
+wcl_app.ProfileService.owner: set in __init__
 wcl_app.ProfileSet: @dataclass class ProfileSet
 wcl_app.ProfileSet.profiles: list[Profile] = field(default_factory=list)
 wcl_app.ProfileSet.active: str | None = None
@@ -290,6 +313,7 @@ wcl_app.RaidService.guild_info: def guild_info(self, guild_id: int | None=None) 
 wcl_app.RaidService.guild_reports: def guild_reports(self, guild_id: int | None=None) -> list[dict[str, Any]]
 wcl_app.RaidService.imported_codes: def imported_codes(self) -> set[str]
 wcl_app.RaidService.import_missing: def import_missing(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
+wcl_app.RaidService.ctx: set in __init__
 wcl_app.ReanalysisResult: @dataclass class ReanalysisResult
 wcl_app.ReanalysisResult.report_id: str
 wcl_app.ReanalysisResult.old_role: str
@@ -318,6 +342,8 @@ wcl_app.ReferenceService.import_reference: def import_reference(self, report: st
 wcl_app.ReferenceService.set_label: def set_label(self, report: str, label: str | None) -> None
 wcl_app.ReferenceService.delete_reference: def delete_reference(self, report: str) -> None
 wcl_app.ReferenceService.compare: def compare(self, guild_report: str, reference_report: str) -> ReferenceComparison
+wcl_app.ReferenceService.ctx: set in __init__
+wcl_app.ReferenceService.raids: set in __init__
 wcl_app.ReportRef: @dataclass class ReportRef
 wcl_app.ReportRef.code: str
 wcl_app.ReportRef.title: str
@@ -330,6 +356,7 @@ wcl_app.RoleOverrideService.from_context: @classmethod def from_context(cls, ctx
 wcl_app.RoleOverrideService.list_overrides: def list_overrides(self, character_name: str | None=None) -> list[dict]
 wcl_app.RoleOverrideService.set: def set(self, character_name: str, role: str, report_id: str | None=None, *, reanalyze: bool=True, progress: ProgressCallback | None=None) -> list[ReanalysisResult]
 wcl_app.RoleOverrideService.clear: def clear(self, character_name: str, report_id: str | None=None, *, reanalyze: bool=True, progress: ProgressCallback | None=None) -> list[ReanalysisResult]
+wcl_app.RoleOverrideService.db: set in __init__
 wcl_app.Series: @dataclass class Series
 wcl_app.Series.key: str
 wcl_app.Series.name: str
@@ -423,7 +450,7 @@ wcl_store.RaidScope.with_sources: def with_sources(self, sources: tuple[str, ...
 wcl_store.StorageError: class StorageError(Exception)
 wcl_store.narrowed: def narrowed(scope: RaidScope | None, sources: tuple[str, ...]) -> RaidScope | None
 [wcl_core.http]
-wcl_core.http.Response: class Response(Protocol)
+wcl_core.http.Response: @runtime_checkable class Response(Protocol)
 wcl_core.http.Response.status_code: @property def status_code(self) -> int
 wcl_core.http.Response.text: @property def text(self) -> str
 wcl_core.http.Response.json: def json(self) -> Any
@@ -442,10 +469,13 @@ wcl_core.testing.FakeDiscord.user: def user(self, *replies: Reply) -> FakeDiscor
 wcl_core.testing.FakeDiscord.install: @contextmanager def install(self) -> Iterator[Any]
 wcl_core.testing.FakeDiscord.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
 wcl_core.testing.FakeDiscord.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeDiscord.requests: list[Request]
 wcl_core.testing.FakeResponse: class FakeResponse
 wcl_core.testing.FakeResponse.__init__: def __init__(self, status_code: int=200, body: Any=_NO_BODY, text: str | None=None) -> None
 wcl_core.testing.FakeResponse.json: def json(self) -> Any
 wcl_core.testing.FakeResponse.raise_for_status: def raise_for_status(self) -> None
+wcl_core.testing.FakeResponse.status_code: set in __init__
+wcl_core.testing.FakeResponse.text: set in __init__
 wcl_core.testing.FakeWarcraftLogs: class FakeWarcraftLogs(_FakeHost)
 wcl_core.testing.FakeWarcraftLogs.__init__: def __init__(self) -> None
 wcl_core.testing.FakeWarcraftLogs.token: def token(self, *replies: Reply) -> FakeWarcraftLogs
@@ -456,6 +486,7 @@ wcl_core.testing.FakeWarcraftLogs.client: def client(self, api_url: str=DEFAULT_
 wcl_core.testing.FakeWarcraftLogs.install: @contextmanager def install(self) -> Iterator[Any]
 wcl_core.testing.FakeWarcraftLogs.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
 wcl_core.testing.FakeWarcraftLogs.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeWarcraftLogs.requests: list[Request]
 wcl_core.testing.Request: @dataclass class Request
 wcl_core.testing.Request.method: str
 wcl_core.testing.Request.url: str
