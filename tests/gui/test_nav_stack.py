@@ -31,6 +31,7 @@ class TestNavigationStack:
         w2 = QLabel("drill 2")
         stack.push_view(w2)
         assert stack.current_depth() == 2
+        assert stack.drill_views() == [w1, w2]
 
     def test_pop_decreases_depth(self, qtbot):
         stack = NavigationStack()
