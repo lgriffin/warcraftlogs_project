@@ -9,6 +9,9 @@ analysis code all run. Shipped in wcl-core so the desktop app, the Toads Hub and
         raid = wcl.client().get_report_metadata("abc")
     assert raid.title == "Kara" and wcl.queries[0].variables == {"code": "abc"}
 
+``FakeHub`` is the Toads Hub's app endpoints (``guides/hub_bridge.md``): ``hub.issue_code(...)`` plays the bot handing a
+member a one-time code, and ``hub.load(discord_id)`` reads back the profiles an app published, as the bot would.
+
 ``FakeClock`` stands in for the system clock the same way: ``with FakeClock().install() as clock`` makes token
 expiry, retry backoff and "today" deterministic, and ``clock.sleeps`` records every wait instead of waiting.
 
@@ -30,13 +33,14 @@ from urllib.parse import urlparse
 
 import requests
 
-from . import clock, discord_auth, http
+from . import clock, discord_auth, http, hub
 from .auth import TokenManager
 from .client import DEFAULT_API_URL, WarcraftLogsClient
 
 __all__ = [
     "FakeClock",
     "FakeDiscord",
+    "FakeHub",
     "FakeResponse",
     "FakeWarcraftLogs",
     "Request",
@@ -271,6 +275,66 @@ class FakeDiscord(_FakeHost):
         if request.method == "GET" and request.url == f"{base}/api/users/@me":
             return _respond(self._user.next())
         raise UnexpectedRequest(f"{request.method} {request.url}: no such Discord endpoint")
+
+
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+class FakeHub(_FakeHost):
+    """The Toads Hub's app endpoints at *base*: one-time codes, app tokens and each member's published profiles."""
+
+    def __init__(self, base: str = "https://hub.toads.test") -> None:
+        super().__init__()
+        self.base = base.rstrip("/")
+        self.codes: dict[str, dict[str, Any]] = {}  # unredeemed code -> member
+        self.apps: dict[str, dict[str, Any]] = {}  # app token -> {"app_id", "member", "app"}
+        self.profiles: dict[str, dict[str, Any]] = {}  # Discord id -> the ProfileSet an app published
+        self._issued = self._linked = 0
+
+    def issue_code(self, discord_id: str, username: str = "toad", display_name: str | None = None) -> str:
+        """What the bot does for a member who asks to link an app: a single-use code bound to them."""
+        self._issued += 1
+        n, digits = 0x7A5C0000 + self._issued, ""
+        for _ in range(8):
+            n, d = divmod(n, 32)
+            digits = _CROCKFORD[d] + digits
+        code = f"{digits[:4]}-{digits[4:]}"
+        self.codes[code] = {"discord_id": discord_id, "username": username, "display_name": display_name}
+        return code
+
+    def load(self, discord_id: str) -> dict[str, Any] | None:
+        """The profiles a member's app published, or None: the directory the bot resolves a user through."""
+        return self.profiles.get(discord_id)
+
+    def _route(self, request: Request) -> FakeResponse:
+        if request.method != "POST" or not request.url.startswith(f"{self.base}/api/apps/"):
+            raise UnexpectedRequest(f"{request.method} {request.url}: no such Toads Hub endpoint")
+        action = request.url[len(f"{self.base}/api/apps/") :]
+        if action == "link":
+            return self._link(request.json or {})
+        app = self.apps.get(request.headers.get("Authorization", "").removeprefix("Bearer "))
+        if app is None:
+            return FakeResponse(401, {"error": "unknown app"})
+        if action == "profiles":
+            self.profiles[app["member"]["discord_id"]] = request.json or {}
+            return FakeResponse(204)
+        if action == "unlink":
+            self.apps = {t: a for t, a in self.apps.items() if a is not app}
+            return FakeResponse(204)
+        raise UnexpectedRequest(f"POST {request.url}: no such Toads Hub endpoint")
+
+    def _link(self, body: dict[str, Any]) -> FakeResponse:
+        try:
+            code = hub.link_code(str(body.get("code", "")))
+        except ValueError:
+            return FakeResponse(400, {"error": "malformed code"})
+        member = self.codes.pop(code, None)  # single use
+        if member is None:
+            return FakeResponse(404, {"error": "unknown or expired code"})
+        self._linked += 1
+        app_id, token = f"app-{self._linked}", f"fake-app-token-{self._linked}"
+        self.apps[token] = {"app_id": app_id, "member": member, "app": body.get("app")}
+        return FakeResponse(201, {"app_id": app_id, "token": token, "member": member})
 
 
 def _is_token(url: str) -> bool:

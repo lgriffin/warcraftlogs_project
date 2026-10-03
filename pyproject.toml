@@ -172,6 +172,7 @@ dynamic_role_parser = ["tests/test_dynamic_role_parser.py"]
 flasks = ["tests/test_flasks.py"]
 game_version = ["tests/test_game_version.py"]
 http = ["tests/test_wcl_core_testing.py"]
+hub = ["tests/test_hub_bridge.py"]
 
 [tool.wcl.mutation.floors]
 auth = 0.71
@@ -180,6 +181,7 @@ dynamic_role_parser = 0.90
 flasks = 0.88
 game_version = 0.94
 http = 1.0
+hub = 1.0
 
 [tool.importlinter]
 root_packages = ["wcl_core", "wcl_store", "wcl_app"]

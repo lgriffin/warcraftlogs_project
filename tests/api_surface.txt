@@ -76,6 +76,18 @@ wcl_app.BadgeService.for_guild: def for_guild(self, names: Iterable[str] | None=
 wcl_app.BadgeService.storage: set in __init__
 wcl_app.BadgeService.rules: set in __init__
 wcl_app.BadgeService.sources: set in __init__
+wcl_app.BridgeService: class BridgeService
+wcl_app.BridgeService.__init__: def __init__(self, store: HubLinkStore | None=None, config: dict[str, Any] | None=None, *, identity: IdentityService | None=None, profiles: ProfileService | None=None, app_version: str='')
+wcl_app.BridgeService.current: def current(self) -> HubLink | None
+wcl_app.BridgeService.is_linked: def is_linked(self) -> bool
+wcl_app.BridgeService.link: def link(self, code: str) -> HubLink
+wcl_app.BridgeService.publish: def publish(self, profiles: ProfileSet | None=None) -> None
+wcl_app.BridgeService.unlink: def unlink(self) -> bool
+wcl_app.BridgeService.store: set in __init__
+wcl_app.BridgeService.config: set in __init__
+wcl_app.BridgeService.identity: set in __init__
+wcl_app.BridgeService.profiles: set in __init__
+wcl_app.BridgeService.app_version: set in __init__
 wcl_app.CharacterComparison: @dataclass class CharacterComparison
 wcl_app.CharacterComparison.history: CharacterHistory
 wcl_app.CharacterComparison.trends: CharacterTrends
@@ -182,6 +194,17 @@ wcl_app.HomeWidget.chart: Chart | None = None
 wcl_app.HomeWidget.empty: str = ''
 wcl_app.HomeWidget.error: str = ''
 wcl_app.HomeWidget.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.HubLinkedNotPublished: class HubLinkedNotPublished(HubError)
+wcl_app.HubLinkedNotPublished.__init__: def __init__(self, message: str, severity: ErrorSeverity=ErrorSeverity.ERROR, details: str | None=None)
+wcl_app.HubLinkedNotPublished.message: set in __init__
+wcl_app.HubLinkedNotPublished.severity: set in __init__
+wcl_app.HubLinkedNotPublished.details: set in __init__
+wcl_app.HubMemberMismatch: class HubMemberMismatch(AuthenticationError)
+wcl_app.HubMemberMismatch.__init__: def __init__(self, message: str, details: str | None=None)
+wcl_app.HubMemberMismatch.message: set in __init__
+wcl_app.HubMemberMismatch.severity: set in __init__
+wcl_app.HubMemberMismatch.details: set in __init__
+wcl_app.HubNotLinked: class HubNotLinked(LookupError)
 wcl_app.IdentityService: class IdentityService
 wcl_app.IdentityService.__init__: def __init__(self, store: DiscordIdentityStore | None=None, config: dict[str, Any] | None=None, *, flow: FlowStarter=start_oauth_flow, redirect_port: int=DEFAULT_REDIRECT_PORT)
 wcl_app.IdentityService.current: def current(self) -> DiscordIdentity | None
@@ -273,6 +296,9 @@ wcl_app.Profile.scope: @property def scope(self) -> RaidScope
 wcl_app.Profile.api_url: @property def api_url(self) -> str | None
 wcl_app.Profile.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.Profile.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> Profile
+wcl_app.ProfileDirectory: class ProfileDirectory(Protocol)
+wcl_app.ProfileDirectory.load: def load(self, discord_id: str) -> ProfileSet | dict[str, Any] | None
+wcl_app.ProfileNotPublished: class ProfileNotPublished(LookupError)
 wcl_app.ProfileService: class ProfileService
 wcl_app.ProfileService.__init__: def __init__(self, store: ProfileStore, ctx: AppContext | None=None, owner: str | None=None)
 wcl_app.ProfileService.from_context: @classmethod def from_context(cls, ctx: AppContext, store: ProfileStore, owner: str | None=None) -> ProfileService
@@ -405,6 +431,7 @@ wcl_app.WidgetSpec.size: str = HALF
 wcl_app.WidgetSpec.default: bool = False
 wcl_app.WidgetSpec.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.character_lineage: def character_lineage(db: RaidRepository, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> CharacterLineage | None
+wcl_app.member_profile: def member_profile(directory: ProfileDirectory, discord_id: str, slug: str | None=None) -> Profile | None
 wcl_app.parse_report_code: def parse_report_code(text: str) -> str | None
 wcl_app.validate_report_code: def validate_report_code(code: str) -> str
 [wcl_store]
@@ -478,6 +505,35 @@ wcl_core.http.Transport.get: def get(self, url: str, *, timeout: float, **kwargs
 wcl_core.http.get: def get(url: str, *, timeout: float, **kwargs: Any) -> Response
 wcl_core.http.post: def post(url: str, *, timeout: float, **kwargs: Any) -> Response
 wcl_core.http.use: @contextmanager def use(transport: Transport) -> Iterator[Transport]
+[wcl_core.hub]
+wcl_core.hub.HubError: class HubError(WarcraftLogsError)
+wcl_core.hub.HubError.__init__: def __init__(self, message: str, severity: ErrorSeverity=ErrorSeverity.ERROR, details: str | None=None)
+wcl_core.hub.HubError.message: set in __init__
+wcl_core.hub.HubError.severity: set in __init__
+wcl_core.hub.HubError.details: set in __init__
+wcl_core.hub.HubLink: @dataclass(frozen=True) class HubLink
+wcl_core.hub.HubLink.hub_url: str
+wcl_core.hub.HubLink.app_id: str
+wcl_core.hub.HubLink.token: SecretStr
+wcl_core.hub.HubLink.member: HubMember
+wcl_core.hub.HubLink.from_reply: @classmethod def from_reply(cls, hub: str, data: Any) -> HubLink
+wcl_core.hub.HubLink.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_core.hub.HubLinkStore: class HubLinkStore
+wcl_core.hub.HubLinkStore.__init__: def __init__(self, path: str | Path | None=None) -> None
+wcl_core.hub.HubLinkStore.path: @property def path(self) -> Path
+wcl_core.hub.HubLinkStore.save: def save(self, link: HubLink) -> None
+wcl_core.hub.HubLinkStore.forget: def forget(self) -> None
+wcl_core.hub.HubLinkStore.link: HubLink | None
+wcl_core.hub.HubMember: @dataclass(frozen=True) class HubMember
+wcl_core.hub.HubMember.discord_id: str
+wcl_core.hub.HubMember.username: str
+wcl_core.hub.HubMember.display_name: str | None = None
+wcl_core.hub.HubMember.name: @property def name(self) -> str
+wcl_core.hub.hub_url: def hub_url(config: dict[str, Any] | None=None) -> str
+wcl_core.hub.link_code: def link_code(text: str) -> str
+wcl_core.hub.publish_profiles: def publish_profiles(link: HubLink, profiles: dict[str, Any]) -> None
+wcl_core.hub.redeem: def redeem(hub: str, code: str, app_name: str, app_version: str) -> HubLink
+wcl_core.hub.revoke: def revoke(link: HubLink) -> None
 [wcl_core.testing]
 wcl_core.testing.FakeClock: class FakeClock
 wcl_core.testing.FakeClock.__init__: def __init__(self, start: datetime=datetime(2026, 11, 3, 20, 0)) -> None
@@ -498,6 +554,18 @@ wcl_core.testing.FakeDiscord.install: @contextmanager def install(self) -> Itera
 wcl_core.testing.FakeDiscord.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
 wcl_core.testing.FakeDiscord.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
 wcl_core.testing.FakeDiscord.requests: list[Request]
+wcl_core.testing.FakeHub: class FakeHub(_FakeHost)
+wcl_core.testing.FakeHub.__init__: def __init__(self, base: str='https://hub.toads.test') -> None
+wcl_core.testing.FakeHub.issue_code: def issue_code(self, discord_id: str, username: str='toad', display_name: str | None=None) -> str
+wcl_core.testing.FakeHub.load: def load(self, discord_id: str) -> dict[str, Any] | None
+wcl_core.testing.FakeHub.base: set in __init__
+wcl_core.testing.FakeHub.codes: dict[str, dict[str, Any]]
+wcl_core.testing.FakeHub.apps: dict[str, dict[str, Any]]
+wcl_core.testing.FakeHub.profiles: dict[str, dict[str, Any]]
+wcl_core.testing.FakeHub.install: @contextmanager def install(self) -> Iterator[Any]
+wcl_core.testing.FakeHub.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeHub.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeHub.requests: list[Request]
 wcl_core.testing.FakeResponse: class FakeResponse
 wcl_core.testing.FakeResponse.__init__: def __init__(self, status_code: int=200, body: Any=_NO_BODY, text: str | None=None) -> None
 wcl_core.testing.FakeResponse.json: def json(self) -> Any

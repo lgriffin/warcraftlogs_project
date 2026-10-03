@@ -66,6 +66,12 @@ class AppConfig:
     # Discord application id for the desktop sign-in (``wcl_core.discord_auth``); public client, no secret.
     discord_client_id: str = ""
 
+    # The Toads Hub this app links with (``wcl_core.hub``); ``TOADS_HUB_URL`` wins over it.
+    toads_hub_url: str = ""
+
+    # Settings' "check for updates on start-up".
+    auto_check_updates: bool = True
+
 
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
@@ -173,6 +179,8 @@ class ConfigManager:
             wcl_api_url=raw_config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"),
             badges=badges if isinstance(badges, dict) else {},
             discord_client_id=str(raw_config.get("discord_client_id") or ""),
+            toads_hub_url=str(raw_config.get("toads_hub_url") or ""),
+            auto_check_updates=raw_config.get("auto_check_updates", True) is not False,
         )
 
         return config
@@ -239,6 +247,8 @@ def load_config(config_file: str | None = None) -> dict[str, Any]:
         "wcl_api_url": config.wcl_api_url,
         "badges": config.badges,
         "discord_client_id": config.discord_client_id,
+        "toads_hub_url": config.toads_hub_url,
+        "auto_check_updates": config.auto_check_updates,
     }
 
 

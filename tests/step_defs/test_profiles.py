@@ -13,13 +13,23 @@ from urllib.request import urlopen
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
-from wcl_app import AppContext, CharacterService, PlayerService, ProfileSiteUnknown, RaidService
+from wcl_app import (
+    AppContext,
+    BridgeService,
+    CharacterService,
+    HubMemberMismatch,
+    PlayerService,
+    ProfileSiteUnknown,
+    RaidService,
+    member_profile,
+)
 from wcl_app.identity import IdentityService
 from wcl_app.profiles import JsonProfileStore, MemoryProfileStore, Profile, ProfileService, ProfileSet
 from wcl_core import config, consumes_analysis, paths
 from wcl_core.common.errors import AuthenticationError
 from wcl_core.discord_auth import DiscordIdentity, DiscordIdentityStore, PkcePair
-from wcl_core.testing import FakeDiscord, FakeWarcraftLogs
+from wcl_core.hub import HubLinkStore
+from wcl_core.testing import FakeDiscord, FakeHub, FakeWarcraftLogs
 
 from warcraftlogs_client import cli
 
@@ -393,3 +403,66 @@ def oauth_url(monkeypatch, url):
 @then(parsers.parse('the browser should have opened "{prefix}"'))
 def opened(sign_in, prefix):
     assert sign_in["url"].startswith(prefix + "?")
+
+
+HUB = "https://hub.toads.test"
+
+
+@given(parsers.parse('the Toads bot gave "{discord_id}" a link code'))
+def bot_gave_code(world, monkeypatch, discord_id):
+    monkeypatch.setenv("TOADS_HUB_URL", HUB)
+    world["hub"] = FakeHub(HUB)
+    world["code"] = world["hub"].issue_code(discord_id, f"member{discord_id}")
+
+
+@given(parsers.parse('this app has the profiles "{first}" and "{second}" with "{active}" active'))
+def app_profiles(world, first, second, active):
+    profiles = [Profile(n.lower(), n, expansions=(n,)) for n in (first, second)]
+    world["profiles"] = ProfileService(MemoryProfileStore(ProfileSet(profiles, active=active.lower())), world["ctx"])
+
+
+@when("the code is redeemed in this app")
+def redeem(world):
+    world["bridge"] = BridgeService(
+        HubLinkStore(world["tmp"] / "hub_link.json"),
+        identity=world.get("identity"),
+        profiles=world.get("profiles"),
+    )
+    with world["hub"].install():
+        try:
+            world["link"] = world["bridge"].link(world["code"])
+        except HubMemberMismatch as e:
+            world["refused"] = e
+
+
+@then(parsers.parse('the app should be linked to the Hub as "{discord_id}"'))
+def linked_as(world, discord_id):
+    link = world["bridge"].current()
+    assert link is not None and link.member.discord_id == discord_id and link.hub_url == HUB
+
+
+@then(parsers.parse('the Hub should hold the profiles "{first}" and "{second}" for "{discord_id}"'))
+def hub_holds(world, first, second, discord_id):
+    held = ProfileSet.from_dict(world["hub"].load(discord_id))
+    assert [p.name for p in held.profiles] == [first, second]
+
+
+@then(parsers.parse('the bot should resolve "{discord_id}" to "{active}", and to "{named}" when asked for "{slug}"'))
+def bot_resolves(world, discord_id, active, named, slug):
+    assert member_profile(world["hub"], discord_id).name == active
+    assert member_profile(world["hub"], discord_id, slug).name == named
+
+
+@then(parsers.parse('the bot should resolve "{discord_id}" to no profile'))
+def bot_resolves_nothing(world, discord_id):
+    assert member_profile(world["hub"], discord_id) is None
+
+
+@then("the link should be refused as someone else's")
+def refused(world):
+    assert "issued to member555, but this app is linked to toadlord" in str(world["refused"])
+
+
+@then("the app should not be linked to the Hub")
+def not_linked(world):
+    assert not world["bridge"].is_linked() and world["hub"].apps == {}

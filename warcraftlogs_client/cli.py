@@ -25,7 +25,7 @@ from .version import __version__
 
 if TYPE_CHECKING:
     from .database import PerformanceDB
-    from .services import AppContext, PlayerLog, PlayerRef, Profile, ProfileService, RaidService, Spread
+    from .services import AppContext, BridgeService, PlayerLog, PlayerRef, Profile, ProfileService, RaidService, Spread
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -155,6 +155,7 @@ Examples:
     _add_reference_parser(subparsers)
     _add_profile_parser(subparsers)
     _add_discord_parser(subparsers)
+    _add_hub_parser(subparsers)
     return parser
 
 
@@ -193,6 +194,17 @@ def _add_profile_parser(subparsers: "argparse._SubParsersAction[argparse.Argumen
 
     import_parser = profile_sub.add_parser("import", help="Import the guild's new reports in the active profile's era")
     import_parser.add_argument("--list", action="store_true", help="Only list them")
+
+
+def _add_hub_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    hub_parser = subparsers.add_parser("hub", help="Link this app to the Toads Hub with a code from the bot")
+    hub_sub = hub_parser.add_subparsers(dest="hub_command", metavar="ACTION")
+    link_parser = hub_sub.add_parser("link", help="Redeem the one-time code the Toads bot gave you")
+    link_parser.add_argument("code", help="The code, like 7KQ2-M9XD")
+    status_parser = hub_sub.add_parser("status", help="Show which Hub and member this app is linked to")
+    status_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    hub_sub.add_parser("publish", help="Send this app's raid profiles to the Hub")
+    hub_sub.add_parser("unlink", help="Forget the Hub link here and on the Hub")
 
 
 def _add_discord_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -760,6 +772,55 @@ def run_discord_command(args: argparse.Namespace) -> int:
     return 1
 
 
+def _bridge() -> "BridgeService":
+    from wcl_core.paths import get_profiles_path
+
+    from .services import AppContext, BridgeService, IdentityService, JsonProfileStore, ProfileService
+    from .version import __version__
+
+    try:
+        config = AppContext.from_config_file().config
+    except WarcraftLogsError:
+        config = {}
+    profiles = ProfileService(JsonProfileStore(get_profiles_path()))
+    return BridgeService(config=config, identity=IdentityService(), profiles=profiles, app_version=__version__)
+
+
+def run_hub_command(args: argparse.Namespace) -> int:
+    import json
+
+    action = getattr(args, "hub_command", None)
+    if not action:
+        print("Specify an action: link, status, publish or unlink.")
+        return 1
+    service = _bridge()
+    link = service.current()
+    try:
+        if action == "link":
+            link = service.link(args.code)
+            print(f"Linked to the Toads Hub as {link.member.name}; your raid profiles are published.")
+        elif action == "publish":
+            service.publish()
+            print("Raid profiles published to the Toads Hub.")
+        elif action == "unlink" and link is None:
+            print("Not linked.")
+        elif action == "unlink":
+            confirmed = service.unlink()
+            print("Hub link forgotten." if confirmed else "Hub link forgotten here; the Hub could not be told.")
+        elif args.json:
+            print(
+                json.dumps(
+                    {"hub_url": link.hub_url, "app_id": link.app_id, "member": link.member.__dict__} if link else None
+                )
+            )
+        else:
+            print(f"Linked to {link.hub_url} as {link.member.name}." if link else "Not linked. Run: hub link CODE")
+    except (WarcraftLogsError, ValueError, LookupError, OSError) as e:
+        print(f"Error: {e}")
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -789,6 +850,7 @@ def main() -> int:
         "reference": run_reference_command,
         "profile": run_profile_command,
         "discord": run_discord_command,
+        "hub": run_hub_command,
     }
 
     handler = commands.get(args.command)

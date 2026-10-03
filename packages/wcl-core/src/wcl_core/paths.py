@@ -99,6 +99,11 @@ def get_discord_identity_path() -> Path:
     return get_user_data_dir() / "discord_identity.json"
 
 
+def get_hub_link_path() -> Path:
+    """This app's Toads Hub registration (``wcl_core.hub``), next to the Discord identity."""
+    return get_user_data_dir() / "hub_link.json"
+
+
 def get_profiles_path() -> Path:
     """The desktop's raid profiles (``wcl_app.profiles.JsonProfileStore``)."""
     return get_user_data_dir() / "profiles.json"

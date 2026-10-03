@@ -82,8 +82,8 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `packages/wcl-core/` — `wcl_core`: WCL client, auth (client credentials and the user OAuth flow), analysis, models,
   spell data and role configs (no Qt, no SQLite). `warcraftlogs_client/<module>.py` files for moved modules are import
   aliases. All its HTTP goes through `wcl_core.http`; tests fake it with `wcl_core.testing` (`FakeWarcraftLogs`,
-  `FakeDiscord`), not `unittest.mock`. The shared packages read the time only through `wcl_core.clock`
-  (`tests/test_clock.py`); tests use `FakeClock`
+  `FakeDiscord`, `FakeHub`), not `unittest.mock`. The shared packages read the time only through `wcl_core.clock`
+  (`tests/test_clock.py`); tests use `FakeClock`. `wcl_core.hub` is the Toads Hub client (`guides/hub_bridge.md`)
 - `packages/wcl-core/src/wcl_core/data/` — spell name mappings and consumes/interrupt/debuff/totem/cooldown configs
 - `packages/wcl-store/` — `wcl_store`: the `RaidRepository` protocol and `StorageError`, the SQLite backend
   (`wcl_store.sqlite.PerformanceDB`, formerly `database.py`, which stays as an import alias) and the Postgres backend
@@ -91,9 +91,9 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `packages/wcl-store/src/wcl_store/postgres/migrations/` — Alembic migrations for the Postgres schema, numbered
   `0001_…`; `wcl_store.postgres.upgrade(url)` runs them
 - `packages/wcl-app/` — `wcl_app`: the application services (`AppContext`, `RaidService`, `PlayerService`,
-  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, lineage); depends only
-  on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it. Headless hosts use
-  `AppContext.headless(client, storage)`
+  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, `BridgeService`,
+  lineage); depends only on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it.
+  Headless hosts use `AppContext.headless(client, storage)`
 - `guides/` — project documentation; `guides/CHARTER.md` is the engineering charter (requirement IDs and statuses,
   audited by `tests/test_charter.py`; change a status in the pull request that changes the check),
   `guides/home_widgets.md` the Home widget payload contract the Toads Hub shares, `guides/badges.md` the Toads badge
