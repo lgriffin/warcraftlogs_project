@@ -25,7 +25,7 @@ EARS_OPENERS = {
     "ears_event_driven": "When",
     "ears_state_driven": "While",
     "ears_unwanted_behavior": "If",
-    "ears_optional_feature": "Where",
+    "ears_optional": "Where",
 }
 OPENERS = {o for o in EARS_OPENERS.values() if o}
 REQ_ID = re.compile(r"[A-Z]+(?:-[A-Z0-9]+)+")
@@ -69,8 +69,8 @@ def ears_problems(scenario: Scenario) -> list[str]:
     shalls = len(SHALL.findall(scenario.requirement))
     if shalls != 1:
         problems.append(f"has {shalls} 'shall', needs one")
-    patterns = [t for t in scenario.tags if t in EARS_OPENERS]
-    if len(patterns) != 1:
+    patterns = [t for t in scenario.tags if t.startswith("ears_")]
+    if len(patterns) != 1 or patterns[0] not in EARS_OPENERS:
         problems.append(f"needs one EARS tag ({', '.join(sorted(EARS_OPENERS))}), has {patterns or 'none'}")
         return problems
     opener = EARS_OPENERS[patterns[0]]
@@ -90,14 +90,21 @@ class Requirement:
     evidence: str
 
 
+TABLE_HEADER = "| ID | Requirement | Status | Evidence |"
+
+
 def requirements(guide: str) -> list[Requirement]:
-    """Rows of the guide's requirements table; an Enforced row whose evidence is 'see below' takes the
-    '<ID> evidence:' sentence after the table."""
+    """Every data row of the guide's requirements table, whatever its ID looks like; an Enforced row whose evidence
+    is 'see below' takes the '<ID> evidence:' sentence after the table."""
+    lines = guide.splitlines()
+    start = next((n for n, line in enumerate(lines) if line.strip() == TABLE_HEADER), None)
     rows = []
-    for line in guide.splitlines():
+    for line in lines[start + 2 :] if start is not None else []:
+        if not line.strip().startswith("|"):
+            break
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) == 4 and REQ_ID.fullmatch(cells[0]):
-            rows.append(Requirement(*cells))
+        cells += [""] * (4 - len(cells))
+        rows.append(Requirement(cells[0], cells[1], cells[2], " | ".join(cells[3:])))
     resolved = []
     for row in rows:
         evidence = row.evidence
@@ -113,6 +120,8 @@ def requirements(guide: str) -> list[Requirement]:
 def requirement_problems(row: Requirement, known: set[str]) -> list[str]:
     """Why a table row is not a sound requirement: its shall count, its status, its evidence."""
     problems = []
+    if not REQ_ID.fullmatch(row.id):
+        problems.append("has a malformed ID, expected one like PROF-01")
     shalls = len(SHALL.findall(row.text))
     if shalls != 1:
         problems.append(f"has {shalls} 'shall', needs one")
@@ -126,17 +135,41 @@ def requirement_problems(row: Requirement, known: set[str]) -> list[str]:
     return problems
 
 
+def evidence_in(rel: str, source: str) -> set[str]:
+    """The evidence one module offers: its test functions and classes, each as ``path::name``, and the path itself
+    when it holds at least one of them (a fixture or helper module proves nothing)."""
+    names = {
+        node.name
+        for node in ast.walk(ast.parse(source))
+        if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"))
+        or (isinstance(node, ast.ClassDef) and node.name.startswith("Test"))
+    }
+    return names | {f"{rel}::{name}" for name in names} | ({rel} if names else set())
+
+
 def known_tests() -> set[str]:
-    """Every test path, test function and test class under tests/, and each path::name pair."""
     known: set[str] = set()
     for path in TESTS.rglob("*.py"):
-        rel = path.relative_to(ROOT).as_posix()
-        known.add(rel)
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                known.add(node.name)
-                known.add(f"{rel}::{node.name}")
+        known |= evidence_in(path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8"))
     return known
+
+
+def bound_features(source: str) -> set[str]:
+    """Feature files a step module binds with an executed ``scenarios(...)`` or ``scenario(...)`` call."""
+    return {
+        node.args[0].value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and _call_name(node) in {"scenarios", "scenario"}
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    }
+
+
+def _call_name(call: ast.Call) -> str:
+    func = call.func
+    return func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
 
 
 def _features() -> list[tuple[str, str]]:
@@ -155,12 +188,26 @@ def test_every_scenario_is_one_ears_requirement():
 
 def test_every_feature_file_is_bound_to_step_definitions():
     """pytest-bdd runs a feature only when a step module calls scenarios() on it; an unbound one never fails."""
-    bound = {
-        match
-        for path in STEP_DEFS.glob("*.py")
-        for match in re.findall(r"\bscenarios?\(\s*[\"']([\w./-]+\.feature)", path.read_text(encoding="utf-8"))
-    }
+    bound = set().union(*(bound_features(p.read_text(encoding="utf-8")) for p in STEP_DEFS.glob("*.py")))
     assert {name for name, _ in _features()} - bound == set()
+
+
+def test_the_ears_tags_are_the_registered_markers():
+    """``--strict-markers`` rejects a tag pytest does not know, so the audit's patterns must be pytest's."""
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert set(re.findall(r'"(ears_\w+):', pyproject)) == set(EARS_OPENERS)
+
+
+def test_the_binding_rule_counts_only_executed_calls():
+    source = """
+from pytest_bdd import scenario, scenarios
+scenarios("a.feature")
+# scenarios("b.feature")
+TEXT = 'scenarios("c.feature")'
+@scenario("d.feature", "D")
+def test_d(): pass
+"""
+    assert bound_features(source) == {"a.feature", "d.feature"}
 
 
 def test_every_requirement_in_the_guide_is_sound():
@@ -191,14 +238,19 @@ def test_the_ears_rule_checks_shall_tag_and_opening_word():
   @ears_ubiquitous @ears_event_driven
   Scenario: When asked, the store shall answer
   Scenario: The store keeps raids
+  @ears_optional
+  Scenario: Where Postgres is installed, the store shall use it
+  @ears_event_driven @ears_evnt_driven
+  Scenario: When asked, the store shall answer
 """
     found = {s.line: ears_problems(s) for s in scenarios("f.feature", source)}
-    assert [line for line, problems in found.items() if not problems] == [3, 5, 7]
+    assert [line for line, problems in found.items() if not problems] == [3, 5, 7, 20]
     assert "opens with 'The', not 'When'" in found[9][0]
     assert "tagged ubiquitous but opens with 'When'" in found[11][0]
     assert found[13] == ["has 2 'shall', needs one"]
     assert "needs one EARS tag" in found[15][0] and "needs one EARS tag" in found[17][0]
     assert found[18][0] == "has 0 'shall', needs one" and len(found[18]) == 2
+    assert "needs one EARS tag" in found[22][0]
 
 
 def test_the_requirement_rule_checks_shall_status_and_evidence():
@@ -212,6 +264,8 @@ def test_the_requirement_rule_checks_shall_status_and_evidence():
 | A-06 | The app shall swim. | Done | `test_swims` |
 | A-07 | The app shall rest. | Enforced | see below |
 | A-08 | The app shall wake. | Enforced | see below |
+| A_09 | The app shall sleep. | Enforced | `test_starts` |
+| A-10 | The app shall log. | Enforced | `tests/conftest.py` |
 
 A-07 evidence: `test_rests` and `tests/test_app.py`. A-08 evidence: `test_dances_badly`.
 """
@@ -225,3 +279,17 @@ A-07 evidence: `test_rests` and `tests/test_app.py`. A-08 evidence: `test_dances
     assert found["A-04"] == ["names test_dances_badly, which does not exist"]
     assert found["A-06"] == ["has status 'Done', not one of Enforced, Gap, Practised"]
     assert found["A-08"] == ["names test_dances_badly, which does not exist"]
+    assert found["A_09"] == ["has a malformed ID, expected one like PROF-01"]
+    assert found["A-10"] == ["names tests/conftest.py, which does not exist"]
+
+
+def test_only_modules_holding_tests_count_as_evidence():
+    assert evidence_in("tests/conftest.py", "def build(): ...\nclass Helper: ...\n") == set()
+    module = "def test_a(): ...\nclass TestB: ...\ndef helper(): ...\n"
+    assert evidence_in("tests/test_x.py", module) == {
+        "test_a",
+        "TestB",
+        "tests/test_x.py::test_a",
+        "tests/test_x.py::TestB",
+        "tests/test_x.py",
+    }
