@@ -52,9 +52,9 @@ class ProfileSwitcher(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         self.combo = QComboBox()
-        # Home, badges and player pages follow the profile today; the raid, character and insight views follow
-        # once they move onto services (identity_and_profiles.md, phase 2.3).
-        self.combo.setToolTip("Raid profile: Home, badges and player pages count only its raids")
+        # Home, badges, player pages and the character history and compare views follow the profile; the raid and
+        # insight views follow once they move onto services (identity_and_profiles.md, phase 2.3).
+        self.combo.setToolTip("Raid profile: Home, badges, player pages and character history count only its raids")
         self.combo.setMinimumWidth(160)
         self.combo.setStyleSheet(
             f"QComboBox {{ background-color: {COLORS['bg_input']}; color: {COLORS['text']};"

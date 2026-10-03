@@ -16,7 +16,10 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import AppContext as AppContext
     from wcl_app import BadgeRules as BadgeRules
     from wcl_app import BadgeService as BadgeService
+    from wcl_app import CharacterComparison as CharacterComparison
+    from wcl_app import CharacterDossier as CharacterDossier
     from wcl_app import CharacterLineage as CharacterLineage
+    from wcl_app import CharacterService as CharacterService
     from wcl_app import Chart as Chart
     from wcl_app import ChartError as ChartError
     from wcl_app import DiscordNotConfigured as DiscordNotConfigured
@@ -55,6 +58,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
 
 for _name in (
     "badges",
+    "characters",
     "charts",
     "context",
     "healing",

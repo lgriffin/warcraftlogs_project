@@ -74,7 +74,8 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
 contract tests on both backends.
 PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence:
-`tests/gui/test_profile_switcher.py` and `test_the_home_page_follows_a_later_profile_switch`.
+`tests/gui/test_profile_switcher.py`, `test_the_home_page_follows_a_later_profile_switch` and
+`tests/gui/test_characters_hub.py`.
 
 ## Layering (per `tests/test_architecture.py`)
 
@@ -197,7 +198,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1, 2.2 merged; 2.3 in review | PROF-07 to PROF-09 |
+| 2 | Scoped services and frontends | 2.1, 2.2, 2.3a merged; 2.3b in review | PROF-07 to PROF-09 |
 | 3 | Import by profile | Planned | |
 | 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
 | 5 | Retire the single-host config | Planned | |
@@ -225,14 +226,17 @@ Order, one PR each:
 2. `get_character_history` takes `scope=`; `PlayerService.history`, the player page and the CLI `history` command
    pass it. Closes PROF-07. With a scope, first and last seen come from the raids inside it, and a character with no
    raids inside it has no history. The desktop's character, compare and history widgets still read the database
-   directly; 2.3 moves them onto `PlayerService.history`.
+   directly; 2.3b moves them onto a service.
 3. Desktop: a profile switcher in the toolbar (reads `ProfileService`, calls `apply()`), a Settings section for
    Discord sign-in (`IdentityService.link()` on a worker thread, like the Warcraft Logs sign-in), and a "Tag stored
    raids" action that runs `backfill_eras()`. No view reads the profile file itself.
-   2.3a (this step's first PR): the top bar's profile switcher (`gui/profile_switcher.py`) over
+   2.3a (merged, #147): the top bar's profile switcher (`gui/profile_switcher.py`) over
    `ProfileService.desktop(ctx)`, sharing the window's context with the Home page so a switch refreshes it in place.
-   Next: the character, compare and history widgets onto `PlayerService.history` and the scoped trends, then the
-   Discord sign-in and "Tag stored raids" in Settings.
+   2.3b: `wcl_app.characters.CharacterService` (roster, dossier, comparison) reads the desktop-only character
+   queries, which now all take `scope=`, under the context's profile at read time. The Characters hub's list, its
+   history panel, the pushed history view and the compare view use it and re-read on a switch, so three entries leave
+   `KNOWN_VIOLATIONS`. `character_view` (My Character) still reads the database for peers and imports; it moves with
+   the insight views. Next: the Discord sign-in and "Tag stored raids" in Settings.
 4. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
    contract (`guides/home_widgets.md` style page for the profile payload).
 Definition of done: every service read that lists or aggregates raids takes the scope; the desktop shows the active

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
-from ..services import ProfileService
+from ..services import CharacterService, ProfileService
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
@@ -218,7 +218,8 @@ class MainWindow(QMainWindow):
 
         self.home_view = HomeView(default_home_service(self._ctx))
         self.raids_hub = RaidsHub()
-        self.characters_hub = CharactersHub()
+        self._characters = CharacterService(self._ctx)
+        self.characters_hub = CharactersHub(characters=self._characters)
         self.insights_view = InsightsView()
         self.raid_group_view = RaidGroupView()
         self.settings_view = SettingsView()
@@ -487,7 +488,7 @@ class MainWindow(QMainWindow):
     def _drill_into_character_history(self, name: str):
         from .character_history_widget import CharacterHistoryWidget
 
-        widget = CharacterHistoryWidget(name)
+        widget = CharacterHistoryWidget(name, characters=self._characters)
         widget.status_message.connect(self.status_bar.showMessage)
         widget.request_back.connect(self.stack.pop_view)
         self.stack.push_view(widget)
@@ -499,6 +500,7 @@ class MainWindow(QMainWindow):
         # The top bar keeps showing the profile and its count; the status bar only notes the switch.
         self.status_bar.showMessage(f"Raid profile: {name}")
         self.home_view.refresh()
+        self.characters_hub.refresh()
 
     def _on_raid_deleted(self, report_id: str):
         pass

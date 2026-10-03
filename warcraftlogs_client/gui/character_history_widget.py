@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..database import PerformanceDB
+from ..services import AppContext, CharacterService
 from .charts import (
     CalendarHeatmapWidget,
     SpiderChartWidget,
@@ -40,13 +40,22 @@ from .styles import COLORS, COMMON_STYLES
 from .table_models import HistoryTableModel
 
 
+def default_character_service() -> CharacterService:
+    """The desktop's character reads in the saved profile; they need the database only, not config.json."""
+    return CharacterService(AppContext.desktop(with_config=False))
+
+
 class CharacterHistoryWidget(QWidget):
     status_message = Signal(str)
     request_back = Signal()
 
-    def __init__(self, character_name: str, inline: bool = False, parent=None):
+    def __init__(
+        self, character_name: str, inline: bool = False, parent=None, characters: CharacterService | None = None
+    ):
         super().__init__(parent)
         self._name = character_name
+        # Reads follow the active raid profile; the window passes its shared service so a switch reaches it.
+        self._characters = characters if characters is not None else default_character_service()
         self._inline = inline
         self._chart_widgets: dict[str, QWidget] = {}
         self._all_healer_trend = []
@@ -272,96 +281,83 @@ class CharacterHistoryWidget(QWidget):
         table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         return table
 
-    def _load_data(self):  # noqa: C901
+    def _load_data(self):
         try:
-            with PerformanceDB() as db:
-                history = db.get_character_history(self._name)
-                if not history:
-                    self._title_label.setText(f"{self._name} — No history found")
-                    return
-
-                self._title_label.setText(f"{history.name}  ({history.player_class})")
-                self.summary_labels["Name"].setText(history.name)
-                self.summary_labels["Class"].setText(history.player_class)
-                self.summary_labels["Raids Tracked"].setText(str(history.total_raids))
-
-                if history.first_seen and history.last_seen:
-                    period = f"{history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}"
-                    self.summary_labels["Active Period"].setText(period)
-
-                self.summary_labels["Avg Active Time"].setText(
-                    f"{history.avg_active_time:.1f}%" if history.avg_active_time else "-"
-                )
-                self.summary_labels["Avg Healing"].setText(
-                    f"{history.avg_healing:,.0f}" if history.avg_healing else "-"
-                )
-                self.summary_labels["Avg Damage"].setText(f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
-                self.summary_labels["Avg Mitigation"].setText(
-                    f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-"
-                )
-                self.summary_labels["Consumables Used"].setText(str(history.total_consumables_used))
-
-                self._all_healer_trend = db.get_healer_trend(self._name)
-                self._all_healer_spell_trend = db.get_healer_spell_trend(self._name) if self._all_healer_trend else []
-                self._all_tank_trend = db.get_tank_trend(self._name)
-                self._all_dps_trend = db.get_dps_trend(self._name)
-                self._all_dps_ability_trend = db.get_dps_ability_trend(self._name) if self._all_dps_trend else []
-                self._all_consumable_trend = db.get_consumable_trend(self._name)
-
-                consumes_summary = db.get_consumable_summary(self._name, limit=5)
-                if consumes_summary:
-                    all_names = set()
-                    for row in consumes_summary:
-                        for k in row:
-                            if k not in ("raid_date", "title", "report_id"):
-                                all_names.add(k)
-                    cols = ["raid_date", "title", *sorted(all_names)]
-                    self._consumes_trend_model.set_data(consumes_summary, cols)
-                else:
-                    self._consumes_trend_model.set_data([], [])
-
-                self._apply_raid_size_filter()
-
-                consistency = db.get_character_consistency(self._name)
-                if consistency:
-                    scores = []
-                    for key in ("healing_consistency", "damage_consistency", "mitigation_consistency"):
-                        if key in consistency:
-                            scores.append(consistency[key])
-                    if scores:
-                        avg = sum(scores) / len(scores)
-                        self.summary_labels["Consistency"].setText(f"{avg:.1f}%")
-
-                compliance = db.get_character_consumable_compliance(self._name)
-                if compliance and compliance.get("total_raids", 0) > 0:
-                    pct = compliance["compliance_pct"]
-                    avg = compliance["avg_per_raid"]
-                    self.summary_labels["Consumable Compliance"].setText(f"{pct:.0f}% ({avg:.1f}/raid)")
-
-                bests = db.get_character_personal_bests(self._name)
-                if bests:
-                    self._bests_model.set_data(bests, ["label", "raid_date", "title", "value"])
-
-                spider_data = db.get_character_spider_data(self._name)
-                if spider_data:
-                    self._spider_widget = SpiderChartWidget(spider_data)
-                    self._spider_tab_layout.addWidget(self._spider_widget)
-
-                calendar_data = db.get_character_raid_calendar(self._name)
-                if calendar_data:
-                    self._calendar_widget = CalendarHeatmapWidget(calendar_data)
-                    self._calendar_tab_layout.addWidget(self._calendar_widget)
-
-                if self._cached_healer_trend:
-                    self._tabs.setCurrentIndex(0)
-                elif self._cached_tank_trend:
-                    self._tabs.setCurrentIndex(1)
-                elif self._cached_dps_trend:
-                    self._tabs.setCurrentIndex(2)
-
-                self.status_message.emit(f"Showing history for {self._name}")
+            dossier = self._characters.dossier(self._name)
         except (sqlite3.Error, KeyError, ValueError, TypeError, OSError) as e:
             self.status_message.emit(f"Error loading history: {e}")
+            return
+        if dossier is None:
+            self._title_label.setText(f"{self._name} — No history found")
+            return
+        self._show_summary(dossier.history)
+        trends = dossier.trends
+        self._all_healer_trend = trends.healer
+        self._all_healer_spell_trend = trends.healer_spells
+        self._all_tank_trend = trends.tank
+        self._all_dps_trend = trends.dps
+        self._all_dps_ability_trend = trends.dps_abilities
+        self._all_consumable_trend = trends.consumables
+        self._show_consumable_summary(dossier.consumable_summary)
+        self._apply_raid_size_filter()
+        self._show_scores(dossier)
+        if self._cached_healer_trend:
+            self._tabs.setCurrentIndex(0)
+        elif self._cached_tank_trend:
+            self._tabs.setCurrentIndex(1)
+        elif self._cached_dps_trend:
+            self._tabs.setCurrentIndex(2)
+        self.status_message.emit(f"Showing history for {self._name}")
+
+    def _show_summary(self, history):
+        self._title_label.setText(f"{history.name}  ({history.player_class})")
+        self.summary_labels["Name"].setText(history.name)
+        self.summary_labels["Class"].setText(history.player_class)
+        self.summary_labels["Raids Tracked"].setText(str(history.total_raids))
+        if history.first_seen and history.last_seen:
+            period = f"{history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}"
+            self.summary_labels["Active Period"].setText(period)
+        self.summary_labels["Avg Active Time"].setText(
+            f"{history.avg_active_time:.1f}%" if history.avg_active_time else "-"
+        )
+        self.summary_labels["Avg Healing"].setText(f"{history.avg_healing:,.0f}" if history.avg_healing else "-")
+        self.summary_labels["Avg Damage"].setText(f"{history.avg_damage:,.0f}" if history.avg_damage else "-")
+        self.summary_labels["Avg Mitigation"].setText(
+            f"{history.avg_mitigation_percent:.1f}%" if history.avg_mitigation_percent else "-"
+        )
+        self.summary_labels["Consumables Used"].setText(str(history.total_consumables_used))
+
+    def _show_consumable_summary(self, consumes_summary: list[dict]):
+        if not consumes_summary:
+            self._consumes_trend_model.set_data([], [])
+            return
+        all_names = {k for row in consumes_summary for k in row if k not in ("raid_date", "title", "report_id")}
+        self._consumes_trend_model.set_data(consumes_summary, ["raid_date", "title", *sorted(all_names)])
+
+    def _show_scores(self, dossier):
+        consistency = dossier.consistency
+        scores = [
+            consistency[key]
+            for key in ("healing_consistency", "damage_consistency", "mitigation_consistency")
+            if key in consistency
+        ]
+        if scores:
+            self.summary_labels["Consistency"].setText(f"{sum(scores) / len(scores):.1f}%")
+
+        compliance = dossier.compliance
+        if compliance and compliance.get("total_raids", 0) > 0:
+            pct = compliance["compliance_pct"]
+            avg = compliance["avg_per_raid"]
+            self.summary_labels["Consumable Compliance"].setText(f"{pct:.0f}% ({avg:.1f}/raid)")
+
+        if dossier.personal_bests:
+            self._bests_model.set_data(dossier.personal_bests, ["label", "raid_date", "title", "value"])
+        if dossier.spider:
+            self._spider_widget = SpiderChartWidget(dossier.spider)
+            self._spider_tab_layout.addWidget(self._spider_widget)
+        if dossier.calendar:
+            self._calendar_widget = CalendarHeatmapWidget(dossier.calendar)
+            self._calendar_tab_layout.addWidget(self._calendar_widget)
 
     # ── Raid size filtering ──
 

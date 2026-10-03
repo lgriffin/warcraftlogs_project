@@ -55,10 +55,7 @@ KNOWN_VIOLATIONS = {
     ("cli", "spell_manager"),
     # Desktop views still reach past services
     ("gui.boss_insights_view", "database"),
-    ("gui.character_history_widget", "database"),
     ("gui.character_view", "database"),
-    ("gui.characters_hub", "database"),
-    ("gui.compare_view", "database"),
     ("gui.download_view", "config"),
     ("gui.download_view", "database"),
     ("gui.encounter_deep_dive_view", "client"),
