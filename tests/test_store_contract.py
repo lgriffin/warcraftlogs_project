@@ -396,6 +396,26 @@ def test_scope_applies_to_a_characters_raids_casts_and_consumables(repo):
     assert [r["report_id"] for r in repo.get_character_raid_roles("Holy", scope=refs)] == [REF]
 
 
+def test_scope_applies_to_character_history(repo):
+    _eras(repo)
+    everything = repo.get_character_history("Stab")
+    assert everything is not None and everything.total_raids == 3
+    classic = repo.get_character_history("Stab", scope=RaidScope(expansions=("Classic",)))
+    assert classic is not None and classic.total_raids == 2  # MC and the untagged Gruul
+    assert classic.first_seen == everything.first_seen  # MC is the first raid
+    tbc = repo.get_character_history("Stab", scope=RaidScope(expansions=(TBC,)))
+    assert tbc is not None and tbc.total_raids == 2  # Kara and Gruul
+    assert classic.first_seen < tbc.first_seen < tbc.last_seen == classic.last_seen  # Kara, then Gruul in both
+    assert classic.total_consumables_used + tbc.total_consumables_used >= everything.total_consumables_used
+    ref = repo.get_character_history("Stab", "nowhere", scope=RaidScope(sources=("reference",)))
+    assert ref is not None and ref.total_raids == 1
+    assert repo.get_character_history("Stab", scope=RaidScope(zones=("Nowhere",))) is None
+    # An empty scope counts the same raids; its last seen is the last guild raid, not the later reference raid.
+    unscoped = repo.get_character_history("Stab", scope=RaidScope())
+    assert unscoped is not None and unscoped.last_seen < everything.last_seen
+    assert replace(unscoped, last_seen=everything.last_seen) == everything
+
+
 def test_scope_applies_to_consumable_totals_and_raids(repo):
     _eras(repo)
     everything = {(r["name"], r["consumable_name"]): r["raids"] for r in repo.get_consumable_totals()}

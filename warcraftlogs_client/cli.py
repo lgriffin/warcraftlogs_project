@@ -272,10 +272,12 @@ def run_consumes_analysis(args: argparse.Namespace) -> int:
 
 def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
     from .database import PerformanceDB
+    from .services import AppContext
 
+    scope = AppContext.desktop(with_config=False).scope
     with PerformanceDB() as db:
         if hasattr(args, "raids") and args.raids:
-            raids = db.get_raid_list()
+            raids = db.get_raid_list(scope=scope)
             if not raids:
                 print("No raids imported yet. Use --save when running analysis.")
                 return 0
@@ -302,7 +304,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
             print("Specify a character name, --all, or --raids.")
             return 1
 
-        history = db.get_character_history(args.character_name)
+        history = db.get_character_history(args.character_name, scope=scope)
         if not history:
             print(f"No data found for '{args.character_name}'.")
             return 1

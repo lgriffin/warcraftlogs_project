@@ -60,7 +60,7 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | PROF-04 | When a profile names a game version with a known site, the context shall import from that site; otherwise it shall keep the configured host. | Enforced | `tests/test_profiles.py::test_switching_profiles_rebuilds_the_client_for_the_host`, `test_api_url_follows_the_game_version_unless_given` |
 | PROF-05 | When a profile is created while an identity is linked, the profile shall carry that Discord id as its owner. | Enforced | `test_create_activate_and_delete` |
 | PROF-06 | When raids stored before this change are backfilled, the service shall tag each from its zone and the configured host, and shall leave an unknown zone's expansion unset. | Enforced | `test_backfill_tags_stored_raids_from_the_zone_and_the_configured_host` |
-| PROF-07 | Each raid-reading service shall use the active scope at read time. | Enforced but history | see below |
+| PROF-07 | Each raid-reading service shall use the active scope at read time. | Enforced | see below |
 | IDENT-01 | The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, and shall hold no client secret. | Enforced | `tests/test_discord_auth.py::TestPkce`, `test_complete_auth_exchanges_the_code_with_the_verifier_and_reads_who` |
 | IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
 | IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
@@ -70,8 +70,8 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
-PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change; character history
-is scoped in phase 2.2. PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`.
+PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
+contract tests on both backends. PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`.
 
 ## Layering (per `tests/test_architecture.py`)
 
@@ -194,7 +194,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1 in review | PROF-07, PROF-08 |
+| 2 | Scoped services and frontends | 2.1 merged (#145), 2.2 in review | PROF-07, PROF-08 |
 | 3 | Import by profile | Planned | |
 | 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
 | 5 | Retire the single-host config | Planned | |
@@ -219,7 +219,10 @@ Order, one PR each:
    Context-built services ask `ctx.scope` at each read, so a profile switch reaches services built before it; an
    explicit `scope=` stays fixed. The desktop and CLI build their context with `AppContext.desktop()`, which starts
    in the saved active profile (PROF-08).
-2. `get_character_history` takes `scope=`; `PlayerService.history` and the player page pass it. Closes PROF-07.
+2. `get_character_history` takes `scope=`; `PlayerService.history`, the player page and the CLI `history` command
+   pass it. Closes PROF-07. With a scope, first and last seen come from the raids inside it, and a character with no
+   raids inside it has no history. The desktop's character, compare and history widgets still read the database
+   directly; 2.3 moves them onto `PlayerService.history`.
 3. Desktop: a profile switcher in the toolbar (reads `ProfileService`, calls `apply()`), a Settings section for
    Discord sign-in (`IdentityService.link()` on a worker thread, like the Warcraft Logs sign-in), and a "Tag stored
    raids" action that runs `backfill_eras()`. No view reads the profile file itself.

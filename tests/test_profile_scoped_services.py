@@ -148,3 +148,19 @@ def test_the_desktop_context_starts_in_the_saved_profile(ctx):
     desktop = AppContext.desktop(with_config=False, db_path=ctx.db_path)
     assert desktop.profile == TBC_ONLY
     assert [r.report_id for r in ReferenceService(desktop).guild_raids()] == [GRUUL, KARA]
+
+
+def test_character_history_follows_the_profile(ctx):
+    """Closes PROF-07: the player page's history and PlayerService.history read under the profile."""
+    from wcl_app import PlayerRef, PlayerService
+
+    holy = PlayerRef.create("HolyPriest", "spineshatter", "eu")
+    players = PlayerService(ctx)
+    assert players.history("HolyPriest").total_raids == 3
+    ctx.use_profile(CLASSIC_DAYS)
+    assert players.history("HolyPriest").total_raids == 2
+    with ctx.repository() as repo:
+        page = PlayerPageService.from_context(ctx, repo, with_api=False)
+        assert page.get_page(holy).history["total_raids"] == 2
+    ctx.use_profile(Profile("z", "Z", zones=("Nowhere",)))
+    assert players.history("HolyPriest") is None

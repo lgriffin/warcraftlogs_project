@@ -99,7 +99,9 @@ class RaidRepository(Protocol):
 
     # ── Characters ──
 
-    def get_character_history(self, character_name: str, source: str = "guild") -> CharacterHistory | None: ...
+    def get_character_history(
+        self, character_name: str, source: str = "guild", scope: RaidScope | None = None
+    ) -> CharacterHistory | None: ...
 
     def get_reports_for_character(self, character_name: str) -> list[dict[str, Any]]:
         """Raids of any source with a role row for the character, newest first:

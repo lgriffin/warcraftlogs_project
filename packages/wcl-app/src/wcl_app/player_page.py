@@ -215,7 +215,7 @@ class PlayerPageService:
     def get_page(self, player: PlayerRef) -> PlayerPageData:
         page_id = self.open_page(player)
         logs = [self._row_to_log(r) for r in self.db.get_player_page_logs(page_id, status="added")]
-        history = self.db.get_character_history(player.name)
+        history = self.db.get_character_history(player.name, scope=self.scope)
         badges = self.badge_rules.award(character_stats(self.db, player.name, scope=self.scope))
         badges.player_class = history.player_class if history else ""
         return PlayerPageData(
