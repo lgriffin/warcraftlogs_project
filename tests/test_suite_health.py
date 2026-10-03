@@ -32,30 +32,50 @@ def _is_pytest(node: ast.AST, *path: str) -> bool:
     return ast.unparse(node) == ".".join(("pytest", *path))
 
 
+def _says_why(node: ast.AST | None) -> bool:
+    """A reason is given and is not a blank string literal."""
+    if node is None:
+        return False
+    return not (isinstance(node, ast.Constant) and isinstance(node.value, str) and not node.value.strip())
+
+
+def _reason(call: ast.Call, *keywords: str, positional: bool) -> ast.AST | None:
+    given = next((k.value for k in call.keywords if k.arg in keywords), None)
+    if given is None and positional and call.args:
+        given = call.args[0]
+    return given
+
+
 def unexplained_skips(tree: ast.AST) -> Iterator[int]:
     """Lines of skip/xfail marks and pytest.skip/xfail/fail calls that do not say why."""
     called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             name = _name(node.func)
-            keywords = {k.arg for k in node.keywords}
             if name in SKIP_MARKS and _is_pytest(node.func, "mark", name):
-                if "reason" not in keywords and not (name == "skip" and node.args):
+                if not _says_why(_reason(node, "reason", positional=name == "skip")):
                     yield node.lineno
-            elif (
-                name in SKIP_CALLS
-                and _is_pytest(node.func, name)
-                and not node.args
-                and not keywords & {"reason", "msg"}
-            ):
-                yield node.lineno
+            elif name in SKIP_CALLS and _is_pytest(node.func, name):
+                if not _says_why(_reason(node, "reason", "msg", positional=True)):
+                    yield node.lineno
         elif isinstance(node, ast.Attribute) and id(node) not in called:
             if node.attr in SKIP_MARKS and _is_pytest(node, "mark", node.attr):
                 yield node.lineno
 
 
-def _checks(node: ast.AST, helpers: set[str]) -> bool:
-    for child in ast.walk(node):
+def _runs(statements: list[ast.stmt]) -> Iterator[ast.AST]:
+    """The nodes these statements execute: like ``ast.walk``, but not into a nested def, lambda or class,
+    whose body runs only if something calls it."""
+    stack: list[ast.AST] = list(statements)
+    while stack:
+        node = stack.pop()
+        yield node
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            stack.extend(ast.iter_child_nodes(node))
+
+
+def _checks(func: ast.FunctionDef | ast.AsyncFunctionDef, helpers: set[str]) -> bool:
+    for child in _runs(func.body):
         if isinstance(child, ast.Assert):
             return True
         if isinstance(child, ast.Call):
@@ -91,9 +111,10 @@ def swallowed_exceptions(tree: ast.AST) -> Iterator[int]:
     exception, or ``contextlib.suppress(Exception)``. Such a block also swallows a failing assert."""
     for node in ast.walk(tree):
         if isinstance(node, ast.ExceptHandler) and _broad(node):
-            body = ast.Module(body=node.body, type_ignores=[])
-            raises = any(isinstance(n, ast.Raise) for n in ast.walk(body))
-            keeps = node.name is not None and any(isinstance(n, ast.Name) and n.id == node.name for n in ast.walk(body))
+            raises = any(isinstance(n, ast.Raise) for n in _runs(node.body))
+            keeps = node.name is not None and any(
+                isinstance(n, ast.Name) and n.id == node.name and isinstance(n.ctx, ast.Load) for n in _runs(node.body)
+            )
             if not raises and not keeps:
                 yield node.lineno
         elif isinstance(node, ast.Call) and _name(node.func) == "suppress":
@@ -122,7 +143,7 @@ def test_no_test_swallows_every_exception():
 
 
 def _lines(rule, source: str) -> list:
-    return list(rule(ast.parse(source)))
+    return sorted(rule(ast.parse(source)))
 
 
 def test_the_skip_rule_wants_a_reason_on_marks_and_calls():
@@ -141,8 +162,13 @@ def test_d():
 def test_e():
     pytest.skip("no network")
     pytest.fail(msg="boom")
+    pytest.skip(reason=f"needs {thing}")
+@pytest.mark.skip(reason="")
+@pytest.mark.xfail(reason="  ")
+def test_f():
+    pytest.skip("")
 """
-    assert _lines(unexplained_skips, source) == [2, 4, 6, 9]
+    assert _lines(unexplained_skips, source) == [2, 4, 6, 9, 17, 18, 20]
 
 
 def test_the_check_rule_accepts_asserts_checking_calls_and_asserting_helpers():
@@ -162,8 +188,20 @@ def test_signal(qtbot, w):
 def test_helper(): _holy(1)
 @scenario("a.feature", "A")
 def test_bdd(): pass
+def test_defines_but_never_calls():
+    def inner(): assert run()
+    lambda: _holy(1)
+    class Probe:
+        def check(self): assert run()
+def test_calls_a_nested_helper():
+    def _seen(x): assert x
+    _seen(run())
 """
-    assert _lines(assertion_free_tests, source) == [(6, "test_bare"), (7, "test_builds_only")]
+    assert _lines(assertion_free_tests, source) == [
+        (6, "test_bare"),
+        (7, "test_builds_only"),
+        (17, "test_defines_but_never_calls"),
+    ]
 
 
 def test_the_swallow_rule_flags_broad_catches_that_drop_the_exception():
@@ -182,5 +220,12 @@ except Exception as e: error = e
 try: run()
 except Exception: raise
 with contextlib.suppress(KeyError): run()
+try: run()
+except Exception:
+    def later(): raise
+try: run()
+except Exception as e: e = None
+try: run()
+except Exception as e: del e
 """
-    assert _lines(swallowed_exceptions, source) == [3, 5, 7, 8]
+    assert _lines(swallowed_exceptions, source) == [3, 5, 7, 8, 17, 20, 22]
