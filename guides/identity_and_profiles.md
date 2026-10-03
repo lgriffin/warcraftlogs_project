@@ -294,7 +294,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Schemas tolerate additive change | `pydantic` only for `SecretStr`; GraphQL parsed by hand | pydantic models with `extra="allow"` for every API response the analyzer reads |
 | Conventional commits, release-please, semver classification | `build_release.sh` bumps versions by hand | Conventional commit check on PR titles, then release automation |
 | Dependency audit, expiring exceptions | `pip-audit` task (needs network) | Run it in CI nightly; exceptions with `expires` dates |
-| Charter with IDs and statuses, each Enforced row names its check | this section and the requirements table | A `guides/CHARTER.md` for the whole repo, with an audit that every Enforced row's evidence exists |
+| Charter with IDs and statuses, each Enforced row names its check | [CHARTER.md](CHARTER.md), audited | Its Part 10 |
 
 `ci-success` needs every job and fails when one failed, was cancelled or was skipped (`scripts/ci_gate.py`).
 `tests/test_dev_tasks.py` reads `ci.yml`: the gate needs every job, only the gate has a job-level `if:`, and each job
@@ -341,7 +341,7 @@ Enforced row names tests that exist. Every Enforced row also has a scenario titl
 Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
 EARS audit over `tests/features/` with a scenario per requirement (done); `wcl_core.testing` with the fake
 transport (done); export coverage and the surface snapshot (done); mutation on `wcl_core` with a floor (done); the clock
-lint (done); the charter.
+lint (done); the charter (done). What is left of the gap table is the charter's gap register.
 
 ## Open questions
 
