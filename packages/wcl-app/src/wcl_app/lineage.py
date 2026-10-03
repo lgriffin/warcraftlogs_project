@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from wcl_core.flasks import load_catalog, preparation
+from wcl_store import RaidScope, narrowed
 
 if TYPE_CHECKING:
     from wcl_store import RaidRepository
@@ -74,9 +75,14 @@ _ROLE_METRICS: dict[str, list[tuple[str, str]]] = {
 
 
 def character_lineage(
-    db: RaidRepository, character_name: str, sources: tuple[str, ...] = ("guild",)
+    db: RaidRepository,
+    character_name: str,
+    sources: tuple[str, ...] = ("guild",),
+    scope: RaidScope | None = None,
 ) -> CharacterLineage | None:
-    raids = db.get_character_raid_roles(character_name, sources)
+    """Min / mean / max of a character's numbers over the raids of ``sources``, inside ``scope`` when given."""
+    scope = narrowed(scope, sources)
+    raids = db.get_character_raid_roles(character_name, sources, scope=scope)
     if not raids:
         return None
 
@@ -102,7 +108,7 @@ def character_lineage(
                 lineage.metrics.append(Spread.of(label, values, role))
 
     # Casts: total per raid across all spells, then per spell within its role.
-    cast_rows = db.get_character_spell_casts(character_name, sources)
+    cast_rows = db.get_character_spell_casts(character_name, sources, scope=scope)
     per_raid_total: dict[int, float] = dict.fromkeys(raid_role, 0.0)
     per_spell: dict[tuple[str, str], dict[int, float]] = defaultdict(dict)
     for c in cast_rows:
@@ -120,7 +126,7 @@ def character_lineage(
     # Consumables: over every raid attended, zero where none were used.
     per_item: dict[str, dict[int, float]] = defaultdict(dict)
     per_raid_consumes: dict[int, float] = dict.fromkeys(raid_role, 0.0)
-    for c in db.get_character_consumable_counts(character_name, sources):
+    for c in db.get_character_consumable_counts(character_name, sources, scope=scope):
         if c["raid_id"] not in raid_role:
             continue
         per_item[c["consumable_name"]][c["raid_id"]] = c["count"]

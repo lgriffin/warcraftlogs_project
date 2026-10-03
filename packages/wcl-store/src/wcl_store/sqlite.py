@@ -1919,13 +1919,11 @@ class PerformanceDB:
     # ── Character lineage ──
     # Raw per-raid rows for a character; services.lineage turns them into min/mean/max.
 
-    def _lineage_raid_filter(self, sources: tuple[str, ...]) -> tuple[str, list]:
-        marks = ", ".join("?" for _ in sources)
-        return f"r.source IN ({marks})", list(sources)
-
-    def get_character_raid_roles(self, character_name: str, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+    def get_character_raid_roles(
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict]:
         """One row per raid the character is in: role and that role's headline numbers."""
-        src_sql, src_params = self._lineage_raid_filter(sources)
+        src_sql, src_params = self._scope_sql(scope, sources)
         rows = (
             self._get_conn()
             .execute(
@@ -1957,9 +1955,11 @@ class PerformanceDB:
         )
         return [dict(r) for r in rows]
 
-    def get_character_spell_casts(self, character_name: str, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+    def get_character_spell_casts(
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict]:
         """Casts per spell per raid, tagged with the role table they came from."""
-        src_sql, src_params = self._lineage_raid_filter(sources)
+        src_sql, src_params = self._scope_sql(scope, sources)
         rows = (
             self._get_conn()
             .execute(
@@ -1989,8 +1989,10 @@ class PerformanceDB:
         )
         return [dict(r) for r in rows]
 
-    def get_character_consumable_counts(self, character_name: str, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
-        src_sql, src_params = self._lineage_raid_filter(sources)
+    def get_character_consumable_counts(
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict]:
+        src_sql, src_params = self._scope_sql(scope, sources)
         rows = (
             self._get_conn()
             .execute(
@@ -2028,9 +2030,11 @@ class PerformanceDB:
         )
         return [dict(r) for r in rows]
 
-    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+    def get_consumable_totals(
+        self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict]:
         """Consumables each character used across raids, by name then consumable."""
-        src_sql, src_params = self._lineage_raid_filter(sources)
+        src_sql, src_params = self._scope_sql(scope, sources)
         rows = (
             self._get_conn()
             .execute(
@@ -2048,13 +2052,13 @@ class PerformanceDB:
         return [dict(r) for r in rows]
 
     def get_consumable_raids(
-        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",)
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict]:
         """Which raids each character used any of these consumables in (ASCII case ignored, as SQLite's LOWER does):
         name, raid_id, consumable_name."""
         if not consumable_names:
             return []
-        src_sql, src_params = self._lineage_raid_filter(sources)
+        src_sql, src_params = self._scope_sql(scope, sources)
         marks = ", ".join("?" for _ in consumable_names)
         folded = tuple(_codec.ascii_lower(n) for n in consumable_names)
         rows = (

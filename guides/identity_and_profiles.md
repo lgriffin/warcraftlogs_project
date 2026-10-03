@@ -1,6 +1,6 @@
 # Discord identity and raid profiles
 
-Plan revision 2, 2026-10-03. Measured at draft PR #144 (branch `claude/experimental-discord-identity-fs3zou`).
+Plan revision 3, 2026-10-03. Phase 1 merged as PR #144 (341b049); phase 2.1 in review.
 Status: **experimental**. Order of precedence, as in ESI.ts: running code and CI are the fact, the requirements
 below are the intent, this guide is the how, the phase map is the order.
 
@@ -60,7 +60,7 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | PROF-04 | When a profile names a game version with a known site, the context shall import from that site; otherwise it shall keep the configured host. | Enforced | `tests/test_profiles.py::test_switching_profiles_rebuilds_the_client_for_the_host`, `test_api_url_follows_the_game_version_unless_given` |
 | PROF-05 | When a profile is created while an identity is linked, the profile shall carry that Discord id as its owner. | Enforced | `test_create_activate_and_delete` |
 | PROF-06 | When raids stored before this change are backfilled, the service shall tag each from its zone and the configured host, and shall leave an unknown zone's expansion unset. | Enforced | `test_backfill_tags_stored_raids_from_the_zone_and_the_configured_host` |
-| PROF-07 | The Home, player, badge, healing and reference services shall pass the active scope to every raid read they make. | Gap (Home done) | Phase 2 |
+| PROF-07 | The Home, player, badge, healing and reference services shall pass the active scope to every raid read they make. | Enforced, except character history | `tests/test_profile_scoped_services.py` (each test fails without the change); `get_character_history` stays unscoped until phase 2.2 |
 | IDENT-01 | The desktop sign-in shall use Authorization Code with PKCE and the `identify` scope only, and shall hold no client secret. | Enforced | `tests/test_discord_auth.py::TestPkce`, `test_complete_auth_exchanges_the_code_with_the_verifier_and_reads_who` |
 | IDENT-02 | If the callback's state differs from the one issued, or carries an error, then the service shall link nothing. | Enforced | `test_link_refuses_a_bad_callback` |
 | IDENT-03 | Identity shall never decide what a user may do; permission checks stay in the frontends. | Practised | `wcl_app.identity` exposes who only; `tests/test_architecture.py` keeps `discord` out of every layer |
@@ -189,8 +189,8 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
-| 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | In review | PR #144 |
-| 2 | Scoped services and frontends | Planned | PROF-07 |
+| 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
+| 2 | Scoped services and frontends | 2.1 in review | PROF-07 |
 | 3 | Import by profile | Planned | |
 | 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
 | 5 | Retire the single-host config | Planned | |
@@ -207,12 +207,16 @@ Enforced.
 ### Phase 2: scoped services and frontends
 
 Order, one PR each:
-1. `PlayerService`, `BadgeService`, `HealingService`, `ReferenceService` pass `ctx.scope`; contract tests for every
-   read that gains `scope=`. Closes PROF-07.
-2. Desktop: a profile switcher in the toolbar (reads `ProfileService`, calls `apply()`), a Settings section for
+1. `BadgeService`, `HealingService`, `ReferenceService`, `PlayerPageService` and the lineage pass `ctx.scope`;
+   `scope=` on `get_character_raid_roles`, `get_character_spell_casts`, `get_character_consumable_counts`,
+   `get_consumable_totals` and `get_consumable_raids`, with contract tests on both backends. A read of other sources
+   narrows the profile's scope to them (`wcl_store.narrowed`), so a TBC profile's reference list is its TBC
+   references. Character history (`get_character_history`) is the one read left, in 2.2.
+2. `get_character_history` takes `scope=`; `PlayerService.history` and the player page pass it. Closes PROF-07.
+3. Desktop: a profile switcher in the toolbar (reads `ProfileService`, calls `apply()`), a Settings section for
    Discord sign-in (`IdentityService.link()` on a worker thread, like the Warcraft Logs sign-in), and a "Tag stored
    raids" action that runs `backfill_eras()`. No view reads the profile file itself.
-3. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
+4. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
    contract (`guides/home_widgets.md` style page for the profile payload).
 Definition of done: every service read that lists or aggregates raids takes the scope; the desktop shows the active
 profile's name and count; `KNOWN_VIOLATIONS` is no larger.

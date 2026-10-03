@@ -40,3 +40,12 @@ class RaidScope:
 
 
 GUILD = RaidScope()
+
+
+def narrowed(scope: RaidScope | None, sources: tuple[str, ...]) -> RaidScope | None:
+    """``scope`` limited to ``sources``, or None when there is no scope.
+
+    A scope's ``sources`` replaces a read's ``sources`` argument, so a service that reads reference raids (or
+    guild and reference together) under the active profile narrows the profile's scope to those sources first.
+    """
+    return scope.with_sources(sources) if scope is not None else None

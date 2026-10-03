@@ -28,6 +28,7 @@ from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
 from wcl_core.flasks import FlaskCatalog, load_catalog, preparation
+from wcl_store import RaidScope, narrowed
 
 from wcl_app.context import AppContext, StorageFactory
 
@@ -389,10 +390,13 @@ def _prepared_raids(rows: Iterable[Mapping[str, Any]], catalog: FlaskCatalog) ->
     return sum(1 for names in names_by_raid.values() if preparation(names, catalog))
 
 
-def character_stats(repo: RaidRepository, name: str, sources: tuple[str, ...] = GUILD_SOURCES) -> PlayerStats:
-    """One character's counts, matched case-insensitively."""
-    raids = {r["raid_id"] for r in repo.get_character_raid_roles(name, sources)}
-    rows = repo.get_character_consumable_counts(name, sources)
+def character_stats(
+    repo: RaidRepository, name: str, sources: tuple[str, ...] = GUILD_SOURCES, scope: RaidScope | None = None
+) -> PlayerStats:
+    """One character's counts, matched case-insensitively, over the raids inside ``scope`` when given."""
+    scope = narrowed(scope, sources)
+    raids = {r["raid_id"] for r in repo.get_character_raid_roles(name, sources, scope=scope)}
+    rows = repo.get_character_consumable_counts(name, sources, scope=scope)
     consumables: dict[str, int] = {}
     for row in rows:
         consumables[row["consumable_name"]] = consumables.get(row["consumable_name"], 0) + row["count"]
@@ -400,17 +404,20 @@ def character_stats(repo: RaidRepository, name: str, sources: tuple[str, ...] = 
     return PlayerStats(name, raids=len(raids), consumables=consumables, flasked_raids=flasked)
 
 
-def guild_stats(repo: RaidRepository, sources: tuple[str, ...] = GUILD_SOURCES) -> dict[str, PlayerStats]:
-    """Counts for every character, keyed by lower-case name."""
+def guild_stats(
+    repo: RaidRepository, sources: tuple[str, ...] = GUILD_SOURCES, scope: RaidScope | None = None
+) -> dict[str, PlayerStats]:
+    """Counts for every character, keyed by lower-case name, over the raids inside ``scope`` when given."""
+    scope = narrowed(scope, sources)
     stats: dict[str, PlayerStats] = {}
-    for row in repo.get_raid_attendance(sources):
+    for row in repo.get_raid_attendance(sources, scope=scope):
         stats[row["name"].lower()] = PlayerStats(row["name"], row["player_class"] or "", row["raids"])
-    for row in repo.get_consumable_totals(sources):
+    for row in repo.get_consumable_totals(sources, scope=scope):
         player = stats.setdefault(row["name"].lower(), PlayerStats(row["name"]))
         player.consumables[row["consumable_name"]] = row["count"]
     catalog = load_catalog()
     rows_by_name: dict[str, list[dict[str, Any]]] = {}
-    for row in repo.get_consumable_raids(catalog.names, sources):
+    for row in repo.get_consumable_raids(catalog.names, sources, scope=scope):
         rows_by_name.setdefault(row["name"].lower(), []).append(row)
     for key, rows in rows_by_name.items():
         player = stats.setdefault(key, PlayerStats(rows[0]["name"]))
@@ -425,28 +432,34 @@ class BadgeService:
     """Badges for one character or the whole guild, over any ``RaidRepository``."""
 
     def __init__(
-        self, storage: StorageFactory, rules: BadgeRules | None = None, sources: tuple[str, ...] = GUILD_SOURCES
+        self,
+        storage: StorageFactory,
+        rules: BadgeRules | None = None,
+        sources: tuple[str, ...] = GUILD_SOURCES,
+        scope: RaidScope | None = None,
     ):
         self.storage = storage
         self.rules = rules if rules is not None else BadgeRules()
         self.sources = sources
+        # The active profile's scope; None counts every raid of ``sources``.
+        self.scope = scope
 
     @classmethod
     def from_context(cls, ctx: AppContext) -> BadgeService:
-        """Badges over the context's storage, with thresholds from its config."""
-        return cls(ctx.repository, BadgeRules.from_config(ctx.config))
+        """Badges over the context's storage and active profile, with thresholds from its config."""
+        return cls(ctx.repository, BadgeRules.from_config(ctx.config), scope=ctx.scope)
 
     def catalogue(self) -> list[BadgeRule]:
         return list(self.rules.rules)
 
     def for_character(self, name: str) -> PlayerBadges:
         with self.storage() as repo:
-            return self.rules.award(character_stats(repo, name, self.sources))
+            return self.rules.award(character_stats(repo, name, self.sources, self.scope))
 
     def for_guild(self, names: Iterable[str] | None = None) -> list[PlayerBadges]:
         """Every character (or just ``names``), most tiers first, then by name."""
         with self.storage() as repo:
-            stats = guild_stats(repo, self.sources)
+            stats = guild_stats(repo, self.sources, self.scope)
         if names is not None:
             wanted = {n.lower() for n in names}
             stats = {k: v for k, v in stats.items() if k in wanted}

@@ -378,6 +378,44 @@ def test_scope_applies_to_counts_sources_attendance_and_healing(repo):
     ]
 
 
+def test_scope_applies_to_a_characters_raids_casts_and_consumables(repo):
+    _eras(repo)
+    classic = RaidScope(expansions=("Classic",))
+    assert sorted(r["report_id"] for r in repo.get_character_raid_roles("Stab", scope=classic)) == [GRUUL, MC]
+    assert sorted(r["report_id"] for r in repo.get_character_raid_roles("Stab", ("nowhere",), scope=classic)) == [
+        GRUUL,
+        MC,
+    ]
+    scoped_ids = {r["raid_id"] for r in repo.get_character_raid_roles("Holy", scope=classic)}
+    assert len(scoped_ids) == 1
+    assert {r["raid_id"] for r in repo.get_character_spell_casts("Holy", scope=classic)} == scoped_ids
+    assert {r["raid_id"] for r in repo.get_character_consumable_counts("Holy", scope=classic)} <= scoped_ids
+    assert repo.get_character_spell_casts("Holy", scope=RaidScope(zones=("Nowhere",))) == []
+    assert repo.get_character_consumable_counts("Holy", scope=RaidScope(zones=("Nowhere",))) == []
+    refs = RaidScope(sources=("reference",), game_versions=("classic",))
+    assert [r["report_id"] for r in repo.get_character_raid_roles("Holy", scope=refs)] == [REF]
+
+
+def test_scope_applies_to_consumable_totals_and_raids(repo):
+    _eras(repo)
+    everything = {(r["name"], r["consumable_name"]): r["raids"] for r in repo.get_consumable_totals()}
+    tbc = {
+        (r["name"], r["consumable_name"]): r["raids"]
+        for r in repo.get_consumable_totals(scope=RaidScope(expansions=(TBC,)))
+    }
+    assert everything and tbc
+    assert all(tbc[k] <= everything[k] for k in tbc)
+    assert sum(tbc.values()) < sum(everything.values())
+    assert repo.get_consumable_totals(scope=RaidScope(zones=("Nowhere",))) == []
+
+    names = tuple({r["consumable_name"] for r in repo.get_consumable_totals()})
+    all_raids = {r["raid_id"] for r in repo.get_consumable_raids(names)}
+    mc_only = {r["raid_id"] for r in repo.get_consumable_raids(names, scope=RaidScope(zones=("Molten Core",)))}
+    assert mc_only and mc_only < all_raids
+    assert repo.get_consumable_raids(names, scope=RaidScope(sources=("reference",))) != []
+    assert repo.get_consumable_raids(names, ("reference",), scope=RaidScope()) == repo.get_consumable_raids(names)
+
+
 def test_healing_by_raid_lists_guild_healers_since_a_date(repo):
     repo.import_raid(_analysis(KARA, start=T0))
     repo.import_raid(_analysis(GRUUL, start=T0 + 7 * DAY, title="Gruul", healer="Resto"))

@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from wcl_store import RaidScope
+
 from wcl_app.charts import BAR, LINE, MAX_SERIES, Chart, Reference, Series, compact, top_series, y_ceiling
 from wcl_app.context import AppContext, StorageFactory
 
@@ -389,18 +391,21 @@ class HealingService:
         storage: StorageFactory,
         *,
         now: Callable[[], datetime] = datetime.now,
+        scope: RaidScope | None = None,
     ):
         self.storage = storage
         self.now = now
+        # The active profile's scope; None reads every guild raid.
+        self.scope = scope
 
     @classmethod
     def from_context(cls, ctx: AppContext) -> HealingService:
-        return cls(ctx.repository)
+        return cls(ctx.repository, scope=ctx.scope)
 
     def weekly(self, weeks: int = DEFAULT_WEEKS) -> WeeklyHealing:
         """The last ``weeks`` weeks (clamped to ``MIN_WEEKS``..``MAX_WEEKS``), this week included. Raises
         ``wcl_store.StorageError`` if storage fails."""
         with self.storage() as repo:
             today = self.now().date()
-            rows = repo.get_healing_by_raid(window_start(today, weeks))
+            rows = repo.get_healing_by_raid(window_start(today, weeks), scope=self.scope)
         return weekly_healing(rows, today, weeks)
