@@ -287,7 +287,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | `./testing` export: `createMockTransport`, `TestDataFactory` | `tests/conftest.py` fixtures only | `wcl_core.testing` (fake GraphQL transport, `RaidAnalysis` factory) so the Hub tests the same way |
 | API surface snapshot + semver diff | `tests/test_api_surface.py` snapshots models and CLI | Snapshot `wcl_app.__all__`, the `RaidRepository` protocol and the dataclass fields of every payload; a lost line needs a `!` commit |
 | Export coverage: every public export referenced by a test | none | A test that every name in `wcl_app.__all__` and `RaidRepository` appears in `tests/` (the store already has this for the contract) |
-| Suite health: no skip/only, no assertion-free tests | none | A lint over `tests/` for `pytest.mark.skip` without a reason, tests with no `assert`, and swallowed exceptions |
+| Suite health: no skip/only, no assertion-free tests | Enforced, see below | None |
 | Determinism: time only via a clock module | `HomeService(now=...)`, `HostedUserToken(clock=...)` | A `wcl_core.clock` and a lint that `time.time`/`datetime.now` appear nowhere else in packages |
 | Error taxonomy with guards | `wcl_core.common.errors` (`WarcraftLogsError`, `AuthenticationError`, `ConfigurationError`), `wcl_store.StorageError` | Document the tree in a guide; add `retryable` on API errors; every service error is a subclass |
 | Schemas tolerate additive change | `pydantic` only for `SecretStr`; GraphQL parsed by hand | pydantic models with `extra="allow"` for every API response the analyzer reads |
@@ -299,9 +299,14 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 `tests/test_dev_tasks.py` reads `ci.yml`: the gate needs every job, only the gate has a job-level `if:`, and each job
 runs exactly its `dev.py` tasks (`JOB_TASKS`) or is listed in `OUTSIDE_DEV` with a reason.
 
-Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint; the EARS audit
-over `tests/features/`; `wcl_core.testing` with the fake transport; export coverage and the surface snapshot;
-mutation on `wcl_core` with a floor; the clock lint; the charter.
+`tests/test_suite_health.py` lints `tests/`: every skip or xfail mark and every `pytest.skip`/`xfail`/`fail` call
+says why, every test function asserts (or uses `pytest.raises`, a mock's `assert_*`, a pytest-qt signal wait, or a
+module helper that asserts), and no `except Exception`/bare `except`/`suppress(Exception)` drops the exception. It
+has no allow-list; each rule has its own test on a small source.
+
+Order for phase Q, cheapest first: fan-in CI job and the `dev.py` parity test (done); suite-health lint (done); the
+EARS audit over `tests/features/`; `wcl_core.testing` with the fake transport; export coverage and the surface
+snapshot; mutation on `wcl_core` with a floor; the clock lint; the charter.
 
 ## Open questions
 

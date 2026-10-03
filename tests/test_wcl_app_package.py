@@ -211,7 +211,10 @@ def test_importing_every_module_loads_no_desktop_qt_or_sqlite():
         "bad = {'warcraftlogs_client', 'PySide6', 'sqlite3', 'sqlalchemy'} & {m.split('.')[0] for m in sys.modules}\n"
         "assert not bad, bad\n"
     )
-    subprocess.run([sys.executable, "-c", code], check=True, cwd=APP_SRC.parent)
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False, cwd=APP_SRC.parent
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _version(pyproject: Path) -> str:
