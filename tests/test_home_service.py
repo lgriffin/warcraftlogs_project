@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 import pytest
-from wcl_app import AppContext, BadgeRules, HomeLayout, HomeService, JsonLayoutStore
+from wcl_app import AppContext, BadgeRules, HomeLayout, HomePage, HomeService, HomeWidget, JsonLayoutStore, WidgetSpec
 from wcl_app.home import CATALOGUE, MemoryLayoutStore, compact
 from wcl_store import StorageError
 from wcl_store.sqlite import PerformanceDB
@@ -114,6 +114,8 @@ def test_catalogue_ids_are_unique_and_every_widget_builds_on_an_empty_database(s
     ids = [s.id for s in CATALOGUE]
     assert len(ids) == len(set(ids))
     page = service.page(HomeLayout.of(ids))
+    assert isinstance(page, HomePage) and all(isinstance(w, HomeWidget) for w in page.widgets)
+    assert all(isinstance(s, WidgetSpec) for s in CATALOGUE)
     assert [w.id for w in page.widgets] == ids
     assert all(not w.error for w in page.widgets)
     assert _widget(service, "last_raid").empty

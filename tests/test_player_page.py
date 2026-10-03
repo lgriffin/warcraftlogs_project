@@ -14,6 +14,7 @@ from warcraftlogs_client.services.player_page import (
     NEW,
     NOT_IN_REPORT,
     ON_PAGE,
+    AddResult,
     PlayerPageService,
     PlayerRef,
     parse_report_code,
@@ -152,6 +153,7 @@ class TestAddLogs:
         known = {log.code: log for log in service.discover_reports(PLAYER)}
         results = service.add_reports(PLAYER, [CODE_A], known=known)
 
+        assert all(isinstance(r, AddResult) for r in results)
         assert [(r.code, r.outcome) for r in results] == [(CODE_A, ADDED)]
         assert analyzer.calls == [CODE_A]
         assert db.is_raid_imported(CODE_A)

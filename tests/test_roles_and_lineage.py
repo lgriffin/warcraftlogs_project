@@ -11,6 +11,7 @@ from warcraftlogs_client.models import ConsumableUsage, PlayerIdentity, RaidComp
 from warcraftlogs_client.services import (
     AppContext,
     RaidService,
+    ReanalysisResult,
     RoleOverrideService,
     character_lineage,
 )
@@ -108,7 +109,10 @@ class TestRoleOverrideService:
         return _analyze
 
     def test_set_reanalyses_only_disagreeing_raids(self, stored, as_dps):
-        results = RoleOverrideService(stored, analyze=as_dps).set("holypriest", "dps")
+        service = RoleOverrideService(stored, analyze=as_dps)
+        results = service.set("holypriest", "dps")
+        assert all(isinstance(r, ReanalysisResult) for r in results)
+        assert [o["role"] for o in service.list_overrides("HolyPriest")] == ["dps"]
         assert sorted(r.report_id for r in results) == [CODE_A, CODE_B, CODE_C]
         assert sorted(as_dps.calls) == [(CODE_A, False), (CODE_B, False), (CODE_C, True)]  # reference raid
         assert all(r.ok and r.old_role == "healer" for r in results)

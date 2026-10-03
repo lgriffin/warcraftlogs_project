@@ -121,6 +121,22 @@ def test_install_puts_back_the_transport_it_found():
     assert http._transport is None
 
 
+def test_any_transport_can_be_installed():
+    """Hosts can install their own transport (a recording proxy, say), not only the shipped fakes."""
+
+    class Echo:
+        def post(self, url, *, timeout, **kwargs):
+            return FakeResponse(200, {"url": url, "timeout": timeout})
+
+        def get(self, url, *, timeout, **kwargs):
+            return FakeResponse(204)
+
+    transport: http.Transport = Echo()
+    with http.use(transport):
+        assert http.post("https://a", timeout=3).json() == {"url": "https://a", "timeout": 3}
+        assert http.get("https://b", timeout=3).status_code == 204
+
+
 def test_the_seam_without_a_transport_calls_requests(monkeypatch):
     calls = []
     monkeypatch.setattr(requests, "post", lambda url, **kw: calls.append(("post", url, kw)) or "p")

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from warcraftlogs_client.services.profiles import MemoryProfileStore, slugify
 from wcl_core.models import RaidMetadata
-from wcl_store import RaidScope
+from wcl_store import RaidScope, narrowed
 from wcl_store.sqlite import PerformanceDB
 
 from warcraftlogs_client.services import AppContext, JsonProfileStore, Profile, ProfileService, ProfileSet, RaidService
@@ -32,6 +32,11 @@ class TestProfile:
         )
         assert Profile("all", "All").scope == RaidScope()
         assert Profile("all", "All").scope.unfiltered
+
+    def test_narrowed_limits_a_scope_to_sources_and_keeps_no_scope(self):
+        tbc = Profile("tbc", "TBC", expansions=(TBC,)).scope
+        assert narrowed(tbc, ("reference",)) == RaidScope(expansions=(TBC,), sources=("reference",))
+        assert narrowed(None, ("reference",)) is None
 
     def test_api_url_follows_the_game_version_unless_given(self):
         assert Profile("era", "Era", game_version="classic").api_url == "https://classic.warcraftlogs.com/api/v2/client"

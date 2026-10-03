@@ -1,6 +1,7 @@
 """Tests for the shared application services layer used by every frontend."""
 
 import ast
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,8 +13,10 @@ from warcraftlogs_client.services import (
     AnalysisThresholds,
     AppContext,
     PlayerService,
+    ProgressCallback,
     RaidService,
     ReferenceAuthRequired,
+    ReportRef,
     validate_report_code,
 )
 
@@ -77,6 +80,9 @@ class TestThresholds:
 
 
 class TestRaidService:
+    def test_progress_callbacks_take_one_message(self):
+        assert ProgressCallback == Callable[[str], None]
+
     def test_analyze_passes_thresholds_and_progress(self, ctx):
         progress = MagicMock()
         with patch("warcraftlogs_client.services.raids.analyze_raid") as analyze:
@@ -140,6 +146,7 @@ class TestPlayerService:
         players = PlayerService(ctx)
         with patch.object(RaidService, "imported_codes", return_value={CODE_A}):
             refs = players.discover_reports("Hadur", "spineshatter", "EU")
+        assert all(isinstance(r, ReportRef) for r in refs)
         assert [(r.code, r.imported) for r in refs] == [(CODE_A, True), (CODE_B, False)]
 
     def test_add_reports_delegates_to_raid_service(self, ctx):
