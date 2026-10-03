@@ -83,7 +83,7 @@ class TestRoleFilter:
 
 
 class TestEmptyAnalysis:
-    def test_no_crash(self):
+    def test_no_crash(self, capsys):
         analysis = RaidAnalysis(
             metadata=RaidMetadata(
                 report_id="empty",
@@ -94,6 +94,7 @@ class TestEmptyAnalysis:
             composition=RaidComposition(),
         )
         render_raid_analysis(analysis)
+        assert "Empty" in capsys.readouterr().out
 
 
 class TestSortingOrder:

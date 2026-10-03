@@ -108,7 +108,10 @@ def test_sqlite_side_needs_no_postgres_extra():
         "bad = {'sqlalchemy', 'psycopg', 'alembic', 'warcraftlogs_client'} & {m.split('.')[0] for m in sys.modules}; "
         "assert not bad, bad"
     )
-    subprocess.run([sys.executable, "-c", code], check=True, cwd=STORE_SRC.parent)
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False, cwd=STORE_SRC.parent
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_wcl_store_version_matches_the_app():
