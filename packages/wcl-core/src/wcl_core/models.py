@@ -239,6 +239,10 @@ class RaidMetadata:
     start_time: int
     end_time: int | None = None
     zone: str | None = None
+    # Which Warcraft Logs site the report is on and which expansion its zone belongs to
+    # (``wcl_core.game_version``). None when unknown, e.g. a raid stored before these were read.
+    game_version: str | None = None
+    expansion: str | None = None
 
     @property
     def date(self) -> datetime:

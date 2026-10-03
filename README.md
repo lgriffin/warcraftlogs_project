@@ -294,6 +294,23 @@ python -m warcraftlogs_client.cli player lineage Hadur                # Min / me
 
 Markdown reports are saved to the `reports/` directory.
 
+**Experimental: profiles and Discord identity** (`guides/identity_and_profiles.md`). A profile is a named view
+over the stored raids, by game version, expansion, zone or date, and picks the guild and Warcraft Logs site new
+imports come from. With no active profile the app behaves as it always has.
+
+```bash
+python -m warcraftlogs_client.cli profile backfill                     # Tag stored raids with their expansion
+python -m warcraftlogs_client.cli profile create TBC --expansion "The Burning Crusade" --use
+python -m warcraftlogs_client.cli profile create Forever --game-version forever
+python -m warcraftlogs_client.cli profile list                         # * marks the active profile
+python -m warcraftlogs_client.cli profile use                          # Back to every raid
+python -m warcraftlogs_client.cli discord login                        # Link this app to your Discord account
+python -m warcraftlogs_client.cli discord whoami
+```
+
+`discord login` needs a Discord application id in `discord_client_id` (config) or `DISCORD_CLIENT_ID`; the app
+is a public client with PKCE, so no secret is stored.
+
 ---
 
 ## Config Files

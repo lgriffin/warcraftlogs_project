@@ -53,6 +53,7 @@ from wcl_core.models import (
 
 from .. import _codec
 from ..errors import StorageError
+from ..scope import RaidScope
 from . import schema as t
 from .schema import NOW_TEXT, nocase
 
@@ -94,6 +95,24 @@ def _c(expr: Any) -> Any:
 
 def _dicts(rows: Iterable[Any]) -> list[dict[str, Any]]:
     return [dict(r._mapping) for r in rows]
+
+
+def _scope_terms(scope: RaidScope | None, sources: tuple[str, ...]) -> list[Any]:
+    """``WHERE`` terms on ``raids`` for ``scope``, or for ``sources`` alone when it is None."""
+    r = t.raids.c
+    if scope is None:
+        return [r.source.in_(sources)]
+    terms: list[Any] = [r.source.in_(scope.sources)]
+    for column, values in ((r.game_version, scope.game_versions), (r.expansion, scope.expansions)):
+        if values:
+            terms.append(or_(column.is_(None), column.in_(values)))
+    if scope.zones:
+        terms.append(nocase(r.zone).in_([nocase(z) for z in scope.zones]))
+    if scope.since:
+        terms.append(_c(r.raid_date) >= scope.since)
+    if scope.until:
+        terms.append(_c(r.raid_date) < scope.until)
+    return terms
 
 
 def _raid_date(metadata: RaidMetadata) -> str:
@@ -158,12 +177,16 @@ class PostgresRaidRepository:
             end_time=metadata.end_time,
             zone=metadata.zone,
             source=source,
+            game_version=metadata.game_version,
+            expansion=metadata.expansion,
         )
         upsert = stmt.on_conflict_do_update(
             index_elements=[t.raids.c.report_id],
             set_={
                 "title": stmt.excluded.title,
                 "zone": func.coalesce(stmt.excluded.zone, t.raids.c.zone),
+                "game_version": func.coalesce(stmt.excluded.game_version, t.raids.c.game_version),
+                "expansion": func.coalesce(stmt.excluded.expansion, t.raids.c.expansion),
                 "imported_at": NOW_TEXT,
             },
         ).returning(t.raids.c.id)
@@ -531,34 +554,70 @@ class PostgresRaidRepository:
             return {r.report_id: r.imported_at for r in rows}
 
     @_storage_errors
-    def count_raids(self, source: str = "guild") -> int:
+    def count_raids(self, source: str = "guild", scope: RaidScope | None = None) -> int:
         with self._engine.connect() as conn:
-            query = select(func.count()).select_from(t.raids).where(t.raids.c.source == source)
+            query = select(func.count()).select_from(t.raids).where(*_scope_terms(scope, (source,)))
             return int(conn.execute(query).scalar_one())
 
     @_storage_errors
-    def get_raid_list(self, limit: int = 50) -> list[dict[str, Any]]:
+    def get_raid_list(self, limit: int = 50, scope: RaidScope | None = None) -> list[dict[str, Any]]:
         r = t.raids.c
         with self._engine.connect() as conn:
             return _dicts(
                 conn.execute(
-                    select(r.report_id, r.title, r.owner, r.raid_date, r.imported_at)
-                    .where(r.source == "guild")
+                    select(
+                        r.report_id, r.title, r.owner, r.raid_date, r.imported_at, r.zone, r.game_version, r.expansion
+                    )
+                    .where(*_scope_terms(scope, ("guild",)))
                     .order_by(_c(r.raid_date).desc())
                     .limit(limit)
                 )
             )
 
     @_storage_errors
-    def get_raids_by_source(self, source: str = "guild", limit: int = 50) -> list[dict[str, Any]]:
+    def get_raids_by_source(
+        self, source: str = "guild", limit: int = 50, scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
         r = t.raids.c
         with self._engine.connect() as conn:
             return _dicts(
                 conn.execute(
-                    select(r.report_id, r.title, r.owner, r.raid_date, r.imported_at, r.zone, r.raid_size, r.label)
-                    .where(r.source == source)
+                    select(
+                        r.report_id,
+                        r.title,
+                        r.owner,
+                        r.raid_date,
+                        r.imported_at,
+                        r.zone,
+                        r.raid_size,
+                        r.label,
+                        r.game_version,
+                        r.expansion,
+                    )
+                    .where(*_scope_terms(scope, (source,)))
                     .order_by(_c(r.raid_date).desc())
                     .limit(limit)
+                )
+            )
+
+    @_storage_errors
+    def set_raid_era(self, report_id: str, game_version: str | None, expansion: str | None) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(
+                update(t.raids)
+                .where(t.raids.c.report_id == report_id)
+                .values(game_version=game_version or None, expansion=expansion or None)
+            )
+
+    @_storage_errors
+    def get_raids_without_era(self) -> list[dict[str, Any]]:
+        r = t.raids.c
+        with self._engine.connect() as conn:
+            return _dicts(
+                conn.execute(
+                    select(r.report_id, r.zone, r.game_version, r.expansion)
+                    .where(or_(r.game_version.is_(None), r.expansion.is_(None)))
+                    .order_by(_c(r.raid_date), _c(r.report_id))
                 )
             )
 
@@ -568,7 +627,7 @@ class PostgresRaidRepository:
             conn.execute(update(t.raids).where(t.raids.c.report_id == report_id).values(label=label or None))
 
     @_storage_errors
-    def get_healing_by_raid(self, since: str) -> list[dict[str, Any]]:
+    def get_healing_by_raid(self, since: str, scope: RaidScope | None = None) -> list[dict[str, Any]]:
         r, c, hp = t.raids.c, t.characters.c, t.healer_performance
         stmt = (
             select(
@@ -580,7 +639,7 @@ class PostgresRaidRepository:
                 hp.c.total_overhealing.label("overhealing"),
             )
             .select_from(hp.join(t.raids, t.raids.c.id == hp.c.raid_id).join(t.characters, c.id == hp.c.character_id))
-            .where(r.source == "guild", _c(r.raid_date) >= since)
+            .where(*_scope_terms(scope, ("guild",)), _c(r.raid_date) >= since)
             .order_by(_c(r.raid_date), _c(r.report_id), _c(c.name))
         )
         with self._engine.connect() as conn:
@@ -1040,7 +1099,9 @@ class PostgresRaidRepository:
     # ── Guild totals ──
 
     @_storage_errors
-    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+    def get_raid_attendance(
+        self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
         c, r = t.characters, t.raids
         rows = union(
             *(
@@ -1051,7 +1112,7 @@ class PostgresRaidRepository:
         stmt = (
             select(c.c.name, c.c.player_class, func.count(rows.c.raid_id.distinct()).label("raids"))
             .select_from(rows.join(r, r.c.id == rows.c.raid_id).join(c, c.c.id == rows.c.character_id))
-            .where(r.c.source.in_(sources))
+            .where(*_scope_terms(scope, sources))
             .group_by(c.c.id, c.c.name, c.c.player_class)
             .order_by(_c(c.c.name))
         )

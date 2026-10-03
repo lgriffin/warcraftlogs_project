@@ -74,8 +74,13 @@ class RaidService:
         return analysis
 
     def list_raids(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Guild raids within the active profile, newest first."""
         with self.ctx.repository() as db:
-            return db.get_raid_list(limit=limit)
+            return db.get_raid_list(limit=limit, scope=self.ctx.scope)
+
+    def count_raids(self) -> int:
+        with self.ctx.repository() as db:
+            return db.count_raids("guild", scope=self.ctx.scope)
 
     def get_raid(self, report_id: str) -> RaidAnalysis | None:
         with self.ctx.repository() as db:
@@ -85,12 +90,18 @@ class RaidService:
         with self.ctx.repository() as db:
             db.delete_raid(report_id)
 
-    def guild_info(self, guild_id: int) -> dict[str, Any]:
-        return self.ctx.wcl_client.get_guild_info(guild_id)
+    def guild_info(self, guild_id: int | None = None) -> dict[str, Any]:
+        return self.ctx.wcl_client.get_guild_info(self._guild(guild_id))
 
-    def guild_reports(self, guild_id: int) -> list[dict[str, Any]]:
-        """Raw guild report list from Warcraft Logs."""
-        return self.ctx.wcl_client.get_guild_reports(guild_id)
+    def guild_reports(self, guild_id: int | None = None) -> list[dict[str, Any]]:
+        """Raw guild report list from Warcraft Logs, for the active profile's guild unless one is given."""
+        return self.ctx.wcl_client.get_guild_reports(self._guild(guild_id))
+
+    def _guild(self, guild_id: int | None) -> int:
+        resolved = guild_id if guild_id is not None else self.ctx.guild_id
+        if resolved is None:
+            raise ValueError("No guild: set guild_id in config.json or on the active profile")
+        return resolved
 
     def imported_codes(self) -> set[str]:
         with self.ctx.repository() as db:

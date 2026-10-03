@@ -44,6 +44,7 @@ from wcl_core.models import (
 from . import _codec
 from ._codec import resolve_name as _resolve_name
 from .errors import StorageError
+from .scope import RaidScope
 
 SCHEMA_VERSION = 2
 
@@ -322,6 +323,12 @@ class PerformanceDB:
         if "imported_at" not in raid_cols:
             conn.execute("ALTER TABLE raids ADD COLUMN imported_at TEXT DEFAULT NULL")
             conn.execute("UPDATE raids SET imported_at = raid_date WHERE imported_at IS NULL")
+        # Which Warcraft Logs site the raid is on and the expansion of its zone (wcl_core.game_version). NULL
+        # until a profile backfill or a re-import fills them, and NULL matches every scope.
+        if "game_version" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN game_version TEXT DEFAULT NULL")
+        if "expansion" not in raid_cols:
+            conn.execute("ALTER TABLE raids ADD COLUMN expansion TEXT DEFAULT NULL")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raids_source ON raids(source)")
 
         conn.execute("""
@@ -522,11 +529,14 @@ class PerformanceDB:
         conn = self._get_conn()
         raid_date = metadata.date.strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
-            """INSERT INTO raids (report_id, title, owner, raid_date, start_time, end_time, zone, source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO raids (report_id, title, owner, raid_date, start_time, end_time, zone, source,
+                                  game_version, expansion)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(report_id) DO UPDATE SET
                    title = excluded.title,
                    zone = COALESCE(excluded.zone, raids.zone),
+                   game_version = COALESCE(excluded.game_version, raids.game_version),
+                   expansion = COALESCE(excluded.expansion, raids.expansion),
                    imported_at = datetime('now')""",
             (
                 metadata.report_id,
@@ -537,6 +547,8 @@ class PerformanceDB:
                 metadata.end_time,
                 metadata.zone,
                 source,
+                metadata.game_version,
+                metadata.expansion,
             ),
         )
         cursor = conn.execute("SELECT id FROM raids WHERE report_id = ?", (metadata.report_id,))
@@ -1578,37 +1590,91 @@ class PerformanceDB:
         ).fetchall()
         return [r["zone"] for r in rows]
 
-    def count_raids(self, source: str = "guild") -> int:
-        row = self._get_conn().execute("SELECT COUNT(*) AS n FROM raids WHERE source = ?", (source,)).fetchone()
+    @staticmethod
+    def _scope_sql(scope: RaidScope | None, sources: tuple[str, ...]) -> tuple[str, list[Any]]:
+        """``WHERE`` terms (on a ``raids`` alias ``r``) for ``scope``, or for ``sources`` alone when it is None."""
+        if scope is not None:
+            sources = scope.sources
+        marks = ", ".join("?" for _ in sources)
+        terms = [f"r.source IN ({marks})"]
+        params: list[Any] = list(sources)
+        if scope is None:
+            return " AND ".join(terms), params
+        for column, values in (("game_version", scope.game_versions), ("expansion", scope.expansions)):
+            if values:
+                marks = ", ".join("?" for _ in values)
+                terms.append(f"(r.{column} IS NULL OR r.{column} IN ({marks}))")
+                params.extend(values)
+        if scope.zones:
+            marks = ", ".join("?" for _ in scope.zones)
+            terms.append(f"r.zone COLLATE NOCASE IN ({marks})")
+            params.extend(scope.zones)
+        if scope.since:
+            terms.append("r.raid_date >= ?")
+            params.append(scope.since)
+        if scope.until:
+            terms.append("r.raid_date < ?")
+            params.append(scope.until)
+        return " AND ".join(terms), params
+
+    def count_raids(self, source: str = "guild", scope: RaidScope | None = None) -> int:
+        where, params = self._scope_sql(scope, (source,))
+        row = self._get_conn().execute(f"SELECT COUNT(*) AS n FROM raids r WHERE {where}", params).fetchone()
         return int(row["n"])
 
-    def get_healing_by_raid(self, since: str) -> list[dict]:
+    def get_healing_by_raid(self, since: str, scope: RaidScope | None = None) -> list[dict]:
         """Healer totals per guild raid since ``since``, for week-on-week healing."""
+        where, params = self._scope_sql(scope, ("guild",))
         rows = (
             self._get_conn()
             .execute(
-                """SELECT r.report_id, r.raid_date, c.name, c.player_class,
+                f"""SELECT r.report_id, r.raid_date, c.name, c.player_class,
                           hp.total_healing AS healing, hp.total_overhealing AS overhealing
                    FROM healer_performance hp
                    JOIN raids r ON r.id = hp.raid_id
                    JOIN characters c ON c.id = hp.character_id
-                   WHERE r.source = 'guild' AND r.raid_date >= ?
+                   WHERE {where} AND r.raid_date >= ?
                    ORDER BY r.raid_date, r.report_id, c.name""",
-                (since,),
+                [*params, since],
             )
             .fetchall()
         )
         return [dict(r) for r in rows]
 
-    def get_raid_list(self, limit: int = 50) -> list[dict]:
+    def get_raid_list(self, limit: int = 50, scope: RaidScope | None = None) -> list[dict]:
         """Get list of all imported guild raids."""
+        where, params = self._scope_sql(scope, ("guild",))
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT r.report_id, r.title, r.owner, r.raid_date, r.imported_at, r.zone, r.game_version,
+                           r.expansion
+                   FROM raids r WHERE {where}
+                   ORDER BY r.raid_date DESC LIMIT ?""",
+                [*params, limit],
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
+    def set_raid_era(self, report_id: str, game_version: str | None, expansion: str | None) -> None:
         conn = self._get_conn()
-        rows = conn.execute(
-            """SELECT report_id, title, owner, raid_date, imported_at
-               FROM raids WHERE source = 'guild'
-               ORDER BY raid_date DESC LIMIT ?""",
-            (limit,),
-        ).fetchall()
+        conn.execute(
+            "UPDATE raids SET game_version = ?, expansion = ? WHERE report_id = ?",
+            (game_version or None, expansion or None, report_id),
+        )
+        conn.commit()
+
+    def get_raids_without_era(self) -> list[dict]:
+        rows = (
+            self._get_conn()
+            .execute(
+                """SELECT report_id, zone, game_version, expansion FROM raids
+                   WHERE game_version IS NULL OR expansion IS NULL
+                   ORDER BY raid_date, report_id"""
+            )
+            .fetchall()
+        )
         return [dict(r) for r in rows]
 
     def get_guild_raids_for_comparison(self, limit: int = 50) -> list[dict]:
@@ -1941,9 +2007,9 @@ class PerformanceDB:
 
     # ── Guild totals ──
 
-    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",)) -> list[dict]:
+    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None) -> list[dict]:
         """Raids each character has a role row in, by name."""
-        src_sql, src_params = self._lineage_raid_filter(sources)
+        src_sql, src_params = self._scope_sql(scope, sources)
         rows = (
             self._get_conn()
             .execute(
@@ -3592,15 +3658,22 @@ class PerformanceDB:
 
     # ── Reference report operations ──
 
-    def get_raids_by_source(self, source: str = "guild", limit: int = 50) -> list[dict[str, Any]]:
-        """Raids of ``source``, newest first, with zone, size and label."""
-        conn = self._get_conn()
-        rows = conn.execute(
-            """SELECT report_id, title, owner, raid_date, imported_at, zone, raid_size, label
-               FROM raids WHERE source = ?
-               ORDER BY raid_date DESC LIMIT ?""",
-            (source, limit),
-        ).fetchall()
+    def get_raids_by_source(
+        self, source: str = "guild", limit: int = 50, scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
+        """Raids of ``source`` (or ``scope``), newest first, with zone, size, label and era."""
+        where, params = self._scope_sql(scope, (source,))
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT r.report_id, r.title, r.owner, r.raid_date, r.imported_at, r.zone, r.raid_size, r.label,
+                           r.game_version, r.expansion
+                   FROM raids r WHERE {where}
+                   ORDER BY r.raid_date DESC LIMIT ?""",
+                [*params, limit],
+            )
+            .fetchall()
+        )
         return [dict(r) for r in rows]
 
     def get_reference_raids(self, limit: int = 50) -> list[dict]:

@@ -75,6 +75,80 @@ class TestCreateParser:
         assert args.use_dynamic_roles is True
 
 
+class TestProfileAndDiscordParsers:
+    def test_profile_create_with_axes(self, parser):
+        args = parser.parse_args(
+            [
+                "profile",
+                "create",
+                "TBC",
+                "--expansion",
+                "The Burning Crusade",
+                "--zone",
+                "Karazhan",
+                "--since",
+                "2026-01-01",
+                "--use",
+            ]
+        )
+        assert args.command == "profile" and args.profile_command == "create"
+        assert args.name == "TBC" and args.expansion == ["The Burning Crusade"] and args.zone == ["Karazhan"]
+        assert args.since == "2026-01-01" and args.use
+
+    def test_profile_game_version_is_checked(self, parser):
+        assert parser.parse_args(["profile", "create", "Era", "--game-version", "classic"]).game_version == "classic"
+        with pytest.raises(SystemExit):
+            parser.parse_args(["profile", "create", "Era", "--game-version", "wrath"])
+
+    def test_profile_use_without_a_slug_clears(self, parser):
+        assert parser.parse_args(["profile", "use"]).slug is None
+        assert parser.parse_args(["profile", "use", "tbc"]).slug == "tbc"
+
+    def test_discord_actions(self, parser):
+        assert parser.parse_args(["discord", "login", "--no-browser"]).no_browser
+        assert parser.parse_args(["discord", "whoami", "--json"]).json
+        assert parser.parse_args(["discord", "logout"]).discord_command == "logout"
+
+
+class TestProfileCommand:
+    def test_list_create_use_show(self, monkeypatch, tmp_path, capsys):
+        from wcl_core import paths
+
+        from warcraftlogs_client import cli
+
+        monkeypatch.setattr(paths, "get_profiles_path", lambda: tmp_path / "profiles.json")
+        monkeypatch.setattr(cli, "_profile_service", lambda need_config: _service(tmp_path))
+        parser = cli.create_parser()
+
+        assert cli.run_profile_command(parser.parse_args(["profile", "list"])) == 0
+        assert "No profiles yet" in capsys.readouterr().out
+        assert (
+            cli.run_profile_command(
+                parser.parse_args(["profile", "create", "TBC", "--expansion", "The Burning Crusade", "--use"])
+            )
+            == 0
+        )
+        assert "Created profile 'TBC' (tbc) and made it active" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "list"])) == 0
+        assert "* tbc" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "use"])) == 0
+        assert "every raid is shown" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "use", "nope"])) == 1
+        assert cli.run_profile_command(parser.parse_args(["profile", "show"])) == 0
+        assert "No active profile" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "delete", "tbc"])) == 0
+        assert cli.run_profile_command(parser.parse_args(["profile"])) == 1
+
+
+def _service(tmp_path):
+    from warcraftlogs_client.services import AppContext, JsonProfileStore, ProfileService
+
+    ctx = AppContext(config={}, db_path=str(tmp_path / "t.db"))
+    service = ProfileService.from_context(ctx, JsonProfileStore(tmp_path / "profiles.json"))
+    service.apply()
+    return service
+
+
 class TestRoleDispatch:
     @pytest.mark.parametrize("role", ["healer", "tank", "melee", "ranged"])
     def test_role_commands_run_unified_analysis_filtered(self, monkeypatch, role):

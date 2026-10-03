@@ -69,7 +69,7 @@ class TestPublicExports:
         from warcraftlogs_client.models import RaidMetadata
 
         fields = sorted(f.name for f in dataclasses.fields(RaidMetadata))
-        expected = ["end_time", "owner", "report_id", "start_time", "title", "zone"]
+        expected = ["end_time", "expansion", "game_version", "owner", "report_id", "start_time", "title", "zone"]
         assert fields == expected, f"RaidMetadata fields changed! Got: {fields}"
 
     def test_healer_performance_fields(self):
@@ -177,7 +177,19 @@ class TestPublicExports:
         for action in parser._subparsers._group_actions:
             subcommands.update(action.choices.keys())
 
-        expected = {"unified", "healer", "tank", "melee", "ranged", "consumes", "history", "player", "reference"}
+        expected = {
+            "unified",
+            "healer",
+            "tank",
+            "melee",
+            "ranged",
+            "consumes",
+            "history",
+            "player",
+            "reference",
+            "profile",
+            "discord",
+        }
         assert subcommands == expected, f"CLI subcommands changed! Got: {subcommands}"
 
     def test_dps_performance_fields(self):

@@ -8,6 +8,8 @@ This module provides a single entry point for all analysis modes:
 - consumes: Consumables analysis across multiple raids
 - history: Query historical character performance
 - player: Discover the reports a character is in and collect them on a player page
+- profile: Named views over the stored raids (TBC, Classic days, ...) and where new imports come from
+- discord: Link this app to a Discord account (experimental, see guides/identity_and_profiles.md)
 """
 
 import argparse
@@ -23,7 +25,7 @@ from .version import __version__
 
 if TYPE_CHECKING:
     from .database import PerformanceDB
-    from .services import AppContext, PlayerLog, PlayerRef, Spread
+    from .services import AppContext, PlayerLog, PlayerRef, Profile, ProfileService, Spread
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -151,7 +153,50 @@ Examples:
     list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
     _add_reference_parser(subparsers)
+    _add_profile_parser(subparsers)
+    _add_discord_parser(subparsers)
     return parser
+
+
+def _add_profile_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    from .services.profiles import GAME_VERSIONS
+
+    profile_parser = subparsers.add_parser("profile", help="Named views over the stored raids (TBC, Classic, ...)")
+    profile_sub = profile_parser.add_subparsers(dest="profile_command", metavar="ACTION")
+
+    list_parser = profile_sub.add_parser("list", help="List profiles and which is active")
+    list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    create_parser = profile_sub.add_parser("create", help="Create a profile")
+    create_parser.add_argument("name", help='Profile name, e.g. "TBC"')
+    create_parser.add_argument("--game-version", choices=GAME_VERSIONS, help="Warcraft Logs site the raids are on")
+    create_parser.add_argument("--expansion", action="append", default=[], help="Expansion to include (repeatable)")
+    create_parser.add_argument("--zone", action="append", default=[], help="Zone to include (repeatable)")
+    create_parser.add_argument("--since", help="Earliest raid date, YYYY-MM-DD")
+    create_parser.add_argument("--until", help="Raid date to stop before, YYYY-MM-DD")
+    create_parser.add_argument("--guild-id", type=int, help="Guild to import from (default: config)")
+    create_parser.add_argument("--use", action="store_true", help="Make it the active profile")
+
+    use_parser = profile_sub.add_parser("use", help="Pick the active profile; no name means every raid")
+    use_parser.add_argument("slug", nargs="?", help="Profile slug from 'profile list'")
+
+    show_parser = profile_sub.add_parser("show", help="Show the active profile and the raids it sees")
+    show_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    delete_parser = profile_sub.add_parser("delete", help="Delete a profile (the raids stay)")
+    delete_parser.add_argument("slug", help="Profile slug")
+
+    profile_sub.add_parser("backfill", help="Tag stored raids with their game version and expansion")
+
+
+def _add_discord_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    discord_parser = subparsers.add_parser("discord", help="Link this app to a Discord account (experimental)")
+    discord_sub = discord_parser.add_subparsers(dest="discord_command", metavar="ACTION")
+    login_parser = discord_sub.add_parser("login", help="Sign in with Discord in the browser")
+    login_parser.add_argument("--no-browser", action="store_true", help="Print the sign-in URL instead of opening it")
+    whoami_parser = discord_sub.add_parser("whoami", help="Show the linked Discord account")
+    whoami_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    discord_sub.add_parser("logout", help="Forget the linked Discord account")
 
 
 def _add_reference_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -553,6 +598,137 @@ def run_reference_command(args: argparse.Namespace) -> int:
     return 1
 
 
+def _profile_service(need_config: bool) -> "ProfileService":
+    from wcl_core.paths import get_profiles_path
+
+    from .services import AppContext, IdentityService, JsonProfileStore, ProfileService
+
+    ctx = AppContext.from_config_file() if need_config else AppContext(config={})
+    identity = IdentityService().current()
+    service = ProfileService.from_context(
+        ctx, JsonProfileStore(get_profiles_path()), owner=identity.id if identity else None
+    )
+    service.apply()
+    return service
+
+
+def _day_start(value: str | None) -> str | None:
+    return f"{value} 00:00:00" if value else None
+
+
+def _print_profile(p: "Profile", active: bool) -> None:
+    axes = []
+    if p.game_version:
+        axes.append(p.game_version)
+    axes.extend(p.expansions)
+    axes.extend(p.zones)
+    if p.since or p.until:
+        axes.append(f"{(p.since or '')[:10]}..{(p.until or '')[:10]}")
+    mark = "*" if active else " "
+    print(f"{mark} {p.slug:<16} {p.name:<24} {', '.join(axes) or 'every raid'}")
+
+
+def run_profile_command(args: argparse.Namespace) -> int:
+    import json
+
+    from .services import RaidService
+
+    action = getattr(args, "profile_command", None)
+    if not action:
+        print("Specify an action: list, create, use, show, delete or backfill.")
+        return 1
+    service = _profile_service(need_config=action == "backfill")
+
+    if action == "list":
+        profiles = service.profiles()
+        if args.json:
+            print(json.dumps(profiles.to_dict(), indent=2))
+        elif not profiles.profiles:
+            print("No profiles yet. Create one with: profile create TBC --expansion 'The Burning Crusade'")
+        for p in [] if args.json else profiles.profiles:
+            _print_profile(p, p.slug == profiles.active)
+        return 0
+    if action == "create":
+        created = service.create(
+            args.name,
+            game_version=args.game_version,
+            expansions=tuple(args.expansion),
+            zones=tuple(args.zone),
+            since=_day_start(args.since),
+            until=_day_start(args.until),
+            guild_id=args.guild_id,
+            activate=args.use,
+        )
+        print(f"Created profile '{created.name}' ({created.slug}){' and made it active' if args.use else ''}.")
+        return 0
+    if action == "use":
+        try:
+            chosen = service.activate(args.slug)
+        except KeyError:
+            print(f"No profile '{args.slug}'. See: profile list")
+            return 1
+        print(f"Active profile: {chosen.name}" if chosen else "Active profile cleared; every raid is shown.")
+        return 0
+    if action == "show":
+        profile = service.active()
+        raids = RaidService(service.ctx).list_raids(limit=20) if service.ctx else []
+        if args.json:
+            print(json.dumps({"profile": profile.to_dict() if profile else None, "raids": raids}, indent=2))
+            return 0
+        print(f"Active profile: {profile.name}" if profile else "No active profile: every raid is shown.")
+        for r in raids:
+            era = " / ".join(x for x in (r.get("game_version"), r.get("expansion")) if x)
+            print(f"{r['report_id']:<18} {r['raid_date'][:10]:<11} {r.get('zone') or '':<22} {era:<30} {r['title']}")
+        return 0
+    if action == "delete":
+        print("Profile deleted." if service.delete(args.slug) else f"No profile '{args.slug}'.")
+        return 0
+    if action == "backfill":
+        changed = service.backfill_eras()
+        print(f"Tagged {changed} raid(s) with a game version and expansion.")
+        return 0
+    return 1
+
+
+def run_discord_command(args: argparse.Namespace) -> int:
+    import json
+
+    from .services import AppContext, DiscordNotConfigured, IdentityService
+
+    action = getattr(args, "discord_command", None)
+    if not action:
+        print("Specify an action: login, whoami or logout.")
+        return 1
+    if action == "login":
+        try:
+            config = AppContext.from_config_file().config
+        except WarcraftLogsError:
+            config = {}
+        service = IdentityService(config=config)
+        try:
+            identity = service.link(open_browser=not args.no_browser)
+        except DiscordNotConfigured as e:
+            print(f"Error: {e}")
+            return 1
+        print(f"Linked to Discord as {identity.display_name} ({identity.id}).")
+        return 0
+    service = IdentityService()
+    linked = service.current()
+    if action == "whoami":
+        if args.json:
+            print(json.dumps(linked.__dict__ if linked else None, indent=2))
+        elif linked:
+            print(f"{linked.display_name} ({linked.username}, id {linked.id})")
+        else:
+            print("Not linked. Run: discord login")
+        return 0
+    if action == "logout":
+        service.unlink()
+        print("Discord account forgotten.")
+        return 0
+    return 1
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -580,6 +756,8 @@ def main() -> int:
         "history": run_history_query,
         "player": run_player_command,
         "reference": run_reference_command,
+        "profile": run_profile_command,
+        "discord": run_discord_command,
     }
 
     handler = commands.get(args.command)
