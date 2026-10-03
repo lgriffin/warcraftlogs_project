@@ -50,7 +50,9 @@ pre-commit install              # run the same pinned tools on every commit
 ```
 
 Tasks: `format lint spelling imports deadcode types security test` (together, `check`), plus `audit`, `diffcov`
-(coverage of lines changed since origin/master, after `test`), `fuzz`, `gui`. The coverage floor in `pyproject.toml`
+(coverage of lines changed since origin/master, after `test`), `pgcov` (the storage tests on both backends and the
+Postgres backend's changed-line coverage, which `diffcov` leaves out; CI's `storage-postgres` job runs it), `fuzz`,
+`gui`. The coverage floor in `pyproject.toml`
 only goes up.
 
 Checker versions are pinned in the `dev` extra; bump them through Dependabot, not by hand. The underlying commands:
