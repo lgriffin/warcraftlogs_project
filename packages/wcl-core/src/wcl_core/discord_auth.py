@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import secrets
-import time
 import webbrowser
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -28,7 +27,7 @@ from urllib.parse import urlencode
 import requests
 from pydantic import SecretStr
 
-from . import http, paths
+from . import clock, http, paths
 from .common.errors import AuthenticationError
 from .user_auth import OAuthCallbackServer, _optional_secret, _reveal
 
@@ -182,7 +181,7 @@ class DiscordIdentityStore:
 
         self._access_token = access
         self._refresh_token = _optional_secret(token_data.get("refresh_token"))
-        self._expires_at = time.time() + float(token_data.get("expires_in", 604800)) - 60
+        self._expires_at = clock.time() + float(token_data.get("expires_in", 604800)) - 60
         self.identity = fetch_identity(access)
         self.save()
         return self.identity

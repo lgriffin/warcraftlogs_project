@@ -10,7 +10,6 @@ import contextlib
 import json
 import logging
 import secrets
-import time
 import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,7 +22,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import requests
 from pydantic import SecretStr
 
-from . import http, paths
+from . import clock, http, paths
 from .common.errors import AuthenticationError
 from .config import as_secret
 
@@ -87,7 +86,7 @@ class UserTokenManager:
         return bool(self._access_token or self._refresh_token)
 
     def get_token(self) -> str:
-        if self._access_token and time.time() < self._expires_at:
+        if self._access_token and clock.time() < self._expires_at:
             return self._access_token.get_secret_value()
         if self._refresh_token:
             self._refresh()
@@ -131,7 +130,7 @@ class UserTokenManager:
             raise AuthenticationError("Received invalid response during token refresh", details=str(e)) from e
 
         self._refresh_token = _optional_secret(token_data.get("refresh_token")) or self._refresh_token
-        self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
+        self._expires_at = clock.time() + token_data.get("expires_in", 3600) - 60
         self._save()
 
     def complete_auth(
@@ -176,7 +175,7 @@ class UserTokenManager:
             raise AuthenticationError("Received invalid response during token exchange", details=str(e)) from e
 
         self._refresh_token = _optional_secret(token_data.get("refresh_token"))
-        self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
+        self._expires_at = clock.time() + token_data.get("expires_in", 3600) - 60
         self._save()
         logger.info("Token exchange successful, token saved.")
 
@@ -236,7 +235,7 @@ class HostedUserToken:
         client_secret: str | SecretStr,
         token_url: str,
         on_refresh: Callable[[UserToken], None] | None = None,
-        clock: Callable[[], float] = time.time,
+        clock: Callable[[], float] = clock.time,
     ) -> None:
         self._token = token
         self._client_id = client_id

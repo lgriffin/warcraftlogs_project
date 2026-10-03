@@ -9,6 +9,9 @@ analysis code all run. Shipped in wcl-core so the desktop app, the Toads Hub and
         raid = wcl.client().get_report_metadata("abc")
     assert raid.title == "Kara" and wcl.queries[0].variables == {"code": "abc"}
 
+``FakeClock`` stands in for the system clock the same way: ``with FakeClock().install() as clock`` makes token
+expiry, retry backoff and "today" deterministic, and ``clock.sleeps`` records every wait instead of waiting.
+
 A reply is a dict (the JSON body; for ``answer`` the GraphQL ``data``), a ``FakeResponse``, an exception to raise
 (``requests.ConnectionError``, ``requests.Timeout``), or for ``answer`` a callable taking the query and variables and
 returning the data. Given several replies, each request takes the next and the last one repeats. A request nothing
@@ -21,16 +24,18 @@ import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
 
-from . import discord_auth, http
+from . import clock, discord_auth, http
 from .auth import TokenManager
 from .client import DEFAULT_API_URL, WarcraftLogsClient
 
 __all__ = [
+    "FakeClock",
     "FakeDiscord",
     "FakeResponse",
     "FakeWarcraftLogs",
@@ -69,6 +74,40 @@ class FakeResponse:
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
             raise requests.HTTPError(f"HTTP {self.status_code}", response=self)
+
+
+class FakeClock:
+    """A clock that moves only when told: ``sleep`` and ``advance`` move it on, and ``sleeps`` records every wait."""
+
+    def __init__(self, start: datetime = datetime(2026, 11, 3, 20, 0)) -> None:
+        self.start = start
+        self.elapsed = 0.0
+        self.sleeps: list[float] = []
+
+    @contextmanager
+    def install(self) -> Iterator[FakeClock]:
+        """Read every wcl-core, wcl-store and wcl-app time from this clock for the block."""
+        with clock.use(self):
+            yield self
+
+    def advance(self, seconds: float) -> FakeClock:
+        if seconds < 0:
+            raise ValueError("a clock does not go back")
+        self.elapsed += seconds
+        return self
+
+    def time(self) -> float:
+        return self.start.timestamp() + self.elapsed
+
+    def monotonic(self) -> float:
+        return self.elapsed
+
+    def now(self) -> datetime:
+        return self.start + timedelta(seconds=self.elapsed)
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.advance(max(0.0, seconds))
 
 
 def grant(access_token: str, expires_in: int = 3600, **extra: Any) -> dict:

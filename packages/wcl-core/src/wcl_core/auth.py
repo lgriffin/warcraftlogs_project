@@ -1,10 +1,9 @@
 import base64
-import time
 
 import requests
 from pydantic import SecretStr
 
-from . import http
+from . import clock, http
 from .common.errors import AuthenticationError
 from .config import as_secret
 
@@ -19,7 +18,7 @@ class TokenManager:
         self.token_expiry = 0.0
 
     def _is_token_valid(self) -> bool:
-        return bool(self.access_token) and time.time() < self.token_expiry
+        return bool(self.access_token) and clock.time() < self.token_expiry
 
     def _get_new_token(self) -> None:
         auth_string = f"{self.client_id}:{self.client_secret.get_secret_value()}"
@@ -44,7 +43,7 @@ class TokenManager:
             raise AuthenticationError("Received invalid response from WarcraftLogs", details=str(e)) from e
 
         self.access_token = SecretStr(token_data["access_token"])
-        self.token_expiry = time.time() + token_data.get("expires_in", 3600) - 60
+        self.token_expiry = clock.time() + token_data.get("expires_in", 3600) - 60
 
     def get_token(self) -> str:
         """Return the raw bearer token; callers must put it only in the Authorization header."""

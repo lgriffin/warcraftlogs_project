@@ -1,108 +1,74 @@
-"""Tests for API client rate limiting and retry logic."""
-
-import time
-from unittest.mock import MagicMock, call, patch
+"""Tests for API client rate limiting and retry logic, on a fake clock so nothing waits."""
 
 import pytest
 import requests
+from wcl_core.testing import FakeClock, FakeWarcraftLogs, status
 
 from warcraftlogs_client.client import WarcraftLogsClient
 
 
 @pytest.fixture
-def client():
-    tm = MagicMock()
-    tm.get_token.return_value = "test_token"
-    c = WarcraftLogsClient(tm, cache_enabled=False)
-    c.MIN_REQUEST_INTERVAL = 0.01
+def wcl():
+    fake = FakeWarcraftLogs()
+    with fake.install():
+        yield fake
+
+
+@pytest.fixture
+def fake_clock():
+    with FakeClock().install() as fake:
+        yield fake
+
+
+@pytest.fixture
+def client(wcl):
+    c = wcl.client()
+    c.MIN_REQUEST_INTERVAL = 0.5
     return c
 
 
 class TestThrottle:
-    def test_first_call_no_delay(self, client):
-        client._last_request_time = 0.0
-        start = time.monotonic()
-        client._throttle()
-        assert time.monotonic() - start < 0.1
+    def test_first_call_no_delay(self, wcl, client, fake_clock):
+        wcl.answer("test", {"ok": True})
+        client.run_query("{ test }")
+        assert fake_clock.sleeps == []
 
-    def test_enforces_interval(self, client):
-        client.MIN_REQUEST_INTERVAL = 0.1
-        client._last_request_time = time.monotonic()
-        start = time.monotonic()
+    def test_enforces_interval(self, client, fake_clock):
+        fake_clock.advance(10)
+        client._last_request_time = 9.8
         client._throttle()
-        elapsed = time.monotonic() - start
-        assert elapsed >= 0.05
+        assert fake_clock.sleeps == [pytest.approx(0.3)]
+
+    def test_back_to_back_queries_are_spaced(self, wcl, client, fake_clock):
+        wcl.answer("test", {"ok": True})
+        client.run_query("{ test }")
+        client.run_query("{ test }")
+        assert fake_clock.sleeps == [pytest.approx(0.5)]
+        assert WarcraftLogsClient.MIN_REQUEST_INTERVAL > 0
 
 
 class TestRetryOn429:
-    @patch("wcl_core.http.requests.post")
-    @patch("warcraftlogs_client.client.time.sleep")
-    def test_retries_on_429(self, mock_sleep, mock_post, client):
-        rate_limited = MagicMock(status_code=429)
-        success = MagicMock(
-            status_code=200,
-            json=lambda: {"data": {}},
-            raise_for_status=lambda: None,
-        )
-        mock_post.side_effect = [rate_limited, success]
+    @pytest.mark.parametrize("code", [429, 500])
+    def test_retries_then_succeeds(self, wcl, client, fake_clock, code):
+        wcl.answer("test", status(code), {"ok": True})
+        assert client.run_query("{ test }") == {"data": {"ok": True}}
+        assert len(wcl.queries) == 2
 
-        result = client.run_query("{ test }")
-        assert result == {"data": {}}
-        assert mock_post.call_count == 2
-
-    @patch("wcl_core.http.requests.post")
-    @patch("warcraftlogs_client.client.time.sleep")
-    def test_retries_on_500(self, mock_sleep, mock_post, client):
-        server_error = MagicMock(status_code=500)
-        success = MagicMock(
-            status_code=200,
-            json=lambda: {"data": {"ok": True}},
-            raise_for_status=lambda: None,
-        )
-        mock_post.side_effect = [server_error, success]
-
-        result = client.run_query("{ test }")
-        assert result == {"data": {"ok": True}}
-        assert mock_post.call_count == 2
-
-    @patch("wcl_core.http.requests.post")
-    @patch("warcraftlogs_client.client.time.sleep")
-    def test_exponential_backoff(self, mock_sleep, mock_post, client):
-        error = MagicMock(status_code=429)
-        success = MagicMock(
-            status_code=200,
-            json=lambda: {"data": {}},
-            raise_for_status=lambda: None,
-        )
-        mock_post.side_effect = [error, error, success]
-
+    def test_exponential_backoff(self, wcl, client, fake_clock):
+        wcl.answer("test", status(429), status(429), {})
         client.run_query("{ test }")
+        assert fake_clock.sleeps == [1, 2]
 
-        backoff_calls = [c for c in mock_sleep.call_args_list if c[0][0] >= 1]
-        assert len(backoff_calls) == 2
-        assert backoff_calls[0] == call(1)
-        assert backoff_calls[1] == call(2)
-
-    @patch("wcl_core.http.requests.post")
-    @patch("warcraftlogs_client.client.time.sleep")
-    def test_max_retries_exhausted_raises(self, mock_sleep, mock_post, client):
-        error_response = MagicMock(status_code=429)
-        error_response.raise_for_status.side_effect = requests.HTTPError("429")
-        mock_post.return_value = error_response
-
+    def test_max_retries_exhausted_raises(self, wcl, client, fake_clock):
+        wcl.answer("test", status(429))
         with pytest.raises(requests.HTTPError):
             client.run_query("{ test }")
-        assert mock_post.call_count == client.MAX_RETRIES
+        assert len(wcl.queries) == client.MAX_RETRIES
 
 
 class TestNoRetryOnClientError:
-    @patch("wcl_core.http.requests.post")
-    @patch("warcraftlogs_client.client.time.sleep")
-    def test_400_raises_immediately(self, mock_sleep, mock_post, client):
-        bad_request = MagicMock(status_code=400)
-        bad_request.raise_for_status.side_effect = requests.HTTPError("400")
-        mock_post.return_value = bad_request
-
+    def test_400_raises_immediately(self, wcl, client, fake_clock):
+        wcl.answer("test", status(400))
         with pytest.raises(requests.HTTPError):
             client.run_query("{ test }")
-        assert mock_post.call_count == 1
+        assert len(wcl.queries) == 1

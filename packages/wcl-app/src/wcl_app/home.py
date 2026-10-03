@@ -31,6 +31,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Protocol
 
+from wcl_core import clock
 from wcl_core.flasks import NOT_PREPARED, PREPARED_ELIXIRS, PREPARED_FLASK, load_catalog, preparation
 from wcl_core.models import RaidAnalysis
 from wcl_store import RaidRepository, RaidScope, StorageError
@@ -420,7 +421,7 @@ class HomeService:
         storage: StorageFactory,
         layouts: LayoutStore | None = None,
         *,
-        now: Callable[[], datetime] = datetime.now,
+        now: Callable[[], datetime] = clock.now,
         badge_rules: BadgeRules | None = None,
         scope: ScopeSource = None,
     ):

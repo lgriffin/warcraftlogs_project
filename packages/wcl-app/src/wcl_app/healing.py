@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from wcl_core import clock
 from wcl_store import RaidScope
 
 from wcl_app.charts import BAR, LINE, MAX_SERIES, Chart, Reference, Series, compact, top_series, y_ceiling
@@ -390,7 +391,7 @@ class HealingService:
         self,
         storage: StorageFactory,
         *,
-        now: Callable[[], datetime] = datetime.now,
+        now: Callable[[], datetime] = clock.now,
         scope: ScopeSource = None,
     ):
         self.storage = storage

@@ -7,12 +7,11 @@ extracted data (not raw JSON wrappers), with consistent signatures.
 
 import json
 import logging
-import time
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
-from . import http
+from . import clock, http
 from .cache import get_cached_response, save_response_cache
 from .game_version import expansion_for_zone, game_version_for_url
 from .models import (
@@ -115,7 +114,7 @@ class WarcraftLogsClient:
 
     def __init__(self, token_manager: TokenSource, cache_enabled: bool = True, api_url: str | None = None) -> None:
         self.token_manager = token_manager
-        self._last_request_time = 0.0
+        self._last_request_time: float | None = None  # no request yet
         self.cache_enabled = cache_enabled
         self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
 
@@ -129,9 +128,11 @@ class WarcraftLogsClient:
         self.api_url = value.rstrip("/")
 
     def _throttle(self) -> None:
-        elapsed = time.monotonic() - self._last_request_time
+        if self._last_request_time is None:
+            return
+        elapsed = clock.monotonic() - self._last_request_time
         if elapsed < self.MIN_REQUEST_INTERVAL:
-            time.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
+            clock.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
 
     def run_query(self, query: str, use_cache: bool = True, variables: dict | None = None) -> dict:
         """POST a GraphQL query. Pass user- or report-derived values in *variables*, never in *query*."""
@@ -154,7 +155,7 @@ class WarcraftLogsClient:
 
         for attempt in range(self.MAX_RETRIES):
             self._throttle()
-            self._last_request_time = time.monotonic()
+            self._last_request_time = clock.monotonic()
 
             response = http.post(self.api_url, headers=headers, json=payload, timeout=30)
 
@@ -163,7 +164,7 @@ class WarcraftLogsClient:
             if response.status_code == 429 or response.status_code >= 500:
                 if attempt < self.MAX_RETRIES - 1:
                     backoff = 2**attempt
-                    time.sleep(backoff)
+                    clock.sleep(backoff)
                     continue
             response.raise_for_status()
             result = response.json()
