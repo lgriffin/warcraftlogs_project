@@ -56,8 +56,8 @@ Postgres backend's changed-line coverage, which `diffcov` leaves out; CI's `stor
 only goes up.
 
 CI's `ci-success` job is the one required check: it needs every other job and fails if any failed, was cancelled or
-was skipped (`scripts/ci_gate.py`). A new CI job goes in its `needs` and either runs a `dev.py` task or gets a reason
-in `OUTSIDE_DEV` in `tests/test_dev_tasks.py`.
+was skipped (`scripts/ci_gate.py`). A new CI job goes in its `needs` and either lists its `dev.py` tasks in `JOB_TASKS` or gets a
+reason in `OUTSIDE_DEV` (both in `tests/test_dev_tasks.py`).
 
 Checker versions are pinned in the `dev` extra; bump them through Dependabot, not by hand. The underlying commands:
 

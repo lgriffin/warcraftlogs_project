@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -21,6 +22,16 @@ dev = _load("dev_tasks", "dev.py")
 gate = _load("ci_gate", "ci_gate.py")
 CI = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 GATE = "ci-success"
+# The scripts/dev.py tasks each CI job runs. A job that drops or swaps a task fails the parity test.
+JOB_TASKS = {
+    "lint": {"lint", "format", "spelling", "deadcode", "imports"},
+    "test": {"test", "diffcov"},
+    "storage-postgres": {"pgcov"},
+    "gui-test": {"gui"},
+    "fuzz": {"fuzz"},
+    "type-check": {"types"},
+    "security": {"security", "audit"},
+}
 # CI jobs that run no scripts/dev.py task, each with the reason `check` cannot run it locally.
 OUTSIDE_DEV = {
     "gitleaks": "a third-party action that scans the whole git history",
@@ -51,38 +62,47 @@ def test_ci_runs_every_check_task():
     assert set(dev.CHECK) <= ci
 
 
-def _jobs(text: str) -> dict[str, str]:
-    """Each top-level job in a workflow with the text of its block."""
-    body = text.split("\njobs:\n", 1)[1]
-    parts = re.split(r"^  ([A-Za-z0-9_-]+):[ \t]*$", body, flags=re.MULTILINE)
-    return dict(zip(parts[1::2], parts[2::2], strict=True))
+def _workflow() -> dict:
+    return yaml.safe_load(CI)
 
 
-def _needs(block: str) -> set[str]:
-    listed = re.search(r"^    needs:\n((?:      - .+\n)+)", block, flags=re.MULTILINE)
-    assert listed, "the gate lists its needs one per line"
-    return {line.strip()[2:] for line in listed.group(1).splitlines()}
+def _jobs() -> dict[str, dict]:
+    return _workflow()["jobs"]
+
+
+def _tasks_run_by(job: dict) -> set[str]:
+    """The scripts/dev.py tasks a job's steps run (only `run:` commands, not comments or names)."""
+    return {task for step in job.get("steps", []) for task in _task_calls(str(step.get("run", "")))}
 
 
 def test_the_gate_waits_on_every_job():
     """ESI.ts `ci-success`: one required check that needs every job, so a dropped job cannot pass silently."""
-    jobs = _jobs(CI)
-    assert _needs(jobs[GATE]) == set(jobs) - {GATE}
+    jobs = _jobs()
+    assert set(jobs[GATE]["needs"]) == set(jobs) - {GATE}
 
 
 def test_only_the_gate_has_a_job_level_if():
     """A job-level `if:` can skip a job, and the gate counts skipped as failed; only the gate itself may have one."""
-    conditional = {job for job, block in _jobs(CI).items() if re.search(r"^    if:", block, flags=re.MULTILINE)}
-    assert conditional == {GATE}
-    assert re.search(r"^    if: always\(\)$", _jobs(CI)[GATE], flags=re.MULTILINE)
+    jobs = _jobs()
+    assert {job for job, spec in jobs.items() if "if" in spec} == {GATE}
+    assert jobs[GATE]["if"] == "always()"
 
 
-def test_every_job_runs_a_dev_task_or_says_why_not():
-    """`check:local` parity: a CI job either runs scripts/dev.py tasks or is listed in OUTSIDE_DEV with a reason."""
-    jobs = _jobs(CI)
-    runs_dev = {job for job, block in jobs.items() if "scripts/dev.py" in block}
-    assert runs_dev | set(OUTSIDE_DEV) == set(jobs)
-    assert not runs_dev & set(OUTSIDE_DEV), "a job listed as outside dev.py now runs it; drop it from OUTSIDE_DEV"
+def test_each_job_runs_its_dev_tasks():
+    """`check:local` parity: each job runs exactly its tasks, so a job cannot quietly stop running one."""
+    run = {job: _tasks_run_by(spec) for job, spec in _jobs().items()}
+    assert {job: tasks for job, tasks in run.items() if tasks} == JOB_TASKS
+    assert {job for job, tasks in run.items() if not tasks} == set(OUTSIDE_DEV)
+
+
+def test_the_parser_sees_quoted_job_ids_and_swapped_tasks():
+    """The checks above read the real YAML: a quoted job id is a job, and a run step names its exact task."""
+    workflow = yaml.safe_load(
+        'jobs:\n  "release-check":\n    steps:\n      - run: python scripts/dev.py lint\n'
+        "      - name: python scripts/dev.py gui\n"
+    )
+    assert set(workflow["jobs"]) == {"release-check"}
+    assert _tasks_run_by(workflow["jobs"]["release-check"]) == {"lint"}
 
 
 def _needs_json(**results: str) -> dict[str, str]:
