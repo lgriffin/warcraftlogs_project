@@ -294,7 +294,7 @@ one-way ratchet: a floor never goes down, a baseline only shrinks, an exception 
 | Schemas tolerate additive change | `pydantic` only for `SecretStr`; GraphQL parsed by hand | pydantic models with `extra="allow"` for every API response the analyzer reads |
 | Conventional commits, release-please, semver classification | `build_release.sh` bumps versions by hand | Conventional commit check on PR titles, then release automation |
 | Dependency audit, expiring exceptions | `pip-audit` task (needs network) | Run it in CI nightly; exceptions with `expires` dates |
-| Charter with IDs and statuses, each Enforced row names its check | Enforced: [CHARTER.md](CHARTER.md), audited by `tests/test_charter.py` | Its Partial and Gap rows (its Part 10) |
+| Charter with IDs and statuses, each Enforced row names its check | [CHARTER.md](CHARTER.md), audited | Its Part 10 |
 
 `ci-success` needs every job and fails when one failed, was cancelled or was skipped (`scripts/ci_gate.py`).
 `tests/test_dev_tasks.py` reads `ci.yml`: the gate needs every job, only the gate has a job-level `if:`, and each job

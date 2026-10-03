@@ -35,6 +35,22 @@ EXTERNAL = {"branch protection"}
 HEADER = re.compile(r"^####\s+(.+?)\s*$")
 TICKED = re.compile(r"`([^`]+)`")
 DEV_TASK = re.compile(r"python scripts/dev\.py ([a-z]+)")
+# One or more backticked names followed by "job" or "jobs": each must be a ci.yml job.
+JOBS = re.compile(r"((?:`[^`]+`(?:,\s*|\s+and\s+)?)+)\s+jobs?\b")
+# A backticked token that names a file: it has a slash, a file extension, or is a dotfile.
+PATHLIKE = re.compile(r"/|\.(py|ya?ml|md|toml|txt|cfg|ini|json|sh)$|^\.\w")
+# Every requirement the charter holds. Adding, removing or renumbering one is a deliberate change to this list.
+REQUIREMENT_IDS = {
+    *(f"ARCH-{n:02}" for n in range(1, 9)),
+    *(f"DES-{n:02}" for n in range(1, 5)),
+    *(f"TEST-{n:02}" for n in range(1, 10)),
+    *(f"GATE-{n:02}" for n in range(1, 6)),
+    *(f"SEC-{n:02}" for n in range(1, 6)),
+    *(f"DOC-{n:02}" for n in range(1, 3)),
+    *(f"REL-{n:02}" for n in range(1, 3)),
+    *(f"PROC-{n:02}" for n in range(1, 3)),
+}
+STRAY_HEADING = re.compile(r"^(#{1,3}|#{5,6})\s+.*\b[A-Z]+-\d+\b")
 
 
 @dataclass(frozen=True)
@@ -133,8 +149,11 @@ def mechanisms(verified_by: str, known: Known) -> tuple[list[str], list[str]]:
     found, missing = [], []
     for task in DEV_TASK.findall(verified_by):
         (found if task in known.tasks else missing).append(f"dev.py {task}")
+    jobs = {job for group in JOBS.findall(verified_by) for job in TICKED.findall(group)}
+    for job in sorted(jobs):
+        (found if job in known.jobs else missing).append(f"{job} job")
     for token in TICKED.findall(verified_by):
-        if token.startswith("python scripts/dev.py"):
+        if token.startswith("python scripts/dev.py") or token in jobs:
             continue
         name = _mechanism(token, known)
         if name is True:
@@ -151,7 +170,7 @@ def _mechanism(token: str, known: Known) -> bool | None:
     path, _, test = token.partition("::")
     if test:
         return token in known.tests
-    if "/" in path or re.search(r"\.(py|ya?ml|md|toml|txt|cfg)$", path):
+    if PATHLIKE.search(path):
         return path.rstrip("/") in known.files
     return None
 
@@ -181,7 +200,10 @@ def _known() -> Known:
     for path in (ROOT / "tests").rglob("*.py"):
         rel = path.relative_to(ROOT).as_posix()
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            # Only what pytest collects is a test: test_* functions and Test* classes, not helpers.
+            if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test")) or (
+                isinstance(node, ast.ClassDef) and node.name.startswith("Test")
+            ):
                 tests.add(f"{rel}::{node.name}")
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     dev_source = (ROOT / "scripts" / "dev.py").read_text(encoding="utf-8")
@@ -189,10 +211,22 @@ def _known() -> Known:
     return Known(frozenset(files), frozenset(tests), frozenset(tasks), frozenset(workflow["jobs"]))
 
 
+def stray_headings(markdown: str) -> list[str]:
+    """Headings that carry a requirement ID at a level other than ``####``, which the parser would skip."""
+    return [f"line {n}: {line}" for n, line in enumerate(markdown.splitlines(), 1) if STRAY_HEADING.match(line)]
+
+
 def test_the_charter_is_sound():
-    blocks = parse(CHARTER.read_text(encoding="utf-8"))
-    assert len(blocks) >= 30, "the parser found too few requirement blocks"
+    markdown = CHARTER.read_text(encoding="utf-8")
+    blocks = parse(markdown)
+    assert stray_headings(markdown) == []
+    assert sorted(b.id for b in blocks) == sorted(REQUIREMENT_IDS), "a requirement was added, dropped or renumbered"
     assert charter_problems(blocks, _known()) == []
+
+
+def test_a_requirement_heading_at_the_wrong_level_is_reported():
+    markdown = "### ARCH-09 · Ubiquitous · Gap\n#### ARCH-10 · Ubiquitous · Gap\n## Part 2 · Architecture\n"
+    assert stray_headings(markdown) == ["line 1: ### ARCH-09 · Ubiquitous · Gap"]
 
 
 def test_every_status_and_prefix_is_used_as_declared():
@@ -206,6 +240,7 @@ def test_the_known_mechanisms_are_read_from_the_repository():
     assert {"lint", "test", "mutation", "imports"} <= known.tasks
     assert {"ci-success", "gitleaks", "storage-postgres"} <= known.jobs
     assert "tests/test_charter.py::test_the_charter_is_sound" in known.tests
+    assert "tests/test_charter.py::form_problems" not in known.tests  # a helper is not a test
     assert "guides/CHARTER.md" in known.files
 
 
@@ -294,6 +329,9 @@ def test_an_enforced_block_needs_a_mechanism_that_exists():
         "TEST-01 (line 1) names guides/gone.md, which does not exist"
     ]
     assert enforced("`RaidRepository` in `guides/a.md`") == []  # a bare name is prose, not a mechanism
+    assert enforced("the `lint` and `gone` jobs") == ["TEST-01 (line 1) names gone job, which does not exist"]
+    assert enforced("`guides/a.md` and `build.sh`") == ["TEST-01 (line 1) names build.sh, which does not exist"]
+    assert enforced("`guides/a.md` and `.gitignore`") == ["TEST-01 (line 1) names .gitignore, which does not exist"]
 
 
 def test_ids_are_unique_and_every_block_says_how_it_is_verified():

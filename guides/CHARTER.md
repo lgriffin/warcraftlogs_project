@@ -153,13 +153,13 @@ recorded with its signature in `tests/api_surface.txt`.
 - **Verified by:** `tests/test_api_contract.py::test_the_public_surface_matches_the_snapshot`, which lists removed
   lines as breaking; `WCL_UPDATE_SURFACE=1` regenerates the file.
 
-#### DES-02 · Ubiquitous · Enforced
+#### DES-02 · Ubiquitous · Practised
 
 Each payload the Hub shares with the desktop **shall** have a guide that states its fields.
 
 - **Why:** the Home widgets, badges and reference comparison are rendered by two frontends from one payload.
 - **Verified by:** `guides/home_widgets.md`, `guides/badges.md`, `guides/reference_comparison.md` and
-  `guides/charts.md`, each read by `tests/test_charter.py` as a path that must exist.
+  `guides/charts.md`; nothing compares a guide's fields with its payload.
 
 #### DES-03 · Ubiquitous · Partial
 
@@ -306,11 +306,12 @@ If a commit carries a credential, then the `gitleaks` job **shall** fail.
 
 #### SEC-02 · Unwanted · Enforced
 
-If a log line, cache file, error message or export would carry a client secret or token, then the analyzer **shall**
-write it masked.
+If a log line or an authentication error would carry a client secret or token, then the analyzer **shall** write it
+masked.
 
-- **Why:** logs and exports are shared with officers; a token in one is a leaked account.
-- **Verified by:** `tests/test_secret_logging.py` and `tests/test_security.py`.
+- **Why:** logs and error reports are shared with officers; a token in one is a leaked account.
+- **Verified by:** `tests/test_secret_logging.py` and
+  `tests/test_security.py::test_secret_not_in_error_messages`, which supply the secret and look for it.
 
 #### SEC-03 · Ubiquitous · Enforced
 
@@ -392,7 +393,8 @@ Each pull request **shall** carry one concern and update the guides it affects.
 
 ## Part 10 · Gap register
 
-The Partial and Gap rows above, cheapest first: ARCH-08 (move `updater.py` onto the clock), TEST-02 (empty
-`KNOWN_STEP_MOCKS`), DOC-02 (an `Implements:` line per guide), DES-03 (a test over service errors), TEST-09 (bad
-implementations for the fuzz properties), ARCH-02 (empty `KNOWN_VIOLATIONS`), DES-04 (response models), REL-02
-(release automation). Each lands as its own pull request and moves its row's status in the same change.
+The Partial, Practised and Gap rows worth closing, cheapest first: ARCH-08 (move `updater.py` onto the clock),
+TEST-02 (empty `KNOWN_STEP_MOCKS`), DOC-02 (an `Implements:` line per guide), DES-03 (a test over service errors),
+DES-02 (a test that each payload guide names its fields), TEST-09 (bad implementations for the fuzz properties),
+ARCH-02 (empty `KNOWN_VIOLATIONS`), DES-04 (response models), REL-02 (release automation). Each lands as its own pull
+request and moves its row's status in the same change.
