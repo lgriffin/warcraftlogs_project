@@ -9,6 +9,7 @@ imports (enforced by ``lint-imports`` and ``tests/test_wcl_app_package.py``).
 """
 
 from wcl_app.badges import Badge, BadgeRule, BadgeRules, BadgeService, PlayerBadges
+from wcl_app.characters import CharacterComparison, CharacterDossier, CharacterService, CharacterTrends
 from wcl_app.charts import Chart, ChartError, Series
 from wcl_app.context import AnalysisThresholds, AppContext, ProgressCallback, validate_report_code
 from wcl_app.healing import HealingService, WeeklyHealing
@@ -30,7 +31,11 @@ __all__ = [
     "BadgeRule",
     "BadgeRules",
     "BadgeService",
+    "CharacterComparison",
+    "CharacterDossier",
     "CharacterLineage",
+    "CharacterService",
+    "CharacterTrends",
     "Chart",
     "ChartError",
     "DiscordNotConfigured",

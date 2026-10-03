@@ -20,8 +20,8 @@ from PySide6.QtWidgets import (
 )
 from wcl_core.models import CharacterHistory
 
-from ..database import PerformanceDB
-from .character_history_widget import CharacterHistoryWidget
+from ..services import CharacterService
+from .character_history_widget import CharacterHistoryWidget, default_character_service
 from .character_view import CharacterView
 from .compare_view import CompareView
 from .player_page_view import PlayerPageView
@@ -33,13 +33,16 @@ class CharactersHub(QWidget):
     analyze_report = Signal(str)
     open_raid = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, characters: CharacterService | None = None):
         super().__init__(parent)
         self._characters: list[CharacterHistory] = []
         self._current_history: CharacterHistoryWidget | None = None
+        self._stale = False
+        # One service for the list, the history and compare views, so they all read in the same raid profile.
+        self._service = characters if characters is not None else default_character_service()
 
         self.character_view = CharacterView()
-        self.compare_view = CompareView()
+        self.compare_view = CompareView(characters=self._service)
         self.player_page_view = PlayerPageView()
 
         self._build_ui()
@@ -168,8 +171,7 @@ class CharactersHub(QWidget):
 
     def _load_characters(self):
         try:
-            with PerformanceDB() as db:
-                self._characters = db.get_all_characters()
+            self._characters = self._service.roster()
         except (sqlite3.Error, OSError) as e:
             self.status_message.emit(f"Failed to load characters: {e}")
             self._characters = []
@@ -210,11 +212,25 @@ class CharactersHub(QWidget):
             self._current_history.deleteLater()
             self._current_history = None
 
-        widget = CharacterHistoryWidget(name, inline=True)
+        widget = CharacterHistoryWidget(name, inline=True, characters=self._service)
         widget.status_message.connect(self.status_message)
         self._history_layout.addWidget(widget)
         self._current_history = widget
         self._right_stack.setCurrentIndex(1)
+
+    def refresh(self):
+        """Re-read the list, the open history and the comparison, e.g. after a raid profile switch.
+
+        While the hub is hidden the re-read waits for it to be shown, so a switch never reads a roster nobody sees.
+        """
+        self.compare_view.refresh()
+        if not self.isVisible():
+            self._stale = True
+            return
+        self._stale = False
+        self._load_characters()
+        if self._current_history is not None:
+            self._current_history.refresh()
 
     def _select_character_by_name(self, name: str):
         for i in range(self._list.count()):
@@ -238,5 +254,7 @@ class CharactersHub(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not self._characters:
+        if self._stale:
+            self.refresh()
+        elif not self._characters:
             self._load_characters()

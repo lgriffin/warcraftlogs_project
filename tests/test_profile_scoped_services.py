@@ -196,3 +196,50 @@ def test_a_storage_failure_gives_no_raid_count(ctx):
 
     ctx.storage = broken
     assert ProfileService.desktop(ctx).raid_count() is None
+
+
+def test_character_drill_downs_follow_the_profile(ctx):
+    """The desktop's character history and compare views read under the profile (PROF-07, phase 2.3b)."""
+    from wcl_app import CharacterService
+
+    characters = CharacterService(ctx)
+    dossier = characters.dossier("HolyPriest")
+    assert dossier is not None and dossier.history.total_raids == 3
+    assert (len(dossier.trends.healer), len(dossier.trends.consumables), len(dossier.calendar)) == (3, 3, 3)
+    assert len(dossier.consumable_summary) == 3 and dossier.compliance["total_raids"] == 3
+    assert dossier.spider and dossier.personal_bests and "healing_consistency" in dossier.consistency
+    assert "HolyPriest" in [c.name for c in characters.roster()]
+
+    ctx.use_profile(TBC_ONLY)  # Kara and the untagged Gruul; the TBC reference raid is not a guild raid
+    dossier = characters.dossier("HolyPriest")
+    assert dossier is not None and dossier.history.total_raids == 2
+    assert [r["report_id"] for r in dossier.calendar] == [KARA, GRUUL]
+    assert {r["report_id"] for r in dossier.trends.healer} == {KARA, GRUUL}
+    assert {r["report_id"] for r in dossier.trends.consumables} == {KARA, GRUUL}
+    assert {r["report_id"] for r in dossier.consumable_summary} == {KARA, GRUUL}
+    assert dossier.compliance["total_raids"] == 2 and dossier.compliance["raids_with_consumes"] == 2
+    assert {b["report_id"] for b in dossier.personal_bests} <= {KARA, GRUUL}
+    comparison = characters.comparison("HolyPriest")
+    assert comparison is not None and comparison.history.total_raids == 2
+    assert {r["report_id"] for r in comparison.trends.healer} == {KARA, GRUUL}
+
+    ctx.use_profile(Profile("z", "Z", zones=("Nowhere",)))
+    assert characters.roster() == []
+    assert characters.dossier("HolyPriest") is None and characters.comparison("HolyPriest") is None
+
+
+def test_character_scores_count_only_the_profile_raids(ctx):
+    """Consistency needs two raids, so a profile holding one raid has no score, though the character has three."""
+    from wcl_app import CharacterService
+
+    characters = CharacterService(ctx)
+    ctx.use_profile(Profile("first", "First week", until="2026-09-20 00:00:00"))  # MC only
+    dossier = characters.dossier("HolyPriest")
+    assert dossier is not None and dossier.history.total_raids == 1
+    assert "healing_consistency" not in dossier.consistency
+    assert dossier.compliance == {
+        "total_raids": 1,
+        "raids_with_consumes": 1,
+        "compliance_pct": 100.0,
+        "avg_per_raid": 1,
+    }

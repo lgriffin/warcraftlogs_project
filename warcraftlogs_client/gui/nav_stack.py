@@ -44,6 +44,10 @@ class NavigationStack(QStackedWidget):
             self.setCurrentIndex(self._active_base)
         self.depth_changed.emit(len(self._drill_stack))
 
+    def drill_views(self) -> list[QWidget]:
+        """The pushed views, bottom first."""
+        return list(self._drill_stack)
+
     def current_depth(self) -> int:
         return len(self._drill_stack)
 
