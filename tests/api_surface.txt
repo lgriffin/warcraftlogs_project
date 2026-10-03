@@ -299,6 +299,7 @@ wcl_app.ProfileSet.get: def get(self, slug: str) -> Profile | None
 wcl_app.ProfileSet.active_profile: @property def active_profile(self) -> Profile | None
 wcl_app.ProfileSet.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.ProfileSet.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> ProfileSet
+wcl_app.ProfileSiteUnknown: class ProfileSiteUnknown(ValueError)
 wcl_app.ProgressCallback: ProgressCallback = Callable[[str], None]
 wcl_app.RaidService: class RaidService
 wcl_app.RaidService.__init__: def __init__(self, ctx: AppContext)
@@ -311,6 +312,9 @@ wcl_app.RaidService.get_raid: def get_raid(self, report_id: str) -> RaidAnalysis
 wcl_app.RaidService.delete_raid: def delete_raid(self, report_id: str) -> None
 wcl_app.RaidService.guild_info: def guild_info(self, guild_id: int | None=None) -> dict[str, Any]
 wcl_app.RaidService.guild_reports: def guild_reports(self, guild_id: int | None=None) -> list[dict[str, Any]]
+wcl_app.RaidService.new_guild_reports: def new_guild_reports(self, guild_id: int | None=None) -> list[dict[str, Any]]
+wcl_app.RaidService.import_new: def import_new(self, guild_id: int | None=None, *, progress: ProgressCallback | None=None) -> list[str]
+wcl_app.RaidService.check_profile_site: def check_profile_site(self) -> None
 wcl_app.RaidService.imported_codes: def imported_codes(self) -> set[str]
 wcl_app.RaidService.import_missing: def import_missing(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
 wcl_app.RaidService.ctx: set in __init__
@@ -446,6 +450,7 @@ wcl_store.RaidScope.zones: tuple[str, ...] = ()
 wcl_store.RaidScope.since: str | None = None
 wcl_store.RaidScope.until: str | None = None
 wcl_store.RaidScope.unfiltered: @property def unfiltered(self) -> bool
+wcl_store.RaidScope.admits: def admits(self, *, source: str='guild', game_version: str | None=None, expansion: str | None=None, zone: str | None=None, raid_date: str | None=None) -> bool
 wcl_store.RaidScope.with_sources: def with_sources(self, sources: tuple[str, ...]) -> RaidScope
 wcl_store.StorageError: class StorageError(Exception)
 wcl_store.narrowed: def narrowed(scope: RaidScope | None, sources: tuple[str, ...]) -> RaidScope | None

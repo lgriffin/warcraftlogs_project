@@ -39,6 +39,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import PlayerService as PlayerService
     from wcl_app import Profile as Profile
     from wcl_app import ProfileService as ProfileService
+    from wcl_app import ProfileSiteUnknown as ProfileSiteUnknown
     from wcl_app import ProgressCallback as ProgressCallback
     from wcl_app import RaidService as RaidService
     from wcl_app import ReanalysisResult as ReanalysisResult

@@ -151,22 +151,22 @@ class DownloadView(QWidget):
             except (FileNotFoundError, json.JSONDecodeError, KeyError):
                 pass
 
+    def profile_changed(self):
+        """Drop the fetched list: the next profile may have another guild, site or era. Refetch if showing."""
+        self._guild_reports_raw = []
+        self._auto_fetched = False
+        self._table_model.set_data([], ["date", "day", "title", "owner", "zone", "code", "status", "imported"])
+        if self.isVisible():
+            self._fetch_guild_reports()
+
     def _fetch_guild_reports(self):
-        try:
-            from wcl_core.config import load_config
-
-            config = load_config()
-            guild_id = config.get("guild_id", 774065)
-        except (FileNotFoundError, json.JSONDecodeError, KeyError):
-            guild_id = 774065
-
         if getattr(self, "_guild_worker", None) and self._guild_worker.isRunning():
             return
 
         self._fetch_btn.setEnabled(False)
         self.status_message.emit("Fetching guild reports...")
 
-        self._guild_worker = GuildReportsWorker(guild_id)
+        self._guild_worker = GuildReportsWorker()  # the active profile's guild and era, else config
         self._guild_worker.finished.connect(self._on_guild_loaded)
         self._guild_worker.error.connect(self._on_guild_error)
         self._guild_worker.start()

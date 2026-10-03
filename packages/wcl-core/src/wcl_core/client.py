@@ -299,7 +299,11 @@ class WarcraftLogsClient:
         }
 
     def get_guild_reports(self, guild_id: int, total: int = 350) -> list[dict]:
-        """Fetch recent reports for a guild, paginating to collect *total* reports."""
+        """Fetch recent reports for a guild, paginating to collect *total* reports.
+
+        Each carries its era like ``get_report_metadata``: ``game_version`` is this client's site, ``expansion`` the
+        zone's (None when the report has no zone or the zone is unknown).
+        """
         all_reports: list[dict] = []
         page = 1
         per_page = min(total, 100)
@@ -313,7 +317,7 @@ class WarcraftLogsClient:
                 owner { name }
                 startTime
                 endTime
-                zone { name }
+                zone { name expansion { name } }
               }
               has_more_pages
             }
@@ -326,6 +330,7 @@ class WarcraftLogsClient:
             result = self.run_query(query, use_cache=False, variables=variables)
             page_data = result["data"]["reportData"]["reports"]
             for r in page_data["data"]:
+                zone = r.get("zone") or {}
                 all_reports.append(
                     {
                         "code": r["code"],
@@ -333,7 +338,9 @@ class WarcraftLogsClient:
                         "owner": r["owner"]["name"] if r.get("owner") else "",
                         "start_time": r["startTime"],
                         "end_time": r.get("endTime"),
-                        "zone": r["zone"]["name"] if r.get("zone") else "",
+                        "zone": zone.get("name") or "",
+                        "game_version": self.game_version,
+                        "expansion": (zone.get("expansion") or {}).get("name") or expansion_for_zone(zone.get("name")),
                     }
                 )
             if not page_data.get("has_more_pages"):

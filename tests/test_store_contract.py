@@ -357,6 +357,38 @@ def test_scope_filters_raids_by_zone_and_date_window(repo):
     assert _codes(repo.get_raid_list(scope=RaidScope(since=kara, until=kara))) == []
 
 
+def test_a_scope_admits_exactly_the_raids_the_store_returns_for_it(repo):
+    _eras(repo)
+    stored = repo.get_raid_list(scope=RaidScope(sources=("guild", "reference"))) + repo.get_raid_list()
+    sources = {r["report_id"]: s for s in ("guild", "reference") for r in repo.get_raids_by_source(s)}
+    kara = next(str(r["raid_date"]) for r in stored if r["report_id"] == KARA)
+    scopes = [
+        RaidScope(),
+        RaidScope(expansions=(TBC,)),
+        RaidScope(expansions=("Classic",), game_versions=("fresh",)),
+        RaidScope(game_versions=("classic",)),
+        RaidScope(sources=("reference",), game_versions=("classic",)),
+        RaidScope(sources=("guild", "reference"), expansions=(TBC,)),
+        RaidScope(zones=("karazhan", "GRUUL'S LAIR")),
+        RaidScope(since=kara),
+        RaidScope(until=kara),
+        RaidScope(since=kara, until=kara),
+    ]
+    for scope in scopes:
+        admitted = {
+            r["report_id"]
+            for r in stored
+            if scope.admits(
+                source=sources[r["report_id"]],
+                game_version=r["game_version"],
+                expansion=r["expansion"],
+                zone=r["zone"],
+                raid_date=str(r["raid_date"]),
+            )
+        }
+        assert admitted == set(_codes(repo.get_raid_list(scope=scope))), scope
+
+
 def test_scope_applies_to_counts_sources_attendance_and_healing(repo):
     _eras(repo)
     tbc = RaidScope(expansions=(TBC,))

@@ -499,6 +499,7 @@ class MainWindow(QMainWindow):
 
     def _on_profile_changed(self, name: str):
         self._refresh_scoped_views()
+        self.raids_hub.download_view.profile_changed()
         # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
         # views' own messages.
         self.status_bar.showMessage(f"Raid profile: {name}")

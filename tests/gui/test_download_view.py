@@ -83,3 +83,20 @@ class TestDownloadView:
     def test_cached_codes_starts_empty(self, qtbot):
         view = _make_download_view(qtbot)
         assert isinstance(view._cached_codes, dict)
+
+    def test_a_profile_switch_drops_the_fetched_list(self, qtbot):
+        view = _make_download_view(qtbot)
+        view._cached_codes = {}
+        view._guild_reports_raw = [{"start_time": 1700006400000, "code": "ABC123", "title": "Kara", "zone": "Karazhan"}]
+        view._auto_fetched = True
+        view._apply_day_filter()
+        with patch.object(DownloadView, "_fetch_guild_reports") as fetch:
+            view.profile_changed()  # hidden: the next show fetches the new profile's list
+        fetch.assert_not_called()
+        assert (view._guild_reports_raw, view._auto_fetched, view._table_model.rowCount()) == ([], False, 0)
+
+    def test_the_fetch_asks_for_the_active_profiles_guild(self, qtbot):
+        view = _make_download_view(qtbot)
+        with patch("warcraftlogs_client.gui.download_view.GuildReportsWorker") as worker:
+            view._fetch_guild_reports()
+        worker.assert_called_once_with()

@@ -13,13 +13,13 @@ from urllib.request import urlopen
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
-from wcl_app import AppContext, CharacterService, PlayerService, RaidService
+from wcl_app import AppContext, CharacterService, PlayerService, ProfileSiteUnknown, RaidService
 from wcl_app.identity import IdentityService
 from wcl_app.profiles import JsonProfileStore, MemoryProfileStore, Profile, ProfileService, ProfileSet
 from wcl_core import config, consumes_analysis, paths
 from wcl_core.common.errors import AuthenticationError
 from wcl_core.discord_auth import DiscordIdentity, DiscordIdentityStore, PkcePair
-from wcl_core.testing import FakeDiscord
+from wcl_core.testing import FakeDiscord, FakeWarcraftLogs
 
 from warcraftlogs_client import cli
 
@@ -218,6 +218,73 @@ def cli_consumes(world, monkeypatch):
 @then(parsers.parse('the command should import from "{url}"'))
 def command_imports_from(world, url):
     assert world["consumes"]["client"].api_url == url
+
+
+def _listed(name: str) -> dict:
+    code, zone, _, expansion = RAIDS[name]
+    return {
+        "code": code,
+        "title": name,
+        "owner": {"name": "Raidlead"},
+        "startTime": T0,
+        "endTime": T0 + 3_600_000,
+        "zone": {"name": zone, "expansion": {"name": expansion} if expansion else None},
+    }
+
+
+@given(parsers.parse("Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild {guild:d}"))
+def warcraft_logs_lists(world, guild):
+    """The real client on the Anniversary site, answered by the fake Warcraft Logs at the HTTP seam."""
+    wcl = FakeWarcraftLogs().answer(
+        "reports(guildID", {"reportData": {"reports": {"data": [_listed(n) for n in RAIDS], "has_more_pages": False}}}
+    )
+    wcl.answer(
+        "report(code: $code)", lambda query, variables: {"reportData": {"report": _listed(CODES[variables["code"]])}}
+    )
+    world["ctx"]._client = wcl.client(FRESH)
+    world["wcl"] = wcl
+
+
+@given("no raid is stored")
+def nothing_stored(world):
+    with world["ctx"].repository() as repo:
+        for code, *_ in RAIDS.values():
+            repo.delete_raid(code)
+        assert repo.count_raids("guild") == 0
+
+
+@when(parsers.parse('the "{name}" profile for guild {guild:d} becomes active'))
+def guild_profile_becomes_active(world, name, guild):
+    world["ctx"].use_profile(Profile("p", name, expansions=(name,), guild_id=guild))
+
+
+@then(parsers.parse("the guild report list should hold {first} and {second}, asked of guild {guild:d}"))
+def guild_list_holds(world, first, second, guild):
+    with world["wcl"].install():
+        reports = RaidService(world["ctx"]).guild_reports()
+    assert [CODES[r["code"]] for r in reports] == [n for n in RAIDS if n in (first, second)]
+    assert world["wcl"].queries[-1].variables["guildID"] == guild
+
+
+@when(parsers.parse("{name} is fetched from Warcraft Logs and saved"))
+def fetched_and_saved(world, name):
+    ctx = world["ctx"]
+    analysis = world["build"](report_id=RAIDS[name][0], start_time=T0)
+    with world["wcl"].install():
+        analysis.metadata = ctx.wcl_client.get_report_metadata(RAIDS[name][0])
+    RaidService(ctx).save(analysis)
+
+
+@then(parsers.parse("the profile's raid list should hold {name} only"))
+def profile_lists_only(world, name):
+    assert _names(RaidService(world["ctx"]).list_raids()) == {name}
+
+
+@then("importing the guild's new reports should fail without asking Warcraft Logs anything")
+def import_refused(world):
+    with world["wcl"].install(), pytest.raises(ProfileSiteUnknown):
+        RaidService(world["ctx"]).import_new(9)
+    assert world["wcl"].requests == []
 
 
 def _free_port() -> int:

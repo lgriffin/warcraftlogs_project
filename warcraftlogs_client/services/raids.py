@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from wcl_app import raids as _module
 
 if TYPE_CHECKING:  # the names callers import through this alias
+    from wcl_app.raids import ProfileSiteUnknown as ProfileSiteUnknown
     from wcl_app.raids import RaidService as RaidService
     from wcl_app.raids import ReferenceAuthRequired as ReferenceAuthRequired
     from wcl_app.raids import ReportRef as ReportRef

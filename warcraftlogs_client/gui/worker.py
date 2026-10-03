@@ -99,12 +99,12 @@ class GuildInfoWorker(QThread):
 
 
 class GuildReportsWorker(QThread):
-    """Fetches guild report list in a background thread."""
+    """Fetches guild report list in a background thread: the active profile's guild and era unless given one."""
 
     finished = Signal(list)
     error = Signal(str)
 
-    def __init__(self, guild_id: int, parent=None):
+    def __init__(self, guild_id: int | None = None, parent=None):
         super().__init__(parent)
         self.guild_id = guild_id
 
