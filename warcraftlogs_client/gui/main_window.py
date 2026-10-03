@@ -20,13 +20,15 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
+from ..services import ProfileService
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
 from .console_widget import ConsoleDock
-from .home_view import HomeView
+from .home_view import HomeView, default_home_service, desktop_context
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
+from .profile_switcher import ProfileSwitcher
 from .raid_analysis_widget import RaidAnalysisWidget
 from .raid_group_view import RaidGroupView
 from .raids_hub import RaidsHub
@@ -190,6 +192,11 @@ class MainWindow(QMainWindow):
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(16, 8, 16, 8)
 
+        # One desktop context for the window, so switching profile reaches every view built on it.
+        self._ctx = desktop_context()
+        self.profile_switcher = ProfileSwitcher(ProfileService.desktop(self._ctx))
+        top_bar_layout.addWidget(self.profile_switcher)
+
         self._guild_name_label = QLabel()
         self._guild_name_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         self._guild_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -209,7 +216,7 @@ class MainWindow(QMainWindow):
         self.stack = NavigationStack()
         self.stack.setStyleSheet(f"QStackedWidget {{ background-color: {COLORS['bg_dark']}; }}")
 
-        self.home_view = HomeView()
+        self.home_view = HomeView(default_home_service(self._ctx))
         self.raids_hub = RaidsHub()
         self.characters_hub = CharactersHub()
         self.insights_view = InsightsView()
@@ -292,6 +299,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
+        self.profile_switcher.profile_changed.connect(self._on_profile_changed)
 
         self._load_guild_info()
 
@@ -486,6 +494,10 @@ class MainWindow(QMainWindow):
 
     def _on_raid_downloaded(self):
         pass
+
+    def _on_profile_changed(self, name: str):
+        self.status_bar.showMessage(f"Raid profile: {name} ({self.profile_switcher.count_label.text()})")
+        self.home_view.refresh()
 
     def _on_raid_deleted(self, report_id: str):
         pass

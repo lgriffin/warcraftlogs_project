@@ -18,7 +18,7 @@ import re
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
 
 from wcl_core.client import DEFAULT_API_URL, WarcraftLogsClient
 from wcl_core.common.errors import ConfigurationError
@@ -26,7 +26,7 @@ from wcl_store import RaidRepository, RaidScope
 
 # A fixed scope, or a callable a service asks at read time (``lambda: ctx.scope``) so a profile switch on the
 # context reaches services built before it.
-ScopeSource = RaidScope | Callable[[], RaidScope | None] | None
+ScopeSource: TypeAlias = "RaidScope | Callable[[], RaidScope | None] | None"
 
 
 def resolve_scope(source: ScopeSource) -> RaidScope | None:

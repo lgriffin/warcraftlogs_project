@@ -185,6 +185,21 @@ class ProfileService:
     def from_context(cls, ctx: AppContext, store: ProfileStore, owner: str | None = None) -> ProfileService:
         return cls(store, ctx, owner=owner)
 
+    @classmethod
+    def desktop(cls, ctx: AppContext | None = None, owner: str | None = None) -> ProfileService:
+        """The desktop's saved profiles, applied to ``ctx`` (a database-only desktop context when None)."""
+        from wcl_core import paths
+
+        context = ctx if ctx is not None else AppContext.desktop(with_config=False)
+        return cls(JsonProfileStore(paths.get_profiles_path()), context, owner=owner)
+
+    def raid_count(self) -> int:
+        """Guild raids inside the active profile, or every guild raid with none; needs a context."""
+        if self.ctx is None:
+            raise ValueError("raid_count needs a context")
+        with self.ctx.repository() as db:
+            return db.count_raids("guild", scope=self.ctx.scope)
+
     def profiles(self) -> ProfileSet:
         return self.store.load() or ProfileSet()
 

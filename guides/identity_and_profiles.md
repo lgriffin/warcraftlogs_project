@@ -68,10 +68,12 @@ EARS form, one `shall` each, in the style of the ESI.ts charter. Status is **Enf
 | IDENT-05 | A linked app shall be able to register with the Toads Hub and the bot shall resolve a Discord user to their profile. | Gap | Phase 4 |
 | ARCH-P1 | The layering shall hold: core has no Qt, SQLite or Discord library; services read storage only through `AppContext.repository()`; frontends call services. | Enforced | `tests/test_architecture.py`, `lint-imports`; `KNOWN_VIOLATIONS` only shrinks |
 | PROF-08 | The desktop and CLI shall start in the saved active profile. | Enforced | see below |
+| PROF-09 | The desktop shall show and switch the active profile and its raid count. | Enforced | see below |
 | ARCH-P2 | A new storage operation shall land in the protocol, both backends, a migration and the contract tests together. | Enforced | `test_contract_module_calls_every_protocol_method` (33 methods), `test_migrations_match_the_schema_and_downgrade_cleanly` |
 
 PROF-07 evidence: `tests/test_profile_scoped_services.py`, each test failing without its change, and the scope
-contract tests on both backends. PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`.
+contract tests on both backends. PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence: `tests/gui/test_profile_switcher.py`
+and `test_the_home_page_follows_a_later_profile_switch`.
 
 ## Layering (per `tests/test_architecture.py`)
 
@@ -194,7 +196,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | Phase | Name | State | Evidence |
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
-| 2 | Scoped services and frontends | 2.1 merged (#145), 2.2 in review | PROF-07, PROF-08 |
+| 2 | Scoped services and frontends | 2.1, 2.2 merged; 2.3 in review | PROF-07 to PROF-09 |
 | 3 | Import by profile | Planned | |
 | 4 | Bridge to the Toads Hub and bot | Planned | IDENT-05 |
 | 5 | Retire the single-host config | Planned | |
@@ -226,6 +228,10 @@ Order, one PR each:
 3. Desktop: a profile switcher in the toolbar (reads `ProfileService`, calls `apply()`), a Settings section for
    Discord sign-in (`IdentityService.link()` on a worker thread, like the Warcraft Logs sign-in), and a "Tag stored
    raids" action that runs `backfill_eras()`. No view reads the profile file itself.
+   2.3a (this step's first PR): the top bar's profile switcher (`gui/profile_switcher.py`) over
+   `ProfileService.desktop(ctx)`, sharing the window's context with the Home page so a switch refreshes it in place.
+   Next: the character, compare and history widgets onto `PlayerService.history` and the scoped trends, then the
+   Discord sign-in and "Tag stored raids" in Settings.
 4. Headless host: `AppContext.headless(..., profile=)` documented for the Hub; `ProfileSet` round-trip stays the
    contract (`guides/home_widgets.md` style page for the profile payload).
 Definition of done: every service read that lists or aggregates raids takes the scope; the desktop shows the active
