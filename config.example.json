@@ -10,6 +10,7 @@
     "character_server": "",
     "character_region": "eu",
     "wcl_api_url": "https://fresh.warcraftlogs.com/api/v2/client",
+    "discord_client_id": "",
     "role_thresholds": {
         "healer_min_healing": 900000,
         "tank_min_taken": 150000,

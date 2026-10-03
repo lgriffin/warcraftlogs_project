@@ -19,18 +19,23 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import CharacterLineage as CharacterLineage
     from wcl_app import Chart as Chart
     from wcl_app import ChartError as ChartError
+    from wcl_app import DiscordNotConfigured as DiscordNotConfigured
     from wcl_app import HealingService as HealingService
     from wcl_app import HomeLayout as HomeLayout
     from wcl_app import HomePage as HomePage
     from wcl_app import HomeService as HomeService
     from wcl_app import HomeWidget as HomeWidget
+    from wcl_app import IdentityService as IdentityService
     from wcl_app import JsonLayoutStore as JsonLayoutStore
+    from wcl_app import JsonProfileStore as JsonProfileStore
     from wcl_app import PlayerBadges as PlayerBadges
     from wcl_app import PlayerLog as PlayerLog
     from wcl_app import PlayerPageData as PlayerPageData
     from wcl_app import PlayerPageService as PlayerPageService
     from wcl_app import PlayerRef as PlayerRef
     from wcl_app import PlayerService as PlayerService
+    from wcl_app import Profile as Profile
+    from wcl_app import ProfileService as ProfileService
     from wcl_app import ProgressCallback as ProgressCallback
     from wcl_app import RaidService as RaidService
     from wcl_app import ReanalysisResult as ReanalysisResult
@@ -54,9 +59,11 @@ for _name in (
     "context",
     "healing",
     "home",
+    "identity",
     "lineage",
     "player_page",
     "players",
+    "profiles",
     "raids",
     "reference",
     "roles",

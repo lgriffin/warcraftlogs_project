@@ -63,6 +63,9 @@ class AppConfig:
     # Toads badge thresholds; ``wcl_app.badges.BadgeRules.from_config`` validates them.
     badges: dict[str, Any] = field(default_factory=dict)
 
+    # Discord application id for the desktop sign-in (``wcl_core.discord_auth``); public client, no secret.
+    discord_client_id: str = ""
+
 
 # Import the standardized error from common.errors
 from .common.errors import ConfigurationError
@@ -169,6 +172,7 @@ class ConfigManager:
             character_region=raw_config.get("character_region", "eu"),
             wcl_api_url=raw_config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"),
             badges=badges if isinstance(badges, dict) else {},
+            discord_client_id=str(raw_config.get("discord_client_id") or ""),
         )
 
         return config
@@ -234,6 +238,7 @@ def load_config(config_file: str | None = None) -> dict[str, Any]:
         "character_region": config.character_region,
         "wcl_api_url": config.wcl_api_url,
         "badges": config.badges,
+        "discord_client_id": config.discord_client_id,
     }
 
 

@@ -33,7 +33,7 @@ from typing import Any, Protocol
 
 from wcl_core.flasks import NOT_PREPARED, PREPARED_ELIXIRS, PREPARED_FLASK, load_catalog, preparation
 from wcl_core.models import RaidAnalysis
-from wcl_store import RaidRepository, StorageError
+from wcl_store import RaidRepository, RaidScope, StorageError
 
 from wcl_app.badges import Badge, BadgeRules, PlayerStats, guild_stats
 from wcl_app.charts import Chart, compact
@@ -365,9 +365,10 @@ def _day(dt: datetime | None, raw: str | None) -> str:
 class _Snapshot:
     """The storage reads a page needs, each done at most once however many widgets use it."""
 
-    def __init__(self, repo: RaidRepository, today: date):
+    def __init__(self, repo: RaidRepository, today: date, scope: RaidScope | None = None):
         self.repo = repo
         self.today = today
+        self.scope = scope
 
     @cached_property
     def badge_stats(self) -> dict[str, PlayerStats]:
@@ -377,11 +378,11 @@ class _Snapshot:
     @cached_property
     def raids(self) -> list[dict[str, Any]]:
         """The newest guild raids, newest first."""
-        return self.repo.get_raid_list(limit=_RECENT_RAIDS_READ)
+        return self.repo.get_raid_list(limit=_RECENT_RAIDS_READ, scope=self.scope)
 
     @cached_property
     def raid_count(self) -> int:
-        return self.repo.count_raids("guild")
+        return self.repo.count_raids("guild", scope=self.scope)
 
     @cached_property
     def last_raid(self) -> dict[str, Any] | None:
@@ -394,7 +395,7 @@ class _Snapshot:
     @cached_property
     def weekly_healing(self) -> WeeklyHealing:
         """Week-on-week healing over every guild raid in the last ``HEALING_WEEKS`` weeks, read once."""
-        rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS))
+        rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS), scope=self.scope)
         return weekly_healing(rows, self.today, HEALING_WEEKS)
 
     @cached_property
@@ -421,11 +422,14 @@ class HomeService:
         *,
         now: Callable[[], datetime] = datetime.now,
         badge_rules: BadgeRules | None = None,
+        scope: RaidScope | None = None,
     ):
         self.storage = storage
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
         self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
+        # The active profile's scope for the raid list, count and healing reads; None sees every guild raid.
+        self.scope = scope
         self._builders: dict[str, Callable[[_Snapshot, HomeWidget], None]] = {
             "quick_actions": self._quick_actions,
             "guild_snapshot": self._guild_snapshot,
@@ -449,7 +453,7 @@ class HomeService:
     @classmethod
     def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
         """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(ctx.repository, layouts, badge_rules=BadgeRules.from_config(ctx.config))
+        return cls(ctx.repository, layouts, badge_rules=BadgeRules.from_config(ctx.config), scope=ctx.scope)
 
     # ── Layout ──
 
@@ -480,7 +484,7 @@ class HomeService:
         generated_at = self.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             with self.storage() as repo:
-                snapshot = _Snapshot(repo, self.now().date())
+                snapshot = _Snapshot(repo, self.now().date(), self.scope)
                 return HomePage([self._build(i, snapshot) for i in ids], generated_at)
         except (StorageError, OSError) as e:
             widgets = [self._blank(i) for i in ids]

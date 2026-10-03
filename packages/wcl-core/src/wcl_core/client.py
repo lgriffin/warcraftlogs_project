@@ -15,6 +15,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 from .cache import get_cached_response, save_response_cache
+from .game_version import expansion_for_zone, game_version_for_url
 from .models import (
     GEAR_SLOT_ORDER,
     GEAR_SLOTS_HIDDEN,
@@ -253,16 +254,26 @@ class WarcraftLogsClient:
 
     # ── Report-level queries ──
 
+    @property
+    def game_version(self) -> str:
+        """The Warcraft Logs site this client talks to (``wcl_core.game_version``): fresh, classic, sod or retail."""
+        return game_version_for_url(self.api_url)
+
     def get_report_metadata(self, report_id: str) -> RaidMetadata:
-        report = self._query_report(report_id, "title owner { name } startTime endTime zone { name }")
-        zone_data = report.get("zone")
+        report = self._query_report(
+            report_id, "title owner { name } startTime endTime zone { name expansion { name } }"
+        )
+        zone_data = report.get("zone") or {}
+        expansion = zone_data.get("expansion") or {}
         return RaidMetadata(
             report_id=report_id,
             title=report["title"],
             owner=report["owner"]["name"],
             start_time=report["startTime"],
             end_time=report.get("endTime"),
-            zone=zone_data["name"] if zone_data else None,
+            zone=zone_data.get("name"),
+            game_version=self.game_version,
+            expansion=expansion.get("name") or expansion_for_zone(zone_data.get("name")),
         )
 
     def get_guild_info(self, guild_id: int) -> dict:

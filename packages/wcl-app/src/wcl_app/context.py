@@ -9,6 +9,9 @@ wires ``TokenManager`` / ``WarcraftLogsClient`` / ``PerformanceDB`` itself.
 Services open storage through ``repository()``, typed as the ``wcl_store.RaidRepository`` protocol. It is the
 desktop SQLite database unless the host passes ``storage`` (the Toads Hub worker passes a Postgres one).
 A headless host builds the context with ``AppContext.headless(client, storage)``: no config file, no SQLite.
+
+The active raid profile (``wcl_app.profiles``) sits on the context too: ``scope`` is what services pass to
+repository reads, and ``wcl_client`` follows the profile's Warcraft Logs host when it names one.
 """
 
 import re
@@ -17,12 +20,14 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from wcl_core.client import WarcraftLogsClient
+from wcl_core.client import DEFAULT_API_URL, WarcraftLogsClient
 from wcl_core.common.errors import ConfigurationError
-from wcl_store import RaidRepository
+from wcl_store import RaidRepository, RaidScope
 
 if TYPE_CHECKING:
     from wcl_store.sqlite import PerformanceDB
+
+    from wcl_app.profiles import Profile
 
 ProgressCallback = Callable[[str], None]
 # Opens a repository for one ``with`` block, e.g. ``lambda: PostgresRaidRepository(engine)``.
@@ -94,6 +99,8 @@ class AppContext:
     # analysis; the desktop's signed-in token file is never read.
     _user_client: Callable[[], WarcraftLogsClient | None] | None = field(default=None, repr=False)
     _headless: bool = field(default=False, repr=False)
+    # The active raid profile, or None for the plain, unfiltered app.
+    profile: "Profile | None" = None
 
     @classmethod
     def from_config_file(cls, config_file: str | None = None, db_path: str | None = None) -> "AppContext":
@@ -108,14 +115,50 @@ class AppContext:
         storage: StorageFactory,
         config: dict[str, Any] | None = None,
         user_client: Callable[[], WarcraftLogsClient | None] | None = None,
+        profile: "Profile | None" = None,
     ) -> "AppContext":
         """Context for a host with its own WCL client and storage, such as the Toads Hub worker.
 
         Reads no config file and never opens the SQLite database. ``config`` only supplies optional
         settings such as ``role_thresholds``. ``user_client`` supplies the user-scoped client for reference
-        reports; without it reference analysis raises ``ReferenceAuthRequired``.
+        reports; without it reference analysis raises ``ReferenceAuthRequired``. ``profile`` scopes reads to
+        the member's active profile; the host's client is used as it is, whatever host the profile names.
         """
-        return cls(config=dict(config or {}), _client=client, storage=storage, _user_client=user_client, _headless=True)
+        return cls(
+            config=dict(config or {}),
+            _client=client,
+            storage=storage,
+            _user_client=user_client,
+            _headless=True,
+            profile=profile,
+        )
+
+    @property
+    def scope(self) -> RaidScope | None:
+        """The active profile's raid scope, or None for everything (today's behaviour)."""
+        return self.profile.scope if self.profile is not None else None
+
+    def use_profile(self, profile: "Profile | None") -> None:
+        """Switch the active profile. On the desktop the client is rebuilt when the profile's host differs."""
+        self.profile = profile
+        wanted = (self.api_url or DEFAULT_API_URL).rstrip("/")
+        if self._client is not None and not self._headless and self._client.api_url != wanted:
+            self._client = None
+
+    @property
+    def guild_id(self) -> int | None:
+        """The guild imports come from: the profile's, else the configured one."""
+        if self.profile is not None and self.profile.guild_id is not None:
+            return self.profile.guild_id
+        value = self.config.get("guild_id")
+        return int(value) if value is not None and value != "" else None
+
+    @property
+    def api_url(self) -> str | None:
+        """The client API URL imports use: the profile's host, else ``wcl_api_url`` from config."""
+        if self.profile is not None and self.profile.api_url:
+            return self.profile.api_url
+        return self.config.get("wcl_api_url")
 
     @property
     def thresholds(self) -> AnalysisThresholds:
@@ -131,7 +174,7 @@ class AppContext:
                 token_mgr = TokenManager(self.config["client_id"], self.config["client_secret"])
             except KeyError as e:
                 raise ConfigurationError(f"Missing config value: {e.args[0]}") from e
-            self._client = WarcraftLogsClient(token_mgr, api_url=self.config.get("wcl_api_url"))
+            self._client = WarcraftLogsClient(token_mgr, api_url=self.api_url)
         return self._client
 
     def user_client(self) -> WarcraftLogsClient | None:
