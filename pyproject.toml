@@ -32,7 +32,7 @@ dev = [
     "vulture==2.16",
     "pip-audit>=2.7",
     "codespell==2.4.3",
-    "diff-cover==9.2.0",
+    "diff-cover==10.6.0",
     "import-linter==2.15",
     "pyyaml>=6.0",  # tests/test_dev_tasks.py reads ci.yml
     "tomli>=2.0; python_version < '3.11'",  # scripts/mutate.py reads pyproject.toml
