@@ -21,12 +21,12 @@ Default thresholds are in ``DEFAULT_RULES``. A host changes them with a ``badges
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field, replace
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
+from wcl_core.common.log import get_logger
 from wcl_core.flasks import FlaskCatalog, load_catalog, preparation
 from wcl_store import RaidScope, narrowed
 
@@ -35,7 +35,7 @@ from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_sco
 if TYPE_CHECKING:
     from wcl_store import RaidRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 BADGES_SCHEMA_VERSION = 1
 

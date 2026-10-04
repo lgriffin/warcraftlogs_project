@@ -8,7 +8,6 @@ we need a user-scoped token via the Authorization Code flow (/api/v2/user).
 
 import contextlib
 import json
-import logging
 import secrets
 import webbrowser
 from collections.abc import Callable
@@ -24,9 +23,10 @@ from pydantic import SecretStr
 
 from . import clock, http, paths
 from .common.errors import AuthenticationError
+from .common.log import get_logger
 from .config import as_secret
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_REDIRECT_PORT = 8764
 

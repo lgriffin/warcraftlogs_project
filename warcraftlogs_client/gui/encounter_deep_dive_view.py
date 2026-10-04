@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from wcl_core.client import WarcraftLogsClient
+from wcl_core.common.log import get_logger
 from wcl_core.models import (
     ConsumableUsage,
     CooldownSynergyAnalysis,
@@ -36,6 +37,8 @@ from wcl_core.models import (
 from .charts import ClassCastTimelineWidget, CooldownSynergyWidget
 from .encounter_worker import EncounterCastWorker, EncounterCooldownWorker, EncounterResourceWorker
 from .styles import COLORS, COMMON_STYLES
+
+logger = get_logger(__name__)
 
 
 class EncounterDeepDiveView(QWidget):
@@ -78,9 +81,7 @@ class EncounterDeepDiveView(QWidget):
         try:
             actors = self._client.get_master_data(self._report_id)
         except Exception as e:
-            import logging
-
-            logging.getLogger(__name__).error("Failed to resolve source IDs: %s", e)
+            logger.error("Failed to resolve source IDs: %s", e)
             return False
 
         actor_map = {a["name"]: a["id"] for a in actors}
@@ -101,9 +102,7 @@ class EncounterDeepDiveView(QWidget):
         _patch_list(self._composition.ranged)
         patched = sum(1 for p in self._composition.all_players if p.source_id != 0)
         total = len(self._composition.all_players)
-        import logging
-
-        logging.getLogger(__name__).info("Resolved %d/%d source IDs", patched, total)
+        logger.info("Resolved %d/%d source IDs", patched, total)
         return patched > 0
 
     def _build_ui(self):

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import logging
 import os
 import re
 from dataclasses import dataclass
@@ -26,8 +25,9 @@ from pydantic import SecretStr
 
 from . import http, paths
 from .common.errors import AuthenticationError, ConfigurationError, WarcraftLogsError
+from .common.log import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     "HubError",

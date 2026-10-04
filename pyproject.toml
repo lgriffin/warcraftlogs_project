@@ -64,7 +64,7 @@ target-version = "py310"
 extend-exclude = ["guides", "*.md"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W", "B", "UP", "SIM", "C4", "RUF", "BLE", "PTH", "PERF", "S", "C90"]
+select = ["E", "F", "I", "W", "B", "UP", "SIM", "C4", "RUF", "BLE", "PTH", "PERF", "S", "C90", "T20"]
 ignore = [
     "E402", "E501", "E701", "SIM102", "SIM108", "SIM116",
     # Loops that append stay readable, and try/except in a loop is free on 3.11+.
@@ -82,7 +82,9 @@ max-complexity = 15
 "warcraftlogs_client/gui/*" = ["B008", "RUF012", "BLE001", "S110", "PTH"]
 # SQL lives only in wcl_store. Queries interpolate internal table and column names; values are always bound.
 "packages/wcl-store/src/wcl_store/*" = ["S608"]
-"tests/*" = ["B008", "RUF012", "SIM105", "SIM115", "BLE001", "S105", "S106", "S110", "S311", "S608"]
+# Dev scripts are standalone tools run before the package is installed; they print their own progress.
+"scripts/*" = ["T201"]
+"tests/*" = ["T201", "B008", "RUF012", "SIM105", "SIM115", "BLE001", "S105", "S106", "S110", "S311", "S608"]
 
 [tool.mypy]
 python_version = "3.10"

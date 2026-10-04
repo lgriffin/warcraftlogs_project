@@ -106,6 +106,10 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - Ruff also enforces security (`S`), blind excepts (`BLE`), pathlib (`PTH`) and a complexity ceiling of 15 (`C901`).
   Split a function rather than adding `# noqa: C901`; the existing ones are a list to shrink. A deliberate catch-all
   gets `# noqa: BLE001 - <why>`
+- Logging goes through `wcl_core.common.log`: `logger = get_logger(__name__)` for diagnostics, `get_console()` for what
+  a command shows the user (bare message on stdout), and `configure_logging(level)` once in a frontend's entry point.
+  No `print` outside `scripts/` and `tests/` (Ruff `T20`), and no named `logging.getLogger` or `basicConfig`
+  (`tests/test_log.py`)
 - All changes go through PRs — never push directly to master
 - Config in `pyproject.toml`, not separate tool config files
 - `config.json` holds API credentials — never commit real values (template in `config.example.json`)

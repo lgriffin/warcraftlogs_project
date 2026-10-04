@@ -15,7 +15,6 @@ import base64
 import contextlib
 import hashlib
 import json
-import logging
 import os
 import secrets
 import webbrowser
@@ -29,9 +28,10 @@ from pydantic import SecretStr
 
 from . import clock, http, paths
 from .common.errors import AuthenticationError
+from .common.log import get_logger
 from .user_auth import OAuthCallbackServer, _optional_secret, _reveal
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_OAUTH_URL = "https://discord.com"
 DEFAULT_REDIRECT_PORT = 8765

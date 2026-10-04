@@ -7,16 +7,17 @@ by editing JSON configuration files.
 """
 
 import json
-import logging
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .common.log import get_logger
+
 if TYPE_CHECKING:
     from .client import WarcraftLogsClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SpellManager:
