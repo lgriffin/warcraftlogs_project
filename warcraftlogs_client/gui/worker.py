@@ -20,6 +20,16 @@ from ..services import (
 )
 
 
+def import_guild() -> int | None:
+    """The guild the Download view and the header follow: the saved profile's, else config's. None until there is
+    one and the Warcraft Logs keys are set."""
+    try:
+        ctx = AppContext.desktop()
+    except (OSError, ValueError, KeyError, WarcraftLogsError):
+        return None
+    return ctx.guild_id if ctx.config.get("client_id") else None
+
+
 class AnalysisWorker(QThread):
     """Runs raid analysis in a background thread."""
 
@@ -34,7 +44,7 @@ class AnalysisWorker(QThread):
     def run(self):
         try:
             self.progress.emit("Loading configuration...")
-            ctx = AppContext.from_config_file()
+            ctx = AppContext.desktop()
 
             self.progress.emit("Authenticating with WarcraftLogs API...")
             result = RaidService(ctx).analyze(self.report_id, progress=self.progress.emit)
@@ -62,7 +72,7 @@ class ReferenceAnalysisWorker(QThread):
     def run(self):
         try:
             self.progress.emit("Loading configuration...")
-            ctx = AppContext.from_config_file()
+            ctx = AppContext.desktop()
 
             self.progress.emit("Connecting with user credentials...")
             result = ReferenceService(ctx).import_reference(
@@ -92,25 +102,25 @@ class GuildInfoWorker(QThread):
 
     def run(self):
         try:
-            info = RaidService(AppContext.from_config_file()).guild_info(self.guild_id)
+            info = RaidService(AppContext.desktop()).guild_info(self.guild_id)
             self.finished.emit(info)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
 
 
 class GuildReportsWorker(QThread):
-    """Fetches guild report list in a background thread."""
+    """Fetches guild report list in a background thread: the active profile's guild and era unless given one."""
 
     finished = Signal(list)
     error = Signal(str)
 
-    def __init__(self, guild_id: int, parent=None):
+    def __init__(self, guild_id: int | None = None, parent=None):
         super().__init__(parent)
         self.guild_id = guild_id
 
     def run(self):
         try:
-            reports = RaidService(AppContext.from_config_file()).guild_reports(self.guild_id)
+            reports = RaidService(AppContext.desktop()).guild_reports(self.guild_id)
             self.finished.emit(reports)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
             self.error.emit(str(e))
@@ -131,7 +141,7 @@ class CharacterProfileWorker(QThread):
 
     def run(self):
         try:
-            profile = PlayerService(AppContext.from_config_file()).profile(
+            profile = PlayerService(AppContext.desktop()).profile(
                 self.char_name,
                 self.server,
                 self.region,

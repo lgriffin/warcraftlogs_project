@@ -10,7 +10,7 @@ import uuid
 from datetime import date, datetime, timedelta
 
 import pytest
-from wcl_app import AppContext, HealingService
+from wcl_app import AppContext, HealingService, WeeklyHealing
 from wcl_app.charts import MAX_SERIES
 from wcl_app.healing import MAX_WEEKS, MIN_WEEKS, week_start, weekly_healing
 from wcl_store import StorageError
@@ -273,6 +273,7 @@ def test_service_reads_guild_raids_only(storage, build_analysis):
         )
     service = HealingService(storage, now=lambda: datetime(2026, 9, 27, 12, 0))
     result = service.weekly(weeks=3)
+    assert isinstance(result, WeeklyHealing)
     assert result.standard().healing_per_character == 800_000
     assert [w.raids for w in result.weeks] == [0, 0, 1]
     assert result.weeks[-1].healing == 800_000

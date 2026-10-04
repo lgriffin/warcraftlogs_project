@@ -31,12 +31,14 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Protocol
 
+from wcl_core import clock
+from wcl_core.flasks import NOT_PREPARED, PREPARED_ELIXIRS, PREPARED_FLASK, load_catalog, preparation
 from wcl_core.models import RaidAnalysis
-from wcl_store import RaidRepository, StorageError
+from wcl_store import RaidRepository, RaidScope, StorageError
 
 from wcl_app.badges import Badge, BadgeRules, PlayerStats, guild_stats
 from wcl_app.charts import Chart, compact
-from wcl_app.context import AppContext, StorageFactory
+from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
 from wcl_app.healing import WeeklyHealing, weekly_healing, window_start
 
 HOME_SCHEMA_VERSION = 1
@@ -243,10 +245,17 @@ CATALOGUE: tuple[WidgetSpec, ...] = (
     WidgetSpec("boss_kills", "Boss kills", "Every boss killed in the last raid and how long it took", TABLE, HALF),
     WidgetSpec("class_mix", "Class mix", "Players of each class in the last raid", BARS, HALF),
     WidgetSpec("interrupts", "Interrupt casts", "Most interrupt abilities cast in the last raid", TABLE, HALF),
-    WidgetSpec("consumables", "Consumables", "Most consumables used in the last raid", TABLE, HALF),
+    WidgetSpec(
+        "consumables", "Consumables", "Most consumables used in the last raid, not counting flasks", TABLE, HALF
+    ),
+    WidgetSpec(
+        "flasks", "Flasks and elixirs", "Who had a flask or a battle and guardian elixir in the last raid", TABLE, HALF
+    ),
     WidgetSpec("tracked_players", "Tracked players", "Characters you follow with a player page", TABLE, HALF),
 )
 _SPECS = {s.id: s for s in CATALOGUE}
+
+_PREPARED_LABELS = {PREPARED_FLASK: "Flask", PREPARED_ELIXIRS: "Elixirs", NOT_PREPARED: "None"}
 
 
 # ── Layout ──
@@ -357,23 +366,24 @@ def _day(dt: datetime | None, raw: str | None) -> str:
 class _Snapshot:
     """The storage reads a page needs, each done at most once however many widgets use it."""
 
-    def __init__(self, repo: RaidRepository, today: date):
+    def __init__(self, repo: RaidRepository, today: date, scope: RaidScope | None = None):
         self.repo = repo
         self.today = today
+        self.scope = scope
 
     @cached_property
     def badge_stats(self) -> dict[str, PlayerStats]:
         """Every character's badge counts over the guild raids, keyed by lower-case name."""
-        return guild_stats(self.repo)
+        return guild_stats(self.repo, scope=self.scope)
 
     @cached_property
     def raids(self) -> list[dict[str, Any]]:
         """The newest guild raids, newest first."""
-        return self.repo.get_raid_list(limit=_RECENT_RAIDS_READ)
+        return self.repo.get_raid_list(limit=_RECENT_RAIDS_READ, scope=self.scope)
 
     @cached_property
     def raid_count(self) -> int:
-        return self.repo.count_raids("guild")
+        return self.repo.count_raids("guild", scope=self.scope)
 
     @cached_property
     def last_raid(self) -> dict[str, Any] | None:
@@ -386,7 +396,7 @@ class _Snapshot:
     @cached_property
     def weekly_healing(self) -> WeeklyHealing:
         """Week-on-week healing over every guild raid in the last ``HEALING_WEEKS`` weeks, read once."""
-        rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS))
+        rows = self.repo.get_healing_by_raid(window_start(self.today, HEALING_WEEKS), scope=self.scope)
         return weekly_healing(rows, self.today, HEALING_WEEKS)
 
     @cached_property
@@ -411,13 +421,17 @@ class HomeService:
         storage: StorageFactory,
         layouts: LayoutStore | None = None,
         *,
-        now: Callable[[], datetime] = datetime.now,
+        now: Callable[[], datetime] = clock.now,
         badge_rules: BadgeRules | None = None,
+        scope: ScopeSource = None,
     ):
         self.storage = storage
         self.layouts: LayoutStore = layouts if layouts is not None else MemoryLayoutStore()
         self.now = now
         self.badge_rules = badge_rules if badge_rules is not None else BadgeRules()
+        # A scope, or a callable giving the active profile's at read time, for the raid list, count and healing
+        # reads; None sees every guild raid.
+        self._scope = scope
         self._builders: dict[str, Callable[[_Snapshot, HomeWidget], None]] = {
             "quick_actions": self._quick_actions,
             "guild_snapshot": self._guild_snapshot,
@@ -434,13 +448,19 @@ class HomeService:
             "class_mix": self._class_mix,
             "interrupts": self._interrupts,
             "consumables": self._consumables,
+            "flasks": self._flasks,
             "tracked_players": self._tracked_players,
         }
 
+    @property
+    def scope(self) -> RaidScope | None:
+        return resolve_scope(self._scope)
+
     @classmethod
     def from_context(cls, ctx: AppContext, layouts: LayoutStore | None = None) -> HomeService:
-        """Home pages over the context's storage (the desktop database, or the host's own)."""
-        return cls(ctx.repository, layouts, badge_rules=BadgeRules.from_config(ctx.config))
+        """Home pages over the context's storage (the desktop database, or the host's own), following its profile."""
+        rules = BadgeRules.from_config(ctx.config)
+        return cls(ctx.repository, layouts, badge_rules=rules, scope=lambda: ctx.scope)
 
     # ── Layout ──
 
@@ -471,7 +491,7 @@ class HomeService:
         generated_at = self.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             with self.storage() as repo:
-                snapshot = _Snapshot(repo, self.now().date())
+                snapshot = _Snapshot(repo, self.now().date(), self.scope)
                 return HomePage([self._build(i, snapshot) for i in ids], generated_at)
         except (StorageError, OSError) as e:
             widgets = [self._blank(i) for i in ids]
@@ -744,9 +764,12 @@ class HomeService:
 
     def _consumables(self, s: _Snapshot, w: HomeWidget) -> None:
         a = s.last_analysis
+        catalog = load_catalog()
         counts: Counter = Counter()
         roles: dict[str, str] = {}
         for c in a.consumables if a else []:
+            if catalog.kind_of(c.consumable_name):
+                continue  # flasks and elixirs have their own widget
             counts[c.player_name] += c.count
             roles[c.player_name] = c.player_role
         if not counts:
@@ -760,6 +783,44 @@ class HomeService:
                 Row(
                     {"name": name, "role": role, "used": str(n)},
                     {"name": name, "role": roles[name], "used": n},
+                    _character_link(name),
+                )
+            )
+
+    def _flasks(self, s: _Snapshot, w: HomeWidget) -> None:
+        a = s.last_analysis
+        catalog = load_catalog()
+        using: dict[str, set[str]] = {}
+        for c in a.consumables if a else []:
+            if c.count > 0 and catalog.kind_of(c.consumable_name):
+                using.setdefault(c.player_name, set()).add(c.consumable_name)
+        if a is None or not using:
+            w.empty = "No flasks or elixirs recorded in the last raid."
+            return
+        roster = {p.name: p.role for p in a.composition.all_players}
+        roster.update({name: roster.get(name, "") for name in using})
+        prepared = {name: preparation(using.get(name, ()), catalog) for name in roster}
+        title = s.last_raid["title"] if s.last_raid else a.metadata.title
+        ready = sum(1 for p in prepared.values() if p)
+        w.subtitle = f"{title}: {ready} of {len(roster)} prepared"
+        w.columns = [
+            Column("name", "Name"),
+            Column("role", "Role"),
+            Column("prepared", "Prepared"),
+            Column("using", "Flasks and elixirs"),
+        ]
+        order = {NOT_PREPARED: 0, PREPARED_ELIXIRS: 1, PREPARED_FLASK: 2}
+        for name in sorted(roster, key=lambda n: (order[prepared[n]], n)):
+            items = sorted(using.get(name, ()))
+            w.rows.append(
+                Row(
+                    {
+                        "name": name,
+                        "role": roster[name].capitalize(),
+                        "prepared": _PREPARED_LABELS[prepared[name]],
+                        "using": ", ".join(items) or "-",
+                    },
+                    {"name": name, "role": roster[name], "prepared": prepared[name], "using": ", ".join(items)},
                     _character_link(name),
                 )
             )

@@ -7,6 +7,7 @@ settings used throughout the application.
 
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,15 @@ class AppConfig:
 
     # Toads badge thresholds; ``wcl_app.badges.BadgeRules.from_config`` validates them.
     badges: dict[str, Any] = field(default_factory=dict)
+
+    # Discord application id for the desktop sign-in (``wcl_core.discord_auth``); public client, no secret.
+    discord_client_id: str = ""
+
+    # The Toads Hub this app links with (``wcl_core.hub``); ``TOADS_HUB_URL`` wins over it.
+    toads_hub_url: str = ""
+
+    # Settings' "check for updates on start-up".
+    auto_check_updates: bool = True
 
 
 # Import the standardized error from common.errors
@@ -169,6 +179,9 @@ class ConfigManager:
             character_region=raw_config.get("character_region", "eu"),
             wcl_api_url=raw_config.get("wcl_api_url", "https://fresh.warcraftlogs.com/api/v2/client"),
             badges=badges if isinstance(badges, dict) else {},
+            discord_client_id=str(raw_config.get("discord_client_id") or ""),
+            toads_hub_url=str(raw_config.get("toads_hub_url") or ""),
+            auto_check_updates=raw_config.get("auto_check_updates", True) is not False,
         )
 
         return config
@@ -234,6 +247,9 @@ def load_config(config_file: str | None = None) -> dict[str, Any]:
         "character_region": config.character_region,
         "wcl_api_url": config.wcl_api_url,
         "badges": config.badges,
+        "discord_client_id": config.discord_client_id,
+        "toads_hub_url": config.toads_hub_url,
+        "auto_check_updates": config.auto_check_updates,
     }
 
 
@@ -241,3 +257,39 @@ def get_app_config(config_file: str | None = None) -> AppConfig:
     """Get the typed application configuration."""
     manager = get_config_manager(config_file)
     return manager.load()
+
+
+# The single-host keys. They are the defaults of the implicit "All" profile: a raid profile names its own site and
+# guild (``wcl_app.profiles``), and ``AppContext.api_url`` / ``guild_id`` pick the profile's first. Every other
+# module reads them through these two functions (``tests/test_single_host_config.py``).
+
+
+def configured_api_url(config: Mapping[str, Any] | None = None) -> str | None:
+    """The client API URL config names, or None when it names none.
+
+    With no *config* it reads config.json, and an unreadable one also gives None.
+    """
+    if config is None:
+        config = _readable_config()
+    value = config.get("wcl_api_url")
+    return str(value).strip() or None if value else None
+
+
+def configured_guild_id(config: Mapping[str, Any] | None = None) -> int | None:
+    """The guild id config names, or None when it names none or it is not a number."""
+    if config is None:
+        config = _readable_config()
+    value = config.get("guild_id")
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _readable_config() -> dict[str, Any]:
+    try:
+        return load_config()
+    except (ConfigurationError, OSError):
+        return {}

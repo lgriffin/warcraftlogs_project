@@ -17,7 +17,7 @@ from dataclasses import asdict, replace
 from typing import Any
 
 import pytest
-from wcl_store import RaidRepository, StorageError
+from wcl_store import RaidRepository, RaidScope, StorageError
 from wcl_store.sqlite import PerformanceDB
 
 from warcraftlogs_client.models import (
@@ -86,6 +86,8 @@ def _analysis(
     healer: str = "Holy",
     dps_role: str = "melee",
     overrides_applied: dict[str, str] | None = None,
+    game_version: str | None = None,
+    expansion: str | None = None,
 ) -> RaidAnalysis:
     """A raid with a row of every kind the store keeps."""
     fight = EncounterSummary(
@@ -105,7 +107,9 @@ def _analysis(
         fight, encounter_id=653, name="Moroes", start_time=100_000, end_time=160_000, players=[], boss_events=[]
     )
     return RaidAnalysis(
-        metadata=RaidMetadata(code, title, "Guildie", start, start + 3_600_000, zone),
+        metadata=RaidMetadata(
+            code, title, "Guildie", start, start + 3_600_000, zone, game_version=game_version, expansion=expansion
+        ),
         composition=RaidComposition(
             tanks=[PlayerIdentity("Tanky", "Warrior", 2, "tank")],
             healers=[PlayerIdentity(healer, "Priest", 1, "healer")],
@@ -217,8 +221,18 @@ def test_raid_list_is_guild_raids_newest_first(repo):
 
     rows = repo.get_raid_list()
     assert [r["report_id"] for r in rows] == [GRUUL, KARA]
-    assert set(rows[0]) == {"report_id", "title", "owner", "raid_date", "imported_at"}
+    assert set(rows[0]) == {
+        "report_id",
+        "title",
+        "owner",
+        "raid_date",
+        "imported_at",
+        "zone",
+        "game_version",
+        "expansion",
+    }
     assert rows[0]["title"] == "Gruul" and rows[0]["owner"] == "Guildie"
+    assert rows[0]["zone"] == "Karazhan" and rows[0]["game_version"] is None and rows[0]["expansion"] is None
     assert DATE_RE.match(rows[0]["raid_date"]) and DATE_RE.match(rows[0]["imported_at"])
     assert [r["report_id"] for r in repo.get_raid_list(limit=1)] == [GRUUL]
 
@@ -230,7 +244,18 @@ def test_raids_by_source_newest_first_with_zone_size_and_label(repo):
 
     refs = repo.get_raids_by_source("reference")
     assert [r["report_id"] for r in refs] == [GRUUL, REF]
-    assert set(refs[0]) == {"report_id", "title", "owner", "raid_date", "imported_at", "zone", "raid_size", "label"}
+    assert set(refs[0]) == {
+        "report_id",
+        "title",
+        "owner",
+        "raid_date",
+        "imported_at",
+        "zone",
+        "raid_size",
+        "label",
+        "game_version",
+        "expansion",
+    }
     assert refs[1]["zone"] == "Karazhan" and refs[0]["zone"] is None
     assert refs[1]["raid_size"] == 3 and refs[1]["label"] is None
     assert [r["report_id"] for r in repo.get_raids_by_source("guild")] == [KARA]
@@ -258,6 +283,199 @@ def test_count_raids_counts_each_source(repo):
     assert repo.count_raids() == 2
     assert repo.count_raids("guild") == 2
     assert repo.count_raids("reference") == 1
+
+
+# ── Eras and scopes ──
+
+TBC = "The Burning Crusade"
+MC = "MoltenCoreMolten"
+
+
+def test_import_stores_the_era_and_keeps_it_when_stored_again(repo):
+    repo.import_raid(_analysis(KARA, game_version="fresh", expansion=TBC))
+    repo.import_raid(_analysis(KARA))  # a later import without an era never blanks it
+    row = repo.get_raids_by_source("guild")[0]
+    assert (row["game_version"], row["expansion"]) == ("fresh", TBC)
+
+    repo.import_raid(_analysis(KARA, game_version="classic", expansion="Classic"))
+    row = repo.get_raids_by_source("guild")[0]
+    assert (row["game_version"], row["expansion"]) == ("classic", "Classic")
+
+
+def test_a_stored_raid_reloads_with_its_zone_and_era(repo):
+    """The deep dive and report links read a stored raid's site from its metadata."""
+    repo.import_raid(_analysis(KARA, game_version="classic", expansion=TBC))
+    meta = repo.get_raid_analysis(KARA).metadata
+    assert (meta.zone, meta.game_version, meta.expansion) == ("Karazhan", "classic", TBC)
+    assert meta.url == "https://classic.warcraftlogs.com/reports/" + KARA
+    repo.import_raid(_analysis(MC, start=T0 + DAY, title="MC", zone="Molten Core"))
+    assert repo.get_raid_analysis(MC).metadata.game_version is None
+
+
+def test_raid_era_is_set_and_missing_eras_are_listed(repo):
+    repo.import_raid(_analysis(MC, start=T0, title="MC", zone="Molten Core"))
+    repo.import_raid(_analysis(KARA, start=T0 + DAY, game_version="fresh", expansion=TBC))
+    repo.import_raid(_analysis(REF, start=T0 + 2 * DAY, game_version="fresh"), source="reference")
+    repo.set_raid_era("unknown0000000000", "fresh", TBC)
+
+    missing = repo.get_raids_without_era()
+    assert [(r["report_id"], r["zone"], r["game_version"], r["expansion"]) for r in missing] == [
+        (MC, "Molten Core", None, None),
+        (REF, "Karazhan", "fresh", None),
+    ]
+    repo.set_raid_era(MC, "fresh", "Classic")
+    repo.set_raid_era(REF, "fresh", TBC)
+    assert repo.get_raids_without_era() == []
+    assert repo.get_raids_by_source("guild")[1]["expansion"] == "Classic"
+
+    repo.set_raid_era(MC, None, "")
+    assert [r["report_id"] for r in repo.get_raids_without_era()] == [MC]
+
+
+def _eras(repo: RaidRepository) -> None:
+    repo.import_raid(_analysis(MC, start=T0, title="MC", zone="Molten Core", game_version="fresh", expansion="Classic"))
+    repo.import_raid(_analysis(KARA, start=T0 + DAY, game_version="fresh", expansion=TBC))
+    repo.import_raid(_analysis(GRUUL, start=T0 + 2 * DAY, title="Gruul", zone="Gruul's Lair", healer="Disc"))
+    repo.import_raid(_analysis(REF, start=T0 + 3 * DAY, game_version="classic", expansion=TBC), source="reference")
+
+
+def _codes(rows: list[dict[str, Any]]) -> list[str]:
+    return [r["report_id"] for r in rows]
+
+
+def test_scope_filters_raids_by_era_and_unknown_eras_match_every_scope(repo):
+    _eras(repo)
+    assert _codes(repo.get_raid_list(scope=RaidScope())) == [GRUUL, KARA, MC]
+    assert _codes(repo.get_raid_list(scope=RaidScope(expansions=(TBC,)))) == [GRUUL, KARA]
+    assert _codes(repo.get_raid_list(scope=RaidScope(expansions=("Classic",)))) == [GRUUL, MC]
+    assert _codes(repo.get_raid_list(scope=RaidScope(game_versions=("classic",)))) == [GRUUL]
+    assert _codes(repo.get_raid_list(scope=RaidScope(sources=("reference",), game_versions=("classic",)))) == [REF]
+    assert _codes(repo.get_raid_list(scope=RaidScope(sources=("guild", "reference"), expansions=(TBC,)))) == [
+        REF,
+        GRUUL,
+        KARA,
+    ]
+    assert _codes(repo.get_raid_list(limit=1, scope=RaidScope(expansions=(TBC,)))) == [GRUUL]
+
+
+def test_scope_filters_raids_by_zone_and_date_window(repo):
+    _eras(repo)
+    assert _codes(repo.get_raid_list(scope=RaidScope(zones=("karazhan", "GRUUL'S LAIR")))) == [GRUUL, KARA]
+    kara = repo.get_raid_list(scope=RaidScope(zones=("Karazhan",)))[0]["raid_date"]
+    assert _codes(repo.get_raid_list(scope=RaidScope(since=kara))) == [GRUUL, KARA]
+    assert _codes(repo.get_raid_list(scope=RaidScope(until=kara))) == [MC]
+    assert _codes(repo.get_raid_list(scope=RaidScope(since=kara, until=kara))) == []
+
+
+def test_a_scope_admits_exactly_the_raids_the_store_returns_for_it(repo):
+    _eras(repo)
+    stored = repo.get_raid_list(scope=RaidScope(sources=("guild", "reference"))) + repo.get_raid_list()
+    sources = {r["report_id"]: s for s in ("guild", "reference") for r in repo.get_raids_by_source(s)}
+    kara = next(str(r["raid_date"]) for r in stored if r["report_id"] == KARA)
+    scopes = [
+        RaidScope(),
+        RaidScope(expansions=(TBC,)),
+        RaidScope(expansions=("Classic",), game_versions=("fresh",)),
+        RaidScope(game_versions=("classic",)),
+        RaidScope(sources=("reference",), game_versions=("classic",)),
+        RaidScope(sources=("guild", "reference"), expansions=(TBC,)),
+        RaidScope(zones=("karazhan", "GRUUL'S LAIR")),
+        RaidScope(since=kara),
+        RaidScope(until=kara),
+        RaidScope(since=kara, until=kara),
+    ]
+    for scope in scopes:
+        admitted = {
+            r["report_id"]
+            for r in stored
+            if scope.admits(
+                source=sources[r["report_id"]],
+                game_version=r["game_version"],
+                expansion=r["expansion"],
+                zone=r["zone"],
+                raid_date=str(r["raid_date"]),
+            )
+        }
+        assert admitted == set(_codes(repo.get_raid_list(scope=scope))), scope
+
+
+def test_scope_applies_to_counts_sources_attendance_and_healing(repo):
+    _eras(repo)
+    tbc = RaidScope(expansions=(TBC,))
+    assert repo.count_raids(scope=tbc) == 2
+    assert repo.count_raids("reference", scope=tbc) == 2  # the scope's sources replace the argument
+    assert repo.count_raids(scope=RaidScope(sources=("reference",), expansions=("Classic",))) == 0
+    assert _codes(repo.get_raids_by_source("reference", scope=RaidScope(game_versions=("fresh",)))) == [GRUUL, KARA, MC]
+    assert _codes(repo.get_raids_by_source(scope=RaidScope(sources=("reference",)))) == [REF]
+
+    attendance = {r["name"]: r["raids"] for r in repo.get_raid_attendance(scope=RaidScope(expansions=("Classic",)))}
+    assert attendance == {"Disc": 1, "Holy": 1, "Stab": 2, "Tanky": 2}
+    everyone = {r["name"]: r["raids"] for r in repo.get_raid_attendance(("nowhere",), scope=tbc)}
+    assert everyone == {"Disc": 1, "Holy": 1, "Stab": 2, "Tanky": 2}
+
+    healers = [(r["report_id"], r["name"]) for r in repo.get_healing_by_raid("", scope=tbc)]
+    assert healers == [(KARA, "Holy"), (GRUUL, "Disc")]
+    assert repo.get_healing_by_raid("", scope=RaidScope(game_versions=("classic",))) == [
+        r for r in repo.get_healing_by_raid("") if r["report_id"] == GRUUL
+    ]
+
+
+def test_scope_applies_to_a_characters_raids_casts_and_consumables(repo):
+    _eras(repo)
+    classic = RaidScope(expansions=("Classic",))
+    assert sorted(r["report_id"] for r in repo.get_character_raid_roles("Stab", scope=classic)) == [GRUUL, MC]
+    assert sorted(r["report_id"] for r in repo.get_character_raid_roles("Stab", ("nowhere",), scope=classic)) == [
+        GRUUL,
+        MC,
+    ]
+    scoped_ids = {r["raid_id"] for r in repo.get_character_raid_roles("Holy", scope=classic)}
+    assert len(scoped_ids) == 1
+    assert {r["raid_id"] for r in repo.get_character_spell_casts("Holy", scope=classic)} == scoped_ids
+    assert {r["raid_id"] for r in repo.get_character_consumable_counts("Holy", scope=classic)} <= scoped_ids
+    assert repo.get_character_spell_casts("Holy", scope=RaidScope(zones=("Nowhere",))) == []
+    assert repo.get_character_consumable_counts("Holy", scope=RaidScope(zones=("Nowhere",))) == []
+    refs = RaidScope(sources=("reference",), game_versions=("classic",))
+    assert [r["report_id"] for r in repo.get_character_raid_roles("Holy", scope=refs)] == [REF]
+
+
+def test_scope_applies_to_character_history(repo):
+    _eras(repo)
+    everything = repo.get_character_history("Stab")
+    assert everything is not None and everything.total_raids == 3
+    classic = repo.get_character_history("Stab", scope=RaidScope(expansions=("Classic",)))
+    assert classic is not None and classic.total_raids == 2  # MC and the untagged Gruul
+    assert classic.first_seen == everything.first_seen  # MC is the first raid
+    tbc = repo.get_character_history("Stab", scope=RaidScope(expansions=(TBC,)))
+    assert tbc is not None and tbc.total_raids == 2  # Kara and Gruul
+    assert classic.first_seen < tbc.first_seen < tbc.last_seen == classic.last_seen  # Kara, then Gruul in both
+    assert classic.total_consumables_used + tbc.total_consumables_used >= everything.total_consumables_used
+    ref = repo.get_character_history("Stab", "nowhere", scope=RaidScope(sources=("reference",)))
+    assert ref is not None and ref.total_raids == 1
+    assert repo.get_character_history("Stab", scope=RaidScope(zones=("Nowhere",))) is None
+    # An empty scope counts the same raids; its last seen is the last guild raid, not the later reference raid.
+    unscoped = repo.get_character_history("Stab", scope=RaidScope())
+    assert unscoped is not None and unscoped.last_seen < everything.last_seen
+    assert replace(unscoped, last_seen=everything.last_seen) == everything
+
+
+def test_scope_applies_to_consumable_totals_and_raids(repo):
+    _eras(repo)
+    everything = {(r["name"], r["consumable_name"]): r["raids"] for r in repo.get_consumable_totals()}
+    tbc = {
+        (r["name"], r["consumable_name"]): r["raids"]
+        for r in repo.get_consumable_totals(scope=RaidScope(expansions=(TBC,)))
+    }
+    assert everything and tbc
+    assert all(tbc[k] <= everything[k] for k in tbc)
+    assert sum(tbc.values()) < sum(everything.values())
+    assert repo.get_consumable_totals(scope=RaidScope(zones=("Nowhere",))) == []
+
+    names = tuple({r["consumable_name"] for r in repo.get_consumable_totals()})
+    all_raids = {r["raid_id"] for r in repo.get_consumable_raids(names)}
+    mc_only = {r["raid_id"] for r in repo.get_consumable_raids(names, scope=RaidScope(zones=("Molten Core",)))}
+    assert mc_only and mc_only < all_raids
+    assert repo.get_consumable_raids(names, scope=RaidScope(sources=("reference",))) != []
+    assert repo.get_consumable_raids(names, ("reference",), scope=RaidScope()) == repo.get_consumable_raids(names)
 
 
 def test_healing_by_raid_lists_guild_healers_since_a_date(repo):
@@ -584,6 +802,26 @@ def test_consumable_totals_sum_across_raids(repo):
     assert [(r["name"], r["count"], r["raids"]) for r in both] == [("Holy", 9, 3), ("Stab", 3, 3)]
 
 
+def test_consumable_raids_lists_each_raid_a_named_consumable_was_used_in(repo):
+    repo.import_raid(_analysis(KARA, start=T0))
+    repo.import_raid(_analysis(GRUUL, start=T0 + DAY))
+    repo.import_raid(_analysis(REF, start=T0 + 2 * DAY), source="reference")
+    unused = _analysis("UnusedUnusedUnus", start=T0 + 3 * DAY)
+    unused.consumables = [ConsumableUsage("Stab", "melee", "UnusedUnusedUnus", "Haste Potion", 0, [])]
+    repo.import_raid(unused)
+    raid_ids = {r["report_id"]: r["raid_id"] for r in repo.get_character_raid_roles("Stab")}
+
+    rows = repo.get_consumable_raids(("Haste Potion", "Flask of Relentless Assault"))
+    assert sorted((r["name"], r["raid_id"], r["consumable_name"]) for r in rows) == sorted(
+        ("Stab", raid_ids[code], "Haste Potion") for code in (KARA, GRUUL)
+    )
+    assert len(repo.get_consumable_raids(("Haste Potion",), ("guild", "reference"))) == 3
+    folded = repo.get_consumable_raids(("HASTE potion",))
+    assert {r["consumable_name"] for r in folded} == {"Haste Potion"}  # ASCII case ignored, stored name returned
+    assert len(folded) == 2
+    assert repo.get_consumable_raids(()) == []
+
+
 # ── Player pages ──
 
 
@@ -720,6 +958,8 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
         "imported": sorted(repo.get_imported_report_codes()),
         "raids": rows(repo.get_raid_list()),
         "by_source": rows(repo.get_raids_by_source("guild")),
+        "scoped": rows(repo.get_raid_list(scope=RaidScope(zones=("gruul's lair",), since="2000-01-01 00:00:00"))),
+        "without_era": repo.get_raids_without_era(),
         "analysis": [asdict(repo.get_raid_analysis(c)) for c in (KARA, GRUUL)],
         "roster": repo.get_raid_roster(GRUUL),
         "sources": [repo.get_raid_source(c) for c in (KARA, GRUUL, REF)],
@@ -730,6 +970,7 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
         "consumables": unordered(repo.get_character_consumable_counts("Disc")),
         "attendance": repo.get_raid_attendance(("guild", "reference")),
         "consumable_totals": repo.get_consumable_totals(("guild", "reference")),
+        "consumable_raids": unordered(repo.get_consumable_raids(("Super Mana Potion", "Haste Potion"))),
         "pages": rows(repo.find_player_pages()),
         "page_logs": rows(repo.get_player_page_logs(page)),
         "overrides": rows(repo.get_role_overrides()),

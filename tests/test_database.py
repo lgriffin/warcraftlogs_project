@@ -126,6 +126,7 @@ class TestDeleteRaid:
 
     def test_nonexistent_no_error(self, db):
         db.delete_raid("does_not_exist")
+        assert db.is_raid_imported("does_not_exist") is False
 
 
 class TestGetAllCharacters:

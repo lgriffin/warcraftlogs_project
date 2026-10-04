@@ -7,14 +7,15 @@ extracted data (not raw JSON wrappers), with consistent signatures.
 
 import json
 import logging
-import time
+from collections.abc import Callable
 from typing import Any, Protocol
-
-import requests
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+from . import clock, http
 from .cache import get_cached_response, save_response_cache
+from .game_version import expansion_for_zone, game_version_for_url
 from .models import (
     GEAR_SLOT_ORDER,
     GEAR_SLOTS_HIDDEN,
@@ -37,6 +38,24 @@ def _extract_report(result: dict) -> dict:
 
 
 DEFAULT_API_URL = "https://www.warcraftlogs.com/api/v2/client"
+
+_GUILD_REPORTS_QUERY = """
+query($guildID: Int!, $limit: Int!, $page: Int!) {
+  reportData {
+    reports(guildID: $guildID, limit: $limit, page: $page) {
+      data {
+        code
+        title
+        owner { name }
+        startTime
+        endTime
+        zone { name expansion { name } }
+      }
+      has_more_pages
+    }
+  }
+}
+"""
 
 # End timestamp used for "whole report" queries (report-relative milliseconds).
 FULL_REPORT_END = 999999999
@@ -115,7 +134,7 @@ class WarcraftLogsClient:
 
     def __init__(self, token_manager: TokenSource, cache_enabled: bool = True, api_url: str | None = None) -> None:
         self.token_manager = token_manager
-        self._last_request_time = 0.0
+        self._last_request_time: float | None = None  # no request yet
         self.cache_enabled = cache_enabled
         self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
 
@@ -129,9 +148,11 @@ class WarcraftLogsClient:
         self.api_url = value.rstrip("/")
 
     def _throttle(self) -> None:
-        elapsed = time.monotonic() - self._last_request_time
+        if self._last_request_time is None:
+            return
+        elapsed = clock.monotonic() - self._last_request_time
         if elapsed < self.MIN_REQUEST_INTERVAL:
-            time.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
+            clock.sleep(self.MIN_REQUEST_INTERVAL - elapsed)
 
     def run_query(self, query: str, use_cache: bool = True, variables: dict | None = None) -> dict:
         """POST a GraphQL query. Pass user- or report-derived values in *variables*, never in *query*."""
@@ -154,16 +175,16 @@ class WarcraftLogsClient:
 
         for attempt in range(self.MAX_RETRIES):
             self._throttle()
-            self._last_request_time = time.monotonic()
+            self._last_request_time = clock.monotonic()
 
-            response = requests.post(self.api_url, headers=headers, json=payload, timeout=30)
+            response = http.post(self.api_url, headers=headers, json=payload, timeout=30)
 
             logger.info("API response: %d (attempt %d)", response.status_code, attempt + 1)
 
             if response.status_code == 429 or response.status_code >= 500:
                 if attempt < self.MAX_RETRIES - 1:
                     backoff = 2**attempt
-                    time.sleep(backoff)
+                    clock.sleep(backoff)
                     continue
             response.raise_for_status()
             result = response.json()
@@ -253,16 +274,26 @@ class WarcraftLogsClient:
 
     # ── Report-level queries ──
 
+    @property
+    def game_version(self) -> str:
+        """The Warcraft Logs site this client talks to (``wcl_core.game_version``): fresh, classic, sod or retail."""
+        return game_version_for_url(self.api_url)
+
     def get_report_metadata(self, report_id: str) -> RaidMetadata:
-        report = self._query_report(report_id, "title owner { name } startTime endTime zone { name }")
-        zone_data = report.get("zone")
+        report = self._query_report(
+            report_id, "title owner { name } startTime endTime zone { name expansion { name } }"
+        )
+        zone_data = report.get("zone") or {}
+        expansion = zone_data.get("expansion") or {}
         return RaidMetadata(
             report_id=report_id,
             title=report["title"],
             owner=report["owner"]["name"],
             start_time=report["startTime"],
             end_time=report.get("endTime"),
-            zone=zone_data["name"] if zone_data else None,
+            zone=zone_data.get("name"),
+            game_version=self.game_version,
+            expansion=expansion.get("name") or expansion_for_zone(zone_data.get("name")),
         )
 
     def get_guild_info(self, guild_id: int) -> dict:
@@ -287,49 +318,54 @@ class WarcraftLogsClient:
             "server": server.get("name", ""),
         }
 
-    def get_guild_reports(self, guild_id: int, total: int = 350) -> list[dict]:
-        """Fetch recent reports for a guild, paginating to collect *total* reports."""
-        all_reports: list[dict] = []
-        page = 1
-        per_page = min(total, 100)
-        query = """
-        query($guildID: Int!, $limit: Int!, $page: Int!) {
-          reportData {
-            reports(guildID: $guildID, limit: $limit, page: $page) {
-              data {
-                code
-                title
-                owner { name }
-                startTime
-                endTime
-                zone { name }
-              }
-              has_more_pages
-            }
-          }
-        }
-        """
+    @property
+    def site_url(self) -> str:
+        """The Warcraft Logs site this client's API is on, for report links: ``https://fresh.warcraftlogs.com``."""
+        parsed = urlparse(self.api_url)
+        return f"{parsed.scheme}://{parsed.netloc}"
 
-        while len(all_reports) < total:
+    def get_guild_reports(
+        self,
+        guild_id: int,
+        total: int = 350,
+        keep: Callable[[dict], bool] | None = None,
+        scan: int = 2000,
+    ) -> list[dict]:
+        """Fetch a guild's newest reports, paginating to collect *total* of them.
+
+        Each carries its era like ``get_report_metadata``: ``game_version`` is this client's site, ``expansion`` the
+        zone's (None when the report has no zone or the zone is unknown), and ``url`` its page on the site. With
+        *keep*, only reports it accepts count towards *total*, and paging goes on through up to *scan* reports, so
+        a profile's era is not hidden behind a run of newer reports from another.
+        """
+        kept: list[dict] = []
+        per_page = min(total, 100) if keep is None else 100
+        limit = total if keep is None else max(total, scan)
+        seen, page = 0, 1
+        while len(kept) < total and seen < limit:
             variables = {"guildID": guild_id, "limit": per_page, "page": page}
-            result = self.run_query(query, use_cache=False, variables=variables)
-            page_data = result["data"]["reportData"]["reports"]
-            for r in page_data["data"]:
-                all_reports.append(
-                    {
-                        "code": r["code"],
-                        "title": r["title"],
-                        "owner": r["owner"]["name"] if r.get("owner") else "",
-                        "start_time": r["startTime"],
-                        "end_time": r.get("endTime"),
-                        "zone": r["zone"]["name"] if r.get("zone") else "",
-                    }
-                )
-            if not page_data.get("has_more_pages"):
+            page_data = self.run_query(_GUILD_REPORTS_QUERY, use_cache=False, variables=variables)["data"]["reportData"]
+            reports = [self._guild_report(r) for r in page_data["reports"]["data"]]
+            seen += len(reports)
+            kept += [r for r in reports if keep is None or keep(r)]
+            if not page_data["reports"].get("has_more_pages") or not reports:
                 break
             page += 1
+        return kept[:total]
 
-        return all_reports[:total]
+    def _guild_report(self, r: dict) -> dict:
+        zone = r.get("zone") or {}
+        return {
+            "code": r["code"],
+            "title": r["title"],
+            "owner": r["owner"]["name"] if r.get("owner") else "",
+            "start_time": r["startTime"],
+            "end_time": r.get("endTime"),
+            "zone": zone.get("name") or "",
+            "game_version": self.game_version,
+            "expansion": (zone.get("expansion") or {}).get("name") or expansion_for_zone(zone.get("name")),
+            "url": f"{self.site_url}/reports/{r['code']}",
+        }
 
     def get_master_data(self, report_id: str) -> list[dict]:
         return [a for a in self.get_all_actors(report_id) if a["type"] == "Player"]
@@ -340,7 +376,9 @@ class WarcraftLogsClient:
         return {a["gameID"]: a["name"] for a in abilities if a.get("gameID") and a.get("name")}
 
     def get_fights(self, report_id: str) -> list[dict]:
-        report = self._query_report(report_id, "fights { id name startTime endTime kill encounterID size }")
+        report = self._query_report(
+            report_id, "fights { id name startTime endTime kill encounterID size friendlyPlayers }"
+        )
         return report.get("fights") or []
 
     def get_encounter_table(self, report_id: str, start_time: int, end_time: int, data_type: str) -> list[dict]:

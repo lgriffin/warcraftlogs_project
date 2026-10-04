@@ -12,7 +12,14 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from wcl_app import AppContext, ReferenceAuthRequired, ReferenceRequestError, ReferenceService
+from wcl_app import (
+    AppContext,
+    ReferenceAuthRequired,
+    ReferenceComparison,
+    ReferenceRequestError,
+    ReferenceService,
+    StoredRaid,
+)
 from wcl_app.reference import (
     MAX_LABEL_LENGTH,
     compare_raids,
@@ -120,6 +127,7 @@ def test_import_uses_the_user_login_and_stores_a_labelled_reference(storage, the
     assert analyze.call_args.args[0] is ctx.user_client()
     assert analyze.call_args.args[1] == THEIRS
     [ref] = ReferenceService(ctx).references()
+    assert isinstance(ref, StoredRaid)
     assert (ref.report_id, ref.title, ref.label, ref.raid_size) == (THEIRS, "World first Gruul", "World first", 3)
     assert ReferenceService(ctx).guild_raids() == []
 
@@ -179,6 +187,7 @@ def test_stored_raid_rows_serialise(storage, stored):
 def test_compare_reads_both_raids_from_storage(storage, stored):
     comparison = ReferenceService(_ctx(storage)).compare(OURS, THEIRS)
 
+    assert isinstance(comparison, ReferenceComparison)
     assert comparison.guild.report_id == OURS and comparison.reference.report_id == THEIRS
     assert comparison.guild.raid_date == "2026-09-21 20:00:00"
     assert (comparison.guild.duration_ms, comparison.reference.duration_ms) == (3_000_000, 2_000_000)

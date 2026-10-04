@@ -20,13 +20,15 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
+from ..services import AppContext, CharacterService, ProfileService
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
 from .console_widget import ConsoleDock
-from .home_view import HomeView
+from .home_view import HomeView, default_home_service, desktop_context
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
+from .profile_switcher import ProfileSwitcher
 from .raid_analysis_widget import RaidAnalysisWidget
 from .raid_group_view import RaidGroupView
 from .raids_hub import RaidsHub
@@ -190,6 +192,11 @@ class MainWindow(QMainWindow):
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(16, 8, 16, 8)
 
+        # One desktop context for the window, so switching profile reaches every view built on it.
+        self._ctx = desktop_context()
+        self.profile_switcher = ProfileSwitcher(ProfileService.desktop(self._ctx))
+        top_bar_layout.addWidget(self.profile_switcher)
+
         self._guild_name_label = QLabel()
         self._guild_name_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         self._guild_name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -209,12 +216,13 @@ class MainWindow(QMainWindow):
         self.stack = NavigationStack()
         self.stack.setStyleSheet(f"QStackedWidget {{ background-color: {COLORS['bg_dark']}; }}")
 
-        self.home_view = HomeView()
+        self.home_view = HomeView(default_home_service(self._ctx))
         self.raids_hub = RaidsHub()
-        self.characters_hub = CharactersHub()
+        self._characters = CharacterService(self._ctx)
+        self.characters_hub = CharactersHub(characters=self._characters)
         self.insights_view = InsightsView()
         self.raid_group_view = RaidGroupView()
-        self.settings_view = SettingsView()
+        self.settings_view = SettingsView(ctx=self._ctx)
 
         self.stack.addWidget(self.home_view)
         self.stack.addWidget(self.raids_hub)
@@ -292,6 +300,9 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
+        self.settings_view.identity_panel.eras_changed.connect(self._on_eras_changed)
+        self.settings_view.profiles_panel.profiles_changed.connect(self._on_profiles_edited)
+        self.profile_switcher.profile_changed.connect(self._on_profile_changed)
 
         self._load_guild_info()
 
@@ -351,14 +362,8 @@ class MainWindow(QMainWindow):
             self._version_label.setVisible(False)
 
     def _auto_check_updates(self):
-        try:
-            from wcl_core.config import load_config
-
-            config = load_config()
-            if not config.get("auto_check_updates", True):
-                return
-        except Exception:
-            pass
+        if not self._ctx.config.get("auto_check_updates", True):
+            return
         QTimer.singleShot(3000, self._run_update_check)
 
     def _run_update_check(self, force: bool = False):
@@ -430,10 +435,6 @@ class MainWindow(QMainWindow):
         self.stack.push_view(widget)
 
     def _drill_into_deep_dive(self, report_id: str, encounter_index: int):
-        from wcl_core.auth import TokenManager
-        from wcl_core.client import WarcraftLogsClient
-        from wcl_core.config import load_config
-
         from .encounter_deep_dive_view import EncounterDeepDiveView
 
         try:
@@ -448,9 +449,8 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            config = load_config()
-            token_mgr = TokenManager(config["client_id"], config["client_secret"])
-            client = WarcraftLogsClient(token_mgr, api_url=config.get("wcl_api_url"))
+            # A fresh context, so credentials saved since start-up apply; the raid's own site, whatever profile is on.
+            client = AppContext.desktop().client_for(analysis.metadata.game_version)
         except Exception as e:
             self.status_bar.showMessage(f"Failed to create API client: {e}")
             return
@@ -479,13 +479,28 @@ class MainWindow(QMainWindow):
     def _drill_into_character_history(self, name: str):
         from .character_history_widget import CharacterHistoryWidget
 
-        widget = CharacterHistoryWidget(name)
+        widget = CharacterHistoryWidget(name, characters=self._characters)
         widget.status_message.connect(self.status_bar.showMessage)
         widget.request_back.connect(self.stack.pop_view)
         self.stack.push_view(widget)
 
     def _on_raid_downloaded(self):
         pass
+
+    def _on_profile_changed(self, name: str):
+        self._refresh_scoped_views()
+        self.raids_hub.download_view.profile_changed()
+        self._load_guild_info()
+        # The top bar keeps showing the profile and its count; the status bar only notes the switch, after the
+        # views' own messages.
+        self.status_bar.showMessage(f"Raid profile: {name}")
+
+    def _on_profiles_edited(self):
+        # Settings added or deleted a profile; deleting the active one switches the app back to all raids.
+        before = self.profile_switcher.combo.currentData()
+        self.profile_switcher.reload()
+        if self.profile_switcher.combo.currentData() != before:
+            self._on_profile_changed(self.profile_switcher.active_name())
 
     def _on_raid_deleted(self, report_id: str):
         pass
@@ -518,34 +533,46 @@ class MainWindow(QMainWindow):
         else:
             self.guild_logo_label.setText("")
 
+    def _refresh_scoped_views(self):
+        """Re-read every view that counts only the active profile's raids, including pushed history views."""
+        from .character_history_widget import CharacterHistoryWidget
+
+        self.home_view.refresh()
+        self.characters_hub.refresh()
+        for view in self.stack.drill_views():
+            if isinstance(view, CharacterHistoryWidget):
+                view.refresh()
+
+    def _on_eras_changed(self):
+        # Tagged raids leave the profiles they don't belong to, so the count and the scoped views change.
+        self.profile_switcher.reload()
+        self._refresh_scoped_views()
+
     def _on_settings_saved(self, msg: str):
         self.status_bar.showMessage(msg)
         if "saved" in msg.lower():
             self._load_guild_info()
 
     def _load_guild_info(self):
-        try:
-            from wcl_core.config import load_config
+        """Show the guild imports come from: the active profile's, else the configured one."""
+        from .worker import GuildInfoWorker, import_guild
 
-            config = load_config()
-            guild_id = config.get("guild_id", 0)
-            client_id = config.get("client_id", "")
-            if not guild_id or not client_id:
-                return
-        except Exception:
+        guild_id = import_guild()
+        if guild_id is None:
             return
-
-        from .worker import GuildInfoWorker
-
         if getattr(self, "_guild_info_worker", None) and self._guild_info_worker.isRunning():
+            self._guild_info_stale = True  # a switch while it runs: ask again when it lands
             return
 
+        self._guild_info_stale = False
         self._guild_info_worker = GuildInfoWorker(guild_id)
         self._guild_info_worker.finished.connect(self._on_guild_info_loaded)
         self._guild_info_worker.start()
 
     def closeEvent(self, event):
         self._console_dock.cleanup()
+        self.profile_switcher.wait_for_counts()
+        self.settings_view.identity_panel.wait_for_tagging()
         worker_attrs = ("_worker", "_guild_worker", "_wowhead_worker", "_auth_wait_thread")
         views = [
             self,
@@ -572,6 +599,8 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _on_guild_info_loaded(self, info: dict):
+        if getattr(self, "_guild_info_stale", False):
+            QTimer.singleShot(0, self._load_guild_info)
         name = info.get("name", "")
         server = info.get("server", "")
         if name and server:

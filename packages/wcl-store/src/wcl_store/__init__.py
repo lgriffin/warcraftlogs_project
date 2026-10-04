@@ -11,5 +11,6 @@ Importing this package loads neither backend.
 
 from .errors import StorageError
 from .repository import RaidRepository
+from .scope import RaidScope, narrowed
 
-__all__ = ["RaidRepository", "StorageError"]
+__all__ = ["RaidRepository", "RaidScope", "StorageError", "narrowed"]

@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from wcl_core.models import EncounterSummary, RaidAnalysis
+from wcl_store import narrowed
 
 from wcl_app.context import AppContext, ProgressCallback
 from wcl_app.player_page import parse_report_code
@@ -485,12 +486,14 @@ class ReferenceService:
 
     def references(self, limit: int = 50) -> list[StoredRaid]:
         with self.ctx.repository() as db:
-            return [StoredRaid.from_row(r) for r in db.get_raids_by_source(REFERENCE, limit)]
+            scope = narrowed(self.ctx.scope, (REFERENCE,))
+            return [StoredRaid.from_row(r) for r in db.get_raids_by_source(REFERENCE, limit, scope=scope)]
 
     def guild_raids(self, limit: int = 50) -> list[StoredRaid]:
         """Our raids a reference can be compared against, newest first."""
         with self.ctx.repository() as db:
-            return [StoredRaid.from_row(r) for r in db.get_raids_by_source(GUILD, limit)]
+            scope = narrowed(self.ctx.scope, (GUILD,))
+            return [StoredRaid.from_row(r) for r in db.get_raids_by_source(GUILD, limit, scope=scope)]
 
     def import_reference(
         self, report: str, *, label: str | None = None, progress: ProgressCallback | None = None

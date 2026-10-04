@@ -178,6 +178,45 @@ class ConsumableUsage:
 
 
 @dataclass
+class FlaskCoverage:
+    """Whether one player had a flask, or a battle and a guardian elixir, up as each boss pull of a raid began.
+
+    Boss pulls are every fight with an encounter id, kills and wipes. A flask counts as both elixirs, so a pull is
+    covered by ``flask_pulls`` or ``elixir_pair_pulls``, never both. The names are every flask and elixir the player
+    had at any point in the raid. Worked out from the buffs table at analysis time; not stored yet.
+    """
+
+    player_name: str
+    player_role: str
+    report_id: str
+    boss_pulls: int = 0
+    flask_pulls: int = 0
+    elixir_pair_pulls: int = 0
+    flasks: list[str] = field(default_factory=list)
+    battle_elixirs: list[str] = field(default_factory=list)
+    guardian_elixirs: list[str] = field(default_factory=list)
+
+    @property
+    def prepared_pulls(self) -> int:
+        """Boss pulls with a flask or an elixir pair up."""
+        return self.flask_pulls + self.elixir_pair_pulls
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.player_name,
+            "role": self.player_role,
+            "report_id": self.report_id,
+            "boss_pulls": self.boss_pulls,
+            "prepared_pulls": self.prepared_pulls,
+            "flask_pulls": self.flask_pulls,
+            "elixir_pair_pulls": self.elixir_pair_pulls,
+            "flasks": list(self.flasks),
+            "battle_elixirs": list(self.battle_elixirs),
+            "guardian_elixirs": list(self.guardian_elixirs),
+        }
+
+
+@dataclass
 class PotionSpike:
     timestamp_ms: int
     potion_name: str
@@ -200,6 +239,10 @@ class RaidMetadata:
     start_time: int
     end_time: int | None = None
     zone: str | None = None
+    # Which Warcraft Logs site the report is on and which expansion its zone belongs to
+    # (``wcl_core.game_version``). None when unknown, e.g. a raid stored before these were read.
+    game_version: str | None = None
+    expansion: str | None = None
 
     @property
     def date(self) -> datetime:
@@ -211,14 +254,12 @@ class RaidMetadata:
 
     @property
     def url(self) -> str:
-        try:
-            from .config import load_config
+        """The report on the site it was fetched from; a raid stored before that was read uses the configured site."""
+        from .config import configured_api_url
+        from .game_version import RETAIL, game_version_for_url, host_for
 
-            api_url = load_config().get("wcl_api_url", "")
-            base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
-        except Exception:  # noqa: BLE001 - a link must render even without a readable config
-            base = "https://www.warcraftlogs.com"
-        return f"{base}/reports/{self.report_id}"
+        version = self.game_version or game_version_for_url(configured_api_url())
+        return f"{host_for(version) or host_for(RETAIL)}/reports/{self.report_id}"
 
 
 @dataclass
@@ -284,6 +325,8 @@ class RaidAnalysis:
     tanks: list[TankPerformance] = field(default_factory=list)
     dps: list[DPSPerformance] = field(default_factory=list)
     consumables: list[ConsumableUsage] = field(default_factory=list)
+    # Not stored: a raid loaded back from storage has none (prepared raids come from ``consumables`` instead).
+    flask_coverage: list[FlaskCoverage] = field(default_factory=list)
     interrupts: list[InterruptUsage] = field(default_factory=list)
     cancelled_casts: list[CancelledCastSummary] = field(default_factory=list)
     aura_uptimes: list[AuraUptime] = field(default_factory=list)

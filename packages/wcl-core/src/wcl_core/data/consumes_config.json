@@ -1,20 +1,23 @@
 {
+  "_comment": [
+    "Aura/spell ids as WarcraftLogs reports them (the buff's spell id, not the item id).",
+    "flasks, battle_elixirs and guardian_elixirs are read from the buffs table like buff_consumables;",
+    "a flask, or one battle and one guardian elixir, counts as prepared (wcl_core.flasks)."
+  ],
   "buff_consumables": {
     "28508": "Destruction Potion",
     "28507": "Haste Potion",
     "28506": "Heroic Potion",
     "28494": "Insane Strength Potion",
     "28504": "Major Dreamless Sleep Potion",
-    "28502": "Ironshield Potion",
-    "28491": "Super Healing Potion",
     "33077": "Scroll of Agility V",
     "12174": "Scroll of Agility IV",
     "33082": "Scroll of Strength V",
     "8120": "Scroll of Strength IV",
     "28726": "Nightmare Seed",
     "38929": "Fel Mana Potion",
-    "42735": "Mad Alchemist's Potion",
-    "35476": "Drums of Battle"
+    "35476": "Drums of Battle",
+    "28515": "Ironshield Potion"
   },
   "cast_consumables": {
     "28499": "Super Mana Potion",
@@ -41,6 +44,44 @@
     "13241": "Goblin Sapper Charge",
     "27235": "Master Healthstone",
     "27236": "Master Healthstone",
-    "27237": "Master Healthstone"
+    "27237": "Master Healthstone",
+    "45051": "Mad Alchemist's Potion"
+  },
+  "flasks": {
+    "28518": "Flask of Fortification",
+    "28519": "Flask of Mighty Restoration",
+    "28520": "Flask of Relentless Assault",
+    "28521": "Flask of Blinding Light",
+    "28540": "Flask of Pure Death",
+    "42735": "Flask of Chromatic Wonder",
+    "17626": "Flask of the Titans",
+    "17627": "Flask of Distilled Wisdom",
+    "17628": "Flask of Supreme Power",
+    "41608": "Shattrath Flask of Relentless Assault",
+    "41609": "Shattrath Flask of Fortification",
+    "41610": "Shattrath Flask of Mighty Restoration",
+    "41611": "Shattrath Flask of Supreme Power",
+    "46837": "Shattrath Flask of Pure Death",
+    "46839": "Shattrath Flask of Blinding Light"
+  },
+  "battle_elixirs": {
+    "28497": "Elixir of Major Agility",
+    "33721": "Adept's Elixir",
+    "28490": "Elixir of Major Strength",
+    "33726": "Elixir of Mastery",
+    "28491": "Elixir of Healing Power",
+    "28501": "Elixir of Major Firepower",
+    "28503": "Elixir of Major Shadow Power",
+    "28493": "Elixir of Major Frost Power",
+    "38954": "Fel Strength Elixir",
+    "33720": "Onslaught Elixir"
+  },
+  "guardian_elixirs": {
+    "28502": "Elixir of Major Defense",
+    "28509": "Elixir of Major Mageblood",
+    "39627": "Elixir of Draenic Wisdom",
+    "39625": "Elixir of Major Fortitude",
+    "39626": "Earthen Elixir",
+    "39628": "Elixir of Ironskin"
   }
 }

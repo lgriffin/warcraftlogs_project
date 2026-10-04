@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..database import PerformanceDB
+from ..services import CharacterService
+from .character_history_widget import default_character_service
 from .charts import SERIES_COLORS, ComparisonSpiderChart
 from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
 
@@ -206,8 +207,10 @@ class _CastTableModel(QAbstractTableModel):
 class CompareView(QWidget):
     status_message = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, characters: CharacterService | None = None):
         super().__init__(parent)
+        # Reads follow the active raid profile; ``refresh()`` re-reads everything after a switch.
+        self._characters = characters if characters is not None else default_character_service()
         self._selected: list[str] = []
         self._char_stats: dict[str, dict] = {}
         self._spider_data: dict[str, dict] = {}
@@ -220,6 +223,7 @@ class CompareView(QWidget):
         self._raw_dps_abilities: dict[str, list[dict]] = {}
         self._raw_consumable_trends: dict[str, list[dict]] = {}
         self._cached_consistency: dict[str, dict | None] = {}
+        self._stale = False
         self._build_ui()
 
     def _build_ui(self):
@@ -402,12 +406,37 @@ class CompareView(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._refresh_character_list()
+        if self._stale:
+            self.refresh()
+        else:
+            self._refresh_character_list()
+
+    def refresh(self):
+        """Re-read the list and every compared character, e.g. after a raid profile switch.
+
+        A character with no raids in the new profile drops out of the comparison. While the view is hidden the
+        re-read waits for it to be shown.
+        """
+        if not self.isVisible():
+            self._stale = True
+            return
+        self._stale = False
+        selected = list(self._selected)
+        # The re-read removes and re-adds each character; those are not the user's actions, so they stay quiet.
+        self.blockSignals(True)
+        try:
+            for name in selected:
+                self._remove_character(name)
+            self._refresh_character_list()
+            for name in selected:
+                self._load_and_add(name)
+            self._sync_checkboxes()
+        finally:
+            self.blockSignals(False)
 
     def _refresh_character_list(self):
         try:
-            with PerformanceDB() as db:
-                self._all_characters = db.get_all_characters()
+            self._all_characters = self._characters.roster()
         except (sqlite3.Error, OSError):
             self._all_characters = []
 
@@ -462,23 +491,18 @@ class CompareView(QWidget):
 
     def _load_and_add(self, name: str):
         try:
-            with PerformanceDB() as db:
-                history = db.get_character_history(name)
-                consistency = db.get_character_consistency(name)
-                spider = db.get_character_spider_data(name)
-                healer_trends = db.get_healer_trend(name)
-                dps_trends = db.get_dps_trend(name)
-                tank_trends = db.get_tank_trend(name)
-                healer_spells = db.get_healer_spell_trend(name)
-                dps_abilities = db.get_dps_ability_trend(name)
-                consumable_trends = db.get_consumable_trend(name)
+            comparison = self._characters.comparison(name)
         except (sqlite3.Error, OSError) as e:
             self.status_message.emit(f"Failed to load {name}: {e}")
             return
 
-        if not history:
+        if comparison is None:
             self.status_message.emit(f"No data found for {name}")
             return
+        trends = comparison.trends
+        healer_trends, dps_trends, tank_trends = trends.healer, trends.dps, trends.tank
+        healer_spells, dps_abilities, consumable_trends = trends.healer_spells, trends.dps_abilities, trends.consumables
+        consistency, spider = comparison.consistency, comparison.spider
 
         self._raw_healer_trends[name] = healer_trends
         self._raw_dps_trends[name] = dps_trends

@@ -169,3 +169,18 @@ class TestBadges:
         cfg_path = tmp_path / "config.json"
         cfg_path.write_text(json.dumps({"client_id": "a", "client_secret": "b", "report_id": "c", "badges": [1]}))
         assert ConfigManager(str(cfg_path)).load().badges == {}
+
+
+class TestSettingsTheAppReadsBack:
+    def _load(self, tmp_path, **extra):
+        cfg_path = tmp_path / "config.json"
+        cfg_path.write_text(json.dumps({"client_id": "a", "client_secret": "b", "report_id": "c", **extra}))
+        return load_config(str(cfg_path))
+
+    def test_the_toads_hub_url_reaches_the_bridge(self, tmp_path):
+        assert self._load(tmp_path, toads_hub_url="https://hub.toads.test")["toads_hub_url"] == "https://hub.toads.test"
+        assert self._load(tmp_path)["toads_hub_url"] == ""
+
+    def test_turning_off_the_update_check_sticks(self, tmp_path):
+        assert self._load(tmp_path, auto_check_updates=False)["auto_check_updates"] is False
+        assert self._load(tmp_path)["auto_check_updates"] is True

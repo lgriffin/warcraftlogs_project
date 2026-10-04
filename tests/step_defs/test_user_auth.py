@@ -1,12 +1,12 @@
-"""Step definitions for user authentication feature."""
+"""Step definitions for user authentication feature, against the fake Warcraft Logs in ``wcl_core.testing``."""
 
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import requests
 from pytest_bdd import given, parsers, scenarios, then, when
+from wcl_core.testing import FakeResponse, FakeWarcraftLogs
 
 from warcraftlogs_client.common.errors import AuthenticationError
 from warcraftlogs_client.user_auth import UserTokenManager
@@ -18,7 +18,7 @@ scenarios("user_auth.feature")
 def no_token(tmp_path):
     token_path = str(tmp_path / "user_token.json")
     tm = UserTokenManager(token_path=token_path)
-    return {"tm": tm, "path": token_path, "post_mock": None}
+    return {"tm": tm, "path": token_path, "wcl": FakeWarcraftLogs()}
 
 
 @given(
@@ -35,7 +35,7 @@ def saved_valid_token(tmp_path, token, seconds):
     with Path(token_path).open("w") as f:
         json.dump(data, f)
     tm = UserTokenManager(token_path=token_path)
-    return {"tm": tm, "path": token_path, "post_mock": None}
+    return {"tm": tm, "path": token_path, "wcl": FakeWarcraftLogs()}
 
 
 @given(
@@ -52,7 +52,7 @@ def saved_expired_token(tmp_path, refresh):
     with Path(token_path).open("w") as f:
         json.dump(data, f)
     tm = UserTokenManager(token_path=token_path)
-    return {"tm": tm, "path": token_path, "post_mock": None}
+    return {"tm": tm, "path": token_path, "wcl": FakeWarcraftLogs()}
 
 
 @given("a corrupted token file", target_fixture="user_auth_ctx")
@@ -61,7 +61,7 @@ def corrupted_token(tmp_path):
     with Path(token_path).open("w") as f:
         f.write("{corrupted data not valid json!!!")
     tm = UserTokenManager(token_path=token_path)
-    return {"tm": tm, "path": token_path, "post_mock": None}
+    return {"tm": tm, "path": token_path, "wcl": FakeWarcraftLogs()}
 
 
 @given(
@@ -69,28 +69,18 @@ def corrupted_token(tmp_path):
         'the token server will respond with access_token "{access}" and refresh_token "{refresh}" expiring in {seconds:d} seconds'
     ),
 )
-def mock_token_success(user_auth_ctx, access, refresh, seconds):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {
-        "access_token": access,
-        "refresh_token": refresh,
-        "expires_in": seconds,
-    }
-    user_auth_ctx["post_mock"] = mock_resp
+def server_grants(user_auth_ctx, access, refresh, seconds):
+    user_auth_ctx["wcl"].token({"access_token": access, "refresh_token": refresh, "expires_in": seconds})
 
 
 @given(parsers.parse("the token server will return HTTP {status:d} on refresh"))
-def mock_refresh_failure(user_auth_ctx, status):
-    mock_resp = MagicMock()
-    mock_resp.status_code = status
-    mock_resp.text = "Bad Request"
-    user_auth_ctx["post_mock"] = mock_resp
+def server_refuses_refresh(user_auth_ctx, status):
+    user_auth_ctx["wcl"].token(FakeResponse(status, text="Bad Request"))
 
 
 @given("the token server is unreachable")
-def mock_unreachable(user_auth_ctx):
-    user_auth_ctx["post_mock"] = "connection_error"
+def server_unreachable(user_auth_ctx):
+    user_auth_ctx["wcl"].token(requests.ConnectionError("unreachable"))
 
 
 @when(
@@ -98,16 +88,7 @@ def mock_unreachable(user_auth_ctx):
     target_fixture="user_token_result",
 )
 def complete_auth_flow(user_auth_ctx, code):
-    mock = user_auth_ctx["post_mock"]
-    if mock == "connection_error":
-        with patch("requests.post", side_effect=requests.ConnectionError("unreachable")):
-            try:
-                user_auth_ctx["tm"].complete_auth(code, "cid", "csec")
-                return {"error": None}
-            except AuthenticationError as e:
-                return {"error": e}
-
-    with patch("requests.post", return_value=mock):
+    with user_auth_ctx["wcl"].install():
         try:
             user_auth_ctx["tm"].complete_auth(code, "cid", "csec")
             return {"error": None}
@@ -124,13 +105,9 @@ def reload_token_manager(user_auth_ctx):
 
 @when("the user requests a token", target_fixture="user_token_result")
 def request_user_token(user_auth_ctx, monkeypatch):
-    mock = user_auth_ctx["post_mock"]
-    config_mock = {"client_id": "cid", "client_secret": "csec"}
-    monkeypatch.setattr("warcraftlogs_client.config.load_config", lambda config_file=None: config_mock)
-    with (
-        patch("requests.post", return_value=mock),
-        patch("warcraftlogs_client.user_auth.get_token_url", return_value="http://fake/oauth/token"),
-    ):
+    config = {"client_id": "cid", "client_secret": "csec"}
+    monkeypatch.setattr("warcraftlogs_client.config.load_config", lambda config_file=None: config)
+    with user_auth_ctx["wcl"].install():
         try:
             token = user_auth_ctx["tm"].get_token()
             return {"token": token, "error": None}

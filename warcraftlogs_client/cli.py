@@ -8,6 +8,8 @@ This module provides a single entry point for all analysis modes:
 - consumes: Consumables analysis across multiple raids
 - history: Query historical character performance
 - player: Discover the reports a character is in and collect them on a player page
+- profile: Named views over the stored raids (TBC, Classic days, ...) and where new imports come from
+- discord: Link this app to a Discord account (experimental, see guides/identity_and_profiles.md)
 """
 
 import argparse
@@ -23,7 +25,7 @@ from .version import __version__
 
 if TYPE_CHECKING:
     from .database import PerformanceDB
-    from .services import AppContext, PlayerLog, PlayerRef, Spread
+    from .services import AppContext, BridgeService, PlayerLog, PlayerRef, Profile, ProfileService, RaidService, Spread
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -151,7 +153,68 @@ Examples:
     list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
     _add_reference_parser(subparsers)
+    _add_profile_parser(subparsers)
+    _add_discord_parser(subparsers)
+    _add_hub_parser(subparsers)
     return parser
+
+
+def _add_profile_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    from .services.profiles import GAME_VERSIONS
+
+    profile_parser = subparsers.add_parser("profile", help="Named views over the stored raids (TBC, Classic, ...)")
+    profile_sub = profile_parser.add_subparsers(dest="profile_command", metavar="ACTION")
+
+    list_parser = profile_sub.add_parser("list", help="List profiles and which is active")
+    list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    create_parser = profile_sub.add_parser("create", help="Create a profile")
+    create_parser.add_argument("name", help='Profile name, e.g. "TBC"')
+    create_parser.add_argument("--game-version", choices=GAME_VERSIONS, help="Warcraft Logs site the raids are on")
+    create_parser.add_argument("--expansion", action="append", default=[], help="Expansion to include (repeatable)")
+    create_parser.add_argument("--zone", action="append", default=[], help="Zone to include (repeatable)")
+    create_parser.add_argument("--since", help="Earliest raid date, YYYY-MM-DD")
+    create_parser.add_argument("--until", help="Raid date to stop before, YYYY-MM-DD")
+    create_parser.add_argument("--guild-id", type=int, help="Guild to import from (default: config)")
+    create_parser.add_argument(
+        "--api-url", help="Warcraft Logs API URL to import from (default: the game version's site, else config)"
+    )
+    create_parser.add_argument("--use", action="store_true", help="Make it the active profile")
+
+    use_parser = profile_sub.add_parser("use", help="Pick the active profile; no name means every raid")
+    use_parser.add_argument("slug", nargs="?", help="Profile slug from 'profile list'")
+
+    show_parser = profile_sub.add_parser("show", help="Show the active profile and the raids it sees")
+    show_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+
+    delete_parser = profile_sub.add_parser("delete", help="Delete a profile (the raids stay)")
+    delete_parser.add_argument("slug", help="Profile slug")
+
+    profile_sub.add_parser("backfill", help="Tag stored raids with their game version and expansion")
+
+    import_parser = profile_sub.add_parser("import", help="Import the guild's new reports in the active profile's era")
+    import_parser.add_argument("--list", action="store_true", help="Only list them")
+
+
+def _add_hub_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    hub_parser = subparsers.add_parser("hub", help="Link this app to the Toads Hub with a code from the bot")
+    hub_sub = hub_parser.add_subparsers(dest="hub_command", metavar="ACTION")
+    link_parser = hub_sub.add_parser("link", help="Redeem the one-time code the Toads bot gave you")
+    link_parser.add_argument("code", help="The code, like 7KQ2-M9XD")
+    status_parser = hub_sub.add_parser("status", help="Show which Hub and member this app is linked to")
+    status_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    hub_sub.add_parser("publish", help="Send this app's raid profiles to the Hub")
+    hub_sub.add_parser("unlink", help="Forget the Hub link here and on the Hub")
+
+
+def _add_discord_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    discord_parser = subparsers.add_parser("discord", help="Link this app to a Discord account (experimental)")
+    discord_sub = discord_parser.add_subparsers(dest="discord_command", metavar="ACTION")
+    login_parser = discord_sub.add_parser("login", help="Sign in with Discord in the browser")
+    login_parser.add_argument("--no-browser", action="store_true", help="Print the sign-in URL instead of opening it")
+    whoami_parser = discord_sub.add_parser("whoami", help="Show the linked Discord account")
+    whoami_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    discord_sub.add_parser("logout", help="Forget the linked Discord account")
 
 
 def _add_reference_parser(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -188,7 +251,7 @@ def run_unified_analysis(args: argparse.Namespace, role: str | None = None) -> i
     from .services import AppContext, RaidService
 
     reset_spell_manager()
-    ctx = AppContext.from_config_file()
+    ctx = AppContext.desktop()
     report_id = args.report_id if hasattr(args, "report_id") and args.report_id else ctx.config["report_id"]
     raids = RaidService(ctx)
 
@@ -217,8 +280,11 @@ def run_consumes_analysis(args: argparse.Namespace) -> int:
     try:
         from wcl_core.consumes_analysis import run_consumes_analysis as _run
 
+        from .services import AppContext
+
         md_path = getattr(args, "md", None)
-        _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path)
+        client = AppContext.desktop().wcl_client  # the saved profile's host, like every other command
+        _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path, client=client)
         return 0
     except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
         print(f"Error running consumes analysis: {e}")
@@ -227,10 +293,12 @@ def run_consumes_analysis(args: argparse.Namespace) -> int:
 
 def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
     from .database import PerformanceDB
+    from .services import AppContext
 
+    scope = AppContext.desktop(with_config=False).scope
     with PerformanceDB() as db:
         if hasattr(args, "raids") and args.raids:
-            raids = db.get_raid_list()
+            raids = db.get_raid_list(scope=scope)
             if not raids:
                 print("No raids imported yet. Use --save when running analysis.")
                 return 0
@@ -241,7 +309,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
             return 0
 
         if hasattr(args, "all") and args.all:
-            characters = db.get_all_characters()
+            characters = db.get_all_characters(scope=scope)
             if not characters:
                 print("No characters tracked yet. Use --save when running analysis.")
                 return 0
@@ -257,7 +325,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
             print("Specify a character name, --all, or --raids.")
             return 1
 
-        history = db.get_character_history(args.character_name)
+        history = db.get_character_history(args.character_name, scope=scope)
         if not history:
             print(f"No data found for '{args.character_name}'.")
             return 1
@@ -276,7 +344,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
 
         role = args.role if hasattr(args, "role") and args.role else None
         if role == "healer" or (role is None and history.avg_healing is not None):
-            trend = db.get_healer_trend(args.character_name)
+            trend = db.get_healer_trend(args.character_name, scope=scope)
             if trend:
                 print(f"\n{'Date':<22} {'Raid':<25} {'Healing':>12} {'Overheal%':>10}")
                 print("-" * 72)
@@ -287,7 +355,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
                     )
 
         if role == "tank" or (role is None and history.avg_mitigation_percent is not None):
-            trend = db.get_tank_trend(args.character_name)
+            trend = db.get_tank_trend(args.character_name, scope=scope)
             if trend:
                 print(f"\n{'Date':<22} {'Raid':<25} {'Taken':>12} {'Mitigation%':>12}")
                 print("-" * 75)
@@ -298,7 +366,7 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
                     )
 
         if role in ("melee", "ranged") or (role is None and history.avg_damage is not None):
-            trend = db.get_dps_trend(args.character_name)
+            trend = db.get_dps_trend(args.character_name, scope=scope)
             if trend:
                 print(f"\n{'Date':<22} {'Raid':<25} {'Role':<8} {'Damage':>12}")
                 print("-" * 70)
@@ -377,13 +445,13 @@ def _run_player_role(ctx: "AppContext", db: "PerformanceDB", args: argparse.Name
     return 0 if all(r.ok for r in results) else 1
 
 
-def _run_player_lineage(db: "PerformanceDB", args: argparse.Namespace) -> int:
+def _run_player_lineage(ctx: "AppContext", db: "PerformanceDB", args: argparse.Namespace) -> int:
     import json
 
     from .services import character_lineage
 
     sources = ("guild", "reference") if args.include_reference else ("guild",)
-    lineage = character_lineage(db, args.name, sources)
+    lineage = character_lineage(db, args.name, sources, scope=ctx.scope)
     if lineage is None:
         print(f"No raids stored for '{args.name}'.")
         return 1
@@ -421,7 +489,7 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
         print("Specify an action: discover, add, show, remove, dismiss, role, lineage or list.")
         return 1
 
-    ctx = AppContext.from_config_file()
+    ctx = AppContext.desktop()
     with ctx.db() as db:
         if action == "list":
             pages = PlayerPageService(db).list_pages()
@@ -437,7 +505,7 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
         if action == "role":
             return _run_player_role(ctx, db, args)
         if action == "lineage":
-            return _run_player_lineage(db, args)
+            return _run_player_lineage(ctx, db, args)
 
         player = _resolve_player(db, args, ctx.config)
         needs_api = action in ("add",) or (action == "discover" and not args.local)
@@ -502,7 +570,7 @@ def _reference_context(action: str) -> "AppContext":
     """Imports talk to Warcraft Logs and need the config; everything else reads the database only."""
     from .services import AppContext
 
-    return AppContext.from_config_file() if action == "import" else AppContext(config={})
+    return AppContext.desktop(with_config=action == "import")
 
 
 def run_reference_command(args: argparse.Namespace) -> int:
@@ -553,6 +621,206 @@ def run_reference_command(args: argparse.Namespace) -> int:
     return 1
 
 
+def _profile_service(need_config: bool) -> "ProfileService":
+    from wcl_core.paths import get_profiles_path
+
+    from .services import AppContext, IdentityService, JsonProfileStore, ProfileService
+
+    ctx = AppContext.desktop(with_config=need_config)
+    identity = IdentityService().current()
+    service = ProfileService.from_context(
+        ctx, JsonProfileStore(get_profiles_path()), owner=identity.id if identity else None
+    )
+    service.apply()
+    return service
+
+
+def _day_start(value: str | None) -> str | None:
+    return f"{value} 00:00:00" if value else None
+
+
+def _print_profile(p: "Profile", active: bool) -> None:
+    axes = []
+    if p.game_version:
+        axes.append(p.game_version)
+    axes.extend(p.expansions)
+    axes.extend(p.zones)
+    if p.since or p.until:
+        axes.append(f"{(p.since or '')[:10]}..{(p.until or '')[:10]}")
+    mark = "*" if active else " "
+    print(f"{mark} {p.slug:<16} {p.name:<24} {', '.join(axes) or 'every raid'}")
+
+
+def run_profile_command(args: argparse.Namespace) -> int:
+    import json
+
+    from .services import RaidService
+
+    action = getattr(args, "profile_command", None)
+    if not action:
+        print("Specify an action: list, create, use, show, delete, backfill or import.")
+        return 1
+    service = _profile_service(need_config=action in ("backfill", "import"))
+    if action == "import" and service.ctx is not None:
+        return _profile_import(RaidService(service.ctx), only_list=args.list)
+
+    if action == "list":
+        profiles = service.profiles()
+        if args.json:
+            print(json.dumps(profiles.to_dict(), indent=2))
+        elif not profiles.profiles:
+            print("No profiles yet. Create one with: profile create TBC --expansion 'The Burning Crusade'")
+        for p in [] if args.json else profiles.profiles:
+            _print_profile(p, p.slug == profiles.active)
+        return 0
+    if action == "create":
+        created = service.create(
+            args.name,
+            game_version=args.game_version,
+            expansions=tuple(args.expansion),
+            zones=tuple(args.zone),
+            since=_day_start(args.since),
+            until=_day_start(args.until),
+            guild_id=args.guild_id,
+            wcl_api_url=args.api_url,
+            activate=args.use,
+        )
+        print(f"Created profile '{created.name}' ({created.slug}){' and made it active' if args.use else ''}.")
+        return 0
+    if action == "use":
+        try:
+            chosen = service.activate(args.slug)
+        except KeyError:
+            print(f"No profile '{args.slug}'. See: profile list")
+            return 1
+        print(f"Active profile: {chosen.name}" if chosen else "Active profile cleared; every raid is shown.")
+        return 0
+    if action == "show":
+        profile = service.active()
+        raids = RaidService(service.ctx).list_raids(limit=20) if service.ctx else []
+        if args.json:
+            print(json.dumps({"profile": profile.to_dict() if profile else None, "raids": raids}, indent=2))
+            return 0
+        print(f"Active profile: {profile.name}" if profile else "No active profile: every raid is shown.")
+        for r in raids:
+            era = " / ".join(x for x in (r.get("game_version"), r.get("expansion")) if x)
+            print(f"{r['report_id']:<18} {r['raid_date'][:10]:<11} {r.get('zone') or '':<22} {era:<30} {r['title']}")
+        return 0
+    if action == "delete":
+        print("Profile deleted." if service.delete(args.slug) else f"No profile '{args.slug}'.")
+        return 0
+    if action == "backfill":
+        changed = service.backfill_eras()
+        print(f"Tagged {changed} raid(s) with a game version and expansion.")
+        return 0
+    return 1
+
+
+def _profile_import(raids: "RaidService", *, only_list: bool) -> int:
+    """``profile import``: the guild's reports in the active profile's era that are not stored yet."""
+    from .services import ProfileSiteUnknown
+
+    try:
+        new = raids.new_guild_reports()
+        if not only_list:
+            raids.import_missing([r["code"] for r in new], progress=print)
+    except (ProfileSiteUnknown, WarcraftLogsError, requests.RequestException, ValueError) as e:
+        print(f"Import failed: {e}")
+        return 1
+    for r in new:
+        print(f"{r['code']:<18} {r.get('zone') or '':<22} {r.get('expansion') or '':<22} {r['title']}")
+    print(f"{len(new)} new report(s){' to import' if only_list else ' imported'}.")
+    return 0
+
+
+def run_discord_command(args: argparse.Namespace) -> int:
+    import json
+
+    from .services import AppContext, DiscordNotConfigured, IdentityService
+
+    action = getattr(args, "discord_command", None)
+    if not action:
+        print("Specify an action: login, whoami or logout.")
+        return 1
+    if action == "login":
+        try:
+            config = AppContext.from_config_file().config
+        except WarcraftLogsError:
+            config = {}
+        service = IdentityService(config=config)
+        try:
+            identity = service.link(open_browser=not args.no_browser)
+        except DiscordNotConfigured as e:
+            print(f"Error: {e}")
+            return 1
+        print(f"Linked to Discord as {identity.display_name} ({identity.id}).")
+        return 0
+    service = IdentityService()
+    linked = service.current()
+    if action == "whoami":
+        if args.json:
+            print(json.dumps(linked.__dict__ if linked else None, indent=2))
+        elif linked:
+            print(f"{linked.display_name} ({linked.username}, id {linked.id})")
+        else:
+            print("Not linked. Run: discord login")
+        return 0
+    if action == "logout":
+        service.unlink()
+        print("Discord account forgotten.")
+        return 0
+    return 1
+
+
+def _bridge() -> "BridgeService":
+    from wcl_core.paths import get_profiles_path
+
+    from .services import AppContext, BridgeService, IdentityService, JsonProfileStore, ProfileService
+    from .version import __version__
+
+    try:
+        config = AppContext.from_config_file().config
+    except WarcraftLogsError:
+        config = {}
+    profiles = ProfileService(JsonProfileStore(get_profiles_path()))
+    return BridgeService(config=config, identity=IdentityService(), profiles=profiles, app_version=__version__)
+
+
+def run_hub_command(args: argparse.Namespace) -> int:
+    import json
+
+    action = getattr(args, "hub_command", None)
+    if not action:
+        print("Specify an action: link, status, publish or unlink.")
+        return 1
+    service = _bridge()
+    link = service.current()
+    try:
+        if action == "link":
+            link = service.link(args.code)
+            print(f"Linked to the Toads Hub as {link.member.name}; your raid profiles are published.")
+        elif action == "publish":
+            service.publish()
+            print("Raid profiles published to the Toads Hub.")
+        elif action == "unlink" and link is None:
+            print("Not linked.")
+        elif action == "unlink":
+            confirmed = service.unlink()
+            print("Hub link forgotten." if confirmed else "Hub link forgotten here; the Hub could not be told.")
+        elif args.json:
+            print(
+                json.dumps(
+                    {"hub_url": link.hub_url, "app_id": link.app_id, "member": link.member.__dict__} if link else None
+                )
+            )
+        else:
+            print(f"Linked to {link.hub_url} as {link.member.name}." if link else "Not linked. Run: hub link CODE")
+    except (WarcraftLogsError, ValueError, LookupError, OSError) as e:
+        print(f"Error: {e}")
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
@@ -580,6 +848,9 @@ def main() -> int:
         "history": run_history_query,
         "player": run_player_command,
         "reference": run_reference_command,
+        "profile": run_profile_command,
+        "discord": run_discord_command,
+        "hub": run_hub_command,
     }
 
     handler = commands.get(args.command)

@@ -3,10 +3,10 @@
 import json
 import logging
 import time
-from unittest.mock import patch
 
 import pytest
 from pytest_bdd import given, scenarios, then, when
+from wcl_core.testing import FakeWarcraftLogs, grant, status
 
 from tests.test_secret_logging import (
     ACCESS_TOKEN,
@@ -15,8 +15,6 @@ from tests.test_secret_logging import (
     NEW_ACCESS_TOKEN,
     NEW_REFRESH_TOKEN,
     REFRESH_TOKEN,
-    _fail,
-    _ok,
     assert_no_secret_in_logs,
 )
 from warcraftlogs_client.auth import TokenManager
@@ -26,8 +24,6 @@ from warcraftlogs_client.config import load_config
 from warcraftlogs_client.user_auth import UserTokenManager
 
 scenarios("secret_logging.feature")
-
-TOKEN_URL = "https://example.test/oauth/token"
 
 
 @given("every logger is capturing at DEBUG level", target_fixture="log_capture")
@@ -53,12 +49,11 @@ def secret_from_env(tmp_path, monkeypatch):
 def client_credentials_and_query(secret_ctx):
     config = secret_ctx["config"]
     tm = TokenManager(config["client_id"], config["client_secret"])
-    client = WarcraftLogsClient(tm, cache_enabled=False, api_url="https://example.test/api/v2/client")
-    with patch("requests.post", return_value=_ok({"access_token": ACCESS_TOKEN, "expires_in": 3600})):
-        tm.get_token()
-    with patch("requests.post", return_value=_ok({"data": {}})) as post:
+    client = WarcraftLogsClient(tm, cache_enabled=False)
+    wcl = FakeWarcraftLogs().token(grant(ACCESS_TOKEN)).answer("x", {})
+    with wcl.install():
         client.run_query("query { x }", use_cache=False)
-    assert post.call_args.kwargs["headers"]["Authorization"] == f"Bearer {ACCESS_TOKEN}"
+    assert wcl.queries[-1].headers["Authorization"] == f"Bearer {ACCESS_TOKEN}"
 
 
 @when("the user completes the OAuth flow and the token is later refreshed")
@@ -67,28 +62,22 @@ def oauth_then_refresh(secret_ctx):
     tm = UserTokenManager(token_path=secret_ctx["token_path"])
     first = {"access_token": ACCESS_TOKEN, "refresh_token": REFRESH_TOKEN, "expires_in": 3600}
     second = {"access_token": NEW_ACCESS_TOKEN, "refresh_token": NEW_REFRESH_TOKEN, "expires_in": 3600}
-    with patch("warcraftlogs_client.user_auth.get_token_url", return_value=TOKEN_URL):
-        with patch("requests.post", return_value=_ok(first)):
-            tm.complete_auth(AUTH_CODE, config["client_id"], config["client_secret"])
+    with FakeWarcraftLogs().token(first, second).install():
+        tm.complete_auth(AUTH_CODE, config["client_id"], config["client_secret"])
         tm._expires_at = time.time() - 1
-        with patch("requests.post", return_value=_ok(second)):
-            assert tm.get_token() == NEW_ACCESS_TOKEN
+        assert tm.get_token() == NEW_ACCESS_TOKEN
 
 
 @when("the token server rejects the client credentials and the OAuth code exchange")
 def rejected_credentials(secret_ctx):
     config = secret_ctx["config"]
     tm = TokenManager(config["client_id"], config["client_secret"])
-    with patch("requests.post", return_value=_fail(401)), pytest.raises(AuthenticationError) as client_err:
+    with FakeWarcraftLogs().token(status(401)).install(), pytest.raises(AuthenticationError) as client_err:
         tm.get_token()
     handle_error(client_err.value, context="client credentials", exit_on_critical=False)
 
     user_tm = UserTokenManager(token_path=secret_ctx["token_path"])
-    with (
-        patch("warcraftlogs_client.user_auth.get_token_url", return_value=TOKEN_URL),
-        patch("requests.post", return_value=_fail(400)),
-        pytest.raises(AuthenticationError) as user_err,
-    ):
+    with FakeWarcraftLogs().token(status(400)).install(), pytest.raises(AuthenticationError) as user_err:
         user_tm.complete_auth(AUTH_CODE, config["client_id"], config["client_secret"])
     handle_error(user_err.value, context="oauth code exchange", exit_on_critical=False)
 

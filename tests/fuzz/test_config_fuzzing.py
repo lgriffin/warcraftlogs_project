@@ -27,9 +27,10 @@ class TestConfigFuzzing:
         config_path.write_text(json.dumps(random_dict), encoding="utf-8")
 
         try:
-            cfg.load_config(str(config_path))
+            result = cfg.load_config(str(config_path))
         except ConfigurationError:
-            pass  # Expected for missing required keys
+            return  # Expected for missing required keys
+        assert isinstance(result, dict)
 
     @settings(max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture])
     @given(text=st.text())

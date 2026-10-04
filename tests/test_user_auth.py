@@ -222,14 +222,8 @@ class TestOAuthCallbackServer:
         server = OAuthCallbackServer(port=port, timeout=5)
         server.start()
 
-        try:
-            resp = urlopen(
-                f"http://127.0.0.1:{port}/callback?code=test_code&state=test_state",
-                timeout=3,
-            )
+        with urlopen(f"http://127.0.0.1:{port}/callback?code=test_code&state=test_state", timeout=3) as resp:
             assert resp.status == 200
-        except Exception:
-            pass
 
         result = server.wait(timeout=5)
         server.shutdown()
@@ -249,13 +243,8 @@ class TestOAuthCallbackServer:
         server = OAuthCallbackServer(port=port, timeout=5)
         server.start()
 
-        try:
-            urlopen(
-                f"http://127.0.0.1:{port}/callback?error=access_denied",
-                timeout=3,
-            )
-        except Exception:
-            pass
+        with urlopen(f"http://127.0.0.1:{port}/callback?error=access_denied", timeout=3) as resp:
+            assert resp.status == 200  # the page tells the user to close the window
 
         result = server.wait(timeout=5)
         server.shutdown()

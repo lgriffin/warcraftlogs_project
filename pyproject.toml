@@ -32,8 +32,10 @@ dev = [
     "vulture==2.16",
     "pip-audit>=2.7",
     "codespell==2.4.3",
-    "diff-cover==9.2.0",
+    "diff-cover==10.6.0",
     "import-linter==2.15",
+    "pyyaml>=6.0",  # tests/test_dev_tasks.py reads ci.yml
+    "tomli>=2.0; python_version < '3.11'",  # scripts/mutate.py reads pyproject.toml
 ]
 
 [project.scripts]
@@ -161,6 +163,26 @@ min_confidence = 80
 # REQ-CORE-ARCH-001: wcl-core stays headless so the desktop app and the Toads Hub worker can share it.
 # REQ-CORE-STORE-002: wcl-store is persistence only, and its SQLite side never needs the Postgres extra.
 # REQ-CORE-APP-001: wcl-app (services) installs and runs without the desktop app.
+# Mutation testing (scripts/mutate.py, `python scripts/dev.py mutation`): each wcl_core module and the tests that
+# must catch a bug planted in it. A floor is the share of mutants the tests kill; floors only go up.
+[tool.wcl.mutation.targets]
+auth = ["tests/test_auth.py", "tests/step_defs/test_auth.py"]
+cache = ["tests/test_cache.py"]
+dynamic_role_parser = ["tests/test_dynamic_role_parser.py"]
+flasks = ["tests/test_flasks.py"]
+game_version = ["tests/test_game_version.py"]
+http = ["tests/test_wcl_core_testing.py"]
+hub = ["tests/test_hub_bridge.py"]
+
+[tool.wcl.mutation.floors]
+auth = 0.71
+cache = 0.30
+dynamic_role_parser = 0.90
+flasks = 0.88
+game_version = 0.94
+http = 1.0
+hub = 1.0
+
 [tool.importlinter]
 root_packages = ["wcl_core", "wcl_store", "wcl_app"]
 include_external_packages = true

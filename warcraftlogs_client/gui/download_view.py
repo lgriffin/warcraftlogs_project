@@ -2,12 +2,11 @@
 Download view — fetch guild reports, show download status, batch analyze.
 """
 
-import json
 import sqlite3
 import webbrowser
 from datetime import datetime
 
-from PySide6.QtCore import QModelIndex, Signal
+from PySide6.QtCore import QModelIndex, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -24,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from .styles import COLORS, COMMON_STYLES
 from .table_models import HistoryTableModel
-from .worker import AnalysisWorker, GuildReportsWorker
+from .worker import AnalysisWorker, GuildReportsWorker, import_guild
 
 
 class DownloadView(QWidget):
@@ -40,6 +39,7 @@ class DownloadView(QWidget):
         self._batch_queue: list[str] = []
         self._batch_total = 0
         self._auto_fetched = False
+        self._generation = 0  # bumped on a profile switch, so a fetch for the old profile is dropped
         self._build_ui()
 
     def _build_ui(self):
@@ -138,41 +138,41 @@ class DownloadView(QWidget):
         self._refresh_cached_codes()
         if self._guild_reports_raw:
             self._apply_day_filter()
-        elif not self._auto_fetched:
-            try:
-                from wcl_core.config import load_config
+        elif not self._auto_fetched and import_guild() is not None:
+            self._auto_fetched = True
+            self._fetch_guild_reports()
 
-                config = load_config()
-                guild_id = config.get("guild_id", 0)
-                client_id = config.get("client_id", "")
-                if guild_id and client_id:
-                    self._auto_fetched = True
-                    self._fetch_guild_reports()
-            except (FileNotFoundError, json.JSONDecodeError, KeyError):
-                pass
+    def profile_changed(self):
+        """Drop the fetched list: the next profile may have another guild, site or era. Refetch if showing.
+
+        A fetch still running for the old profile is from an older generation; its list is dropped when it lands.
+        """
+        self._generation += 1
+        self._guild_reports_raw = []
+        self._auto_fetched = False
+        self._apply_day_filter()
+        if self.isVisible():
+            self._fetch_guild_reports()
 
     def _fetch_guild_reports(self):
-        try:
-            from wcl_core.config import load_config
-
-            config = load_config()
-            guild_id = config.get("guild_id", 774065)
-        except (FileNotFoundError, json.JSONDecodeError, KeyError):
-            guild_id = 774065
-
         if getattr(self, "_guild_worker", None) and self._guild_worker.isRunning():
-            return
+            return  # a switch meanwhile refetches when this one lands
 
         self._fetch_btn.setEnabled(False)
         self.status_message.emit("Fetching guild reports...")
 
-        self._guild_worker = GuildReportsWorker(guild_id)
-        self._guild_worker.finished.connect(self._on_guild_loaded)
+        generation = self._generation
+        self._guild_worker = GuildReportsWorker()  # the active profile's guild and era, else config
+        self._guild_worker.finished.connect(lambda reports: self._on_guild_loaded(reports, generation))
         self._guild_worker.error.connect(self._on_guild_error)
         self._guild_worker.start()
 
-    def _on_guild_loaded(self, reports: list):
+    def _on_guild_loaded(self, reports: list, generation: int | None = None):
         self._fetch_btn.setEnabled(True)
+        if generation is not None and generation != self._generation:
+            if self.isVisible():  # fetched for the profile before the switch: ask again for this one
+                QTimer.singleShot(0, self._fetch_guild_reports)
+            return
         self._guild_reports_raw = reports
         self._refresh_cached_codes()
         self._apply_day_filter()
@@ -225,6 +225,7 @@ class DownloadView(QWidget):
                     "owner": r.get("owner", ""),
                     "zone": r.get("zone", ""),
                     "code": code,
+                    "url": r.get("url", ""),
                     "status": "Downloaded" if is_saved else "",
                     "imported": imported_display,
                 }
@@ -249,16 +250,9 @@ class DownloadView(QWidget):
             return
         col_name = self._table_model._columns[col_idx]
         if col_name == "code":
-            code = rows[index.row()].get("code", "")
-            if code:
-                try:
-                    from wcl_core.config import load_config
-
-                    api_url = load_config().get("wcl_api_url", "")
-                except (FileNotFoundError, json.JSONDecodeError, KeyError):
-                    api_url = ""
-                base = "https://fresh.warcraftlogs.com" if "fresh." in api_url else "https://www.warcraftlogs.com"
-                webbrowser.open(f"{base}/reports/{code}")
+            url = rows[index.row()].get("url", "")
+            if url:  # the report's page on the site the list came from
+                webbrowser.open(url)
         else:
             code = rows[index.row()].get("code", "")
             if code:

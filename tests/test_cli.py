@@ -75,6 +75,118 @@ class TestCreateParser:
         assert args.use_dynamic_roles is True
 
 
+class TestProfileAndDiscordParsers:
+    def test_profile_create_with_axes(self, parser):
+        args = parser.parse_args(
+            [
+                "profile",
+                "create",
+                "TBC",
+                "--expansion",
+                "The Burning Crusade",
+                "--zone",
+                "Karazhan",
+                "--since",
+                "2026-01-01",
+                "--use",
+            ]
+        )
+        assert args.command == "profile" and args.profile_command == "create"
+        assert args.name == "TBC" and args.expansion == ["The Burning Crusade"] and args.zone == ["Karazhan"]
+        assert args.since == "2026-01-01" and args.use
+
+    def test_profile_game_version_is_checked(self, parser):
+        assert parser.parse_args(["profile", "create", "Era", "--game-version", "classic"]).game_version == "classic"
+        with pytest.raises(SystemExit):
+            parser.parse_args(["profile", "create", "Era", "--game-version", "wrath"])
+
+    def test_profile_use_without_a_slug_clears(self, parser):
+        assert parser.parse_args(["profile", "use"]).slug is None
+        assert parser.parse_args(["profile", "use", "tbc"]).slug == "tbc"
+
+    def test_discord_actions(self, parser):
+        assert parser.parse_args(["discord", "login", "--no-browser"]).no_browser
+        assert parser.parse_args(["discord", "whoami", "--json"]).json
+        assert parser.parse_args(["discord", "logout"]).discord_command == "logout"
+
+
+class TestProfileCommand:
+    def test_list_create_use_show(self, monkeypatch, tmp_path, capsys):
+        from wcl_core import paths
+
+        from warcraftlogs_client import cli
+
+        monkeypatch.setattr(paths, "get_profiles_path", lambda: tmp_path / "profiles.json")
+        monkeypatch.setattr(cli, "_profile_service", lambda need_config: _service(tmp_path))
+        parser = cli.create_parser()
+
+        assert cli.run_profile_command(parser.parse_args(["profile", "list"])) == 0
+        assert "No profiles yet" in capsys.readouterr().out
+        assert (
+            cli.run_profile_command(
+                parser.parse_args(["profile", "create", "TBC", "--expansion", "The Burning Crusade", "--use"])
+            )
+            == 0
+        )
+        assert "Created profile 'TBC' (tbc) and made it active" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "list"])) == 0
+        assert "* tbc" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "use"])) == 0
+        assert "every raid is shown" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "use", "nope"])) == 1
+        assert cli.run_profile_command(parser.parse_args(["profile", "show"])) == 0
+        assert "No active profile" in capsys.readouterr().out
+        assert cli.run_profile_command(parser.parse_args(["profile", "delete", "tbc"])) == 0
+        assert cli.run_profile_command(parser.parse_args(["profile"])) == 1
+
+
+class TestHistoryCommand:
+    def test_history_follows_the_saved_profile(self, monkeypatch, tmp_path, capsys, build_analysis):
+        from wcl_app.profiles import JsonProfileStore, Profile, ProfileSet
+        from wcl_core import paths
+
+        from warcraftlogs_client import cli, database
+
+        db_path = tmp_path / "history.db"
+        with database.PerformanceDB(str(db_path)) as db:
+            for code, expansion in (("ClassicRaid00000", "Classic"), ("TbcRaid000000000", "The Burning Crusade")):
+                db.import_raid(build_analysis(report_id=code))
+                db.set_raid_era(code, "fresh", expansion)
+        real = database.PerformanceDB
+        monkeypatch.setattr(database, "PerformanceDB", lambda: real(str(db_path)))
+        parser = cli.create_parser()
+
+        assert cli.run_history_query(parser.parse_args(["history", "HolyPriest"])) == 0
+        assert "Raids tracked: 2" in capsys.readouterr().out
+        tbc = Profile("tbc", "TBC", expansions=("The Burning Crusade",))
+        JsonProfileStore(paths.get_profiles_path()).save(ProfileSet(profiles=[tbc], active="tbc"))
+        assert cli.run_history_query(parser.parse_args(["history", "HolyPriest"])) == 0
+        assert "Raids tracked: 1" in capsys.readouterr().out
+        assert cli.run_history_query(parser.parse_args(["history", "--raids"])) == 0
+        out = capsys.readouterr().out
+        assert "TbcRaid000000000" in out and "ClassicRaid00000" not in out
+        assert cli.run_history_query(parser.parse_args(["history", "--all"])) == 0
+        holy = next(line for line in capsys.readouterr().out.splitlines() if line.startswith("HolyPriest"))
+        assert holy.split()[2] == "1"
+
+        tbc_scope = tbc.scope
+        with real(str(db_path)) as db:
+            for trend in (db.get_healer_trend, db.get_tank_trend, db.get_dps_trend):
+                assert len(trend("HolyPriest")) in (0, 2)
+                assert {r["report_id"] for r in trend("HolyPriest", scope=tbc_scope)} <= {"TbcRaid000000000"}
+            assert [r["report_id"] for r in db.get_healer_trend("HolyPriest", scope=tbc_scope)] == ["TbcRaid000000000"]
+            assert db.get_all_characters(scope=Profile("z", "Z", zones=("Nowhere",)).scope) == []
+
+
+def _service(tmp_path):
+    from warcraftlogs_client.services import AppContext, JsonProfileStore, ProfileService
+
+    ctx = AppContext(config={}, db_path=str(tmp_path / "t.db"))
+    service = ProfileService.from_context(ctx, JsonProfileStore(tmp_path / "profiles.json"))
+    service.apply()
+    return service
+
+
 class TestRoleDispatch:
     @pytest.mark.parametrize("role", ["healer", "tank", "melee", "ranged"])
     def test_role_commands_run_unified_analysis_filtered(self, monkeypatch, role):

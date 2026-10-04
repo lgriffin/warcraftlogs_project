@@ -205,7 +205,7 @@ class TestGraphQLInjection:
     def test_report_code_sent_as_variable(self):
         client = _graphql_client()
         response = _ok({"data": {"reportData": {"report": {"title": "t", "owner": {"name": "o"}, "startTime": 1}}}})
-        with patch("warcraftlogs_client.client.requests.post", return_value=response) as mock_post:
+        with patch("wcl_core.http.requests.post", return_value=response) as mock_post:
             client.get_report_metadata(self.HOSTILE)
         payload = mock_post.call_args[1]["json"]
         assert self.HOSTILE not in payload["query"]
@@ -215,7 +215,7 @@ class TestGraphQLInjection:
         client = _graphql_client()
         response = _ok({"data": {"characterData": {"character": None}}})
         with (
-            patch("warcraftlogs_client.client.requests.post", return_value=response) as mock_post,
+            patch("wcl_core.http.requests.post", return_value=response) as mock_post,
             pytest.raises(ValueError, match="not found"),
         ):
             client.get_character_profile(self.HOSTILE, "server", "EU")
@@ -226,7 +226,7 @@ class TestGraphQLInjection:
     def test_event_filters_sent_as_variables(self):
         client = _graphql_client()
         response = _ok({"data": {"reportData": {"report": {"events": {"data": []}}}}})
-        with patch("warcraftlogs_client.client.requests.post", return_value=response) as mock_post:
+        with patch("wcl_core.http.requests.post", return_value=response) as mock_post:
             client.get_cast_events_for_encounter("abc", 7, 1000, 2000)
         payload = mock_post.call_args[1]["json"]
         assert payload["variables"] == {
@@ -241,13 +241,13 @@ class TestGraphQLInjection:
     @pytest.mark.parametrize("bad", ["DamageDone) { x }", "Healing, sourceID: 1", "healing"])
     def test_data_type_enum_is_allow_listed(self, bad):
         client = _graphql_client()
-        with patch("warcraftlogs_client.client.requests.post") as mock_post, pytest.raises(ValueError):
+        with patch("wcl_core.http.requests.post") as mock_post, pytest.raises(ValueError):
             client.get_encounter_table("abc", 0, 1, bad)
         mock_post.assert_not_called()
 
     def test_ranking_metric_is_allow_listed(self):
         client = _graphql_client()
-        with patch("warcraftlogs_client.client.requests.post") as mock_post, pytest.raises(ValueError):
+        with patch("wcl_core.http.requests.post") as mock_post, pytest.raises(ValueError):
             client.get_character_zone_rankings("n", "s", "EU", 1, metric="dps) { x }")
         mock_post.assert_not_called()
 
@@ -263,6 +263,6 @@ class TestGraphQLInjection:
         def reply(code):
             return _ok({"data": {"reportData": {"report": {"title": code, "owner": {"name": "o"}, "startTime": 1}}}})
 
-        with patch("warcraftlogs_client.client.requests.post", side_effect=[reply("A"), reply("B")]):
+        with patch("wcl_core.http.requests.post", side_effect=[reply("A"), reply("B")]):
             assert client.get_report_metadata("A").title == "A"
             assert client.get_report_metadata("B").title == "B"
