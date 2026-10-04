@@ -6,12 +6,13 @@ extracted data (not raw JSON wrappers), with consistent signatures.
 """
 
 import json
-import logging
 from collections.abc import Callable
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+from .common.log import get_logger
+
+logger = get_logger(__name__)
 
 from . import clock, http
 from .cache import get_cached_response, save_response_cache

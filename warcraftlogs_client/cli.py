@@ -20,12 +20,15 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 from wcl_core.common.errors import WarcraftLogsError
+from wcl_core.common.log import configure_logging, get_console
 
 from .version import __version__
 
 if TYPE_CHECKING:
     from .database import PerformanceDB
     from .services import AppContext, BridgeService, PlayerLog, PlayerRef, Profile, ProfileService, RaidService, Spread
+
+console = get_console()
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -263,11 +266,11 @@ def run_unified_analysis(args: argparse.Namespace, role: str | None = None) -> i
         from .renderers.markdown import export_raid_analysis
 
         path = export_raid_analysis(analysis, role=role)
-        print(f"\nMarkdown report exported to: {path}")
+        console.info(f"\nMarkdown report exported to: {path}")
 
     if hasattr(args, "save") and args.save:
         raids.save(analysis)
-        print(f"\nResults saved to database for report {report_id}")
+        console.info(f"\nResults saved to database for report {report_id}")
 
     return 0
 
@@ -287,7 +290,7 @@ def run_consumes_analysis(args: argparse.Namespace) -> int:
         _run(args.raid_ids, args.csv, include_healers=args.healers, markdown_path=md_path, client=client)
         return 0
     except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-        print(f"Error running consumes analysis: {e}")
+        console.error(f"Error running consumes analysis: {e}")
         return 1
 
 
@@ -300,56 +303,58 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
         if hasattr(args, "raids") and args.raids:
             raids = db.get_raid_list(scope=scope)
             if not raids:
-                print("No raids imported yet. Use --save when running analysis.")
+                console.info("No raids imported yet. Use --save when running analysis.")
                 return 0
-            print(f"\n{'Date':<22} {'Title':<30} {'Report ID':<20}")
-            print("-" * 75)
+            console.info(f"\n{'Date':<22} {'Title':<30} {'Report ID':<20}")
+            console.info("-" * 75)
             for r in raids:
-                print(f"{r['raid_date']:<22} {r['title']:<30} {r['report_id']:<20}")
+                console.info(f"{r['raid_date']:<22} {r['title']:<30} {r['report_id']:<20}")
             return 0
 
         if hasattr(args, "all") and args.all:
             characters = db.get_all_characters(scope=scope)
             if not characters:
-                print("No characters tracked yet. Use --save when running analysis.")
+                console.info("No characters tracked yet. Use --save when running analysis.")
                 return 0
-            print(f"\n{'Character':<18} {'Class':<12} {'Raids':>6} {'First Seen':<12} {'Last Seen':<12}")
-            print("-" * 65)
+            console.info(f"\n{'Character':<18} {'Class':<12} {'Raids':>6} {'First Seen':<12} {'Last Seen':<12}")
+            console.info("-" * 65)
             for c in characters:
                 first = c.first_seen.strftime("%Y-%m-%d") if c.first_seen else "?"
                 last = c.last_seen.strftime("%Y-%m-%d") if c.last_seen else "?"
-                print(f"{c.name:<18} {c.player_class:<12} {c.total_raids:>6} {first:<12} {last:<12}")
+                console.info(f"{c.name:<18} {c.player_class:<12} {c.total_raids:>6} {first:<12} {last:<12}")
             return 0
 
         if not args.character_name:
-            print("Specify a character name, --all, or --raids.")
+            console.info("Specify a character name, --all, or --raids.")
             return 1
 
         history = db.get_character_history(args.character_name, scope=scope)
         if not history:
-            print(f"No data found for '{args.character_name}'.")
+            console.info(f"No data found for '{args.character_name}'.")
             return 1
 
-        print(f"\n=== {history.name} ({history.player_class}) ===")
-        print(f"Raids tracked: {history.total_raids}")
+        console.info(f"\n=== {history.name} ({history.player_class}) ===")
+        console.info(f"Raids tracked: {history.total_raids}")
         if history.first_seen and history.last_seen:
-            print(f"Active: {history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}")
+            console.info(
+                f"Active: {history.first_seen.strftime('%Y-%m-%d')} to {history.last_seen.strftime('%Y-%m-%d')}"
+            )
         if history.avg_healing is not None:
-            print(f"Avg Healing: {history.avg_healing:,.0f}")
+            console.info(f"Avg Healing: {history.avg_healing:,.0f}")
         if history.avg_damage is not None:
-            print(f"Avg Damage: {history.avg_damage:,.0f}")
+            console.info(f"Avg Damage: {history.avg_damage:,.0f}")
         if history.avg_mitigation_percent is not None:
-            print(f"Avg Mitigation: {history.avg_mitigation_percent:.1f}%")
-        print(f"Total Consumables Used: {history.total_consumables_used}")
+            console.info(f"Avg Mitigation: {history.avg_mitigation_percent:.1f}%")
+        console.info(f"Total Consumables Used: {history.total_consumables_used}")
 
         role = args.role if hasattr(args, "role") and args.role else None
         if role == "healer" or (role is None and history.avg_healing is not None):
             trend = db.get_healer_trend(args.character_name, scope=scope)
             if trend:
-                print(f"\n{'Date':<22} {'Raid':<25} {'Healing':>12} {'Overheal%':>10}")
-                print("-" * 72)
+                console.info(f"\n{'Date':<22} {'Raid':<25} {'Healing':>12} {'Overheal%':>10}")
+                console.info("-" * 72)
                 for row in trend:
-                    print(
+                    console.info(
                         f"{row['raid_date']:<22} {row['title']:<25} "
                         f"{row['total_healing']:>12,} {row['overheal_percent']:>9.1f}%"
                     )
@@ -357,10 +362,10 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
         if role == "tank" or (role is None and history.avg_mitigation_percent is not None):
             trend = db.get_tank_trend(args.character_name, scope=scope)
             if trend:
-                print(f"\n{'Date':<22} {'Raid':<25} {'Taken':>12} {'Mitigation%':>12}")
-                print("-" * 75)
+                console.info(f"\n{'Date':<22} {'Raid':<25} {'Taken':>12} {'Mitigation%':>12}")
+                console.info("-" * 75)
                 for row in trend:
-                    print(
+                    console.info(
                         f"{row['raid_date']:<22} {row['title']:<25} "
                         f"{row['total_damage_taken']:>12,} {row['mitigation_percent']:>11.1f}%"
                     )
@@ -368,10 +373,12 @@ def run_history_query(args: argparse.Namespace) -> int:  # noqa: C901
         if role in ("melee", "ranged") or (role is None and history.avg_damage is not None):
             trend = db.get_dps_trend(args.character_name, scope=scope)
             if trend:
-                print(f"\n{'Date':<22} {'Raid':<25} {'Role':<8} {'Damage':>12}")
-                print("-" * 70)
+                console.info(f"\n{'Date':<22} {'Raid':<25} {'Role':<8} {'Damage':>12}")
+                console.info("-" * 70)
                 for row in trend:
-                    print(f"{row['raid_date']:<22} {row['title']:<25} {row['role']:<8} {row['total_damage']:>12,}")
+                    console.info(
+                        f"{row['raid_date']:<22} {row['title']:<25} {row['role']:<8} {row['total_damage']:>12,}"
+                    )
 
     return 0
 
@@ -397,13 +404,15 @@ def _resolve_player(db: "PerformanceDB", args: argparse.Namespace, config: dict[
 
 def _print_logs(logs: Sequence["PlayerLog"]) -> None:
     if not logs:
-        print("No reports found.")
+        console.info("No reports found.")
         return
-    print(f"\n{'Date':<12} {'Code':<18} {'Status':<10} {'Imported':<9} {'Zone':<22} Title")
-    print("-" * 100)
+    console.info(f"\n{'Date':<12} {'Code':<18} {'Status':<10} {'Imported':<9} {'Zone':<22} Title")
+    console.info("-" * 100)
     for log in logs:
         imported = "yes" if log.imported else "no"
-        print(f"{log.date_formatted:<12} {log.code:<18} {log.status:<10} {imported:<9} {log.zone[:21]:<22} {log.title}")
+        console.info(
+            f"{log.date_formatted:<12} {log.code:<18} {log.status:<10} {imported:<9} {log.zone[:21]:<22} {log.title}"
+        )
 
 
 def _run_player_role(ctx: "AppContext", db: "PerformanceDB", args: argparse.Namespace) -> int:
@@ -415,17 +424,17 @@ def _run_player_role(ctx: "AppContext", db: "PerformanceDB", args: argparse.Name
     if args.report:
         report = parse_report_code(args.report)
         if report is None:
-            print(f"Not a report code or URL: {args.report}")
+            console.info(f"Not a report code or URL: {args.report}")
             return 1
     if args.role is None and not args.clear:
         overrides = RoleOverrideService(db).list_overrides(args.name)
         if args.json:
-            print(json.dumps(overrides, indent=2))
+            console.info(json.dumps(overrides, indent=2))
         elif not overrides:
-            print(f"No role override for {args.name}; roles are detected per raid.")
+            console.info(f"No role override for {args.name}; roles are detected per raid.")
         else:
             for o in overrides:
-                print(f"{o['character_name']:<18} {o['role']:<8} {o['report_id'] or 'all raids'}")
+                console.info(f"{o['character_name']:<18} {o['role']:<8} {o['report_id'] or 'all raids'}")
         return 0
 
     service = RoleOverrideService.from_context(ctx, db, with_api=not args.no_reanalyze)
@@ -436,12 +445,12 @@ def _run_player_role(ctx: "AppContext", db: "PerformanceDB", args: argparse.Name
     else:
         results = service.set(args.name, args.role, report, reanalyze=reanalyze, progress=progress)
     if args.json:
-        print(json.dumps([r.to_dict() for r in results], indent=2))
+        console.info(json.dumps([r.to_dict() for r in results], indent=2))
     else:
         scope = report or "every raid"
-        print(f"{args.name}: {'override cleared' if args.clear else args.role} for {scope}.")
+        console.info(f"{args.name}: {'override cleared' if args.clear else args.role} for {scope}.")
         for r in results:
-            print(f"  {r.report_id} (was {r.old_role}): {r.message}")
+            console.info(f"  {r.report_id} (was {r.old_role}): {r.message}")
     return 0 if all(r.ok for r in results) else 1
 
 
@@ -453,23 +462,25 @@ def _run_player_lineage(ctx: "AppContext", db: "PerformanceDB", args: argparse.N
     sources = ("guild", "reference") if args.include_reference else ("guild",)
     lineage = character_lineage(db, args.name, sources, scope=ctx.scope)
     if lineage is None:
-        print(f"No raids stored for '{args.name}'.")
+        console.info(f"No raids stored for '{args.name}'.")
         return 1
     if args.json:
-        print(json.dumps(lineage.to_dict(), indent=2))
+        console.info(json.dumps(lineage.to_dict(), indent=2))
         return 0
 
     roles = ", ".join(f"{n} {r}" for r, n in lineage.role_counts.items())
-    print(f"=== {lineage.character}: {lineage.raids} raids ({roles}), {lineage.first_raid} to {lineage.last_raid} ===")
+    console.info(
+        f"=== {lineage.character}: {lineage.raids} raids ({roles}), {lineage.first_raid} to {lineage.last_raid} ==="
+    )
 
     def table(title: str, spreads: Sequence["Spread"]) -> None:
         if not spreads:
             return
-        print(f"\n{title:<34} {'Role':<7} {'Min':>11} {'Mean':>11} {'Max':>11} {'Raids':>6}")
-        print("-" * 84)
+        console.info(f"\n{title:<34} {'Role':<7} {'Min':>11} {'Mean':>11} {'Max':>11} {'Raids':>6}")
+        console.info("-" * 84)
         for sp in spreads:
             label = sp.name if len(sp.name) <= 33 else sp.name[:32] + "…"
-            print(
+            console.info(
                 f"{label:<34} {sp.role or 'all':<7} {sp.min:>11,.1f} {sp.mean:>11,.1f} {sp.max:>11,.1f} {sp.raids:>6}"
             )
 
@@ -486,7 +497,7 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
 
     action = getattr(args, "player_command", None)
     if not action:
-        print("Specify an action: discover, add, show, remove, dismiss, role, lineage or list.")
+        console.info("Specify an action: discover, add, show, remove, dismiss, role, lineage or list.")
         return 1
 
     ctx = AppContext.desktop()
@@ -494,12 +505,14 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
         if action == "list":
             pages = PlayerPageService(db).list_pages()
             if args.json:
-                print(json.dumps(pages, indent=2))
+                console.info(json.dumps(pages, indent=2))
             elif not pages:
-                print("No player pages yet. Use 'player discover NAME' to start one.")
+                console.info("No player pages yet. Use 'player discover NAME' to start one.")
             else:
                 for p in pages:
-                    print(f"{p['name']:<18} {p['server']:<20} {p['region'].upper():<4} {p['log_count']:>4} reports")
+                    console.info(
+                        f"{p['name']:<18} {p['server']:<20} {p['region'].upper():<4} {p['log_count']:>4} reports"
+                    )
             return 0
 
         if action == "role":
@@ -514,13 +527,13 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
         if action == "discover":
             logs = service.discover_reports(player, limit=args.limit)
             if args.json:
-                print(json.dumps([log.to_dict() for log in logs], indent=2))
+                console.info(json.dumps([log.to_dict() for log in logs], indent=2))
             else:
-                print(f"Reports for {player.label}:")
+                console.info(f"Reports for {player.label}:")
                 _print_logs(logs)
                 new = sum(1 for log in logs if log.status == "new")
                 if new:
-                    print(f"\n{new} new. Add them with: player add {player.name} --new")
+                    console.info(f"\n{new} new. Add them with: player add {player.name} --new")
             return 0
 
         if action == "add":
@@ -531,36 +544,38 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
                 known = {log.code: log for log in found}
                 refs.extend(known)
             if not refs:
-                print("Nothing to add. Pass report codes/URLs or --new.")
+                console.info("Nothing to add. Pass report codes/URLs or --new.")
                 return 1
             results = service.add_reports(
                 player, refs, verify=not args.no_verify, known=known, progress=None if args.json else print
             )
             if args.json:
-                print(json.dumps([r.to_dict() for r in results], indent=2))
+                console.info(json.dumps([r.to_dict() for r in results], indent=2))
             else:
                 for r in results:
-                    print(f"{r.code:<18} {r.outcome:<16} {r.message}")
+                    console.info(f"{r.code:<18} {r.outcome:<16} {r.message}")
             return 0 if all(r.ok for r in results) else 1
 
         if action == "show":
             page = service.get_page(player)
             if args.json:
-                print(json.dumps(page.to_dict(), indent=2))
+                console.info(json.dumps(page.to_dict(), indent=2))
                 return 0
-            print(f"=== {player.label} ===")
+            console.info(f"=== {player.label} ===")
             if page.history:
                 h = page.history
-                print(f"{h['player_class']}, {h['total_raids']} raids tracked ({h['first_seen']} to {h['last_seen']})")
+                console.info(
+                    f"{h['player_class']}, {h['total_raids']} raids tracked ({h['first_seen']} to {h['last_seen']})"
+                )
             _print_logs(page.logs)
             return 0
 
         if action == "remove":
-            print(f"Removed {service.remove(player, args.reports)} report(s) from {player.label}.")
+            console.info(f"Removed {service.remove(player, args.reports)} report(s) from {player.label}.")
             return 0
 
         if action == "dismiss":
-            print(f"Dismissed {service.dismiss(player, args.reports)} report(s) for {player.label}.")
+            console.info(f"Dismissed {service.dismiss(player, args.reports)} report(s) for {player.label}.")
             return 0
 
     return 1
@@ -581,40 +596,42 @@ def run_reference_command(args: argparse.Namespace) -> int:
 
     action = getattr(args, "reference_command", None)
     if not action:
-        print("Specify an action: list, import, label, delete or compare.")
+        console.info("Specify an action: list, import, label, delete or compare.")
         return 1
     service = ReferenceService(_reference_context(action))
 
     if action == "list":
         raids = service.guild_raids() if args.guild else service.references()
         if args.json:
-            print(json.dumps([r.to_dict() for r in raids], indent=2))
+            console.info(json.dumps([r.to_dict() for r in raids], indent=2))
         elif not raids:
-            print("No raids stored." if args.guild else "No reference raids yet. Add one with: reference import CODE")
+            console.info(
+                "No raids stored." if args.guild else "No reference raids yet. Add one with: reference import CODE"
+            )
         for r in [] if args.json else raids:
             label = f"  [{r.label}]" if r.label else ""
-            print(f"{r.report_id:<18} {r.raid_date[:10]:<11} {r.zone or '':<22} {r.title}{label}")
+            console.info(f"{r.report_id:<18} {r.raid_date[:10]:<11} {r.zone or '':<22} {r.title}{label}")
         return 0
     if action == "import":
         try:
             analysis = service.import_reference(args.report, label=args.label, progress=print)
         except ReferenceAuthRequired:
-            print("Sign in to Warcraft Logs first: desktop app > Reference > Authenticate.")
+            console.info("Sign in to Warcraft Logs first: desktop app > Reference > Authenticate.")
             return 1
-        print(f"Imported '{analysis.metadata.title}' as a reference raid.")
+        console.info(f"Imported '{analysis.metadata.title}' as a reference raid.")
         return 0
     if action == "label":
         service.set_label(args.report, args.label)
-        print("Label saved." if args.label.strip() else "Label cleared.")
+        console.info("Label saved." if args.label.strip() else "Label cleared.")
         return 0
     if action == "delete":
         service.delete_reference(args.report)
-        print("Reference raid deleted.")
+        console.info("Reference raid deleted.")
         return 0
     if action == "compare":
         comparison = service.compare(args.guild_report, args.reference_report)
         if args.json:
-            print(json.dumps(comparison.to_dict(), indent=2))
+            console.info(json.dumps(comparison.to_dict(), indent=2))
         else:
             render_reference_comparison(comparison)
         return 0
@@ -648,7 +665,7 @@ def _print_profile(p: "Profile", active: bool) -> None:
     if p.since or p.until:
         axes.append(f"{(p.since or '')[:10]}..{(p.until or '')[:10]}")
     mark = "*" if active else " "
-    print(f"{mark} {p.slug:<16} {p.name:<24} {', '.join(axes) or 'every raid'}")
+    console.info(f"{mark} {p.slug:<16} {p.name:<24} {', '.join(axes) or 'every raid'}")
 
 
 def run_profile_command(args: argparse.Namespace) -> int:
@@ -658,7 +675,7 @@ def run_profile_command(args: argparse.Namespace) -> int:
 
     action = getattr(args, "profile_command", None)
     if not action:
-        print("Specify an action: list, create, use, show, delete, backfill or import.")
+        console.info("Specify an action: list, create, use, show, delete, backfill or import.")
         return 1
     service = _profile_service(need_config=action in ("backfill", "import"))
     if action == "import" and service.ctx is not None:
@@ -667,9 +684,9 @@ def run_profile_command(args: argparse.Namespace) -> int:
     if action == "list":
         profiles = service.profiles()
         if args.json:
-            print(json.dumps(profiles.to_dict(), indent=2))
+            console.info(json.dumps(profiles.to_dict(), indent=2))
         elif not profiles.profiles:
-            print("No profiles yet. Create one with: profile create TBC --expansion 'The Burning Crusade'")
+            console.info("No profiles yet. Create one with: profile create TBC --expansion 'The Burning Crusade'")
         for p in [] if args.json else profiles.profiles:
             _print_profile(p, p.slug == profiles.active)
         return 0
@@ -685,33 +702,35 @@ def run_profile_command(args: argparse.Namespace) -> int:
             wcl_api_url=args.api_url,
             activate=args.use,
         )
-        print(f"Created profile '{created.name}' ({created.slug}){' and made it active' if args.use else ''}.")
+        console.info(f"Created profile '{created.name}' ({created.slug}){' and made it active' if args.use else ''}.")
         return 0
     if action == "use":
         try:
             chosen = service.activate(args.slug)
         except KeyError:
-            print(f"No profile '{args.slug}'. See: profile list")
+            console.info(f"No profile '{args.slug}'. See: profile list")
             return 1
-        print(f"Active profile: {chosen.name}" if chosen else "Active profile cleared; every raid is shown.")
+        console.info(f"Active profile: {chosen.name}" if chosen else "Active profile cleared; every raid is shown.")
         return 0
     if action == "show":
         profile = service.active()
         raids = RaidService(service.ctx).list_raids(limit=20) if service.ctx else []
         if args.json:
-            print(json.dumps({"profile": profile.to_dict() if profile else None, "raids": raids}, indent=2))
+            console.info(json.dumps({"profile": profile.to_dict() if profile else None, "raids": raids}, indent=2))
             return 0
-        print(f"Active profile: {profile.name}" if profile else "No active profile: every raid is shown.")
+        console.info(f"Active profile: {profile.name}" if profile else "No active profile: every raid is shown.")
         for r in raids:
             era = " / ".join(x for x in (r.get("game_version"), r.get("expansion")) if x)
-            print(f"{r['report_id']:<18} {r['raid_date'][:10]:<11} {r.get('zone') or '':<22} {era:<30} {r['title']}")
+            console.info(
+                f"{r['report_id']:<18} {r['raid_date'][:10]:<11} {r.get('zone') or '':<22} {era:<30} {r['title']}"
+            )
         return 0
     if action == "delete":
-        print("Profile deleted." if service.delete(args.slug) else f"No profile '{args.slug}'.")
+        console.info("Profile deleted." if service.delete(args.slug) else f"No profile '{args.slug}'.")
         return 0
     if action == "backfill":
         changed = service.backfill_eras()
-        print(f"Tagged {changed} raid(s) with a game version and expansion.")
+        console.info(f"Tagged {changed} raid(s) with a game version and expansion.")
         return 0
     return 1
 
@@ -725,11 +744,11 @@ def _profile_import(raids: "RaidService", *, only_list: bool) -> int:
         if not only_list:
             raids.import_missing([r["code"] for r in new], progress=print)
     except (ProfileSiteUnknown, WarcraftLogsError, requests.RequestException, ValueError) as e:
-        print(f"Import failed: {e}")
+        console.info(f"Import failed: {e}")
         return 1
     for r in new:
-        print(f"{r['code']:<18} {r.get('zone') or '':<22} {r.get('expansion') or '':<22} {r['title']}")
-    print(f"{len(new)} new report(s){' to import' if only_list else ' imported'}.")
+        console.info(f"{r['code']:<18} {r.get('zone') or '':<22} {r.get('expansion') or '':<22} {r['title']}")
+    console.info(f"{len(new)} new report(s){' to import' if only_list else ' imported'}.")
     return 0
 
 
@@ -740,7 +759,7 @@ def run_discord_command(args: argparse.Namespace) -> int:
 
     action = getattr(args, "discord_command", None)
     if not action:
-        print("Specify an action: login, whoami or logout.")
+        console.info("Specify an action: login, whoami or logout.")
         return 1
     if action == "login":
         try:
@@ -751,23 +770,23 @@ def run_discord_command(args: argparse.Namespace) -> int:
         try:
             identity = service.link(open_browser=not args.no_browser)
         except DiscordNotConfigured as e:
-            print(f"Error: {e}")
+            console.error(f"Error: {e}")
             return 1
-        print(f"Linked to Discord as {identity.display_name} ({identity.id}).")
+        console.info(f"Linked to Discord as {identity.display_name} ({identity.id}).")
         return 0
     service = IdentityService()
     linked = service.current()
     if action == "whoami":
         if args.json:
-            print(json.dumps(linked.__dict__ if linked else None, indent=2))
+            console.info(json.dumps(linked.__dict__ if linked else None, indent=2))
         elif linked:
-            print(f"{linked.display_name} ({linked.username}, id {linked.id})")
+            console.info(f"{linked.display_name} ({linked.username}, id {linked.id})")
         else:
-            print("Not linked. Run: discord login")
+            console.info("Not linked. Run: discord login")
         return 0
     if action == "logout":
         service.unlink()
-        print("Discord account forgotten.")
+        console.info("Discord account forgotten.")
         return 0
     return 1
 
@@ -791,32 +810,34 @@ def run_hub_command(args: argparse.Namespace) -> int:
 
     action = getattr(args, "hub_command", None)
     if not action:
-        print("Specify an action: link, status, publish or unlink.")
+        console.info("Specify an action: link, status, publish or unlink.")
         return 1
     service = _bridge()
     link = service.current()
     try:
         if action == "link":
             link = service.link(args.code)
-            print(f"Linked to the Toads Hub as {link.member.name}; your raid profiles are published.")
+            console.info(f"Linked to the Toads Hub as {link.member.name}; your raid profiles are published.")
         elif action == "publish":
             service.publish()
-            print("Raid profiles published to the Toads Hub.")
+            console.info("Raid profiles published to the Toads Hub.")
         elif action == "unlink" and link is None:
-            print("Not linked.")
+            console.info("Not linked.")
         elif action == "unlink":
             confirmed = service.unlink()
-            print("Hub link forgotten." if confirmed else "Hub link forgotten here; the Hub could not be told.")
+            console.info("Hub link forgotten." if confirmed else "Hub link forgotten here; the Hub could not be told.")
         elif args.json:
-            print(
+            console.info(
                 json.dumps(
                     {"hub_url": link.hub_url, "app_id": link.app_id, "member": link.member.__dict__} if link else None
                 )
             )
         else:
-            print(f"Linked to {link.hub_url} as {link.member.name}." if link else "Not linked. Run: hub link CODE")
+            console.info(
+                f"Linked to {link.hub_url} as {link.member.name}." if link else "Not linked. Run: hub link CODE"
+            )
     except (WarcraftLogsError, ValueError, LookupError, OSError) as e:
-        print(f"Error: {e}")
+        console.error(f"Error: {e}")
         return 1
     return 0
 
@@ -830,7 +851,7 @@ def main() -> int:
         level = logging.INFO
     if getattr(args, "debug", False):
         level = logging.DEBUG
-    logging.basicConfig(level=level, format="%(name)s %(levelname)s: %(message)s")
+    configure_logging(level)
 
     if not args.command:
         args.command = "unified"
@@ -858,7 +879,7 @@ def main() -> int:
         try:
             return handler(args)
         except (WarcraftLogsError, requests.RequestException, KeyError, ValueError, TypeError, OSError) as e:
-            print(f"Error: {e}")
+            console.error(f"Error: {e}")
             return 1
 
     parser.print_help()

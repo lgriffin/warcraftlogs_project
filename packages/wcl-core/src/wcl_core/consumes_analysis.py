@@ -7,18 +7,19 @@ providing role-based filtering and detailed reporting.
 
 import csv
 import json
-import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import requests
 
-logger = logging.getLogger(__name__)
-
 from . import dynamic_role_parser
 from .client import WarcraftLogsClient
 from .common.data import get_master_data, get_report_metadata
+from .common.log import get_console, get_logger
+
+logger = get_logger(__name__)
+console = get_console()
 
 
 class ConsumesAnalyzer:
@@ -313,9 +314,9 @@ class ConsumesAnalyzer:
 
     def generate_report(self, output_csv: str | None = None, include_healers: bool = False) -> None:
         """Generate the consumables analysis report."""
-        print("\n" + "=" * 80)
-        print("CONSUMABLES ANALYSIS REPORT")
-        print("=" * 80)
+        console.info("\n" + "=" * 80)
+        console.info("CONSUMABLES ANALYSIS REPORT")
+        console.info("=" * 80)
 
         self._print_consumables_report()
         self._print_group_buff_behavior()
@@ -345,8 +346,8 @@ class ConsumesAnalyzer:
         """Print consumable usage per raid, showing only consumables that appeared."""
         for report_id in sorted(self.raid_metadata.keys()):
             raid_title = self.raid_metadata[report_id]["title"]
-            print(f"\nRaid: {raid_title} ({report_id})")
-            print("-" * 60)
+            console.info(f"\nRaid: {raid_title} ({report_id})")
+            console.info("-" * 60)
 
             present_consumables: set[str] = set()
             players_in_raid: set[str] = set()
@@ -361,14 +362,14 @@ class ConsumesAnalyzer:
                             usage_data[(player_name, consumable_name)] = count
 
             if not present_consumables:
-                print("No consumable usage found in this raid.")
+                console.info("No consumable usage found in this raid.")
                 continue
 
             col_names = sorted(present_consumables)
             col_width = 20
             header = f"{'Player':<20} " + "".join(f"{name[: col_width - 2]:>{col_width}}" for name in col_names)
-            print(header)
-            print("-" * len(header))
+            console.info(header)
+            console.info("-" * len(header))
 
             for player_name in sorted(players_in_raid):
                 has_any = any(usage_data.get((player_name, c), 0) > 0 for c in col_names)
@@ -378,19 +379,19 @@ class ConsumesAnalyzer:
                 for c in col_names:
                     count = usage_data.get((player_name, c), 0)
                     row += f"{count:>{col_width}}" if count > 0 else f"{'':>{col_width}}"
-                print(row)
+                console.info(row)
 
     def _print_group_buff_behavior(self) -> None:
         """Analyze and print coordinated potion usage patterns."""
-        print("\nGROUP-WIDE BUFF BEHAVIOR")
-        print("-" * 80)
-        print("Analyzing coordinated potion usage (60-second windows)...")
+        console.info("\nGROUP-WIDE BUFF BEHAVIOR")
+        console.info("-" * 80)
+        console.info("Analyzing coordinated potion usage (60-second windows)...")
 
         # Analyze each raid
         for report_id in sorted(self.raid_metadata.keys()):
             raid_title = self.raid_metadata[report_id]["title"]
-            print(f"\nRaid: {raid_title} ({report_id})")
-            print("-" * 80)
+            console.info(f"\nRaid: {raid_title} ({report_id})")
+            console.info("-" * 80)
 
             # Detect spikes for each potion type
             spikes_found = False
@@ -412,23 +413,23 @@ class ConsumesAnalyzer:
                         minutes = time_seconds // 60
                         seconds = time_seconds % 60
 
-                        print(f"\n  [{minutes:02d}:{seconds:02d}] {potion_name}")
-                        print(f"    {window['player_count']} players used this potion")
+                        console.info(f"\n  [{minutes:02d}:{seconds:02d}] {potion_name}")
+                        console.info(f"    {window['player_count']} players used this potion")
 
                         # Find the next boss kill after this timestamp
                         next_boss = self._find_next_boss_kill(report_id, window["start_time"])
                         if next_boss:
-                            print(f"    Next boss killed: {next_boss['name']}")
+                            console.info(f"    Next boss killed: {next_boss['name']}")
 
-                        print(f"    Used by: {', '.join(sorted(window['players']))}")
+                        console.info(f"    Used by: {', '.join(sorted(window['players']))}")
 
                         # Show who didn't use it (if there are any non-users)
                         set(self.consumes_data.keys())
                         if window["non_users"]:
-                            print(f"    Did NOT use: {', '.join(sorted(window['non_users']))}")
+                            console.info(f"    Did NOT use: {', '.join(sorted(window['non_users']))}")
 
             if not spikes_found:
-                print("  No coordinated potion usage detected (minimum 10 players within 60 seconds)")
+                console.info("  No coordinated potion usage detected (minimum 10 players within 60 seconds)")
 
     def _find_next_boss_kill(self, report_id: str, timestamp: int) -> dict | None:
         """Find the next boss kill after a given timestamp."""

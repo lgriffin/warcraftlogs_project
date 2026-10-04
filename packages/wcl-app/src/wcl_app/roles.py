@@ -12,12 +12,12 @@ damage), so relabelling stored rows would not be enough.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from wcl_core.analysis import OVERRIDE_ROLES
+from wcl_core.common.log import get_logger
 from wcl_store import StorageError
 
 from wcl_app.context import AppContext, ProgressCallback, validate_report_code
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from wcl_core.models import RaidAnalysis
     from wcl_store import RaidRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Called as analyze(report_id, reference=...), matching RaidService.analyze.
 AnalyzeFn = Callable[..., "RaidAnalysis"]

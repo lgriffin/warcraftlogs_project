@@ -8,13 +8,14 @@ No printing — presentation is handled by renderers (console, markdown, GUI).
 import bisect
 import contextlib
 import json
-import logging
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from .common.log import get_logger
+
+logger = get_logger(__name__)
 
 import requests
 

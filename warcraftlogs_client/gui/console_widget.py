@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core.common.log import DATE_FORMAT, LOG_FORMAT
 
 from .styles import COLORS
 
@@ -106,8 +107,7 @@ class ConsoleDock(QDockWidget):
         """)
 
         self._handler = GuiLogHandler()
-        fmt = "%(asctime)s  %(name)s  %(levelname)s: %(message)s"
-        self._handler.setFormatter(logging.Formatter(fmt, datefmt="%H:%M:%S"))
+        self._handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
         logging.getLogger().addHandler(self._handler)
         self._handler.log_message.connect(self._append_log)
 

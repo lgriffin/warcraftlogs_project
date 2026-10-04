@@ -177,6 +177,34 @@ class TestHistoryCommand:
             assert [r["report_id"] for r in db.get_healer_trend("HolyPriest", scope=tbc_scope)] == ["TbcRaid000000000"]
             assert db.get_all_characters(scope=Profile("z", "Z", zones=("Nowhere",)).scope) == []
 
+    def test_history_prints_each_role_trend_and_says_when_there_is_nothing(
+        self, monkeypatch, tmp_path, capsys, build_analysis
+    ):
+        from warcraftlogs_client import cli, database
+
+        db_path = tmp_path / "history.db"
+        real = database.PerformanceDB
+        monkeypatch.setattr(database, "PerformanceDB", lambda: real(str(db_path)))
+        parser = cli.create_parser()
+
+        assert cli.run_history_query(parser.parse_args(["history", "--raids"])) == 0
+        assert "No raids imported yet" in capsys.readouterr().out
+        assert cli.run_history_query(parser.parse_args(["history", "--all"])) == 0
+        assert "No characters tracked yet" in capsys.readouterr().out
+        assert cli.run_history_query(parser.parse_args(["history"])) == 1
+        assert "Specify a character name" in capsys.readouterr().out
+        assert cli.run_history_query(parser.parse_args(["history", "Nobody"])) == 1
+        assert "No data found for 'Nobody'." in capsys.readouterr().out
+
+        with real(str(db_path)) as db:
+            db.import_raid(build_analysis(report_id="TbcRaid000000000"))
+        assert cli.run_history_query(parser.parse_args(["history", "TankWarrior"])) == 0
+        out = capsys.readouterr().out
+        assert "Avg Mitigation:" in out and "Mitigation%" in out
+        assert cli.run_history_query(parser.parse_args(["history", "StabbyRogue"])) == 0
+        out = capsys.readouterr().out
+        assert "Avg Damage:" in out and "Damage" in out.split("Total Consumables Used")[1]
+
 
 def _service(tmp_path):
     from warcraftlogs_client.services import AppContext, JsonProfileStore, ProfileService

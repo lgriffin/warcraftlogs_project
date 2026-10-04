@@ -1,12 +1,12 @@
 import hashlib
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
 from . import paths
+from .common.log import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CACHE_DIR = str(paths.get_cache_dir())
 QUERY_CACHE_DIR = str(Path(CACHE_DIR) / "responses")

@@ -12,6 +12,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from wcl_core.common.log import get_console
+
+console = get_console()
+
 SPELL_DATA_DIR = Path(__file__).resolve().parent / "packages" / "wcl-core" / "src" / "wcl_core" / "data" / "spell_data"
 
 
@@ -21,13 +25,13 @@ def load_json_file(filepath: Path) -> dict[str, Any] | None:
         with filepath.open(encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"❌ File not found: {filepath}")
+        console.error(f"❌ File not found: {filepath}")
         return None
     except json.JSONDecodeError as e:
-        print(f"❌ JSON syntax error in {filepath}: {e}")
+        console.error(f"❌ JSON syntax error in {filepath}: {e}")
         return None
     except OSError as e:
-        print(f"❌ Error reading {filepath}: {e}")
+        console.error(f"❌ Error reading {filepath}: {e}")
         return None
 
 
@@ -38,18 +42,18 @@ def save_json_file(filepath: Path, data: dict[str, Any]) -> bool:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except OSError as e:
-        print(f"❌ Error saving {filepath}: {e}")
+        console.error(f"❌ Error saving {filepath}: {e}")
         return False
 
 
 def validate_configurations() -> bool:  # noqa: C901
     """Validate spell configuration files."""
-    print("🔍 Validating spell configurations...")
+    console.info("🔍 Validating spell configurations...")
 
     # Check if spell_data directory exists
     if not SPELL_DATA_DIR.exists():
-        print("❌ spell_data directory not found!")
-        print("💡 Run this script from the project root directory.")
+        console.error("❌ spell_data directory not found!")
+        console.info("💡 Run this script from the project root directory.")
         return False
 
     aliases_file = SPELL_DATA_DIR / "spell_aliases.json"
@@ -72,7 +76,7 @@ def validate_configurations() -> bool:  # noqa: C901
                 try:
                     aliases[int(source_id)] = int(canonical_id)
                 except (ValueError, TypeError):
-                    print(f"⚠️ Invalid alias: {source_id} -> {canonical_id}")
+                    console.info(f"⚠️ Invalid alias: {source_id} -> {canonical_id}")
 
     # Flatten names
     names = {}
@@ -84,16 +88,16 @@ def validate_configurations() -> bool:  # noqa: C901
                 try:
                     names[int(spell_id)] = str(spell_name)
                 except (ValueError, TypeError):
-                    print(f"⚠️ Invalid name mapping: {spell_id} -> {spell_name}")
+                    console.info(f"⚠️ Invalid name mapping: {spell_id} -> {spell_name}")
 
-    print(f"✅ Loaded {len(aliases)} spell aliases")
-    print(f"✅ Loaded {len(names)} spell names")
+    console.info(f"✅ Loaded {len(aliases)} spell aliases")
+    console.info(f"✅ Loaded {len(names)} spell names")
 
     # Check for issues
     issues = 0
 
     # Check for circular aliases
-    print("\n🔄 Checking for circular aliases...")
+    console.info("\n🔄 Checking for circular aliases...")
     for variant_id, canonical_id in aliases.items():
         visited = set()
         current = canonical_id
@@ -105,31 +109,31 @@ def validate_configurations() -> bool:  # noqa: C901
             current = aliases[current]
 
             if current in path[:-1]:
-                print(f"⚠️ Circular alias: {' -> '.join(map(str, [*path, current]))}")
+                console.info(f"⚠️ Circular alias: {' -> '.join(map(str, [*path, current]))}")
                 issues += 1
                 break
 
     # Check for missing canonical names
-    print("\n📝 Checking for missing canonical spell names...")
+    console.info("\n📝 Checking for missing canonical spell names...")
     missing_names = []
     for canonical_id in set(aliases.values()):
         if canonical_id not in names:
             missing_names.append(canonical_id)
 
     if missing_names:
-        print(f"⚠️ {len(missing_names)} canonical IDs missing names:")
+        console.info(f"⚠️ {len(missing_names)} canonical IDs missing names:")
         for spell_id in sorted(missing_names)[:10]:  # Show first 10
-            print(f"   - {spell_id}")
+            console.info(f"   - {spell_id}")
         if len(missing_names) > 10:
-            print(f"   ... and {len(missing_names) - 10} more")
+            console.info(f"   ... and {len(missing_names) - 10} more")
         issues += len(missing_names)
 
     # Summary
     if issues == 0:
-        print("\n✅ Configuration validation passed! No issues found.")
+        console.info("\n✅ Configuration validation passed! No issues found.")
         return True
     else:
-        print(f"\n⚠️ Found {issues} issues in configuration.")
+        console.info(f"\n⚠️ Found {issues} issues in configuration.")
         return False
 
 
@@ -149,7 +153,7 @@ def add_spell_name(spell_id: int, spell_name: str, category: str) -> bool:
     names_data[category][str(spell_id)] = spell_name
 
     if save_json_file(names_file, names_data):
-        print(f"✅ Added spell: {spell_id} -> '{spell_name}' in category '{category}'")
+        console.info(f"✅ Added spell: {spell_id} -> '{spell_name}' in category '{category}'")
         return True
     return False
 
@@ -171,7 +175,7 @@ def add_spell_alias(variant_ids: list, canonical_id: int, group_name: str) -> bo
         aliases_data[group_name][str(variant_id)] = canonical_id
 
     if save_json_file(aliases_file, aliases_data):
-        print(f"✅ Added aliases: {variant_ids} -> {canonical_id} in group '{group_name}'")
+        console.info(f"✅ Added aliases: {variant_ids} -> {canonical_id} in group '{group_name}'")
         return True
     return False
 
@@ -184,11 +188,11 @@ def list_categories() -> None:
     if names_data is None:
         return
 
-    print("\n📋 Available spell name categories:")
+    console.info("\n📋 Available spell name categories:")
     for category in sorted(names_data.keys()):
         if not category.startswith("_"):
             spell_count = len(names_data[category]) if isinstance(names_data[category], dict) else 0
-            print(f"   - {category} ({spell_count} spells)")
+            console.info(f"   - {category} ({spell_count} spells)")
 
 
 def list_groups() -> None:
@@ -199,11 +203,11 @@ def list_groups() -> None:
     if aliases_data is None:
         return
 
-    print("\n📋 Available spell alias groups:")
+    console.info("\n📋 Available spell alias groups:")
     for group in sorted(aliases_data.keys()):
         if not group.startswith("_"):
             alias_count = len(aliases_data[group]) if isinstance(aliases_data[group], dict) else 0
-            print(f"   - {group} ({alias_count} aliases)")
+            console.info(f"   - {group} ({alias_count} aliases)")
 
 
 def search_spells(query: str) -> None:
@@ -227,11 +231,11 @@ def search_spells(query: str) -> None:
                     matches.append((category, spell_id, spell_name))
 
     if matches:
-        print(f"\n🔍 Found {len(matches)} matches for '{query}':")
+        console.info(f"\n🔍 Found {len(matches)} matches for '{query}':")
         for category, spell_id, spell_name in matches:
-            print(f"   - ID {spell_id}: '{spell_name}' (in {category})")
+            console.info(f"   - ID {spell_id}: '{spell_name}' (in {category})")
     else:
-        print(f"\n❌ No matches found for '{query}'")
+        console.info(f"\n❌ No matches found for '{query}'")
 
 
 def main():
@@ -294,7 +298,7 @@ Examples:
             success = add_spell_alias(variant_ids, args.canonical_id, args.group_name)
             sys.exit(0 if success else 1)
         except ValueError:
-            print("❌ Invalid variant IDs. Use comma-separated integers.")
+            console.error("❌ Invalid variant IDs. Use comma-separated integers.")
             sys.exit(1)
 
     elif args.command == "search":

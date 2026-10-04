@@ -176,3 +176,26 @@ class TestRunConsumesAnalysis:
         )
         consumes_analysis.run_consumes_analysis(["a"])
         assert analyzer.analyze_raid.call_args.args[0].api_url == "https://x.test/api"
+
+
+class TestGenerateReport:
+    def test_prints_the_usage_table_and_coordinated_potions(self, analyzer, capsys):
+        analyzer.raid_metadata = {"r1": {"title": "Karazhan"}, "r2": {"title": "Gruul"}}
+        for i in range(12):
+            analyzer.consumes_data[f"P{i:02d}"]["r1"]["Haste Potion"] = 1
+            analyzer.timestamp_data["r1"]["Haste Potion"].append({"timestamp": 61_000 + i * 100, "player": f"P{i:02d}"})
+        analyzer.consumes_data["Idle"]["r1"]["Haste Potion"] = 0
+        analyzer.boss_kills["r1"].append({"timestamp": 90_000, "name": "Attumen"})
+
+        analyzer.generate_report()
+
+        out = capsys.readouterr().out
+        assert "CONSUMABLES ANALYSIS REPORT" in out
+        assert "Raid: Karazhan (r1)" in out and "Raid: Gruul (r2)" in out
+        assert "No consumable usage found in this raid." in out
+        assert any(line.startswith("P00") and line.rstrip().endswith("1") for line in out.splitlines())
+        assert "Idle " not in out.split("GROUP-WIDE BUFF BEHAVIOR")[0]
+        assert "[01:01] Haste Potion" in out and "12 players used this potion" in out
+        assert "Next boss killed: Attumen" in out
+        assert "Did NOT use: Idle" in out
+        assert "No coordinated potion usage detected" in out

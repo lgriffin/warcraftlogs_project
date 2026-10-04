@@ -1,10 +1,11 @@
 # dynamic_role_parser.py
 
-import logging
 from collections import defaultdict
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from .common.log import get_logger
+
+logger = get_logger(__name__)
 
 
 def group_players_by_class(master_actors: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -56,8 +57,4 @@ def identify_healers(
                 }
             )
 
-    # print("\n💉 Identified Healers (Healing > 50,000):")
-    # for healer in healers:
-    #     print(f"- {healer['name']} ({healer['class']}): {healer['healing']:,} healing")
-    # print("\n💉 Excluding anyone that hasn't breached 50k healing:")
     return healers

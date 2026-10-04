@@ -5,16 +5,17 @@ This module provides consistent error handling, logging, and user-friendly
 error messages across the entire application.
 """
 
-import logging
 import sys
 import traceback
 from collections.abc import Callable
 from enum import Enum
 from typing import Any, TypeVar
 
+from .log import get_logger
+
 _R = TypeVar("_R")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ErrorSeverity(Enum):

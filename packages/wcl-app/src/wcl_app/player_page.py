@@ -11,7 +11,6 @@ in which case the player's presence in the report is checked first.
 
 from __future__ import annotations
 
-import logging
 import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -20,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 from wcl_core.common.errors import WarcraftLogsError
+from wcl_core.common.log import get_logger
 from wcl_store import RaidScope
 
 from wcl_app.badges import BadgeRules, PlayerBadges, character_stats
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from wcl_core.models import CharacterHistory, RaidAnalysis
     from wcl_store import RaidRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _REPORT_URL_RE = re.compile(r"warcraftlogs\.com/reports/([A-Za-z0-9]{16})(?:[/?#]|$)")
 # Realm names contain letters, spaces, apostrophes and hyphens; WCL slugs drop
