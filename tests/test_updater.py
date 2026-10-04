@@ -150,7 +150,7 @@ class TestTamperedZipRefused:
     def test_verify_accepts_matching_digest(self, tmp_path):
         zip_path = tmp_path / ZIP_NAME
         digest = make_update_zip(zip_path)
-        verify_update_zip(str(zip_path), digest.upper())  # case-insensitive, no exception
+        assert verify_update_zip(str(zip_path), digest.upper()) is None  # case-insensitive, no exception
 
     def test_verify_rejects_tampered_zip(self, tmp_path):
         zip_path = tmp_path / ZIP_NAME

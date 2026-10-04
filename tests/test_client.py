@@ -21,7 +21,7 @@ def client():
 
 
 class TestRunQuery:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_bearer_token_header(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {}},
@@ -32,7 +32,7 @@ class TestRunQuery:
         call_kwargs = mock_post.call_args
         assert call_kwargs[1]["headers"]["Authorization"] == "Bearer test_token"
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_json_body(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {}},
@@ -43,7 +43,7 @@ class TestRunQuery:
         call_kwargs = mock_post.call_args
         assert call_kwargs[1]["json"] == {"query": "{ myQuery }"}
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_uses_configured_api_url(self, mock_post):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {}},
@@ -67,7 +67,7 @@ class TestRunQuery:
 
 
 class TestGetReportMetadata:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_parses_response(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {
@@ -91,7 +91,7 @@ class TestGetReportMetadata:
         assert meta.owner == "Guild"
         assert meta.report_id == "abc"
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_not_found_raises(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {"reportData": {"report": None}}},
@@ -103,7 +103,7 @@ class TestGetReportMetadata:
 
 
 class TestGetMasterData:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_filters_player_type(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {
@@ -130,7 +130,7 @@ class TestGetMasterData:
 
 
 class TestGetCastTable:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_nested_data_format(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {
@@ -143,7 +143,7 @@ class TestGetCastTable:
         assert len(result) == 1
         assert result[0]["guid"] == 1
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_flat_format(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {"reportData": {"report": {"table": {"entries": [{"guid": 2, "name": "Strike"}]}}}}},
@@ -153,7 +153,7 @@ class TestGetCastTable:
         result = client.get_cast_table("r1", 1)
         assert len(result) == 1
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_empty_response(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {"reportData": {"report": {"table": ""}}}},
@@ -165,7 +165,7 @@ class TestGetCastTable:
 
 
 class TestGetCastEventsPaginated:
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_single_page(self, mock_post, client):
         mock_post.return_value = MagicMock(
             json=lambda: {
@@ -186,7 +186,7 @@ class TestGetCastEventsPaginated:
         result = client.get_cast_events_paginated("r1", 1)
         assert len(result) == 1
 
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_multi_page(self, mock_post, client):
         page1 = {
             "data": {
@@ -283,7 +283,7 @@ class TestPerPlayerEventsFollowPagination:
         "method",
         ["get_healing_data", "get_cast_data", "get_aura_data", "get_damage_done_data", "get_damage_taken_data"],
     )
-    @patch("warcraftlogs_client.client.requests.post")
+    @patch("wcl_core.http.requests.post")
     def test_all_pages_returned(self, mock_post, client, method):
         mock_post.side_effect = [self._page([{"amount": 1}], 5000), self._page([{"amount": 2}], None)]
         result = getattr(client, method)("r1", 7)

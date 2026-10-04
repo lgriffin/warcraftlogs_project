@@ -1,10 +1,9 @@
-"""Step definitions for API authentication feature."""
-
-from unittest.mock import MagicMock, patch
+"""Step definitions for API authentication feature, against the fake Warcraft Logs in ``wcl_core.testing``."""
 
 import requests
 from pydantic import SecretStr
 from pytest_bdd import given, parsers, scenarios, then, when
+from wcl_core.testing import FakeWarcraftLogs, grant, invalid_json, status
 
 from warcraftlogs_client.auth import TokenManager
 from warcraftlogs_client.common.errors import AuthenticationError
@@ -17,7 +16,7 @@ scenarios("auth.feature")
     target_fixture="auth_ctx",
 )
 def token_manager(cid, csec):
-    return {"tm": TokenManager(cid, csec), "post_mock": None}
+    return {"tm": TokenManager(cid, csec), "wcl": FakeWarcraftLogs()}
 
 
 @given(
@@ -28,72 +27,51 @@ def expired_token_manager(token):
     tm = TokenManager("test_id", "test_secret")
     tm.access_token = SecretStr(token)
     tm.token_expiry = 0
-    return {"tm": tm, "post_mock": None}
+    return {"tm": tm, "wcl": FakeWarcraftLogs()}
 
 
-@given(
-    parsers.parse('the auth server will respond with token "{token}" expiring in {seconds:d} seconds'),
-)
-def mock_success_response(auth_ctx, token, seconds):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"access_token": token, "expires_in": seconds}
-    mock_resp.raise_for_status.return_value = None
-    auth_ctx["post_mock"] = mock_resp
+@given(parsers.parse('the auth server will respond with token "{token}" expiring in {seconds:d} seconds'))
+def server_grants(auth_ctx, token, seconds):
+    auth_ctx["wcl"].token(grant(token, seconds))
 
 
-@given(parsers.parse("the auth server will return HTTP {status:d}"))
-def mock_http_error(auth_ctx, status):
-    mock_resp = MagicMock()
-    mock_resp.status_code = status
-    http_error = requests.HTTPError(response=mock_resp)
-    mock_resp.raise_for_status.side_effect = http_error
-    auth_ctx["post_mock"] = mock_resp
+@given(parsers.parse("the auth server will return HTTP {code:d}"))
+def server_refuses(auth_ctx, code):
+    auth_ctx["wcl"].token(status(code))
 
 
 @given("the auth server is unreachable")
-def mock_connection_error(auth_ctx):
-    auth_ctx["post_mock"] = "connection_error"
+def server_unreachable(auth_ctx):
+    auth_ctx["wcl"].token(requests.ConnectionError("unreachable"))
 
 
 @given("the auth server will time out")
-def mock_timeout(auth_ctx):
-    auth_ctx["post_mock"] = "timeout"
+def server_times_out(auth_ctx):
+    auth_ctx["wcl"].token(requests.Timeout("timed out"))
 
 
 @given("the auth server will return invalid JSON")
-def mock_invalid_json(auth_ctx):
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.raise_for_status.return_value = None
-    mock_resp.json.side_effect = ValueError("Invalid JSON")
-    auth_ctx["post_mock"] = mock_resp
+def server_sends_garbage(auth_ctx):
+    auth_ctx["wcl"].token(invalid_json())
+
+
+def _request(auth_ctx, times):
+    with auth_ctx["wcl"].install():
+        try:
+            tokens = [auth_ctx["tm"].get_token() for _ in range(times)]
+        except AuthenticationError as e:
+            return {"token": None, "error": e, "wcl": auth_ctx["wcl"]}
+    return {"token": tokens[-1], "error": None, "wcl": auth_ctx["wcl"]}
 
 
 @when("a token is requested", target_fixture="token_result")
 def request_token(auth_ctx):
-    mock = auth_ctx["post_mock"]
-    if mock == "connection_error":
-        side_effect = requests.ConnectionError("unreachable")
-    elif mock == "timeout":
-        side_effect = requests.Timeout("timed out")
-    else:
-        side_effect = None
-
-    with patch("requests.post", return_value=mock, side_effect=side_effect) as patched:
-        try:
-            token = auth_ctx["tm"].get_token()
-            return {"token": token, "error": None, "mock": patched}
-        except AuthenticationError as e:
-            return {"token": None, "error": e, "mock": patched}
+    return _request(auth_ctx, 1)
 
 
 @when("a token is requested twice", target_fixture="token_result")
 def request_token_twice(auth_ctx):
-    with patch("requests.post", return_value=auth_ctx["post_mock"]) as patched:
-        auth_ctx["tm"].get_token()
-        auth_ctx["tm"].get_token()
-        return {"token": None, "error": None, "mock": patched}
+    return _request(auth_ctx, 2)
 
 
 @then(parsers.parse('the token should be "{expected}"'))
@@ -103,7 +81,7 @@ def check_token(token_result, expected):
 
 @then("the auth server should have been called once")
 def check_called_once(token_result):
-    assert token_result["mock"].call_count == 1
+    assert len(token_result["wcl"].token_requests) == 1
 
 
 @then(parsers.parse('an authentication error should be raised with message containing "{text}"'))

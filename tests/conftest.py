@@ -25,6 +25,14 @@ from warcraftlogs_client.models import (
 
 
 @pytest.fixture(autouse=True)
+def isolated_profiles(tmp_path, monkeypatch):
+    """No test reads or writes the real desktop's saved raid profiles."""
+    from wcl_core import paths
+
+    monkeypatch.setattr(paths, "get_profiles_path", lambda: tmp_path / "profiles.json")
+
+
+@pytest.fixture(autouse=True)
 def reset_global_state():
     """Reset singletons between tests."""
     import warcraftlogs_client.config as cfg

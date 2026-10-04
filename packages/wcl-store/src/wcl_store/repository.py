@@ -10,11 +10,17 @@ Every method commits its own work, and a failed write leaves nothing half-stored
 matched case-insensitively. Dates are ``"YYYY-MM-DD HH:MM:SS"`` strings: ``raid_date`` is the report start in
 the importing machine's local time (as the desktop app has always stored it); ``imported_at``,
 ``created_at`` and ``updated_at`` are UTC.
+
+Reads that list or aggregate raids take ``scope`` (``wcl_store.RaidScope``): which sources, game versions,
+expansions, zones and date window to see. ``None`` keeps the method's historic behaviour (its ``source`` or
+``sources`` argument alone); a scope's ``sources`` replaces that argument.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from .scope import RaidScope
 
 if TYPE_CHECKING:
     from wcl_core.models import CharacterHistory, RaidAnalysis
@@ -42,17 +48,30 @@ class RaidRepository(Protocol):
         """``{report_id: imported_at}`` for every stored raid, of any source."""
         ...
 
-    def count_raids(self, source: str = "guild") -> int:
-        """How many raids of ``source`` (``"guild"`` or ``"reference"``) are stored."""
+    def count_raids(self, source: str = "guild", scope: RaidScope | None = None) -> int:
+        """How many raids of ``source`` (``"guild"`` or ``"reference"``), or of ``scope``, are stored."""
         ...
 
-    def get_raid_list(self, limit: int = 50) -> list[dict[str, Any]]:
-        """Guild raids, newest ``raid_date`` first: report_id, title, owner, raid_date, imported_at."""
+    def get_raid_list(self, limit: int = 50, scope: RaidScope | None = None) -> list[dict[str, Any]]:
+        """Guild raids (or ``scope``'s), newest ``raid_date`` first: report_id, title, owner, raid_date,
+        imported_at, zone, game_version, expansion."""
         ...
 
-    def get_raids_by_source(self, source: str = "guild", limit: int = 50) -> list[dict[str, Any]]:
-        """Raids of ``source``, newest ``raid_date`` first: report_id, title, owner, raid_date, imported_at, zone,
-        raid_size and label (None when unset)."""
+    def get_raids_by_source(
+        self, source: str = "guild", limit: int = 50, scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
+        """Raids of ``source`` (or ``scope``), newest ``raid_date`` first: report_id, title, owner, raid_date,
+        imported_at, zone, raid_size, label (None when unset), game_version and expansion."""
+        ...
+
+    def set_raid_era(self, report_id: str, game_version: str | None, expansion: str | None) -> None:
+        """Record which site a stored raid is on and which expansion its zone belongs to. Unknown codes are
+        ignored; None clears a value."""
+        ...
+
+    def get_raids_without_era(self) -> list[dict[str, Any]]:
+        """Raids of any source missing ``game_version`` or ``expansion``, oldest first: report_id, zone,
+        game_version, expansion."""
         ...
 
     def set_raid_label(self, report_id: str, label: str | None) -> None:
@@ -60,9 +79,10 @@ class RaidRepository(Protocol):
 
         ...
 
-    def get_healing_by_raid(self, since: str) -> list[dict[str, Any]]:
-        """One row per healer per guild raid with ``raid_date >= since``, oldest raid first, then by name:
-        report_id, raid_date, name, player_class, healing, overhealing. Raids without healers are not listed."""
+    def get_healing_by_raid(self, since: str, scope: RaidScope | None = None) -> list[dict[str, Any]]:
+        """One row per healer per guild raid (or ``scope``'s) with ``raid_date >= since``, oldest raid first, then
+        by name: report_id, raid_date, name, player_class, healing, overhealing. Raids without healers are not
+        listed."""
         ...
 
     def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None:
@@ -79,7 +99,9 @@ class RaidRepository(Protocol):
 
     # ── Characters ──
 
-    def get_character_history(self, character_name: str, source: str = "guild") -> CharacterHistory | None: ...
+    def get_character_history(
+        self, character_name: str, source: str = "guild", scope: RaidScope | None = None
+    ) -> CharacterHistory | None: ...
 
     def get_reports_for_character(self, character_name: str) -> list[dict[str, Any]]:
         """Raids of any source with a role row for the character, newest first:
@@ -87,33 +109,45 @@ class RaidRepository(Protocol):
         ...
 
     def get_character_raid_roles(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """One row per raid and role, oldest first: raid_id, report_id, title, raid_date, zone, role, healing,
         overheal_percent, damage, damage_taken, mitigation_percent (None where the role has no such number)."""
         ...
 
     def get_character_spell_casts(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """Casts per spell per raid, in no set order: raid_id, role, spell_id, spell_name, casts."""
         ...
 
     def get_character_consumable_counts(
-        self, character_name: str, sources: tuple[str, ...] = ("guild",)
+        self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """Consumables per raid, in no set order: raid_id, consumable_name, count."""
         ...
 
     # ── Guild totals ──
 
-    def get_raid_attendance(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+    def get_raid_attendance(
+        self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
         """Raids each character has a role row in, by name: name, player_class, raids."""
         ...
 
-    def get_consumable_totals(self, sources: tuple[str, ...] = ("guild",)) -> list[dict[str, Any]]:
+    def get_consumable_totals(
+        self, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
         """Consumables each character used across raids, by name then consumable: name, consumable_name,
         count (the sum) and raids (raids it was used in). Consumables never used are left out."""
+        ...
+
+    def get_consumable_raids(
+        self, consumable_names: tuple[str, ...], sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
+    ) -> list[dict[str, Any]]:
+        """Which raids each character used any of ``consumable_names`` in, in no set order: name, raid_id and
+        consumable_name as stored. Names match ignoring ASCII case, like character names. Rows with a count of 0 are
+        left out; no names means no rows."""
         ...
 
     # ── Player pages ──

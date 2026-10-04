@@ -58,7 +58,7 @@ def test_app_context_opens_injected_storage(tmp_path, sample_raid_analysis):
 def test_contract_module_calls_every_protocol_method():
     """A method added to RaidRepository must be exercised by the contract module too."""
     methods = sorted(n for n, v in vars(RaidRepository).items() if not n.startswith("_") and callable(v))
-    assert len(methods) == 30
+    assert len(methods) == 33
     contract = (ROOT / "tests" / "test_store_contract.py").read_text(encoding="utf-8")
     missing = [m for m in methods if f".{m}(" not in contract]
     assert not missing, f"tests/test_store_contract.py never calls: {missing}"
@@ -108,7 +108,10 @@ def test_sqlite_side_needs_no_postgres_extra():
         "bad = {'sqlalchemy', 'psycopg', 'alembic', 'warcraftlogs_client'} & {m.split('.')[0] for m in sys.modules}; "
         "assert not bad, bad"
     )
-    subprocess.run([sys.executable, "-c", code], check=True, cwd=STORE_SRC.parent)
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False, cwd=STORE_SRC.parent
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_wcl_store_version_matches_the_app():

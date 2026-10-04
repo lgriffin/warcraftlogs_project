@@ -1,0 +1,599 @@
+[wcl_app]
+wcl_app.AddResult: @dataclass class AddResult
+wcl_app.AddResult.code: str
+wcl_app.AddResult.outcome: str
+wcl_app.AddResult.message: str = ''
+wcl_app.AddResult.ok: @property def ok(self) -> bool
+wcl_app.AddResult.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.AnalysisThresholds: @dataclass(frozen=True) class AnalysisThresholds
+wcl_app.AnalysisThresholds.healer_min_healing: int = 900000
+wcl_app.AnalysisThresholds.tank_min_taken: int = 150000
+wcl_app.AnalysisThresholds.tank_min_mitigation: int = 40
+wcl_app.AnalysisThresholds.healer_min_healing_10: int = 400000
+wcl_app.AnalysisThresholds.tank_min_taken_10: int = 300000
+wcl_app.AnalysisThresholds.from_config: @classmethod def from_config(cls, config: dict[str, Any]) -> 'AnalysisThresholds'
+wcl_app.AnalysisThresholds.as_kwargs: def as_kwargs(self) -> ThresholdKwargs
+wcl_app.AppContext: @dataclass class AppContext
+wcl_app.AppContext.config: dict[str, Any]
+wcl_app.AppContext.db_path: str | None = None
+wcl_app.AppContext.storage: StorageFactory | None = field(default=None, repr=False)
+wcl_app.AppContext.profile: 'Profile | None' = None
+wcl_app.AppContext.from_config_file: @classmethod def from_config_file(cls, config_file: str | None=None, db_path: str | None=None) -> 'AppContext'
+wcl_app.AppContext.desktop: @classmethod def desktop(cls, config_file: str | None=None, db_path: str | None=None, *, with_config: bool=True) -> 'AppContext'
+wcl_app.AppContext.headless: @classmethod def headless(cls, client: WarcraftLogsClient, storage: StorageFactory, config: dict[str, Any] | None=None, user_client: Callable[[], WarcraftLogsClient | None] | None=None, profile: 'Profile | None'=None) -> 'AppContext'
+wcl_app.AppContext.scope: @property def scope(self) -> RaidScope | None
+wcl_app.AppContext.use_profile: def use_profile(self, profile: 'Profile | None') -> None
+wcl_app.AppContext.guild_id: @property def guild_id(self) -> int | None
+wcl_app.AppContext.api_url: @property def api_url(self) -> str | None
+wcl_app.AppContext.thresholds: @property def thresholds(self) -> AnalysisThresholds
+wcl_app.AppContext.wcl_client: @property def wcl_client(self) -> WarcraftLogsClient
+wcl_app.AppContext.client_for: def client_for(self, game_version: str | None) -> WarcraftLogsClient
+wcl_app.AppContext.user_client: def user_client(self) -> WarcraftLogsClient | None
+wcl_app.AppContext.db: @contextmanager def db(self) -> Iterator['PerformanceDB']
+wcl_app.AppContext.repository: @contextmanager def repository(self) -> Iterator[RaidRepository]
+wcl_app.Badge: @dataclass class Badge
+wcl_app.Badge.id: str
+wcl_app.Badge.name: str
+wcl_app.Badge.description: str
+wcl_app.Badge.icon: str
+wcl_app.Badge.glyph: str
+wcl_app.Badge.tier: int
+wcl_app.Badge.quality: str
+wcl_app.Badge.tier_name: str
+wcl_app.Badge.value: int
+wcl_app.Badge.display: str
+wcl_app.Badge.stacks: int
+wcl_app.Badge.next_at: int | None
+wcl_app.Badge.next_tier: str
+wcl_app.Badge.progress: float
+wcl_app.Badge.earned: @property def earned(self) -> bool
+wcl_app.Badge.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.BadgeRule: @dataclass(frozen=True) class BadgeRule
+wcl_app.BadgeRule.id: str
+wcl_app.BadgeRule.name: str
+wcl_app.BadgeRule.description: str
+wcl_app.BadgeRule.icon: str
+wcl_app.BadgeRule.glyph: str
+wcl_app.BadgeRule.unit: str
+wcl_app.BadgeRule.thresholds: tuple[int, ...]
+wcl_app.BadgeRule.metric: str = CONSUMABLES
+wcl_app.BadgeRule.items: frozenset[str] = frozenset()
+wcl_app.BadgeRule.exclude: frozenset[str] = frozenset()
+wcl_app.BadgeRule.count: def count(self, stats: PlayerStats) -> int
+wcl_app.BadgeRule.award: def award(self, stats: PlayerStats) -> Badge
+wcl_app.BadgeRule.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.BadgeRules: @dataclass(frozen=True) class BadgeRules
+wcl_app.BadgeRules.rules: tuple[BadgeRule, ...] = DEFAULT_RULES
+wcl_app.BadgeRules.from_config: @classmethod def from_config(cls, config: Mapping[str, Any]) -> BadgeRules
+wcl_app.BadgeRules.award: def award(self, stats: PlayerStats) -> PlayerBadges
+wcl_app.BadgeRules.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.BadgeService: class BadgeService
+wcl_app.BadgeService.__init__: def __init__(self, storage: StorageFactory, rules: BadgeRules | None=None, sources: tuple[str, ...]=GUILD_SOURCES, scope: ScopeSource=None)
+wcl_app.BadgeService.scope: @property def scope(self) -> RaidScope | None
+wcl_app.BadgeService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> BadgeService
+wcl_app.BadgeService.catalogue: def catalogue(self) -> list[BadgeRule]
+wcl_app.BadgeService.for_character: def for_character(self, name: str) -> PlayerBadges
+wcl_app.BadgeService.for_guild: def for_guild(self, names: Iterable[str] | None=None) -> list[PlayerBadges]
+wcl_app.BadgeService.storage: set in __init__
+wcl_app.BadgeService.rules: set in __init__
+wcl_app.BadgeService.sources: set in __init__
+wcl_app.BridgeService: class BridgeService
+wcl_app.BridgeService.__init__: def __init__(self, store: HubLinkStore | None=None, config: dict[str, Any] | None=None, *, identity: IdentityService | None=None, profiles: ProfileService | None=None, app_version: str='')
+wcl_app.BridgeService.current: def current(self) -> HubLink | None
+wcl_app.BridgeService.is_linked: def is_linked(self) -> bool
+wcl_app.BridgeService.link: def link(self, code: str) -> HubLink
+wcl_app.BridgeService.publish: def publish(self, profiles: ProfileSet | None=None) -> None
+wcl_app.BridgeService.unlink: def unlink(self) -> bool
+wcl_app.BridgeService.store: set in __init__
+wcl_app.BridgeService.config: set in __init__
+wcl_app.BridgeService.identity: set in __init__
+wcl_app.BridgeService.profiles: set in __init__
+wcl_app.BridgeService.app_version: set in __init__
+wcl_app.CharacterComparison: @dataclass class CharacterComparison
+wcl_app.CharacterComparison.history: CharacterHistory
+wcl_app.CharacterComparison.trends: CharacterTrends
+wcl_app.CharacterComparison.consistency: dict[str, Any] = field(default_factory=dict)
+wcl_app.CharacterComparison.spider: dict[str, Any] = field(default_factory=dict)
+wcl_app.CharacterDossier: @dataclass class CharacterDossier
+wcl_app.CharacterDossier.history: CharacterHistory
+wcl_app.CharacterDossier.trends: CharacterTrends
+wcl_app.CharacterDossier.consumable_summary: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterDossier.consistency: dict[str, Any] = field(default_factory=dict)
+wcl_app.CharacterDossier.compliance: dict[str, Any] = field(default_factory=dict)
+wcl_app.CharacterDossier.personal_bests: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterDossier.spider: dict[str, Any] = field(default_factory=dict)
+wcl_app.CharacterDossier.calendar: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterLineage: @dataclass class CharacterLineage
+wcl_app.CharacterLineage.character: str
+wcl_app.CharacterLineage.raids: int
+wcl_app.CharacterLineage.role_counts: dict[str, int] = field(default_factory=dict)
+wcl_app.CharacterLineage.first_raid: str | None = None
+wcl_app.CharacterLineage.last_raid: str | None = None
+wcl_app.CharacterLineage.metrics: list[Spread] = field(default_factory=list)
+wcl_app.CharacterLineage.casts: list[Spread] = field(default_factory=list)
+wcl_app.CharacterLineage.consumables: list[Spread] = field(default_factory=list)
+wcl_app.CharacterLineage.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.CharacterService: class CharacterService
+wcl_app.CharacterService.__init__: def __init__(self, ctx: AppContext)
+wcl_app.CharacterService.scope: @property def scope(self) -> RaidScope | None
+wcl_app.CharacterService.roster: def roster(self) -> list[CharacterHistory]
+wcl_app.CharacterService.dossier: def dossier(self, name: str) -> CharacterDossier | None
+wcl_app.CharacterService.comparison: def comparison(self, name: str) -> CharacterComparison | None
+wcl_app.CharacterService.ctx: set in __init__
+wcl_app.CharacterTrends: @dataclass class CharacterTrends
+wcl_app.CharacterTrends.healer: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterTrends.healer_spells: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterTrends.tank: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterTrends.dps: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterTrends.dps_abilities: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterTrends.consumables: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.Chart: @dataclass class Chart
+wcl_app.Chart.id: str
+wcl_app.Chart.title: str
+wcl_app.Chart.kind: str
+wcl_app.Chart.categories: list[str]
+wcl_app.Chart.series: list[Series]
+wcl_app.Chart.subtitle: str = ''
+wcl_app.Chart.x_label: str = ''
+wcl_app.Chart.y_label: str = ''
+wcl_app.Chart.y_max: float = 0.0
+wcl_app.Chart.references: list[Reference] = field(default_factory=list)
+wcl_app.Chart.notes: list[str] = field(default_factory=list)
+wcl_app.Chart.empty: str = ''
+wcl_app.Chart.validate: def validate(self) -> Chart
+wcl_app.Chart.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.Chart.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> Chart
+wcl_app.ChartError: class ChartError(ValueError)
+wcl_app.DiscordNotConfigured: class DiscordNotConfigured(Exception)
+wcl_app.HealingService: class HealingService
+wcl_app.HealingService.__init__: def __init__(self, storage: StorageFactory, *, now: Callable[[], datetime]=clock.now, scope: ScopeSource=None)
+wcl_app.HealingService.scope: @property def scope(self) -> RaidScope | None
+wcl_app.HealingService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> HealingService
+wcl_app.HealingService.weekly: def weekly(self, weeks: int=DEFAULT_WEEKS) -> WeeklyHealing
+wcl_app.HealingService.storage: set in __init__
+wcl_app.HealingService.now: set in __init__
+wcl_app.HomeLayout: @dataclass(frozen=True) class HomeLayout
+wcl_app.HomeLayout.widgets: tuple[str, ...]
+wcl_app.HomeLayout.default: @classmethod def default(cls) -> HomeLayout
+wcl_app.HomeLayout.of: @classmethod def of(cls, widget_ids: Iterable[str]) -> HomeLayout
+wcl_app.HomeLayout.from_dict: @classmethod def from_dict(cls, data: Any) -> HomeLayout
+wcl_app.HomeLayout.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.HomeLayout.hidden: def hidden(self) -> list[str]
+wcl_app.HomePage: @dataclass class HomePage
+wcl_app.HomePage.widgets: list[HomeWidget]
+wcl_app.HomePage.generated_at: str
+wcl_app.HomePage.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.HomeService: class HomeService
+wcl_app.HomeService.__init__: def __init__(self, storage: StorageFactory, layouts: LayoutStore | None=None, *, now: Callable[[], datetime]=clock.now, badge_rules: BadgeRules | None=None, scope: ScopeSource=None)
+wcl_app.HomeService.scope: @property def scope(self) -> RaidScope | None
+wcl_app.HomeService.from_context: @classmethod def from_context(cls, ctx: AppContext, layouts: LayoutStore | None=None) -> HomeService
+wcl_app.HomeService.catalogue: @staticmethod def catalogue() -> list[WidgetSpec]
+wcl_app.HomeService.layout: def layout(self) -> HomeLayout
+wcl_app.HomeService.save_layout: def save_layout(self, widget_ids: Iterable[str]) -> HomeLayout
+wcl_app.HomeService.reset_layout: def reset_layout(self) -> HomeLayout
+wcl_app.HomeService.page: def page(self, layout: HomeLayout | None=None) -> HomePage
+wcl_app.HomeService.widget: def widget(self, widget_id: str) -> HomeWidget
+wcl_app.HomeService.storage: set in __init__
+wcl_app.HomeService.layouts: LayoutStore
+wcl_app.HomeService.now: set in __init__
+wcl_app.HomeService.badge_rules: set in __init__
+wcl_app.HomeWidget: @dataclass class HomeWidget
+wcl_app.HomeWidget.id: str
+wcl_app.HomeWidget.title: str
+wcl_app.HomeWidget.kind: str
+wcl_app.HomeWidget.size: str
+wcl_app.HomeWidget.subtitle: str = ''
+wcl_app.HomeWidget.link: Link | None = None
+wcl_app.HomeWidget.tiles: list[Tile] = field(default_factory=list)
+wcl_app.HomeWidget.columns: list[Column] = field(default_factory=list)
+wcl_app.HomeWidget.rows: list[Row] = field(default_factory=list)
+wcl_app.HomeWidget.items: list[ListItem] = field(default_factory=list)
+wcl_app.HomeWidget.bars: list[Bar] = field(default_factory=list)
+wcl_app.HomeWidget.actions: list[Action] = field(default_factory=list)
+wcl_app.HomeWidget.holders: list[BadgeHolder] = field(default_factory=list)
+wcl_app.HomeWidget.chart: Chart | None = None
+wcl_app.HomeWidget.empty: str = ''
+wcl_app.HomeWidget.error: str = ''
+wcl_app.HomeWidget.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.HubLinkedNotPublished: class HubLinkedNotPublished(HubError)
+wcl_app.HubLinkedNotPublished.__init__: def __init__(self, message: str, severity: ErrorSeverity=ErrorSeverity.ERROR, details: str | None=None)
+wcl_app.HubLinkedNotPublished.message: set in __init__
+wcl_app.HubLinkedNotPublished.severity: set in __init__
+wcl_app.HubLinkedNotPublished.details: set in __init__
+wcl_app.HubMemberMismatch: class HubMemberMismatch(AuthenticationError)
+wcl_app.HubMemberMismatch.__init__: def __init__(self, message: str, details: str | None=None)
+wcl_app.HubMemberMismatch.message: set in __init__
+wcl_app.HubMemberMismatch.severity: set in __init__
+wcl_app.HubMemberMismatch.details: set in __init__
+wcl_app.HubNotLinked: class HubNotLinked(LookupError)
+wcl_app.IdentityService: class IdentityService
+wcl_app.IdentityService.__init__: def __init__(self, store: DiscordIdentityStore | None=None, config: dict[str, Any] | None=None, *, flow: FlowStarter=start_oauth_flow, redirect_port: int=DEFAULT_REDIRECT_PORT)
+wcl_app.IdentityService.current: def current(self) -> DiscordIdentity | None
+wcl_app.IdentityService.is_linked: def is_linked(self) -> bool
+wcl_app.IdentityService.client_id: def client_id(self) -> str | None
+wcl_app.IdentityService.link: def link(self, *, open_browser: bool=True, timeout: float | None=None) -> DiscordIdentity
+wcl_app.IdentityService.unlink: def unlink(self) -> None
+wcl_app.IdentityService.store: set in __init__
+wcl_app.IdentityService.config: set in __init__
+wcl_app.JsonLayoutStore: class JsonLayoutStore
+wcl_app.JsonLayoutStore.__init__: def __init__(self, path: str | Path)
+wcl_app.JsonLayoutStore.load: def load(self) -> HomeLayout | None
+wcl_app.JsonLayoutStore.save: def save(self, layout: HomeLayout | None) -> None
+wcl_app.JsonLayoutStore.path: set in __init__
+wcl_app.JsonProfileStore: class JsonProfileStore
+wcl_app.JsonProfileStore.__init__: def __init__(self, path: str | Path)
+wcl_app.JsonProfileStore.load: def load(self) -> ProfileSet | None
+wcl_app.JsonProfileStore.save: def save(self, profiles: ProfileSet) -> None
+wcl_app.JsonProfileStore.path: set in __init__
+wcl_app.PlayerBadges: @dataclass class PlayerBadges
+wcl_app.PlayerBadges.name: str
+wcl_app.PlayerBadges.player_class: str
+wcl_app.PlayerBadges.badges: list[Badge]
+wcl_app.PlayerBadges.earned: @property def earned(self) -> list[Badge]
+wcl_app.PlayerBadges.score: @property def score(self) -> int
+wcl_app.PlayerBadges.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.PlayerLog: @dataclass class PlayerLog
+wcl_app.PlayerLog.code: str
+wcl_app.PlayerLog.title: str
+wcl_app.PlayerLog.start_time: int = 0
+wcl_app.PlayerLog.zone: str = ''
+wcl_app.PlayerLog.owner: str = ''
+wcl_app.PlayerLog.guild: str = ''
+wcl_app.PlayerLog.status: str = NEW
+wcl_app.PlayerLog.imported: bool = False
+wcl_app.PlayerLog.source: str = 'wcl'
+wcl_app.PlayerLog.date: @property def date(self) -> datetime | None
+wcl_app.PlayerLog.date_formatted: @property def date_formatted(self) -> str
+wcl_app.PlayerLog.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.PlayerPageData: @dataclass class PlayerPageData
+wcl_app.PlayerPageData.player: PlayerRef
+wcl_app.PlayerPageData.logs: list[PlayerLog] = field(default_factory=list)
+wcl_app.PlayerPageData.history: dict[str, Any] | None = None
+wcl_app.PlayerPageData.lineage: CharacterLineage | None = None
+wcl_app.PlayerPageData.role_overrides: list[dict] = field(default_factory=list)
+wcl_app.PlayerPageData.badges: PlayerBadges | None = None
+wcl_app.PlayerPageData.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.PlayerPageService: class PlayerPageService
+wcl_app.PlayerPageService.__init__: def __init__(self, db: RaidRepository, client: WarcraftLogsClient | None=None, analyze: AnalyzeFn | None=None, import_source: str='guild', badge_rules: BadgeRules | None=None, scope: ScopeSource=None)
+wcl_app.PlayerPageService.scope: @property def scope(self) -> RaidScope | None
+wcl_app.PlayerPageService.from_context: @classmethod def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool=True) -> PlayerPageService
+wcl_app.PlayerPageService.open_page: def open_page(self, player: PlayerRef) -> int
+wcl_app.PlayerPageService.list_pages: def list_pages(self, name: str | None=None) -> list[dict]
+wcl_app.PlayerPageService.get_page: def get_page(self, player: PlayerRef) -> PlayerPageData
+wcl_app.PlayerPageService.discover_reports: def discover_reports(self, player: PlayerRef, limit: int=50, include_local: bool=True) -> list[PlayerLog]
+wcl_app.PlayerPageService.add_reports: def add_reports(self, player: PlayerRef, refs: list[str], verify: bool=True, known: dict[str, PlayerLog] | None=None, progress: Callable[[str], None] | None=None) -> list[AddResult]
+wcl_app.PlayerPageService.dismiss: def dismiss(self, player: PlayerRef, codes: list[str]) -> int
+wcl_app.PlayerPageService.remove: def remove(self, player: PlayerRef, codes: list[str]) -> int
+wcl_app.PlayerPageService.db: set in __init__
+wcl_app.PlayerPageService.client: set in __init__
+wcl_app.PlayerPageService.import_source: set in __init__
+wcl_app.PlayerPageService.badge_rules: set in __init__
+wcl_app.PlayerRef: @dataclass(frozen=True) class PlayerRef
+wcl_app.PlayerRef.name: str
+wcl_app.PlayerRef.server: str
+wcl_app.PlayerRef.region: str
+wcl_app.PlayerRef.create: @classmethod def create(cls, name: str, server: str, region: str) -> PlayerRef
+wcl_app.PlayerRef.label: @property def label(self) -> str
+wcl_app.PlayerService: class PlayerService
+wcl_app.PlayerService.__init__: def __init__(self, ctx: AppContext, raids: RaidService | None=None)
+wcl_app.PlayerService.profile: def profile(self, name: str, server: str, region: str, api_url: str | None=None) -> CharacterProfile
+wcl_app.PlayerService.discover_reports: def discover_reports(self, name: str, server: str, region: str, api_url: str | None=None) -> list[ReportRef]
+wcl_app.PlayerService.add_reports: def add_reports(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
+wcl_app.PlayerService.history: def history(self, name: str) -> CharacterHistory | None
+wcl_app.PlayerService.ctx: set in __init__
+wcl_app.PlayerService.raids: set in __init__
+wcl_app.Profile: @dataclass(frozen=True) class Profile
+wcl_app.Profile.slug: str
+wcl_app.Profile.name: str
+wcl_app.Profile.game_version: str | None = None
+wcl_app.Profile.expansions: tuple[str, ...] = ()
+wcl_app.Profile.zones: tuple[str, ...] = ()
+wcl_app.Profile.since: str | None = None
+wcl_app.Profile.until: str | None = None
+wcl_app.Profile.guild_id: int | None = None
+wcl_app.Profile.wcl_api_url: str | None = None
+wcl_app.Profile.owner: str | None = None
+wcl_app.Profile.scope: @property def scope(self) -> RaidScope
+wcl_app.Profile.api_url: @property def api_url(self) -> str | None
+wcl_app.Profile.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.Profile.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> Profile
+wcl_app.ProfileDirectory: class ProfileDirectory(Protocol)
+wcl_app.ProfileDirectory.load: def load(self, discord_id: str) -> ProfileSet | dict[str, Any] | None
+wcl_app.ProfileNotPublished: class ProfileNotPublished(LookupError)
+wcl_app.ProfileService: class ProfileService
+wcl_app.ProfileService.__init__: def __init__(self, store: ProfileStore, ctx: AppContext | None=None, owner: str | None=None)
+wcl_app.ProfileService.from_context: @classmethod def from_context(cls, ctx: AppContext, store: ProfileStore, owner: str | None=None) -> ProfileService
+wcl_app.ProfileService.desktop: @classmethod def desktop(cls, ctx: AppContext | None=None, owner: str | None=None) -> ProfileService
+wcl_app.ProfileService.raid_count: def raid_count(self) -> int | None
+wcl_app.ProfileService.profiles: def profiles(self) -> ProfileSet
+wcl_app.ProfileService.list: def list(self) -> list[Profile]
+wcl_app.ProfileService.get: def get(self, slug: str) -> Profile | None
+wcl_app.ProfileService.active: def active(self) -> Profile | None
+wcl_app.ProfileService.create: def create(self, name: str, *, game_version: str | None=None, expansions: tuple[str, ...]=(), zones: tuple[str, ...]=(), since: str | None=None, until: str | None=None, guild_id: int | None=None, wcl_api_url: str | None=None, activate: bool=False) -> Profile
+wcl_app.ProfileService.update: def update(self, slug: str, **changes: Any) -> Profile
+wcl_app.ProfileService.delete: def delete(self, slug: str) -> bool
+wcl_app.ProfileService.activate: def activate(self, slug: str | None) -> Profile | None
+wcl_app.ProfileService.scope: def scope(self) -> RaidScope | None
+wcl_app.ProfileService.apply: def apply(self) -> Profile | None
+wcl_app.ProfileService.backfill_eras: def backfill_eras(self) -> int
+wcl_app.ProfileService.store: set in __init__
+wcl_app.ProfileService.ctx: set in __init__
+wcl_app.ProfileService.owner: set in __init__
+wcl_app.ProfileSet: @dataclass class ProfileSet
+wcl_app.ProfileSet.profiles: list[Profile] = field(default_factory=list)
+wcl_app.ProfileSet.active: str | None = None
+wcl_app.ProfileSet.get: def get(self, slug: str) -> Profile | None
+wcl_app.ProfileSet.active_profile: @property def active_profile(self) -> Profile | None
+wcl_app.ProfileSet.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.ProfileSet.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> ProfileSet
+wcl_app.ProfileSiteUnknown: class ProfileSiteUnknown(ValueError)
+wcl_app.ProgressCallback: ProgressCallback = Callable[[str], None]
+wcl_app.RaidService: class RaidService
+wcl_app.RaidService.__init__: def __init__(self, ctx: AppContext)
+wcl_app.RaidService.analyze: def analyze(self, report_id: str, *, reference: bool=False, progress: ProgressCallback | None=None) -> RaidAnalysis
+wcl_app.RaidService.save: def save(self, analysis: RaidAnalysis, source: str='guild') -> None
+wcl_app.RaidService.analyze_and_save: def analyze_and_save(self, report_id: str, *, reference: bool=False, progress: ProgressCallback | None=None) -> RaidAnalysis
+wcl_app.RaidService.list_raids: def list_raids(self, limit: int=50) -> list[dict[str, Any]]
+wcl_app.RaidService.count_raids: def count_raids(self) -> int
+wcl_app.RaidService.get_raid: def get_raid(self, report_id: str) -> RaidAnalysis | None
+wcl_app.RaidService.delete_raid: def delete_raid(self, report_id: str) -> None
+wcl_app.RaidService.guild_info: def guild_info(self, guild_id: int | None=None) -> dict[str, Any]
+wcl_app.RaidService.guild_reports: def guild_reports(self, guild_id: int | None=None) -> list[dict[str, Any]]
+wcl_app.RaidService.new_guild_reports: def new_guild_reports(self, guild_id: int | None=None) -> list[dict[str, Any]]
+wcl_app.RaidService.import_new: def import_new(self, guild_id: int | None=None, *, progress: ProgressCallback | None=None) -> list[str]
+wcl_app.RaidService.check_profile_site: def check_profile_site(self) -> None
+wcl_app.RaidService.imported_codes: def imported_codes(self) -> set[str]
+wcl_app.RaidService.import_missing: def import_missing(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
+wcl_app.RaidService.ctx: set in __init__
+wcl_app.ReanalysisResult: @dataclass class ReanalysisResult
+wcl_app.ReanalysisResult.report_id: str
+wcl_app.ReanalysisResult.old_role: str
+wcl_app.ReanalysisResult.ok: bool
+wcl_app.ReanalysisResult.message: str = ''
+wcl_app.ReanalysisResult.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.ReferenceAuthRequired: class ReferenceAuthRequired(Exception)
+wcl_app.ReferenceComparison: @dataclass(frozen=True) class ReferenceComparison
+wcl_app.ReferenceComparison.guild: RaidSide
+wcl_app.ReferenceComparison.reference: RaidSide
+wcl_app.ReferenceComparison.scope: Scope
+wcl_app.ReferenceComparison.overview: list[Metric]
+wcl_app.ReferenceComparison.composition: list[Metric]
+wcl_app.ReferenceComparison.classes: list[ClassRow]
+wcl_app.ReferenceComparison.consumables: list[ConsumableRow]
+wcl_app.ReferenceComparison.encounters: list[EncounterRow]
+wcl_app.ReferenceComparison.version: int = COMPARISON_SCHEMA_VERSION
+wcl_app.ReferenceComparison.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.ReferenceRequestError: class ReferenceRequestError(ValueError)
+wcl_app.ReferenceService: class ReferenceService
+wcl_app.ReferenceService.__init__: def __init__(self, ctx: AppContext)
+wcl_app.ReferenceService.signed_in: def signed_in(self) -> bool
+wcl_app.ReferenceService.references: def references(self, limit: int=50) -> list[StoredRaid]
+wcl_app.ReferenceService.guild_raids: def guild_raids(self, limit: int=50) -> list[StoredRaid]
+wcl_app.ReferenceService.import_reference: def import_reference(self, report: str, *, label: str | None=None, progress: ProgressCallback | None=None) -> RaidAnalysis
+wcl_app.ReferenceService.set_label: def set_label(self, report: str, label: str | None) -> None
+wcl_app.ReferenceService.delete_reference: def delete_reference(self, report: str) -> None
+wcl_app.ReferenceService.compare: def compare(self, guild_report: str, reference_report: str) -> ReferenceComparison
+wcl_app.ReferenceService.ctx: set in __init__
+wcl_app.ReferenceService.raids: set in __init__
+wcl_app.ReportRef: @dataclass class ReportRef
+wcl_app.ReportRef.code: str
+wcl_app.ReportRef.title: str
+wcl_app.ReportRef.start_time: int = 0
+wcl_app.ReportRef.zone_name: str = ''
+wcl_app.ReportRef.imported: bool = False
+wcl_app.RoleOverrideService: class RoleOverrideService
+wcl_app.RoleOverrideService.__init__: def __init__(self, db: RaidRepository, analyze: AnalyzeFn | None=None)
+wcl_app.RoleOverrideService.from_context: @classmethod def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool=True) -> RoleOverrideService
+wcl_app.RoleOverrideService.list_overrides: def list_overrides(self, character_name: str | None=None) -> list[dict]
+wcl_app.RoleOverrideService.set: def set(self, character_name: str, role: str, report_id: str | None=None, *, reanalyze: bool=True, progress: ProgressCallback | None=None) -> list[ReanalysisResult]
+wcl_app.RoleOverrideService.clear: def clear(self, character_name: str, report_id: str | None=None, *, reanalyze: bool=True, progress: ProgressCallback | None=None) -> list[ReanalysisResult]
+wcl_app.RoleOverrideService.db: set in __init__
+wcl_app.Series: @dataclass class Series
+wcl_app.Series.key: str
+wcl_app.Series.name: str
+wcl_app.Series.values: list[float | None]
+wcl_app.Series.display: list[str]
+wcl_app.Series.emphasis: bool = False
+wcl_app.Series.total: @property def total(self) -> float
+wcl_app.Spread: @dataclass class Spread
+wcl_app.Spread.name: str
+wcl_app.Spread.min: float
+wcl_app.Spread.mean: float
+wcl_app.Spread.max: float
+wcl_app.Spread.raids: int
+wcl_app.Spread.total: float
+wcl_app.Spread.role: str = ''
+wcl_app.Spread.raids_used: int = 0
+wcl_app.Spread.of: @classmethod def of(cls, name: str, values: list[float], role: str='') -> Spread
+wcl_app.StoredRaid: @dataclass(frozen=True) class StoredRaid
+wcl_app.StoredRaid.report_id: str
+wcl_app.StoredRaid.title: str
+wcl_app.StoredRaid.raid_date: str
+wcl_app.StoredRaid.zone: str | None = None
+wcl_app.StoredRaid.raid_size: int | None = None
+wcl_app.StoredRaid.label: str | None = None
+wcl_app.StoredRaid.owner: str | None = None
+wcl_app.StoredRaid.from_row: @classmethod def from_row(cls, row: dict[str, Any]) -> StoredRaid
+wcl_app.StoredRaid.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.WeeklyHealing: @dataclass class WeeklyHealing
+wcl_app.WeeklyHealing.weeks: list[HealingWeek]
+wcl_app.WeeklyHealing.healers: list[HealerWeeks] = field(default_factory=list)
+wcl_app.WeeklyHealing.raids: @property def raids(self) -> int
+wcl_app.WeeklyHealing.standard: def standard(self) -> HealingStandard | None
+wcl_app.WeeklyHealing.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.WeeklyHealing.raid_chart: def raid_chart(self) -> Chart
+wcl_app.WeeklyHealing.healer_chart: def healer_chart(self, top: int=MAX_SERIES) -> Chart
+wcl_app.WidgetSpec: @dataclass(frozen=True) class WidgetSpec
+wcl_app.WidgetSpec.id: str
+wcl_app.WidgetSpec.title: str
+wcl_app.WidgetSpec.description: str
+wcl_app.WidgetSpec.kind: str
+wcl_app.WidgetSpec.size: str = HALF
+wcl_app.WidgetSpec.default: bool = False
+wcl_app.WidgetSpec.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.character_lineage: def character_lineage(db: RaidRepository, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> CharacterLineage | None
+wcl_app.member_profile: def member_profile(directory: ProfileDirectory, discord_id: str, slug: str | None=None) -> Profile | None
+wcl_app.parse_report_code: def parse_report_code(text: str) -> str | None
+wcl_app.validate_report_code: def validate_report_code(code: str) -> str
+[wcl_store]
+wcl_store.RaidRepository: @runtime_checkable class RaidRepository(Protocol)
+wcl_store.RaidRepository.import_raid: def import_raid(self, analysis: RaidAnalysis, source: str='guild') -> None
+wcl_store.RaidRepository.replace_raid_analysis: def replace_raid_analysis(self, analysis: RaidAnalysis, source: str='guild') -> None
+wcl_store.RaidRepository.delete_raid: def delete_raid(self, report_id: str) -> None
+wcl_store.RaidRepository.is_raid_imported: def is_raid_imported(self, report_id: str) -> bool
+wcl_store.RaidRepository.get_imported_report_codes: def get_imported_report_codes(self) -> dict[str, str]
+wcl_store.RaidRepository.count_raids: def count_raids(self, source: str='guild', scope: RaidScope | None=None) -> int
+wcl_store.RaidRepository.get_raid_list: def get_raid_list(self, limit: int=50, scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_raids_by_source: def get_raids_by_source(self, source: str='guild', limit: int=50, scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.set_raid_era: def set_raid_era(self, report_id: str, game_version: str | None, expansion: str | None) -> None
+wcl_store.RaidRepository.get_raids_without_era: def get_raids_without_era(self) -> list[dict[str, Any]]
+wcl_store.RaidRepository.set_raid_label: def set_raid_label(self, report_id: str, label: str | None) -> None
+wcl_store.RaidRepository.get_healing_by_raid: def get_healing_by_raid(self, since: str, scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_raid_analysis: def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None
+wcl_store.RaidRepository.get_raid_roster: def get_raid_roster(self, report_id: str) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_raid_source: def get_raid_source(self, report_id: str) -> str | None
+wcl_store.RaidRepository.get_character_history: def get_character_history(self, character_name: str, source: str='guild', scope: RaidScope | None=None) -> CharacterHistory | None
+wcl_store.RaidRepository.get_reports_for_character: def get_reports_for_character(self, character_name: str) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_character_raid_roles: def get_character_raid_roles(self, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_character_spell_casts: def get_character_spell_casts(self, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_character_consumable_counts: def get_character_consumable_counts(self, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_raid_attendance: def get_raid_attendance(self, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_consumable_totals: def get_consumable_totals(self, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_consumable_raids: def get_consumable_raids(self, consumable_names: tuple[str, ...], sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_or_create_player_page: def get_or_create_player_page(self, name: str, server: str, region: str) -> int
+wcl_store.RaidRepository.find_player_pages: def find_player_pages(self, name: str | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.set_player_page_log: def set_player_page_log(self, page_id: int, report_id: str, status: str, title: str='', zone: str | None=None, owner: str | None=None, start_time: int=0) -> None
+wcl_store.RaidRepository.remove_player_page_log: def remove_player_page_log(self, page_id: int, report_id: str) -> bool
+wcl_store.RaidRepository.get_player_page_logs: def get_player_page_logs(self, page_id: int, status: str | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.set_role_override: def set_role_override(self, character_name: str, role: str, report_id: str='') -> None
+wcl_store.RaidRepository.clear_role_override: def clear_role_override(self, character_name: str, report_id: str='') -> bool
+wcl_store.RaidRepository.get_role_overrides: def get_role_overrides(self, character_name: str | None=None) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_role_overrides_for_report: def get_role_overrides_for_report(self, report_id: str) -> dict[str, str]
+wcl_store.RaidRepository.get_role_override_raids: def get_role_override_raids(self, character_name: str) -> set[str]
+wcl_store.RaidScope: @dataclass(frozen=True) class RaidScope
+wcl_store.RaidScope.sources: tuple[str, ...] = ('guild',)
+wcl_store.RaidScope.game_versions: tuple[str, ...] = ()
+wcl_store.RaidScope.expansions: tuple[str, ...] = ()
+wcl_store.RaidScope.zones: tuple[str, ...] = ()
+wcl_store.RaidScope.since: str | None = None
+wcl_store.RaidScope.until: str | None = None
+wcl_store.RaidScope.unfiltered: @property def unfiltered(self) -> bool
+wcl_store.RaidScope.admits: def admits(self, *, source: str='guild', game_version: str | None=None, expansion: str | None=None, zone: str | None=None, raid_date: str | None=None) -> bool
+wcl_store.RaidScope.with_sources: def with_sources(self, sources: tuple[str, ...]) -> RaidScope
+wcl_store.StorageError: class StorageError(Exception)
+wcl_store.narrowed: def narrowed(scope: RaidScope | None, sources: tuple[str, ...]) -> RaidScope | None
+[wcl_core.clock]
+wcl_core.clock.Clock: @runtime_checkable class Clock(Protocol)
+wcl_core.clock.Clock.time: def time(self) -> float
+wcl_core.clock.Clock.monotonic: def monotonic(self) -> float
+wcl_core.clock.Clock.now: def now(self) -> datetime
+wcl_core.clock.Clock.sleep: def sleep(self, seconds: float) -> None
+wcl_core.clock.monotonic: def monotonic() -> float
+wcl_core.clock.now: def now() -> datetime
+wcl_core.clock.sleep: def sleep(seconds: float) -> None
+wcl_core.clock.time: def time() -> float
+wcl_core.clock.today: def today() -> date
+wcl_core.clock.use: @contextmanager def use(clock: Clock) -> Iterator[Clock]
+[wcl_core.http]
+wcl_core.http.Response: @runtime_checkable class Response(Protocol)
+wcl_core.http.Response.status_code: @property def status_code(self) -> int
+wcl_core.http.Response.text: @property def text(self) -> str
+wcl_core.http.Response.json: def json(self) -> Any
+wcl_core.http.Response.raise_for_status: def raise_for_status(self) -> None
+wcl_core.http.Transport: class Transport(Protocol)
+wcl_core.http.Transport.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> Response
+wcl_core.http.Transport.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> Response
+wcl_core.http.get: def get(url: str, *, timeout: float, **kwargs: Any) -> Response
+wcl_core.http.post: def post(url: str, *, timeout: float, **kwargs: Any) -> Response
+wcl_core.http.use: @contextmanager def use(transport: Transport) -> Iterator[Transport]
+[wcl_core.hub]
+wcl_core.hub.HubError: class HubError(WarcraftLogsError)
+wcl_core.hub.HubError.__init__: def __init__(self, message: str, severity: ErrorSeverity=ErrorSeverity.ERROR, details: str | None=None)
+wcl_core.hub.HubError.message: set in __init__
+wcl_core.hub.HubError.severity: set in __init__
+wcl_core.hub.HubError.details: set in __init__
+wcl_core.hub.HubLink: @dataclass(frozen=True) class HubLink
+wcl_core.hub.HubLink.hub_url: str
+wcl_core.hub.HubLink.app_id: str
+wcl_core.hub.HubLink.token: SecretStr
+wcl_core.hub.HubLink.member: HubMember
+wcl_core.hub.HubLink.from_reply: @classmethod def from_reply(cls, hub: str, data: Any) -> HubLink
+wcl_core.hub.HubLink.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_core.hub.HubLinkStore: class HubLinkStore
+wcl_core.hub.HubLinkStore.__init__: def __init__(self, path: str | Path | None=None) -> None
+wcl_core.hub.HubLinkStore.path: @property def path(self) -> Path
+wcl_core.hub.HubLinkStore.save: def save(self, link: HubLink) -> None
+wcl_core.hub.HubLinkStore.forget: def forget(self) -> None
+wcl_core.hub.HubLinkStore.link: HubLink | None
+wcl_core.hub.HubMember: @dataclass(frozen=True) class HubMember
+wcl_core.hub.HubMember.discord_id: str
+wcl_core.hub.HubMember.username: str
+wcl_core.hub.HubMember.display_name: str | None = None
+wcl_core.hub.HubMember.name: @property def name(self) -> str
+wcl_core.hub.hub_url: def hub_url(config: dict[str, Any] | None=None) -> str
+wcl_core.hub.link_code: def link_code(text: str) -> str
+wcl_core.hub.publish_profiles: def publish_profiles(link: HubLink, profiles: dict[str, Any]) -> None
+wcl_core.hub.redeem: def redeem(hub: str, code: str, app_name: str, app_version: str) -> HubLink
+wcl_core.hub.revoke: def revoke(link: HubLink) -> None
+[wcl_core.testing]
+wcl_core.testing.FakeClock: class FakeClock
+wcl_core.testing.FakeClock.__init__: def __init__(self, start: datetime=datetime(2026, 11, 3, 20, 0)) -> None
+wcl_core.testing.FakeClock.install: @contextmanager def install(self) -> Iterator[FakeClock]
+wcl_core.testing.FakeClock.advance: def advance(self, seconds: float) -> FakeClock
+wcl_core.testing.FakeClock.time: def time(self) -> float
+wcl_core.testing.FakeClock.monotonic: def monotonic(self) -> float
+wcl_core.testing.FakeClock.now: def now(self) -> datetime
+wcl_core.testing.FakeClock.sleep: def sleep(self, seconds: float) -> None
+wcl_core.testing.FakeClock.start: set in __init__
+wcl_core.testing.FakeClock.elapsed: set in __init__
+wcl_core.testing.FakeClock.sleeps: list[float]
+wcl_core.testing.FakeDiscord: class FakeDiscord(_FakeHost)
+wcl_core.testing.FakeDiscord.__init__: def __init__(self) -> None
+wcl_core.testing.FakeDiscord.token: def token(self, *replies: Reply) -> FakeDiscord
+wcl_core.testing.FakeDiscord.user: def user(self, *replies: Reply) -> FakeDiscord
+wcl_core.testing.FakeDiscord.install: @contextmanager def install(self) -> Iterator[Any]
+wcl_core.testing.FakeDiscord.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeDiscord.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeDiscord.requests: list[Request]
+wcl_core.testing.FakeHub: class FakeHub(_FakeHost)
+wcl_core.testing.FakeHub.__init__: def __init__(self, base: str='https://hub.toads.test') -> None
+wcl_core.testing.FakeHub.issue_code: def issue_code(self, discord_id: str, username: str='toad', display_name: str | None=None) -> str
+wcl_core.testing.FakeHub.load: def load(self, discord_id: str) -> dict[str, Any] | None
+wcl_core.testing.FakeHub.base: set in __init__
+wcl_core.testing.FakeHub.codes: dict[str, dict[str, Any]]
+wcl_core.testing.FakeHub.apps: dict[str, dict[str, Any]]
+wcl_core.testing.FakeHub.profiles: dict[str, dict[str, Any]]
+wcl_core.testing.FakeHub.install: @contextmanager def install(self) -> Iterator[Any]
+wcl_core.testing.FakeHub.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeHub.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeHub.requests: list[Request]
+wcl_core.testing.FakeResponse: class FakeResponse
+wcl_core.testing.FakeResponse.__init__: def __init__(self, status_code: int=200, body: Any=_NO_BODY, text: str | None=None) -> None
+wcl_core.testing.FakeResponse.json: def json(self) -> Any
+wcl_core.testing.FakeResponse.raise_for_status: def raise_for_status(self) -> None
+wcl_core.testing.FakeResponse.status_code: set in __init__
+wcl_core.testing.FakeResponse.text: set in __init__
+wcl_core.testing.FakeWarcraftLogs: class FakeWarcraftLogs(_FakeHost)
+wcl_core.testing.FakeWarcraftLogs.__init__: def __init__(self) -> None
+wcl_core.testing.FakeWarcraftLogs.token: def token(self, *replies: Reply) -> FakeWarcraftLogs
+wcl_core.testing.FakeWarcraftLogs.answer: def answer(self, contains: str, *replies: Reply) -> FakeWarcraftLogs
+wcl_core.testing.FakeWarcraftLogs.token_requests: @property def token_requests(self) -> list[Request]
+wcl_core.testing.FakeWarcraftLogs.queries: @property def queries(self) -> list[Request]
+wcl_core.testing.FakeWarcraftLogs.client: def client(self, api_url: str=DEFAULT_API_URL) -> WarcraftLogsClient
+wcl_core.testing.FakeWarcraftLogs.install: @contextmanager def install(self) -> Iterator[Any]
+wcl_core.testing.FakeWarcraftLogs.post: def post(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeWarcraftLogs.get: def get(self, url: str, *, timeout: float, **kwargs: Any) -> FakeResponse
+wcl_core.testing.FakeWarcraftLogs.requests: list[Request]
+wcl_core.testing.Request: @dataclass class Request
+wcl_core.testing.Request.method: str
+wcl_core.testing.Request.url: str
+wcl_core.testing.Request.timeout: float
+wcl_core.testing.Request.headers: dict = field(default_factory=dict)
+wcl_core.testing.Request.data: dict | None = None
+wcl_core.testing.Request.json: dict | None = None
+wcl_core.testing.Request.query: @property def query(self) -> str
+wcl_core.testing.Request.variables: @property def variables(self) -> dict
+wcl_core.testing.UnexpectedRequest: class UnexpectedRequest(AssertionError)
+wcl_core.testing.grant: def grant(access_token: str, expires_in: int=3600, **extra: Any) -> dict
+wcl_core.testing.invalid_json: def invalid_json(text: str='<html>not json</html>') -> FakeResponse
+wcl_core.testing.status: def status(code: int, text: str='') -> FakeResponse

@@ -49,9 +49,15 @@ python scripts/dev.py types imports -k   # any tasks, in order; -k keeps going a
 pre-commit install              # run the same pinned tools on every commit
 ```
 
-Tasks: `format lint spelling imports deadcode types security test` (together, `check`), plus `audit`, `diffcov`
-(coverage of lines changed since origin/master, after `test`), `fuzz`, `gui`. The coverage floor in `pyproject.toml`
-only goes up.
+Tasks: `format lint spelling imports deadcode types security test mutation` (together, `check`), plus `audit`, `diffcov`
+(coverage of lines changed since origin/master, after `test`), `pgcov` (the storage tests on both backends and the
+Postgres backend's changed-line coverage, which `diffcov` leaves out; CI's `storage-postgres` job runs it), `fuzz`,
+`gui`. The coverage floor in `pyproject.toml` only goes up, and so do the mutation floors in `[tool.wcl.mutation]`
+(`python scripts/mutate.py <module> -v` lists the mutants a module's tests miss).
+
+CI's `ci-success` job is the one required check: it needs every other job and fails if any failed, was cancelled or was
+skipped (`scripts/ci_gate.py`). A new CI job goes in its `needs` and either lists its `dev.py` tasks in `JOB_TASKS` or
+gets a reason in `OUTSIDE_DEV` (both in `tests/test_dev_tasks.py`).
 
 Checker versions are pinned in the `dev` extra; bump them through Dependabot, not by hand. The underlying commands:
 
@@ -75,7 +81,9 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `tests/` — unit, BDD (`tests/features/` + `tests/step_defs/`), fuzz (`tests/fuzz/`), GUI (`tests/gui/`)
 - `packages/wcl-core/` — `wcl_core`: WCL client, auth (client credentials and the user OAuth flow), analysis, models,
   spell data and role configs (no Qt, no SQLite). `warcraftlogs_client/<module>.py` files for moved modules are import
-  aliases
+  aliases. All its HTTP goes through `wcl_core.http`; tests fake it with `wcl_core.testing` (`FakeWarcraftLogs`,
+  `FakeDiscord`, `FakeHub`), not `unittest.mock`. The shared packages read the time only through `wcl_core.clock`
+  (`tests/test_clock.py`); tests use `FakeClock`. `wcl_core.hub` is the Toads Hub client (`guides/hub_bridge.md`)
 - `packages/wcl-core/src/wcl_core/data/` — spell name mappings and consumes/interrupt/debuff/totem/cooldown configs
 - `packages/wcl-store/` — `wcl_store`: the `RaidRepository` protocol and `StorageError`, the SQLite backend
   (`wcl_store.sqlite.PerformanceDB`, formerly `database.py`, which stays as an import alias) and the Postgres backend
@@ -83,12 +91,13 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `packages/wcl-store/src/wcl_store/postgres/migrations/` — Alembic migrations for the Postgres schema, numbered
   `0001_…`; `wcl_store.postgres.upgrade(url)` runs them
 - `packages/wcl-app/` — `wcl_app`: the application services (`AppContext`, `RaidService`, `PlayerService`,
-  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, lineage); depends only
-  on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it. Headless hosts use
-  `AppContext.headless(client, storage)`
-- `guides/` — project documentation; `guides/home_widgets.md` is the Home widget payload contract the Toads Hub
-  shares, `guides/badges.md` the Toads badge payload and its thresholds, and `guides/reference_comparison.md` the
-  reference comparison payload
+  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, `BridgeService`,
+  lineage); depends only on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it.
+  Headless hosts use `AppContext.headless(client, storage)`
+- `guides/` — project documentation; `guides/CHARTER.md` is the engineering charter (requirement IDs and statuses,
+  audited by `tests/test_charter.py`; change a status in the pull request that changes the check),
+  `guides/home_widgets.md` the Home widget payload contract the Toads Hub shares, `guides/badges.md` the Toads badge
+  payload and its thresholds, and `guides/reference_comparison.md` the reference comparison payload
 
 ## Conventions
 
@@ -119,6 +128,10 @@ Layers, innermost first; each may import only itself and inner layers. `tests/te
 4. **presenters**: `renderers/`. Turn domain models into text; never read storage.
 5. **frontends**: CLI, PySide6 desktop, and later the Toads API and bot. Call services only; from core they may use just
    `models`, `common`, `paths`, `version`.
+
+`wcl_api_url` and `guild_id` in config.json are only the defaults of the "All" raid profile: read them through
+`wcl_core.config.configured_api_url` / `configured_guild_id`, or `AppContext.api_url` / `guild_id` (which put the
+active profile first), and a stored raid's site through `AppContext.client_for` (`tests/test_single_host_config.py`).
 
 New features go into a service first, then each frontend adapts it. Charts share presenter payloads, not drawing code.
 Auth/RBAC stays in the frontend adapters. Existing shortcuts are listed in `KNOWN_VIOLATIONS` in the test; the list may

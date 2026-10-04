@@ -26,6 +26,20 @@ SOURCES = [
     "packages/wcl-app/src/",
 ]
 COVERAGE = ["--cov=warcraftlogs_client", "--cov=wcl_core", "--cov=wcl_store", "--cov=wcl_app"]
+# The Postgres backend only runs where a database is up (CI's storage-postgres job), so its changed lines are
+# measured there by `pgcov` rather than by `diffcov` after the database-free `test`.
+# diff-cover globs `--include` from the repo root but matches `--exclude` against absolute paths.
+POSTGRES_FILES = "packages/wcl-store/src/wcl_store/postgres/**"
+POSTGRES_ANYWHERE = "*/wcl_store/postgres/*"
+# The storage contract, migrations and the services that read storage, run on both backends.
+STORAGE_TESTS = [
+    "tests/test_store_contract.py",
+    "tests/test_wcl_store_package.py",
+    "tests/test_wcl_app_package.py",
+    "tests/test_home_service.py",
+    "tests/test_badges.py",
+    "tests/step_defs/test_storage.py",
+]
 
 TASKS: dict[str, tuple[str, list[list[str]]]] = {
     "format": ("Ruff format check", [["ruff", "format", "--check", "."]]),
@@ -73,16 +87,51 @@ TASKS: dict[str, tuple[str, list[list[str]]]] = {
         ],
     ),
     "diffcov": (
-        "coverage of lines changed since origin/master (run test first)",
-        [["diff-cover", "coverage.xml", "--compare-branch=origin/master", "--fail-under=80"]],
+        "coverage of lines changed since origin/master (run test first); pgcov covers the Postgres backend",
+        [
+            [
+                "diff-cover",
+                "coverage.xml",
+                "--compare-branch=origin/master",
+                "--fail-under=80",
+                "--exclude",
+                POSTGRES_ANYWHERE,
+            ]
+        ],
+    ),
+    "pgcov": (
+        "storage tests on both backends, and coverage of the Postgres backend's changed lines "
+        "(needs WCL_STORE_TEST_DATABASE_URL and the postgres extra)",
+        [
+            [
+                "pytest",
+                "--tb=short",
+                "-v",
+                "-rs",
+                "--cov=wcl_store",
+                "--cov-report=xml:coverage-postgres.xml",
+                "--cov-fail-under=0",  # the floor is for the whole suite; this run only checks changed lines
+                "--cov-config=pyproject.toml",
+                *STORAGE_TESTS,
+            ],
+            [
+                "diff-cover",
+                "coverage-postgres.xml",
+                "--compare-branch=origin/master",
+                "--fail-under=80",
+                "--include",
+                POSTGRES_FILES,
+            ],
+        ],
     ),
     "fuzz": ("hypothesis fuzz tests", [["pytest", "-q", "--tb=short", "tests/fuzz/"]]),
     "gui": ("GUI tests (needs the gui extra and a display)", [["pytest", "-q", "--tb=short", "tests/gui/"]]),
+    "mutation": ("mutation floors on wcl_core (scripts/mutate.py)", [[sys.executable, "scripts/mutate.py"]]),
 }
 
 # What `check` runs: every CI check that needs no network or services, cheapest first so it fails fast.
 # `test` already collects tests/fuzz (as CI's test job does, for coverage), so `fuzz` stays a separate task.
-CHECK = ["format", "lint", "spelling", "imports", "deadcode", "types", "security", "test"]
+CHECK = ["format", "lint", "spelling", "imports", "deadcode", "types", "security", "test", "mutation"]
 
 FIX = [["ruff", "check", "--fix", "."], ["ruff", "format", "."]]
 

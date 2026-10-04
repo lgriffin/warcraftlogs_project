@@ -10,7 +10,6 @@ import contextlib
 import json
 import logging
 import secrets
-import time
 import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,7 +22,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import requests
 from pydantic import SecretStr
 
-from . import paths
+from . import clock, http, paths
 from .common.errors import AuthenticationError
 from .config import as_secret
 
@@ -33,15 +32,14 @@ DEFAULT_REDIRECT_PORT = 8764
 
 
 def _get_base_url() -> str:
-    """Derive the WCL domain from the configured API URL."""
-    from .config import load_config
+    """Derive the WCL domain from the configured API URL; the sign-in stays on the site the user configured."""
+    from .config import configured_api_url
 
     try:
-        api_url = load_config().get("wcl_api_url", "")
-        parsed = urlparse(api_url)
+        parsed = urlparse(configured_api_url() or "")
         if parsed.hostname:
             return f"{parsed.scheme}://{parsed.hostname}"
-    except Exception:  # noqa: BLE001, S110 - no readable config means the default domain
+    except ValueError:  # a malformed URL, such as an unclosed [host]: sign in on the main site
         pass
     return "https://www.warcraftlogs.com"
 
@@ -87,7 +85,7 @@ class UserTokenManager:
         return bool(self._access_token or self._refresh_token)
 
     def get_token(self) -> str:
-        if self._access_token and time.time() < self._expires_at:
+        if self._access_token and clock.time() < self._expires_at:
             return self._access_token.get_secret_value()
         if self._refresh_token:
             self._refresh()
@@ -104,7 +102,7 @@ class UserTokenManager:
 
         token_url = get_token_url()
         try:
-            response = requests.post(
+            response = http.post(
                 token_url,
                 data={
                     "grant_type": "refresh_token",
@@ -131,7 +129,7 @@ class UserTokenManager:
             raise AuthenticationError("Received invalid response during token refresh", details=str(e)) from e
 
         self._refresh_token = _optional_secret(token_data.get("refresh_token")) or self._refresh_token
-        self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
+        self._expires_at = clock.time() + token_data.get("expires_in", 3600) - 60
         self._save()
 
     def complete_auth(
@@ -148,7 +146,7 @@ class UserTokenManager:
         logger.info("Token exchange: POST %s (redirect_uri=%s)", token_url, redirect_uri)
 
         try:
-            response = requests.post(
+            response = http.post(
                 token_url,
                 data={
                     "grant_type": "authorization_code",
@@ -176,7 +174,7 @@ class UserTokenManager:
             raise AuthenticationError("Received invalid response during token exchange", details=str(e)) from e
 
         self._refresh_token = _optional_secret(token_data.get("refresh_token"))
-        self._expires_at = time.time() + token_data.get("expires_in", 3600) - 60
+        self._expires_at = clock.time() + token_data.get("expires_in", 3600) - 60
         self._save()
         logger.info("Token exchange successful, token saved.")
 
@@ -236,7 +234,7 @@ class HostedUserToken:
         client_secret: str | SecretStr,
         token_url: str,
         on_refresh: Callable[[UserToken], None] | None = None,
-        clock: Callable[[], float] = time.time,
+        clock: Callable[[], float] = clock.time,
     ) -> None:
         self._token = token
         self._client_id = client_id
@@ -261,7 +259,7 @@ class HostedUserToken:
 
     def _refresh(self, refresh_token: SecretStr) -> UserToken:
         try:
-            response = requests.post(
+            response = http.post(
                 self._token_url,
                 data={
                     "grant_type": "refresh_token",

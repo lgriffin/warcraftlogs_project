@@ -43,16 +43,22 @@ _ROW_HEIGHT = 30
 _TILES_PER_ROW = 6
 
 
-def default_home_service() -> HomeService:
+def desktop_context() -> AppContext:
+    """The desktop's context in the saved profile; without a loadable config.json, a database-only one."""
+    try:
+        return AppContext.desktop()
+    except ConfigurationError:
+        return AppContext.desktop(with_config=False)
+
+
+def default_home_service(ctx: AppContext | None = None) -> HomeService:
     """The desktop's home service: the local database, with the layout kept next to it.
 
-    Badge thresholds come from config.json when it loads; without it the defaults apply.
+    Badge thresholds come from config.json when it loads; without it the defaults apply. Pass the window's
+    ``ctx`` so a profile switch on it reaches the home page.
     """
-    try:
-        ctx = AppContext.from_config_file()
-    except ConfigurationError:
-        ctx = AppContext(config={})
-    return HomeService.from_context(ctx, JsonLayoutStore(get_user_data_dir() / LAYOUT_FILE))
+    context = ctx if ctx is not None else desktop_context()
+    return HomeService.from_context(context, JsonLayoutStore(get_user_data_dir() / LAYOUT_FILE))
 
 
 class _PageWorker(QThread):
@@ -482,11 +488,16 @@ class HomeView(QWidget):
         self._loading = True
         self._refresh_btn.setEnabled(False)
         worker = _PageWorker(self._service, self)
-        worker.loaded.connect(self.show_page)
+        worker.loaded.connect(self._on_page)
         worker.finished.connect(self._on_loaded)
         worker.finished.connect(worker.deleteLater)
         self._worker = worker
         worker.start()
+
+    def _on_page(self, page: HomePage) -> None:
+        if self._reload_after:
+            return  # a refresh was asked for mid-load (a profile switch, a new layout): this page is outdated
+        self.show_page(page)
 
     def _on_loaded(self) -> None:
         self._loading = False

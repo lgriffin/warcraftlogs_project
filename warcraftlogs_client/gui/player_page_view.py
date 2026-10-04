@@ -60,7 +60,7 @@ class _DiscoverWorker(QThread):
 
     def run(self):
         try:
-            ctx = AppContext.from_config_file()
+            ctx = AppContext.desktop()
             with ctx.db() as db:
                 service = PlayerPageService.from_context(ctx, db)
                 found = service.discover_reports(self.player)
@@ -83,7 +83,7 @@ class _AddWorker(QThread):
 
     def run(self):
         try:
-            ctx = AppContext.from_config_file()
+            ctx = AppContext.desktop()
             with ctx.db() as db:
                 service = PlayerPageService.from_context(ctx, db)
                 results = service.add_reports(self.player, self.refs, known=self.known, progress=self.progress.emit)
@@ -104,7 +104,7 @@ class _RoleWorker(QThread):
 
     def run(self):
         try:
-            ctx = AppContext.from_config_file()
+            ctx = AppContext.desktop()
             with ctx.db() as db:
                 service = RoleOverrideService.from_context(ctx, db)
                 if self.role is None:
@@ -470,7 +470,7 @@ class PlayerPageView(QWidget):
         if self._player is None:
             return
         try:
-            ctx = AppContext.from_config_file()
+            ctx = AppContext.desktop()
             with ctx.db() as db:
                 action(PlayerPageService.from_context(ctx, db, with_api=False), self._player)
         except (*API_ERRORS, sqlite3.Error) as e:

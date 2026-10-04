@@ -5,6 +5,7 @@ Settings view — configure credentials, thresholds, and database.
 import json
 import os
 import sqlite3
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QFont
@@ -22,7 +23,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .hub_panel import HubPanel
+from .identity_panel import IdentityPanel
+from .profiles_panel import ProfilesPanel
 from .styles import COLORS, COMMON_STYLES
+
+if TYPE_CHECKING:
+    from ..services import IdentityService
 
 
 class SettingsView(QWidget):
@@ -32,8 +39,10 @@ class SettingsView(QWidget):
 
     CONFIG_PATH = str(_paths.get_config_path())
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, ctx=None):
         super().__init__(parent)
+        # The window's context, so tagging raids reads the configured host and a sign-in sees the Discord app id.
+        self._ctx = ctx
         self.setStyleSheet(COMMON_STYLES)
         self._build_ui()
         self._load_current_config()
@@ -85,7 +94,8 @@ class SettingsView(QWidget):
 
         self.guild_id_input = QLineEdit()
         self.guild_id_input.setPlaceholderText("e.g. 774065")
-        creds_layout.addRow("Guild ID:", self.guild_id_input)
+        self.guild_id_input.setToolTip("The guild imports use when no profile, or a profile without its own, is on")
+        creds_layout.addRow("Default Guild ID:", self.guild_id_input)
 
         self.guild_name_input = QLineEdit()
         self.guild_name_input.setPlaceholderText("e.g. Amicable")
@@ -202,6 +212,14 @@ class SettingsView(QWidget):
 
         layout.addWidget(auth_group)
         self._refresh_auth_status()
+
+        # ── Discord account and raid eras ──
+        self.identity_panel = self._make_identity_panel()
+        layout.addWidget(self.identity_panel)
+        self.hub_panel = self._make_hub_panel()
+        layout.addWidget(self.hub_panel)
+        self.profiles_panel = self._make_profiles_panel()
+        layout.addWidget(self.profiles_panel)
 
         # ── Role Thresholds ──
         thresh_group = QGroupBox("Role Detection Thresholds")
@@ -422,6 +440,10 @@ class SettingsView(QWidget):
             from wcl_core.config import get_config_manager
 
             get_config_manager(self.CONFIG_PATH)
+            for name in ("identity_panel", "hub_panel"):
+                panel = getattr(self, name, None)
+                if panel is not None:
+                    panel.use_config(config)
 
             QMessageBox.information(self, "Saved", "Settings saved successfully.")
             self.status_message.emit("Settings saved")
@@ -496,6 +518,50 @@ class SettingsView(QWidget):
 
             self._update_status_label.setText(f"You're up to date (v{__version__})")
             self.status_message.emit("No updates available")
+
+    def _identity(self, ctx) -> "IdentityService":
+        """One Discord identity for every Settings panel, so they agree on who is linked."""
+        if getattr(self, "_shared_identity", None) is None:
+            from ..services import IdentityService
+
+            self._shared_identity = IdentityService(config=ctx.config)
+        return self._shared_identity
+
+    def _make_identity_panel(self) -> IdentityPanel:
+        from ..services import ProfileService
+        from .home_view import desktop_context
+
+        ctx = self._ctx if self._ctx is not None else desktop_context()
+        panel = IdentityPanel(self._identity(ctx), ProfileService.desktop(ctx))
+        panel.status_message.connect(self.status_message)
+        return panel
+
+    def _make_profiles_panel(self) -> ProfilesPanel:
+        from ..services import ProfileService
+        from .home_view import desktop_context
+
+        ctx = self._ctx if self._ctx is not None else desktop_context()
+        panel = ProfilesPanel(ProfileService.desktop(ctx), self._identity(ctx))
+        panel.status_message.connect(self.status_message)
+        return panel
+
+    def _make_hub_panel(self) -> HubPanel:
+        from wcl_core.paths import get_profiles_path
+
+        from ..services import BridgeService, JsonProfileStore, ProfileService
+        from ..version import __version__
+        from .home_view import desktop_context
+
+        ctx = self._ctx if self._ctx is not None else desktop_context()
+        bridge = BridgeService(
+            config=ctx.config,
+            identity=self._identity(ctx),  # the panel above's: a sign-in there reaches the IDENT-07 check here
+            profiles=ProfileService(JsonProfileStore(get_profiles_path())),
+            app_version=__version__,
+        )
+        panel = HubPanel(bridge)
+        panel.status_message.connect(self.status_message)
+        return panel
 
     def _refresh_auth_status(self):
         from ..user_auth import UserTokenManager

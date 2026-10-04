@@ -147,3 +147,32 @@ class TestCsvExport:
             content = f.read()
         assert "Player1" in content
         assert "Haste Potion" in content
+
+
+class TestRunConsumesAnalysis:
+    def test_uses_the_client_it_is_given(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from wcl_core import consumes_analysis
+
+        analyzer = MagicMock()
+        monkeypatch.setattr(consumes_analysis, "ConsumesAnalyzer", lambda include_healers: analyzer)
+        client = MagicMock()
+        consumes_analysis.run_consumes_analysis(["a", "b"], client=client)
+        assert [c.args for c in analyzer.analyze_raid.call_args_list] == [(client, "a"), (client, "b")]
+        analyzer.generate_report.assert_called_once_with(None, include_healers=False)
+
+    def test_builds_a_client_from_the_config_file_without_one(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from wcl_core import config, consumes_analysis
+
+        analyzer = MagicMock()
+        monkeypatch.setattr(consumes_analysis, "ConsumesAnalyzer", lambda include_healers: analyzer)
+        monkeypatch.setattr(
+            config,
+            "load_config",
+            lambda: {"client_id": "id", "client_secret": "s", "wcl_api_url": "https://x.test/api"},
+        )
+        consumes_analysis.run_consumes_analysis(["a"])
+        assert analyzer.analyze_raid.call_args.args[0].api_url == "https://x.test/api"

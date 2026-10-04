@@ -89,6 +89,10 @@ raids = Table(
     Column("label", Text),
     Column("raid_size", Integer),
     Column("zone", Text),
+    # Which Warcraft Logs site the raid is on and the expansion of its zone (``wcl_core.game_version``); NULL
+    # until read or backfilled, and NULL matches every ``RaidScope``.
+    Column("game_version", Text),
+    Column("expansion", Text),
 )
 
 healer_performance = Table(

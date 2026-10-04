@@ -41,5 +41,6 @@ class PlayerService:
         return self.raids.import_missing(codes, progress=progress)
 
     def history(self, name: str) -> CharacterHistory | None:
+        """The character's summary over the active profile's raids; None if they have none."""
         with self.ctx.repository() as db:
-            return db.get_character_history(name)
+            return db.get_character_history(name, scope=self.ctx.scope)

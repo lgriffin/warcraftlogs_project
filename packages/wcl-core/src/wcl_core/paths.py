@@ -94,6 +94,21 @@ def get_user_token_path() -> Path:
     return get_user_data_dir() / "user_token.json"
 
 
+def get_discord_identity_path() -> Path:
+    """The linked Discord identity (``wcl_core.discord_auth``), next to the Warcraft Logs user token."""
+    return get_user_data_dir() / "discord_identity.json"
+
+
+def get_hub_link_path() -> Path:
+    """This app's Toads Hub registration (``wcl_core.hub``), next to the Discord identity."""
+    return get_user_data_dir() / "hub_link.json"
+
+
+def get_profiles_path() -> Path:
+    """The desktop's raid profiles (``wcl_app.profiles.JsonProfileStore``)."""
+    return get_user_data_dir() / "profiles.json"
+
+
 def get_consumes_config_path() -> Path:
     return get_data_dir() / "consumes_config.json"
 

@@ -787,7 +787,7 @@ class ReferenceView(QWidget):
 
 def _service() -> ReferenceService:
     """Reference raids in the desktop database; imports build their own context with the user login."""
-    return ReferenceService(AppContext(config={}))
+    return ReferenceService(AppContext.desktop(with_config=False))
 
 
 # ── Head-to-Head table models ──

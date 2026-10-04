@@ -124,7 +124,9 @@ The full-featured PySide6 desktop app provides:
 - **GM/RL Insights** — Cross-raid analytics for guild leaders and raid leaders, with filtering by raid day, raid size, zone, and lookback window.
 - **Boss Insights** — Aggregate boss encounter performance across all imported raids.
 - **Reference Reports** — Import non-guild reports for benchmarking. Head-to-Head comparison shows consumable differences scoped to shared encounters, with Boss vs Trash breakdown, Engineering Stats, and Consumable Timeline.
-- **Settings** — Configure API credentials, role detection thresholds, and manage the local database.
+- **Settings** — Configure API credentials, role detection thresholds, and manage the local database. Link the app
+  to your Discord account, and tag raids stored before eras were recorded so raid profiles can tell Classic, TBC and
+  Era raids apart.
 
 ### Raid Analysis
 
@@ -148,6 +150,8 @@ Tracks consumable usage per player per raid:
   - Destruction Potion, Super Mana Potion, Haste Potion
   - Master Healthstone (all rank variants unified under one name)
   - Fel Iron Bomb, Goblin Sapper Charge
+  - Flasks and battle/guardian elixirs, read from the buffs table; a player with a flask or an elixir pair counts
+    as prepared (Home `flasks` widget, Flask Bearer badge)
 
 Consumables to track are configured in `packages/wcl-core/src/wcl_core/data/consumes_config.json`.
 
@@ -292,6 +296,23 @@ python -m warcraftlogs_client.cli player lineage Hadur                # Min / me
 
 Markdown reports are saved to the `reports/` directory.
 
+**Experimental: profiles and Discord identity** (`guides/identity_and_profiles.md`). A profile is a named view
+over the stored raids, by game version, expansion, zone or date, and picks the guild and Warcraft Logs site new
+imports come from. With no active profile the app behaves as it always has.
+
+```bash
+python -m warcraftlogs_client.cli profile backfill                     # Tag stored raids with their expansion
+python -m warcraftlogs_client.cli profile create TBC --expansion "The Burning Crusade" --use
+python -m warcraftlogs_client.cli profile create Forever --game-version forever
+python -m warcraftlogs_client.cli profile list                         # * marks the active profile
+python -m warcraftlogs_client.cli profile use                          # Back to every raid
+python -m warcraftlogs_client.cli discord login                        # Link this app to your Discord account
+python -m warcraftlogs_client.cli discord whoami
+```
+
+`discord login` needs a Discord application id in `discord_client_id` (config) or `DISCORD_CLIENT_ID`; the app
+is a public client with PKCE, so no secret is stored.
+
 ---
 
 ## Config Files
@@ -301,7 +322,7 @@ Markdown reports are saved to the `reports/` directory.
 | `config.example.json` | Template for local setup (committed) |
 | `config.json` | Local API credentials and settings (**gitignored** — copy from example) |
 | `user_token.json` | OAuth user token for reference reports (**gitignored**) |
-| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell ID mappings (buff-based and cast-based) |
+| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell IDs: buffs, casts, flasks, elixirs |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_names.json` | Spell ID to name mappings by category |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 
