@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from wcl_core.models import CharacterProfile, EncounterRanking
 
 from ..database import PerformanceDB
+from ..services import MyCharactersService, PlayerRef
 from .charts import (
     CalendarHeatmapWidget,
     SpiderChartWidget,
@@ -45,6 +46,7 @@ from .charts import (
     build_tank_chart,
     build_tank_mitigation_chart,
 )
+from .my_characters_bar import MyCharactersBar
 from .styles import COLORS, COMMON_STYLES
 from .table_models import GearTableModel, HistoryTableModel
 from .worker import CharacterProfileWorker, WowheadResolverWorker
@@ -251,9 +253,10 @@ class CharacterView(QWidget):
     analyze_report = Signal(str)
     view_character_history = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, my_characters: MyCharactersService | None = None):
         super().__init__(parent)
         self.setStyleSheet(COMMON_STYLES)
+        self._my_characters = my_characters
         self._worker = None
         self._profile = None
         self._chart_widgets = {}
@@ -275,6 +278,7 @@ class CharacterView(QWidget):
         self._cached_consumable_trend = []
         self._build_ui()
         self._load_character_config()
+        self._show_main()
 
     def _build_ui(self):
         outer = QVBoxLayout(self)
@@ -299,6 +303,14 @@ class CharacterView(QWidget):
         header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         header.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(header)
+
+        # ── Main and claimed alts ──
+        self._my_characters_section = _CollapsibleSection("My Characters")
+        self._my_characters_bar = MyCharactersBar(self._my_characters_service)
+        self._my_characters_bar.character_chosen.connect(self._on_favourite_chosen)
+        self._my_characters_bar.status_message.connect(self.status_message)
+        self._my_characters_section.content_layout().addWidget(self._my_characters_bar)
+        layout.addWidget(self._my_characters_section)
 
         # ── Character Settings (collapsible) ──
         self._config_section = _CollapsibleSection("Character Settings")
@@ -340,6 +352,9 @@ class CharacterView(QWidget):
 
         btn_row.addStretch()
         config_layout.addRow(btn_row)
+
+        for field in (self._char_name_input, self._char_server_input, self._char_region_input):
+            field.textChanged.connect(self._on_form_changed)
 
         self._config_section.content_layout().addWidget(config_inner)
         layout.addWidget(self._config_section)
@@ -702,6 +717,52 @@ class CharacterView(QWidget):
         table.setStyleSheet(f"QTableView {{ alternate-background-color: {COLORS['bg_dark']}; }}")
         return table
 
+    # ── Main and claimed alts ──
+
+    def _read_config(self) -> dict:
+        try:
+            with open(CONFIG_PATH) as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+        return config if isinstance(config, dict) else {}
+
+    def _my_characters_service(self) -> MyCharactersService:
+        if self._my_characters is not None:
+            return self._my_characters
+        return MyCharactersService.desktop(self._read_config())
+
+    def _form_ref(self) -> PlayerRef | None:
+        try:
+            return PlayerRef.create(
+                self._char_name_input.text(),
+                self._char_server_input.text(),
+                self._char_region_input.text() or "eu",
+            )
+        except ValueError:
+            return None
+
+    def _on_form_changed(self):
+        self._my_characters_bar.set_current(self._form_ref())
+
+    def _show_main(self):
+        """Re-read the signed-in user's characters; on a new sign-in open their main unless one of theirs is shown."""
+        owner = self._my_characters_bar.owner
+        mine = self._my_characters_bar.reload()
+        if self._my_characters_bar.owner != owner and mine.main is not None and self._form_ref() not in mine:
+            self._fill_form(mine.main)
+        self._on_form_changed()
+
+    def _fill_form(self, ref: PlayerRef):
+        self._char_name_input.setText(ref.name)
+        self._char_server_input.setText(ref.server)
+        self._char_region_input.setText(ref.region)
+
+    def _on_favourite_chosen(self, ref: PlayerRef):
+        self._fill_form(ref)
+        self._config_section.set_collapsed(True)
+        self._fetch_profile()
+
     # ── Config persistence ──
 
     def _load_character_config(self):
@@ -737,6 +798,7 @@ class CharacterView(QWidget):
             with open(CONFIG_PATH, "w") as f:
                 json.dump(config, f, indent=4)
             self.status_message.emit("Character settings saved")
+            self._show_main()  # with nothing claimed yet, the saved character is the main
         except (json.JSONDecodeError, OSError) as e:
             QMessageBox.critical(self, "Save Error", f"Could not save config:\n{e}")
 
@@ -1374,7 +1436,11 @@ class CharacterView(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not self._profile:
+        before = self._form_ref()
+        self._show_main()  # signing in or out since the page was last shown changes whose characters these are
+        if self._profile and self._form_ref() != before:
+            self._fetch_profile()
+        elif not self._profile:
             char_name = self._char_name_input.text().strip()
             server = self._char_server_input.text().strip()
             if char_name and server:

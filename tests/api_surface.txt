@@ -225,6 +225,23 @@ wcl_app.JsonProfileStore.__init__: def __init__(self, path: str | Path)
 wcl_app.JsonProfileStore.load: def load(self) -> ProfileSet | None
 wcl_app.JsonProfileStore.save: def save(self, profiles: ProfileSet) -> None
 wcl_app.JsonProfileStore.path: set in __init__
+wcl_app.MyCharacters: @dataclass(frozen=True) class MyCharacters
+wcl_app.MyCharacters.main: PlayerRef | None = None
+wcl_app.MyCharacters.alts: tuple[PlayerRef, ...] = ()
+wcl_app.MyCharacters.favourites: @property def favourites(self) -> tuple[PlayerRef, ...]
+wcl_app.MyCharacters.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.MyCharacters.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> MyCharacters
+wcl_app.MyCharactersService: class MyCharactersService
+wcl_app.MyCharactersService.__init__: def __init__(self, store: MyCharactersStore, owner: str | None=None, config: dict[str, Any] | None=None, *, owner_name: str | None=None)
+wcl_app.MyCharactersService.desktop: @classmethod def desktop(cls, config: dict[str, Any] | None=None) -> MyCharactersService
+wcl_app.MyCharactersService.current: def current(self) -> MyCharacters
+wcl_app.MyCharactersService.set_main: def set_main(self, ref: PlayerRef) -> MyCharacters
+wcl_app.MyCharactersService.claim: def claim(self, ref: PlayerRef) -> MyCharacters
+wcl_app.MyCharactersService.release: def release(self, ref: PlayerRef) -> MyCharacters
+wcl_app.MyCharactersService.store: set in __init__
+wcl_app.MyCharactersService.owner: set in __init__
+wcl_app.MyCharactersService.owner_name: set in __init__
+wcl_app.MyCharactersService.config: set in __init__
 wcl_app.PlayerBadges: @dataclass class PlayerBadges
 wcl_app.PlayerBadges.name: str
 wcl_app.PlayerBadges.player_class: str

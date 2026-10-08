@@ -26,10 +26,11 @@ from warcraftlogs_client.models import (
 
 @pytest.fixture(autouse=True)
 def isolated_profiles(tmp_path, monkeypatch):
-    """No test reads or writes the real desktop's saved raid profiles."""
+    """No test reads or writes the real desktop's saved raid profiles or main and alts."""
     from wcl_core import paths
 
     monkeypatch.setattr(paths, "get_profiles_path", lambda: tmp_path / "profiles.json")
+    monkeypatch.setattr(paths, "get_my_characters_path", lambda: tmp_path / "my_characters.json")
 
 
 @pytest.fixture(autouse=True)

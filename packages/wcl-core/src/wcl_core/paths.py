@@ -109,6 +109,11 @@ def get_profiles_path() -> Path:
     return get_user_data_dir() / "profiles.json"
 
 
+def get_my_characters_path() -> Path:
+    """The main character and claimed alts of each signed-in user (``wcl_app.my_characters``)."""
+    return get_user_data_dir() / "my_characters.json"
+
+
 def get_consumes_config_path() -> Path:
     return get_data_dir() / "consumes_config.json"
 

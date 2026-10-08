@@ -119,7 +119,7 @@ The full-featured PySide6 desktop app provides:
 - **Raids** — Browse all imported raids with encounter details. Each raid shows role-based performance breakdowns (Healers, Tanks, Melee DPS, Ranged DPS), consumable tracking, Boss vs Trash usage breakdown, Engineering Stats, and a Consumable Timeline.
 - **Find Character** — Search and browse all tracked characters across your imported raids.
 - **Raid Groups** — Create and manage raid groups, assign characters, set raid days, and view group dashboards with aggregated performance, attendance, and role coverage.
-- **My Character** — Set up your main character to view WarcraftLogs profile data, rankings, gear, and recent reports. Links directly to your WCL profile page.
+- **My Character** — Set up your main character to view WarcraftLogs profile data, rankings, gear, and recent reports. Links directly to your WCL profile page. Claim your alts too: the main and alts sit at the top as one-click favourites, kept per Discord sign-in.
 - **Compare** — Side-by-side character comparison with radar chart overlay across six dimensions.
 - **GM/RL Insights** — Cross-raid analytics for guild leaders and raid leaders, with filtering by raid day, raid size, zone, and lookback window.
 - **Boss Insights** — Aggregate boss encounter performance across all imported raids.

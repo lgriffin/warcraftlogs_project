@@ -43,6 +43,7 @@ The foundation layer. Each module has a dedicated test file covering its public 
 | Totem uptime | `test_totem_uptime.py` | Band merging, multi-shaman, prepull |
 | Cancelled casts | `test_cancelled_casts.py` | All-completed/cancelled, multi-player, DB roundtrip |
 | My Character | `test_my_character.py` | Role detection, boss comparison, trends |
+| Main and alts | `test_my_characters.py`, `gui/test_my_characters.py` | Claiming, per-identity ownership, the favourites bar |
 | Raid diff | `test_raid_diff.py` | Consumable/interrupt summary computation |
 | Data models | `test_models.py` | Overheal/mitigation percent, timestamps, composition |
 | Table models | `test_table_models.py` | Display data, sorting, formatting, checkbox mode |
