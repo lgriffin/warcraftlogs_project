@@ -759,6 +759,11 @@ class CharacterView(QWidget):
         self._char_region_input.setText(ref.region)
 
     def _on_favourite_chosen(self, ref: PlayerRef):
+        if self._worker is not None and self._worker.isRunning():
+            # _fetch_profile waits for the running fetch, which would freeze the window until it returns.
+            self.status_message.emit("Still loading the last character; try again in a moment")
+            self._on_form_changed()
+            return
         self._fill_form(ref)
         self._config_section.set_collapsed(True)
         self._fetch_profile()

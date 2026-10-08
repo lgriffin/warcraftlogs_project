@@ -135,3 +135,20 @@ class TestCharacterViewOpensTheMain:
         view = character_view.CharacterView()
         qtbot.addWidget(view)
         assert view._my_characters_bar.owner == "42" and _labels(view._my_characters_bar) == ["★ Hadur"]
+
+    def test_a_favourite_clicked_while_a_fetch_runs_is_ignored(self, qtbot, config_path, fetched):
+        class Running:
+            def isRunning(self):
+                return True
+
+        store = MemoryMyCharactersStore({"42": MyCharacters(main=ALT, alts=(MAIN,))})
+        view = character_view.CharacterView(my_characters=MyCharactersService(store, owner="42"))
+        qtbot.addWidget(view)
+        view._worker = Running()
+        messages: list[str] = []
+        view.status_message.connect(messages.append)
+        view._my_characters_bar._buttons[1].click()
+        assert fetched == [] and view._char_name_input.text() == "Toadly"
+        assert messages == ["Still loading the last character; try again in a moment"]
+        assert view._my_characters_bar._buttons[0].isChecked() and not view._my_characters_bar._buttons[1].isChecked()
+        view._worker = None

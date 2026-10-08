@@ -1,9 +1,9 @@
 """My characters: the main character and the alts a user has claimed, so a profile page can jump between them.
 
 Each Discord identity (``wcl_app.identity``) keeps its own main and alts; with nobody signed in they belong to this
-app (``LOCAL``). The first time someone signs in, they take over what was set up before signing in, and before
-anything was claimed at all the main is the one "My Character" saved in config.json, so nothing set up earlier
-disappears when you log in.
+app (``LOCAL``). The first account to sign in takes over what was set up before signing in, or, before anything was
+claimed at all, the one "My Character" saved in config.json, so nothing set up earlier disappears when you log in.
+Later accounts start empty.
 
 Where the claims are kept is up to the host, like profiles: the desktop uses ``JsonMyCharactersStore`` on
 ``my_characters.json``; the Toads Hub can keep them per member in its own database.
@@ -11,6 +11,7 @@ Where the claims are kept is up to the host, like profiles: the desktop uses ``J
 
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,7 +61,8 @@ class MyCharacters:
     def from_dict(cls, data: dict[str, Any]) -> MyCharacters:
         main = _ref_from_dict(data.get("main"))
         alts: list[PlayerRef] = []
-        for raw in data.get("alts") or ():
+        raw_alts = data.get("alts")
+        for raw in raw_alts if isinstance(raw_alts, list) else ():
             ref = _ref_from_dict(raw)
             if ref is not None and ref != main and ref not in alts:
                 alts.append(ref)
@@ -109,7 +111,10 @@ class JsonMyCharactersStore:
         owners[owner] = characters.to_dict()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"version": MY_CHARACTERS_SCHEMA_VERSION, "owners": owners}
-        self.path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # Write beside the file, then swap it in, so an interrupted save never leaves every owner's claims unreadable.
+        partial = self.path.with_name(self.path.name + ".tmp")
+        partial.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        partial.replace(self.path)
 
 
 def legacy_main(config: dict[str, Any] | None) -> PlayerRef | None:
@@ -153,14 +158,20 @@ class MyCharactersService:
         return cls(store, identity.id, config, owner_name=identity.display_name)
 
     def current(self) -> MyCharacters:
-        """The owner's characters; one who saved nothing takes over the signed-out ones, then config.json's."""
+        """The owner's characters; the first one signed in takes over the signed-out ones, then config.json's."""
         saved = self.store.load(self.owner)
-        if saved is None and self.owner != LOCAL:
-            saved = self.store.load(LOCAL)
-        if saved is None:
-            main = legacy_main(self.config)
-            saved = MyCharacters(main=main)
-        return saved
+        if saved is not None:
+            return saved
+        inherited = self.store.load(LOCAL) if self.owner != LOCAL else None
+        if inherited is None:
+            inherited = MyCharacters(main=legacy_main(self.config))
+        if self.owner != LOCAL and inherited.favourites:
+            # Hand them over once: the signed-out set is left empty, so the next account to sign in starts afresh.
+            # A failed save loses nothing; the hand-over is tried again next time.
+            with contextlib.suppress(OSError):
+                self.store.save(self.owner, inherited)
+                self.store.save(LOCAL, MyCharacters())
+        return inherited
 
     def _save(self, characters: MyCharacters) -> MyCharacters:
         self.store.save(self.owner, characters)

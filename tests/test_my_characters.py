@@ -73,6 +73,26 @@ class TestWhoseCharacters:
         assert store.load("42") == MyCharacters(main=MAIN, alts=(ALT,))
         assert signed_in.owner_name == "Leigh" and MyCharactersService(store, owner_name="x").owner_name is None
 
+    def test_only_the_first_account_takes_over_the_signed_out_ones(self, store):
+        MyCharactersService(store).claim(MAIN)
+        assert MyCharactersService(store, owner="42").current() == MyCharacters(main=MAIN)
+        assert store.load("42") == MyCharacters(main=MAIN) and store.load(LOCAL) == MyCharacters()
+        assert MyCharactersService(store, owner="43", config=LEGACY).current() == MyCharacters()
+        assert MyCharactersService(store).current() == MyCharacters()
+
+    def test_only_the_first_account_takes_over_the_config_character(self, store):
+        assert MyCharactersService(store, owner="42", config=LEGACY).current() == MyCharacters(main=MAIN)
+        assert MyCharactersService(store, owner="43", config=LEGACY).current() == MyCharacters()
+
+    def test_a_failed_hand_over_still_shows_the_characters(self):
+        class Broken(MemoryMyCharactersStore):
+            def save(self, owner, characters):
+                raise OSError("read-only")
+
+        store = Broken({LOCAL: MyCharacters(main=MAIN)})
+        assert MyCharactersService(store, owner="42").current() == MyCharacters(main=MAIN)
+        assert store.load("42") is None and store.load(LOCAL) == MyCharacters(main=MAIN)
+
     def test_the_config_character_is_the_main_until_anything_is_claimed(self, store):
         service = MyCharactersService(store, owner="42", config=LEGACY)
         assert service.current() == MyCharacters(main=MAIN)
@@ -94,6 +114,7 @@ class TestJsonStore:
         assert again.load("42") == MyCharacters(main=MAIN, alts=(ALT,))
         assert again.load(LOCAL) == MyCharacters(main=ALT2)
         assert json.loads((tmp_path / "sub" / "mine.json").read_text())["version"] == 1
+        assert sorted(p.name for p in (tmp_path / "sub").iterdir()) == ["mine.json"]  # no partial file left behind
 
     def test_unreadable_files_and_entries_mean_nothing_saved(self, tmp_path):
         path = tmp_path / "mine.json"
@@ -117,6 +138,8 @@ class TestJsonStore:
         }
         assert MyCharacters.from_dict(data) == MyCharacters(main=MAIN, alts=(ALT,))
         assert MyCharacters.from_dict({}) == MyCharacters()
+        assert MyCharacters.from_dict({"main": data["main"], "alts": 1}) == MyCharacters(main=MAIN)
+        assert MyCharacters.from_dict({"alts": {"name": "Toadly"}}) == MyCharacters()
 
     def test_the_desktop_reads_the_linked_identity(self, tmp_path, monkeypatch):
         from wcl_core import paths
