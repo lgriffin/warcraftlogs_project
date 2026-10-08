@@ -35,6 +35,8 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import IdentityService as IdentityService
     from wcl_app import JsonLayoutStore as JsonLayoutStore
     from wcl_app import JsonProfileStore as JsonProfileStore
+    from wcl_app import MyCharacters as MyCharacters
+    from wcl_app import MyCharactersService as MyCharactersService
     from wcl_app import PlayerBadges as PlayerBadges
     from wcl_app import PlayerLog as PlayerLog
     from wcl_app import PlayerPageData as PlayerPageData
@@ -74,6 +76,7 @@ for _name in (
     "home",
     "identity",
     "lineage",
+    "my_characters",
     "player_page",
     "players",
     "profiles",
