@@ -153,7 +153,7 @@ class AppearanceService:
         store: AppearanceStore,
         owner: str | None = None,
         *,
-        main_class: Callable[[], str | None] = lambda: None,
+        main_class: Callable[[], str | None] | None = None,
     ):
         self.store = store
         self.owner = owner or LOCAL
@@ -182,7 +182,7 @@ class AppearanceService:
         return self.theme(appearance)
 
     def main_class(self) -> str | None:
-        return class_for(self._main_class())
+        return class_for(self._main_class()) if self._main_class else None
 
     def theme(self, appearance: Appearance | None = None) -> Theme:
         """The theme for ``appearance`` (the saved one by default), with a followed main's class resolved."""

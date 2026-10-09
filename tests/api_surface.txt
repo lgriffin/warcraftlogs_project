@@ -37,7 +37,7 @@ wcl_app.Appearance.class_theme: str = FOLLOW_MAIN
 wcl_app.Appearance.to_dict: def to_dict(self) -> dict[str, str]
 wcl_app.Appearance.from_dict: @classmethod def from_dict(cls, data: Any) -> Appearance
 wcl_app.AppearanceService: class AppearanceService
-wcl_app.AppearanceService.__init__: def __init__(self, store: AppearanceStore, owner: str | None=None, *, main_class: Callable[[], str | None]=lambda: None)
+wcl_app.AppearanceService.__init__: def __init__(self, store: AppearanceStore, owner: str | None=None, *, main_class: Callable[[], str | None] | None=None)
 wcl_app.AppearanceService.desktop: @classmethod def desktop(cls, ctx: AppContext) -> AppearanceService
 wcl_app.AppearanceService.current: def current(self) -> Appearance
 wcl_app.AppearanceService.save: def save(self, appearance: Appearance) -> Theme
