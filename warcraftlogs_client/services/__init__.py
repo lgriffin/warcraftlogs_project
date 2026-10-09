@@ -11,9 +11,12 @@ from typing import TYPE_CHECKING
 import wcl_app as _module
 
 if TYPE_CHECKING:  # the names callers import through this alias
+    from wcl_app import VANILLA_CLASSES as VANILLA_CLASSES
     from wcl_app import AddResult as AddResult
     from wcl_app import AnalysisThresholds as AnalysisThresholds
     from wcl_app import AppContext as AppContext
+    from wcl_app import Appearance as Appearance
+    from wcl_app import AppearanceService as AppearanceService
     from wcl_app import BadgeRules as BadgeRules
     from wcl_app import BadgeService as BadgeService
     from wcl_app import BridgeService as BridgeService
@@ -37,6 +40,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import JsonProfileStore as JsonProfileStore
     from wcl_app import MyCharacters as MyCharacters
     from wcl_app import MyCharactersService as MyCharactersService
+    from wcl_app import Palette as Palette
     from wcl_app import PlayerBadges as PlayerBadges
     from wcl_app import PlayerLog as PlayerLog
     from wcl_app import PlayerPageData as PlayerPageData
@@ -59,14 +63,17 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import RoleOverrideService as RoleOverrideService
     from wcl_app import Spread as Spread
     from wcl_app import StoredRaid as StoredRaid
+    from wcl_app import Theme as Theme
     from wcl_app import WeeklyHealing as WeeklyHealing
     from wcl_app import WidgetSpec as WidgetSpec
+    from wcl_app import build_palette as build_palette
     from wcl_app import character_lineage as character_lineage
     from wcl_app import member_profile as member_profile
     from wcl_app import parse_report_code as parse_report_code
     from wcl_app import validate_report_code as validate_report_code
 
 for _name in (
+    "appearance",
     "badges",
     "bridge",
     "characters",
@@ -83,6 +90,7 @@ for _name in (
     "raids",
     "reference",
     "roles",
+    "themes",
 ):
     sys.modules[f"{__name__}.{_name}"] = importlib.import_module(f"wcl_app.{_name}")
 sys.modules[__name__] = _module

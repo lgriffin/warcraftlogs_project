@@ -36,7 +36,7 @@ from wcl_core.models import (
 
 from .charts import ClassCastTimelineWidget, CooldownSynergyWidget
 from .encounter_worker import EncounterCastWorker, EncounterCooldownWorker, EncounterResourceWorker
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 logger = get_logger(__name__)
 
@@ -109,7 +109,7 @@ class EncounterDeepDiveView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         # ── Header bar ──
         header = QWidget()

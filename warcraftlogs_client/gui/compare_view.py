@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from ..services import CharacterService
 from .character_history_widget import default_character_service
 from .charts import SERIES_COLORS, ComparisonSpiderChart
-from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
+from .styles import CLASS_COLORS, COLORS, common_styles
 
 MAX_CHARACTERS = 5
 
@@ -230,7 +230,7 @@ class CompareView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         title = QLabel("Character Comparison")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
@@ -465,7 +465,7 @@ class CompareView(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, ch.name)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Checked if ch.name in self._selected else Qt.CheckState.Unchecked)
-            class_color = CLASS_COLORS.get(ch.player_class, "#eeeeee")
+            class_color = CLASS_COLORS.get(ch.player_class, COLORS["text"])
             item.setForeground(QColor(class_color))
             self._char_list.addItem(item)
 

@@ -10,7 +10,7 @@ from .download_view import DownloadView
 from .raid_diff_view import RaidDiffView
 from .raids_view import RaidsView
 from .reference_view import ReferenceView
-from .styles import COMMON_STYLES
+from .styles import common_styles
 
 
 class RaidsHub(QWidget):
@@ -30,7 +30,7 @@ class RaidsHub(QWidget):
         self._connect_signals()
 
     def _build_ui(self):
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)

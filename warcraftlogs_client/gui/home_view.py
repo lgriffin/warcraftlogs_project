@@ -36,7 +36,7 @@ from ..services import AppContext, HomeLayout, HomePage, HomeService, HomeWidget
 from ..services.home import ACTION, CHARACTER, PLAYER_PAGE, RAID, Link
 from .badges import BadgeStrip
 from .charts import build_payload_chart
-from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
+from .styles import CLASS_COLORS, COLORS, common_styles
 
 LAYOUT_FILE = "home_layout.json"
 _ROW_HEIGHT = 30
@@ -348,7 +348,7 @@ class CustomiseHomeDialog(QDialog):
         self.setWindowTitle("Customise Home")
         self.setMinimumSize(460, 520)
         self.setStyleSheet(
-            COMMON_STYLES
+            common_styles()
             + f"""
             CustomiseHomeDialog {{ background-color: {COLORS["bg_dark"]}; }}
             QListWidget {{
@@ -433,7 +433,7 @@ class HomeView(QWidget):
 
     def _build_ui(self):
         self.setStyleSheet(
-            COMMON_STYLES
+            common_styles()
             + f"""
             HomeView, HomeView QScrollArea, HomeView QWidget#homeContent {{
                 background-color: {COLORS["bg_dark"]};

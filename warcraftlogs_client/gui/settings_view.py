@@ -23,10 +23,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .appearance_panel import AppearancePanel
 from .hub_panel import HubPanel
 from .identity_panel import IdentityPanel
 from .profiles_panel import ProfilesPanel
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 if TYPE_CHECKING:
     from ..services import IdentityService
@@ -43,7 +44,7 @@ class SettingsView(QWidget):
         super().__init__(parent)
         # The window's context, so tagging raids reads the configured host and a sign-in sees the Discord app id.
         self._ctx = ctx
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         self._build_ui()
         self._load_current_config()
 
@@ -72,6 +73,9 @@ class SettingsView(QWidget):
         header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         header.setStyleSheet(f"color: {COLORS['text_header']};")
         layout.addWidget(header)
+
+        self.appearance_panel = self._make_appearance_panel()
+        layout.addWidget(self.appearance_panel)
 
         # ── API Credentials ──
         creds_group = QGroupBox("WarcraftLogs API Credentials")
@@ -140,7 +144,7 @@ class SettingsView(QWidget):
         save_creds_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {COLORS["accent"]};
-                color: #121214;
+                color: {COLORS["on_accent"]};
                 border: none;
                 border-radius: 4px;
                 padding: 8px 20px;
@@ -294,8 +298,8 @@ class SettingsView(QWidget):
         clear_all_btn.setFixedWidth(160)
         clear_all_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS["error"]};
-                color: white;
+                background-color: {COLORS["danger"]};
+                color: {COLORS["on_danger"]};
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
@@ -303,7 +307,7 @@ class SettingsView(QWidget):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: #c0392b;
+                background-color: {COLORS["danger_hover"]};
             }}
         """)
         clear_all_btn.clicked.connect(self._clear_all_data)
@@ -526,6 +530,15 @@ class SettingsView(QWidget):
 
             self._shared_identity = IdentityService(config=ctx.config)
         return self._shared_identity
+
+    def _make_appearance_panel(self) -> AppearancePanel:
+        from ..services import AppearanceService
+        from .home_view import desktop_context
+
+        ctx = self._ctx if self._ctx is not None else desktop_context()
+        panel = AppearancePanel(AppearanceService.desktop(ctx))
+        panel.status_message.connect(self.status_message)
+        return panel
 
     def _make_identity_panel(self) -> IdentityPanel:
         from ..services import ProfileService

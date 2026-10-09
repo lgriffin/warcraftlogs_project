@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 
 class _MetricCard(QFrame):
@@ -48,7 +48,7 @@ class _MetricCard(QFrame):
 
         self._raid_b_lbl = QLabel("Raid B: —")
         self._raid_b_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self._raid_b_lbl.setStyleSheet("color: #69CCF0; border: none;")
+        self._raid_b_lbl.setStyleSheet(f"color: {COLORS['info']}; border: none;")
         layout.addWidget(self._raid_b_lbl)
 
         self._delta_lbl = QLabel()
@@ -80,7 +80,7 @@ class RaidDiffView(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
@@ -305,7 +305,7 @@ class RaidDiffView(QWidget):
 
             comp_grid.addWidget(self._styled_label(cls, COLORS["text"]), i, 0)
             comp_grid.addWidget(self._styled_label(str(ac), COLORS["accent"]), i, 1)
-            comp_grid.addWidget(self._styled_label(str(bc), "#69CCF0"), i, 2)
+            comp_grid.addWidget(self._styled_label(str(bc), COLORS["info"]), i, 2)
 
             sign = "+" if delta > 0 else ""
             d_color = COLORS["success"] if delta > 0 else (COLORS["error"] if delta < 0 else COLORS["text_dim"])
@@ -338,7 +338,7 @@ class RaidDiffView(QWidget):
                 cons_grid.addWidget(self._styled_label(name, COLORS["text"]), i, 0)
                 cons_grid.addWidget(self._styled_label(str(a_uses), COLORS["accent"]), i, 1)
                 cons_grid.addWidget(self._styled_label(str(ac.get("unique_users", 0)), COLORS["text_dim"]), i, 2)
-                cons_grid.addWidget(self._styled_label(str(b_uses), "#69CCF0"), i, 3)
+                cons_grid.addWidget(self._styled_label(str(b_uses), COLORS["info"]), i, 3)
                 cons_grid.addWidget(self._styled_label(str(bc.get("unique_users", 0)), COLORS["text_dim"]), i, 4)
 
                 sign = "+" if delta > 0 else ""
@@ -370,7 +370,7 @@ class RaidDiffView(QWidget):
 
                 int_grid.addWidget(self._styled_label(spell, COLORS["text"]), i, 0)
                 int_grid.addWidget(self._styled_label(str(a_count), COLORS["accent"]), i, 1)
-                int_grid.addWidget(self._styled_label(str(b_count), "#69CCF0"), i, 2)
+                int_grid.addWidget(self._styled_label(str(b_count), COLORS["info"]), i, 2)
 
                 sign = "+" if delta > 0 else ""
                 d_color = COLORS["success"] if delta > 0 else (COLORS["error"] if delta < 0 else COLORS["text_dim"])
@@ -402,9 +402,9 @@ class RaidDiffView(QWidget):
 
                 enc_grid.addWidget(self._styled_label(boss, COLORS["text"]), i, 0)
                 enc_grid.addWidget(self._styled_label(f"{dur_a_s // 60}:{dur_a_s % 60:02d}", COLORS["accent"]), i, 1)
-                enc_grid.addWidget(self._styled_label(f"{dur_b_s // 60}:{dur_b_s % 60:02d}", "#69CCF0"), i, 2)
+                enc_grid.addWidget(self._styled_label(f"{dur_b_s // 60}:{dur_b_s % 60:02d}", COLORS["info"]), i, 2)
                 enc_grid.addWidget(self._styled_label(f"{dmg_a:,}", COLORS["accent"]), i, 3)
-                enc_grid.addWidget(self._styled_label(f"{dmg_b:,}", "#69CCF0"), i, 4)
+                enc_grid.addWidget(self._styled_label(f"{dmg_b:,}", COLORS["info"]), i, 4)
 
                 if dmg_b > 0:
                     delta_pct = (dmg_a - dmg_b) / dmg_b * 100

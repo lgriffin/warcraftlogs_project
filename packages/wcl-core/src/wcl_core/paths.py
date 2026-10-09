@@ -114,6 +114,11 @@ def get_my_characters_path() -> Path:
     return get_user_data_dir() / "my_characters.json"
 
 
+def get_appearance_path() -> Path:
+    """Each signed-in user's theme: light or dark, and which class it is styled after (``wcl_app.appearance``)."""
+    return get_user_data_dir() / "appearance.json"
+
+
 def get_consumes_config_path() -> Path:
     return get_data_dir() / "consumes_config.json"
 

@@ -13,12 +13,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 from ..services.badges import Badge
 from .styles import COLORS
 
-QUALITY_COLORS = {
-    "uncommon": COLORS["quality_uncommon"],
-    "rare": COLORS["quality_rare"],
-    "epic": COLORS["quality_epic"],
-    "legendary": COLORS["quality_legendary"],
-}
+QUALITIES = ("uncommon", "rare", "epic", "legendary")
 
 
 def badge_tooltip(badge: Badge) -> str:
@@ -41,8 +36,8 @@ class BadgeChip(QLabel):
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setToolTip(badge_tooltip(badge))
-        ring = QUALITY_COLORS.get(badge.quality, COLORS["border"])
-        faded = "" if badge.earned else "color: rgba(255, 255, 255, 90);"
+        ring = COLORS[f"quality_{badge.quality}"] if badge.quality in QUALITIES else COLORS["border"]
+        faded = "" if badge.earned else f"color: {COLORS['text_dim']};"
         self.setStyleSheet(
             f"background-color: {COLORS['bg_input']}; border: 2px solid {ring}; border-radius: {size // 2}px;"
             f" font-size: {max(size // 2, 9)}px; padding: 0; {faded}"

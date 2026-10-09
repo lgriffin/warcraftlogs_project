@@ -36,7 +36,7 @@ from .charts import (
     build_tank_chart,
     build_tank_mitigation_chart,
 )
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 from .table_models import HistoryTableModel
 
 
@@ -79,7 +79,7 @@ class CharacterHistoryWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         self._title_label = QLabel()
         if self._inline:

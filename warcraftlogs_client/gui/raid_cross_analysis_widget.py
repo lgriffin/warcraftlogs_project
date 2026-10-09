@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from .charts import build_raid_trend_chart
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 _ALIGN_RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 _ALIGN_LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -103,7 +103,7 @@ class RaidCrossAnalysisWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         # ── Header bar ──
         header = QWidget()

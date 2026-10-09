@@ -1,54 +1,78 @@
 """
-Shared styles for the application — WoW-themed dark palette.
+Shared styles for the application, drawn from the active theme's palette.
+
+``COLORS``, ``CLASS_COLORS`` and ``SERIES`` hold the active palette's tokens (``wcl_app.themes``). ``apply_palette``
+swaps them in place, so every widget built afterwards draws in the new theme; widgets already on screen keep the
+colours they were built with, which is why switching theme rebuilds the main window.
 """
 
-COLORS = {
-    # Backgrounds — dark charcoal/slate
-    "bg_dark": "#121214",
-    "bg_mid": "#1a1a1f",
-    "bg_card": "#22222a",
-    "bg_input": "#2a2a35",
-    "bg_hover": "#32323e",
-    # WoW Gold accent (primary)
-    "accent": "#c9a42c",
-    "accent_hover": "#dbb734",
-    "accent_dim": "#8a7020",
-    # Secondary accent
-    "purple": "#8b5cf6",
-    "purple_hover": "#a78bfa",
-    # Text
-    "text": "#e0e0e0",
-    "text_dim": "#888892",
-    "text_header": "#f5f5f5",
-    "text_gold": "#ffd100",
-    # Borders
-    "border": "#2f2f3a",
-    "border_accent": "#4a4535",
-    # Semantic
-    "success": "#1eff00",
-    "warning": "#ff8000",
-    "error": "#e74c3c",
-    # WoW quality/ranking colors
-    "quality_common": "#9d9d9d",
-    "quality_uncommon": "#1eff00",
-    "quality_rare": "#0070dd",
-    "quality_epic": "#a335ee",
-    "quality_legendary": "#ff8000",
-}
+from PySide6.QtGui import QColor, QPalette
 
-CLASS_COLORS = {
-    "Warrior": "#C79C6E",
-    "Paladin": "#F58CBA",
-    "Priest": "#FFFFFF",
-    "Shaman": "#0070DE",
-    "Druid": "#FF7D0A",
-    "Rogue": "#FFF569",
-    "Mage": "#69CCF0",
-    "Warlock": "#9482C9",
-    "Hunter": "#ABD473",
-}
+from ..services import Palette, build_palette
 
-COMMON_STYLES = f"""
+COLORS: dict[str, str] = {}
+CLASS_COLORS: dict[str, str] = {}
+SERIES: list[str] = []
+_active: list[Palette] = []
+
+
+def apply_palette(palette: Palette) -> None:
+    """Make ``palette`` the one every widget built from now on draws with."""
+    COLORS.clear()
+    COLORS.update(palette.colors)
+    CLASS_COLORS.clear()
+    CLASS_COLORS.update(palette.class_colors)
+    SERIES[:] = palette.series
+    _active[:] = [palette]
+
+
+def active_palette() -> Palette:
+    return _active[0]
+
+
+apply_palette(build_palette())
+
+
+def qt_palette() -> QPalette:
+    """The active theme as a Qt palette, for the widgets no style sheet reaches (menus, native dialogs)."""
+    roles = {
+        QPalette.ColorRole.Window: "bg_dark",
+        QPalette.ColorRole.WindowText: "text",
+        QPalette.ColorRole.Base: "bg_input",
+        QPalette.ColorRole.AlternateBase: "bg_card",
+        QPalette.ColorRole.ToolTipBase: "bg_card",
+        QPalette.ColorRole.ToolTipText: "text",
+        QPalette.ColorRole.PlaceholderText: "text_dim",
+        QPalette.ColorRole.Text: "text",
+        QPalette.ColorRole.Button: "bg_card",
+        QPalette.ColorRole.ButtonText: "text",
+        QPalette.ColorRole.BrightText: "text_header",
+        QPalette.ColorRole.Highlight: "accent",
+        QPalette.ColorRole.HighlightedText: "on_accent",
+        QPalette.ColorRole.Link: "accent",
+    }
+    palette = QPalette()
+    for role, token in roles.items():
+        palette.setColor(role, QColor(COLORS[token]))
+    return palette
+
+
+def app_styles() -> str:
+    """The application-wide style sheet: tooltips, which no widget's own sheet reaches."""
+    return f"""
+        QToolTip {{
+            background-color: {COLORS["bg_card"]};
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["border"]};
+            padding: 4px 8px;
+            font-size: 12px;
+        }}
+    """
+
+
+def common_styles() -> str:
+    """The style sheet every page starts from, in the active theme."""
+    return f"""
     QWidget {{
         color: {COLORS["text"]};
         font-family: "Segoe UI", sans-serif;
@@ -69,7 +93,7 @@ COMMON_STYLES = f"""
     }}
     QPushButton {{
         background-color: {COLORS["accent"]};
-        color: #121214;
+        color: {COLORS["on_accent"]};
         border: none;
         border-radius: 4px;
         padding: 8px 20px;
@@ -80,8 +104,8 @@ COMMON_STYLES = f"""
         background-color: {COLORS["accent_hover"]};
     }}
     QPushButton:disabled {{
-        background-color: #3a3a3a;
-        color: #666;
+        background-color: {COLORS["bg_hover"]};
+        color: {COLORS["text_dim"]};
     }}
     QPushButton[secondary="true"] {{
         background-color: {COLORS["bg_card"]};

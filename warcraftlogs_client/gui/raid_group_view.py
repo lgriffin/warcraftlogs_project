@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from ..database import PerformanceDB
 from .charts import build_class_comparison_chart, build_group_performance_chart
 from .raid_list_widget import RaidListWidget
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 from .table_models import HistoryTableModel
 
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -59,7 +59,7 @@ class RaidGroupView(QWidget):
 
     def _build_ui(self):
         self.setStyleSheet(
-            COMMON_STYLES
+            common_styles()
             + f"""
             RaidGroupView, RaidGroupView QWidget {{
                 background-color: {COLORS["bg_dark"]};
@@ -94,11 +94,11 @@ class RaidGroupView(QWidget):
         self._delete_btn = QPushButton("  Delete  ")
         self._delete_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS["error"]};
-                color: white; border: none; border-radius: 4px;
+                background-color: {COLORS["danger"]};
+                color: {COLORS["on_danger"]}; border: none; border-radius: 4px;
                 padding: 8px 20px; font-size: 13px; font-weight: bold;
             }}
-            QPushButton:hover {{ background-color: #c0392b; }}
+            QPushButton:hover {{ background-color: {COLORS["danger_hover"]}; }}
         """)
         self._delete_btn.clicked.connect(self._delete_group)
         btn_row.addWidget(self._delete_btn)

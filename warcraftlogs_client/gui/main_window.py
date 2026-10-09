@@ -54,6 +54,8 @@ class _UpdateCheckWorker(QThread):
 
 
 class MainWindow(QMainWindow):
+    theme_changed = Signal(object)  # Theme: Settings applied a new one; the app rebuilds the window in it
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("WarcraftLogs Analyzer")
@@ -300,6 +302,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
+        self.settings_view.appearance_panel.theme_applied.connect(self.theme_changed)
         self.settings_view.identity_panel.eras_changed.connect(self._on_eras_changed)
         self.settings_view.profiles_panel.profiles_changed.connect(self._on_profiles_edited)
         self.profile_switcher.profile_changed.connect(self._on_profile_changed)

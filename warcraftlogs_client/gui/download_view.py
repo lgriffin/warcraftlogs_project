@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 from .table_models import HistoryTableModel
 from .worker import AnalysisWorker, GuildReportsWorker, import_guild
 
@@ -46,7 +46,7 @@ class DownloadView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         title = QLabel("Download Raids")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
