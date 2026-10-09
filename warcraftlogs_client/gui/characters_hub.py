@@ -25,7 +25,7 @@ from .character_history_widget import CharacterHistoryWidget, default_character_
 from .character_view import CharacterView
 from .compare_view import CompareView
 from .player_page_view import PlayerPageView
-from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
+from .styles import CLASS_COLORS, COLORS, common_styles
 
 
 class CharactersHub(QWidget):
@@ -49,7 +49,7 @@ class CharactersHub(QWidget):
         self._connect_signals()
 
     def _build_ui(self):
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -186,7 +186,7 @@ class CharactersHub(QWidget):
         for ch in self._characters:
             if query and query not in ch.name.lower():
                 continue
-            class_color = CLASS_COLORS.get(ch.player_class, "#eee")
+            class_color = CLASS_COLORS.get(ch.player_class, COLORS["text"])
             raids_text = f"{ch.total_raids} raids" if ch.total_raids else "0 raids"
             display = f"{ch.name}  [{ch.player_class}]  ({raids_text})"
             item = QListWidgetItem(display)

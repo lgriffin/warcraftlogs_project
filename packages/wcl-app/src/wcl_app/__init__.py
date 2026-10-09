@@ -8,6 +8,7 @@ imports (enforced by ``lint-imports`` and ``tests/test_wcl_app_package.py``).
 ``warcraftlogs_client.services`` is an alias of this package.
 """
 
+from wcl_app.appearance import Appearance, AppearanceService, Theme
 from wcl_app.badges import Badge, BadgeRule, BadgeRules, BadgeService, PlayerBadges
 from wcl_app.bridge import (
     BridgeService,
@@ -32,11 +33,15 @@ from wcl_app.profiles import JsonProfileStore, Profile, ProfileService, ProfileS
 from wcl_app.raids import ProfileSiteUnknown, RaidService, ReferenceAuthRequired, ReportRef
 from wcl_app.reference import ReferenceComparison, ReferenceRequestError, ReferenceService, StoredRaid
 from wcl_app.roles import ReanalysisResult, RoleOverrideService
+from wcl_app.themes import VANILLA_CLASSES, Palette, build_palette
 
 __all__ = [
+    "VANILLA_CLASSES",
     "AddResult",
     "AnalysisThresholds",
     "AppContext",
+    "Appearance",
+    "AppearanceService",
     "Badge",
     "BadgeRule",
     "BadgeRules",
@@ -63,6 +68,7 @@ __all__ = [
     "JsonProfileStore",
     "MyCharacters",
     "MyCharactersService",
+    "Palette",
     "PlayerBadges",
     "PlayerLog",
     "PlayerPageData",
@@ -87,8 +93,10 @@ __all__ = [
     "Series",
     "Spread",
     "StoredRaid",
+    "Theme",
     "WeeklyHealing",
     "WidgetSpec",
+    "build_palette",
     "character_lineage",
     "member_profile",
     "parse_report_code",

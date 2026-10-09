@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from wcl_core.models import CharacterHistory
 
 from ..database import PerformanceDB
-from .styles import CLASS_COLORS, COLORS, COMMON_STYLES
+from .styles import CLASS_COLORS, COLORS, common_styles
 
 
 class FindCharacterView(QWidget):
@@ -31,7 +31,7 @@ class FindCharacterView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         self._characters: list[CharacterHistory] = []
         self._selected: CharacterHistory | None = None
         self._build_ui()
@@ -176,7 +176,7 @@ class FindCharacterView(QWidget):
         for ch in self._characters:
             if query and query not in ch.name.lower():
                 continue
-            class_color = CLASS_COLORS.get(ch.player_class, "#eee")
+            class_color = CLASS_COLORS.get(ch.player_class, COLORS["text"])
             raids_text = f"{ch.total_raids} raids" if ch.total_raids else "0 raids"
             display = f"{ch.name}  [{ch.player_class}]  ({raids_text})"
 
@@ -209,7 +209,7 @@ class FindCharacterView(QWidget):
         self._detail_group.setVisible(True)
         self._history_btn.setVisible(True)
 
-        class_color = CLASS_COLORS.get(ch.player_class, "#eee")
+        class_color = CLASS_COLORS.get(ch.player_class, COLORS["text"])
         self._detail_labels["Name"].setText(ch.name)
         self._detail_labels["Name"].setStyleSheet(f"color: {class_color}; font-size: 15px; font-weight: bold;")
         self._detail_labels["Class"].setText(ch.player_class)

@@ -39,7 +39,7 @@ from .analysis_helpers import (
 )
 from .charts import DebuffTimelineWidget
 from .detail_panel import CharacterDetailPanel
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 from .table_models import (
     CancelledCastTableModel,
     DPSTableModel,
@@ -94,7 +94,7 @@ class RaidAnalysisWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         header = QWidget()
         header.setFixedHeight(52)
@@ -138,12 +138,12 @@ class RaidAnalysisWidget(QWidget):
         refresh_btn.setFixedHeight(32)
         refresh_btn.setStyleSheet("""
             QPushButton {
-                background-color: #2980b9;
+                background-color: #1f6aa5;
                 color: white; border: none; border-radius: 4px;
                 padding: 8px 16px; font-size: 12px; font-weight: bold;
             }
-            QPushButton:hover { background-color: #3498db; }
-            QPushButton:disabled { background-color: #555; color: #888; }
+            QPushButton:hover { background-color: #1a5a8c; }
+            QPushButton:disabled { background-color: #555; color: #ccc; }
         """)
         refresh_btn.clicked.connect(self._refresh_raid)
         header_layout.addWidget(refresh_btn)
@@ -154,11 +154,11 @@ class RaidAnalysisWidget(QWidget):
             delete_btn.setFixedHeight(32)
             delete_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {COLORS["error"]};
-                    color: white; border: none; border-radius: 4px;
+                    background-color: {COLORS["danger"]};
+                    color: {COLORS["on_danger"]}; border: none; border-radius: 4px;
                     padding: 8px 16px; font-size: 12px; font-weight: bold;
                 }}
-                QPushButton:hover {{ background-color: #c0392b; }}
+                QPushButton:hover {{ background-color: {COLORS["danger_hover"]}; }}
             """)
             delete_btn.clicked.connect(self._delete_raid)
             header_layout.addWidget(delete_btn)

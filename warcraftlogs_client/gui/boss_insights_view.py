@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..database import PerformanceDB
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 DAY_OPTIONS = [
     "All Days",
@@ -67,7 +67,7 @@ class BossInsightsView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         header = QHBoxLayout()
         title = QLabel("Boss Insights")

@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from ..database import PerformanceDB
 from .raid_list_widget import RaidListWidget
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 DAY_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -40,7 +40,7 @@ class RaidsView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         title = QLabel("Raids")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))

@@ -41,7 +41,7 @@ from ..services.player_page import (
     PlayerRef,
 )
 from .badges import BadgeStrip
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 _COLUMNS = ["Date", "Title", "Zone", "Owner", "Status", "Imported", "Code"]
 _STATUS_LABELS = {NEW: "New", ON_PAGE: "On page", "dismissed": "Dismissed"}
@@ -122,7 +122,7 @@ class PlayerPageView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         self._player: PlayerRef | None = None
         self._discovered: list[PlayerLog] = []
         self._worker: QThread | None = None

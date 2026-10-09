@@ -40,7 +40,7 @@ from .analysis_helpers import (
     compute_shared_encounter_window,
     scope_analysis_to_window,
 )
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 from .worker import ReferenceAnalysisWorker
 
 
@@ -286,7 +286,7 @@ class ReferenceView(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
 
         self._tabs = QTabWidget()
         self._tabs.setStyleSheet(f"""
@@ -999,8 +999,14 @@ class _H2HEncounterModel(QAbstractTableModel):
 class _ConsumableComparisonChart(QWidget):
     """Grouped horizontal bar chart comparing guild vs reference consumable usage."""
 
-    GUILD_COLOR = QColor(COLORS["accent"])
-    REF_COLOR = QColor("#5dade2")
+    @property
+    def GUILD_COLOR(self) -> QColor:
+        return QColor(COLORS["accent"])
+
+    @property
+    def REF_COLOR(self) -> QColor:
+        return QColor(COLORS["info"])
+
     BAR_HEIGHT = 14
     ROW_HEIGHT = 36
     NAME_COL_WIDTH = 180
@@ -1219,7 +1225,7 @@ class _HeadToHeadPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)

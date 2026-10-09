@@ -25,7 +25,7 @@ from .charts import (
     build_overheal_trend_chart,
     build_raid_duration_chart,
 )
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 
 def _clear_layout_widgets(layout):
@@ -55,7 +55,7 @@ class InsightsView(QWidget):
 
     def _build_ui(self):
         self.setStyleSheet(
-            COMMON_STYLES
+            common_styles()
             + f"""
             InsightsView, InsightsView QWidget {{
                 background-color: {COLORS["bg_dark"]};

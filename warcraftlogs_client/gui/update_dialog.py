@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from ..updater import UpdateDownloader, UpdateInfo, apply_update
 from ..version import __version__
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 
 
 class UpdateDialog(QDialog):
@@ -29,7 +29,7 @@ class UpdateDialog(QDialog):
         self.setWindowTitle("Update Available")
         self.setMinimumSize(520, 420)
         self.setStyleSheet(
-            COMMON_STYLES
+            common_styles()
             + f"""
             QDialog {{
                 background-color: {COLORS["bg_card"]};

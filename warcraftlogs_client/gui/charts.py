@@ -4,6 +4,7 @@ Reusable chart widgets for performance trends using PySide6.QtCharts.
 
 import math
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from PySide6.QtCharts import (
@@ -25,20 +26,29 @@ from wcl_core.models import (
 )
 
 from ..services.charts import Chart
-from .styles import COLORS
+from ..services.themes import contrast
+from .styles import COLORS, SERIES
 
-SERIES_COLORS = [
-    QColor("#c9a42c"),  # WoW gold
-    QColor("#69CCF0"),  # Mage blue
-    QColor("#1eff00"),  # Uncommon green
-    QColor("#ff8000"),  # Legendary orange
-    QColor("#a335ee"),  # Epic purple
-    QColor("#ABD473"),  # Hunter green
-    QColor("#F58CBA"),  # Paladin pink
-    QColor("#C79C6E"),  # Warrior tan
-    QColor("#FFF569"),  # Rogue yellow
-    QColor("#0070DE"),  # Rare blue
-]
+
+class _SeriesColors(Sequence[QColor]):
+    """The active theme's chart series colours, in order; read live so a theme switch reaches new charts."""
+
+    def __getitem__(self, index):  # type: ignore[override]
+        if isinstance(index, slice):
+            return [QColor(c) for c in SERIES[index]]
+        return QColor(SERIES[index])
+
+    def __len__(self) -> int:
+        return len(SERIES)
+
+
+SERIES_COLORS = _SeriesColors()
+
+
+def _text_on(fill: QColor) -> QColor:
+    """White or near-black, whichever reads better on a filled heatmap cell."""
+    cell = fill.name()
+    return QColor("#ffffff" if contrast("#ffffff", cell) >= contrast("#121214", cell) else "#121214")
 
 
 def _make_chart(title: str) -> QChart:
@@ -131,7 +141,7 @@ def _add_overlay_series(
         return
     series = QLineSeries()
     series.setName(name)
-    pen = QPen(QColor("#ffffff"))
+    pen = QPen(QColor(COLORS["text_header"]))
     pen.setWidth(2)
     pen.setStyle(Qt.PenStyle.DashLine)
     series.setPen(pen)
@@ -1346,7 +1356,7 @@ class ConsumableHeatmapWidget(QWidget):
                 painter.drawRect(rect)
 
                 if val > 0:
-                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setPen(_text_on(color))
                     painter.setFont(label_font)
                     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"{val:.0f}" if val >= 1 else f"{val:.1f}")
 
@@ -1444,7 +1454,7 @@ class ConsumableTimelineHeatmap(QWidget):
                 painter.drawRect(rect)
 
                 if val > 0:
-                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setPen(_text_on(color))
                     painter.setFont(label_font)
                     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(val))
 
@@ -1533,7 +1543,7 @@ class OverlayTimelineHeatmap(QWidget):
 
         for player in g_players:
             y = top_margin + row_i * (cell_h + gap)
-            painter.setPen(QColor("#2ecc71"))
+            painter.setPen(QColor(COLORS["success"]))
             painter.drawText(4, int(y + cell_h - 4), player[:14])
             buckets = g_grid.get(player, [])
             for m in range(total_minutes):
@@ -1551,7 +1561,7 @@ class OverlayTimelineHeatmap(QWidget):
                 painter.setBrush(QBrush(color))
                 painter.drawRect(rect)
                 if val > 0:
-                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setPen(_text_on(color))
                     painter.setFont(label_font)
                     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(val))
             row_i += 1
@@ -1564,7 +1574,7 @@ class OverlayTimelineHeatmap(QWidget):
 
         for player in r_players:
             y = top_margin + row_i * (cell_h + gap)
-            painter.setPen(QColor("#69CCF0"))
+            painter.setPen(QColor(COLORS["info"]))
             painter.drawText(4, int(y + cell_h - 4), player[:14])
             buckets = r_grid.get(player, [])
             for m in range(total_minutes):
@@ -1582,7 +1592,7 @@ class OverlayTimelineHeatmap(QWidget):
                 painter.setBrush(QBrush(color))
                 painter.drawRect(rect)
                 if val > 0:
-                    painter.setPen(QColor("#fff" if intensity > 0.4 else COLORS["text_dim"]))
+                    painter.setPen(_text_on(color))
                     painter.setFont(label_font)
                     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(val))
             row_i += 1
@@ -1744,7 +1754,11 @@ class CancelledCastTimelineWidget(QWidget):
     _CAST_COLOR = QColor("#3498db")
     _DMG_COLOR = QColor("#f39c12")
     _DEATH_COLOR = QColor("#e74c3c")
-    _CANCEL_COLOR = QColor(COLORS["error"])
+
+    @property
+    def _CANCEL_COLOR(self) -> QColor:
+        return QColor(COLORS["error"])
+
     _CANCEL_LINE_COLOR = QColor(231, 76, 60, 140)
 
     def __init__(self, parent=None):

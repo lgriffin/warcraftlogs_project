@@ -47,7 +47,7 @@ from .charts import (
     build_tank_mitigation_chart,
 )
 from .my_characters_bar import MyCharactersBar
-from .styles import COLORS, COMMON_STYLES
+from .styles import COLORS, common_styles
 from .table_models import GearTableModel, HistoryTableModel
 from .worker import CharacterProfileWorker, WowheadResolverWorker
 
@@ -166,16 +166,16 @@ class _RankingsTableModel(QAbstractTableModel):
 
 def _percent_color(pct: float):
     if pct >= 99:
-        return QColor("#e268a8")
+        return QColor(COLORS["quality_artifact"])
     if pct >= 95:
-        return QColor("#ff8000")
+        return QColor(COLORS["quality_legendary"])
     if pct >= 75:
-        return QColor("#a335ee")
+        return QColor(COLORS["quality_epic"])
     if pct >= 50:
-        return QColor("#0070dd")
+        return QColor(COLORS["quality_rare"])
     if pct >= 25:
-        return QColor("#1eff00")
-    return QColor("#9d9d9d")
+        return QColor(COLORS["quality_uncommon"])
+    return QColor(COLORS["quality_common"])
 
 
 def _ordinal(n: int) -> str:
@@ -255,7 +255,7 @@ class CharacterView(QWidget):
 
     def __init__(self, parent=None, my_characters: MyCharactersService | None = None):
         super().__init__(parent)
-        self.setStyleSheet(COMMON_STYLES)
+        self.setStyleSheet(common_styles())
         self._my_characters = my_characters
         self._worker = None
         self._profile = None

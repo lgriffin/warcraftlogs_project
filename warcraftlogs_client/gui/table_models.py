@@ -334,14 +334,22 @@ class HistoryTableModel(QAbstractTableModel):
         return False
 
 
-QUALITY_COLORS = {
-    0: QColor("#9d9d9d"),  # Poor
-    1: QColor("#ffffff"),  # Common
-    2: QColor("#1eff00"),  # Uncommon
-    3: QColor("#0070dd"),  # Rare
-    4: QColor("#a335ee"),  # Epic
-    5: QColor("#ff8000"),  # Legendary
+# Item quality to the palette token its name is drawn in: poor, common, uncommon, rare, epic, legendary.
+QUALITY_TOKENS = {
+    0: "quality_common",
+    1: "text_header",
+    2: "quality_uncommon",
+    3: "quality_rare",
+    4: "quality_epic",
+    5: "quality_legendary",
 }
+
+
+def _quality_color(quality, fallback: QColor) -> QColor:
+    from .styles import COLORS
+
+    token = QUALITY_TOKENS.get(quality)
+    return QColor(COLORS[token]) if token else fallback
 
 
 class GearTableModel(QAbstractTableModel):
@@ -407,9 +415,9 @@ class GearTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.ForegroundRole:
             if col == 1:
-                return QUALITY_COLORS.get(item.quality, _link_color())
+                return _quality_color(item.quality, _link_color())
             if col == 3:
-                return QUALITY_COLORS.get(item.quality, QColor("#eeeeee"))
+                return _quality_color(item.quality, _text_color())
             if col == 4:
                 return _link_color()
 
@@ -426,6 +434,12 @@ def _link_color() -> QColor:
     return QColor(COLORS["accent"])
 
 
+def _text_color() -> QColor:
+    from .styles import COLORS
+
+    return QColor(COLORS["text"])
+
+
 def _link_font() -> QFont:
     font = QFont()
     font.setUnderline(True)
@@ -433,18 +447,9 @@ def _link_font() -> QFont:
 
 
 def _class_color(class_name: str) -> QColor:
-    colors = {
-        "Warrior": QColor("#C79C6E"),
-        "Paladin": QColor("#F58CBA"),
-        "Priest": QColor("#FFFFFF"),
-        "Shaman": QColor("#0070DE"),
-        "Druid": QColor("#FF7D0A"),
-        "Rogue": QColor("#FFF569"),
-        "Mage": QColor("#69CCF0"),
-        "Warlock": QColor("#9482C9"),
-        "Hunter": QColor("#ABD473"),
-    }
-    return colors.get(class_name, QColor("#EEEEEE"))
+    from .styles import CLASS_COLORS, COLORS
+
+    return QColor(CLASS_COLORS.get(class_name, COLORS["text"]))
 
 
 class InterruptTableModel(QAbstractTableModel):
@@ -582,11 +587,13 @@ class CancelledCastTableModel(QAbstractTableModel):
             if col == 1:
                 return _class_color(r.player_class)
             if col == 4:
+                from .styles import COLORS
+
                 if r.cancel_rate < 5:
-                    return QColor("#1eff00")
+                    return QColor(COLORS["success"])
                 if r.cancel_rate < 15:
-                    return QColor("#ff8000")
-                return QColor("#ff4444")
+                    return QColor(COLORS["warning"])
+                return QColor(COLORS["error"])
 
         if role == Qt.ItemDataRole.FontRole:
             if col == 0:
