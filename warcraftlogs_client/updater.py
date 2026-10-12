@@ -21,21 +21,11 @@ import shutil
 import subprocess
 import time
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import requests
-
-try:
-    from PySide6.QtCore import QThread, Signal
-except ImportError:  # pragma: no cover - GUI extra not installed (CLI-only install, headless CI)
-    # Keep the pure update/verification helpers importable without PySide6.
-    QThread = object  # type: ignore[assignment,misc]
-
-    def Signal(*_types):  # type: ignore[no-redef]
-        return None
-
-
 from wcl_core import paths
 
 from .version import __version__
@@ -49,6 +39,10 @@ _HEX_DIGITS = frozenset("0123456789abcdef")
 
 class UpdateVerificationError(RuntimeError):
     """The downloaded update could not be proven to match the release's SHA256SUMS."""
+
+
+class UpdateDownloadError(RuntimeError):
+    """The download was cancelled or did not arrive whole."""
 
 
 @dataclass
@@ -216,56 +210,47 @@ def _save_check_timestamp():
         pass
 
 
-class UpdateDownloader(QThread):
-    """Downloads an update zip with progress reporting."""
+@dataclass
+class DownloadedUpdate:
+    zip_path: str
+    expected_sha256: str  # from SHA256SUMS; pass it to apply_update()
 
-    progress = Signal(int, int)  # bytes_done, bytes_total
-    finished = Signal(str)  # zip_path
-    error = Signal(str)  # error message
 
-    def __init__(self, info: UpdateInfo, parent=None):
-        super().__init__(parent)
-        self._info = info
-        self._cancelled = False
-        self.expected_sha256 = ""  # set once SHA256SUMS has been fetched; passed to apply_update()
+def download_update(
+    info: UpdateInfo,
+    on_progress: Callable[[int, int], None] = lambda _done, _total: None,
+    is_cancelled: Callable[[], bool] = lambda: False,
+) -> DownloadedUpdate:
+    """Download and verify the update zip, reporting (bytes_done, bytes_total) as it goes.
 
-    def cancel(self):
-        self._cancelled = True
+    Raises UpdateVerificationError, UpdateDownloadError, requests.RequestException or OSError, and leaves no
+    partial zip behind when it does.
+    """
+    zip_path = paths.get_update_dir() / f"WarcraftLogsAnalyzer-v{info.version}.zip"
+    try:
+        # Resolve the expected digest first: no SHA256SUMS entry means no download at all.
+        expected_sha256 = fetch_expected_sha256(info)
+        resp = requests.get(info.download_url, stream=True, timeout=30)
+        resp.raise_for_status()
+        total = int(resp.headers.get("content-length", info.asset_size))
+        done = 0
 
-    def run(self):
-        update_dir = paths.get_update_dir()
-        zip_path = update_dir / f"WarcraftLogsAnalyzer-v{self._info.version}.zip"
+        with zip_path.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if is_cancelled():
+                    raise UpdateDownloadError("Download cancelled")
+                f.write(chunk)
+                done += len(chunk)
+                on_progress(done, total)
 
-        try:
-            # Resolve the expected digest first: no SHA256SUMS entry means no download at all.
-            self.expected_sha256 = fetch_expected_sha256(self._info)
-            resp = requests.get(self._info.download_url, stream=True, timeout=30)
-            resp.raise_for_status()
-            total = int(resp.headers.get("content-length", self._info.asset_size))
-            done = 0
+        if info.asset_size and abs(done - info.asset_size) > 1024:
+            raise UpdateDownloadError(f"Download size mismatch: expected {info.asset_size}, got {done}")
 
-            with zip_path.open("wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if self._cancelled:
-                        f.close()
-                        zip_path.unlink(missing_ok=True)
-                        self.error.emit("Download cancelled")
-                        return
-                    f.write(chunk)
-                    done += len(chunk)
-                    self.progress.emit(done, total)
-
-            if self._info.asset_size and abs(done - self._info.asset_size) > 1024:
-                zip_path.unlink(missing_ok=True)
-                self.error.emit(f"Download size mismatch: expected {self._info.asset_size}, got {done}")
-                return
-
-            verify_update_zip(str(zip_path), self.expected_sha256)
-            self.finished.emit(str(zip_path))
-
-        except (requests.RequestException, OSError, UpdateVerificationError) as e:
-            zip_path.unlink(missing_ok=True)
-            self.error.emit(str(e))
+        verify_update_zip(str(zip_path), expected_sha256)
+    except (requests.RequestException, OSError, RuntimeError):
+        zip_path.unlink(missing_ok=True)
+        raise
+    return DownloadedUpdate(str(zip_path), expected_sha256)
 
 
 def apply_update(zip_path: str, expected_sha256: str) -> bool:
