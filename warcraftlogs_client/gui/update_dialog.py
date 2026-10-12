@@ -2,7 +2,8 @@
 Update dialog — shows release notes, downloads update, and triggers install.
 """
 
-from PySide6.QtCore import Qt
+import requests
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QDialog,
@@ -14,9 +15,35 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..updater import UpdateDownloader, UpdateInfo, apply_update
+from ..updater import UpdateInfo, apply_update, download_update
 from ..version import __version__
 from .styles import COLORS, common_styles
+
+
+class UpdateDownloader(QThread):
+    """Runs ``updater.download_update`` off the UI thread and reports through signals."""
+
+    progress = Signal(int, int)  # bytes_done, bytes_total
+    finished = Signal(str)  # zip_path
+    error = Signal(str)  # error message
+
+    def __init__(self, info: UpdateInfo, parent=None):
+        super().__init__(parent)
+        self._info = info
+        self._cancelled = False
+        self.expected_sha256 = ""  # set once the download is verified; passed to apply_update()
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        try:
+            downloaded = download_update(self._info, self.progress.emit, lambda: self._cancelled)
+        except (requests.RequestException, OSError, RuntimeError) as e:
+            self.error.emit(str(e))
+            return
+        self.expected_sha256 = downloaded.expected_sha256
+        self.finished.emit(downloaded.zip_path)
 
 
 class UpdateDialog(QDialog):

@@ -1,7 +1,9 @@
 """REQ-CORE-REL-001: the updater refuses to stage a zip whose SHA-256 does not match SHA256SUMS."""
 
+import ast
 import hashlib
 import zipfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,9 +11,11 @@ import requests
 
 from warcraftlogs_client import updater
 from warcraftlogs_client.updater import (
+    UpdateDownloadError,
     UpdateInfo,
     UpdateVerificationError,
     apply_update,
+    download_update,
     fetch_expected_sha256,
     find_checksums_asset,
     parse_sha256sums,
@@ -195,3 +199,79 @@ class TestTamperedZipRefused:
             apply_update(str(zip_path), "")
         assert not dirs["staged"].exists()
         dirs["popen"].assert_not_called()
+
+
+def test_updater_does_not_import_qt():
+    """Issue #167: the update logic stays importable on a CLI-only install; the QThread lives in gui/."""
+    tree = ast.parse(Path(updater.__file__).read_text(encoding="utf-8"))
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+    imported |= {node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    assert not {name for name in imported if name.split(".")[0] == "PySide6"}
+
+
+class TestDownloadUpdate:
+    def _get(self, sums_text: str, zip_bytes: bytes):
+        sums = MagicMock(text=sums_text)
+        sums.raise_for_status.return_value = None
+        download = MagicMock(headers={"content-length": str(len(zip_bytes))})
+        download.raise_for_status.return_value = None
+        download.iter_content.return_value = [zip_bytes[:10], zip_bytes[10:]]
+        return lambda url, **_kwargs: sums if url == SUMS_URL else download
+
+    def _zip(self, tmp_path, tampered=False):
+        source = tmp_path / "src.zip"
+        digest = make_update_zip(source)
+        if tampered:
+            tamper(source)
+        return source.read_bytes(), f"{digest}  {ZIP_NAME}\n", digest
+
+    def test_verified_download_returns_path_and_digest(self, dirs, tmp_path):
+        zip_bytes, sums, digest = self._zip(tmp_path)
+        progress = []
+        with patch.object(updater.requests, "get", side_effect=self._get(sums, zip_bytes)):
+            result = download_update(make_info(), lambda done, total: progress.append((done, total)))
+        assert result.expected_sha256 == digest
+        assert Path(result.zip_path).read_bytes() == zip_bytes
+        assert progress == [(10, len(zip_bytes)), (len(zip_bytes), len(zip_bytes))]
+
+    def test_tampered_download_raises_and_is_deleted(self, dirs, tmp_path):
+        zip_bytes, sums, _ = self._zip(tmp_path, tampered=True)
+        with (
+            patch.object(updater.requests, "get", side_effect=self._get(sums, zip_bytes)),
+            pytest.raises(UpdateVerificationError),
+        ):
+            download_update(make_info())
+        assert list(dirs["update"].iterdir()) == []
+
+    def test_cancel_stops_and_deletes_partial_zip(self, dirs, tmp_path):
+        zip_bytes, sums, _ = self._zip(tmp_path)
+        with (
+            patch.object(updater.requests, "get", side_effect=self._get(sums, zip_bytes)),
+            pytest.raises(UpdateDownloadError, match="Download cancelled"),
+        ):
+            download_update(make_info(), is_cancelled=lambda: True)
+        assert list(dirs["update"].iterdir()) == []
+
+    def test_size_mismatch_raises_and_deletes_zip(self, dirs, tmp_path):
+        zip_bytes, sums, _ = self._zip(tmp_path)
+        info = make_info()
+        info.asset_size = len(zip_bytes) + 4096
+        with (
+            patch.object(updater.requests, "get", side_effect=self._get(sums, zip_bytes)),
+            pytest.raises(UpdateDownloadError, match="size mismatch"),
+        ):
+            download_update(info)
+        assert list(dirs["update"].iterdir()) == []
+
+    def test_failing_progress_callback_deletes_partial_zip(self, dirs, tmp_path):
+        zip_bytes, sums, _ = self._zip(tmp_path)
+
+        def explode(_done, _total):
+            raise ValueError("progress callback failed")
+
+        with (
+            patch.object(updater.requests, "get", side_effect=self._get(sums, zip_bytes)),
+            pytest.raises(ValueError, match="progress callback failed"),
+        ):
+            download_update(make_info(), explode)
+        assert list(dirs["update"].iterdir()) == []

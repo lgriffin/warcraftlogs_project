@@ -8,7 +8,7 @@ pytest.importorskip("PySide6")
 
 from tests.test_updater import ZIP_NAME, make_info, make_update_zip, tamper
 from warcraftlogs_client import updater
-from warcraftlogs_client.updater import UpdateDownloader
+from warcraftlogs_client.gui.update_dialog import UpdateDownloader
 
 pytestmark = [pytest.mark.gui, pytest.mark.security]
 
