@@ -223,8 +223,8 @@ def download_update(
 ) -> DownloadedUpdate:
     """Download and verify the update zip, reporting (bytes_done, bytes_total) as it goes.
 
-    Raises UpdateVerificationError, UpdateDownloadError, requests.RequestException or OSError, and leaves no
-    partial zip behind when it does.
+    Raises UpdateVerificationError, UpdateDownloadError, requests.RequestException or OSError (or whatever a
+    callback raises), and leaves no partial zip behind when it does.
     """
     zip_path = paths.get_update_dir() / f"WarcraftLogsAnalyzer-v{info.version}.zip"
     try:
@@ -247,7 +247,7 @@ def download_update(
             raise UpdateDownloadError(f"Download size mismatch: expected {info.asset_size}, got {done}")
 
         verify_update_zip(str(zip_path), expected_sha256)
-    except (requests.RequestException, OSError, RuntimeError):
+    except BaseException:
         zip_path.unlink(missing_ok=True)
         raise
     return DownloadedUpdate(str(zip_path), expected_sha256)

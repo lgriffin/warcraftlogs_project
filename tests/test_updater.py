@@ -262,3 +262,16 @@ class TestDownloadUpdate:
         ):
             download_update(info)
         assert list(dirs["update"].iterdir()) == []
+
+    def test_failing_progress_callback_deletes_partial_zip(self, dirs, tmp_path):
+        zip_bytes, sums, _ = self._zip(tmp_path)
+
+        def explode(_done, _total):
+            raise ValueError("progress callback failed")
+
+        with (
+            patch.object(updater.requests, "get", side_effect=self._get(sums, zip_bytes)),
+            pytest.raises(ValueError, match="progress callback failed"),
+        ):
+            download_update(make_info(), explode)
+        assert list(dirs["update"].iterdir()) == []
