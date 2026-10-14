@@ -713,6 +713,7 @@ class MainWindow(QMainWindow):
                 lambda: self._handle_palette_command("raids.download"),
             ),
             "browse": (lambda: self.raids_hub._tabs.tabBar(), lambda: self._handle_palette_command("raids.browse")),
+            "search": (lambda: self._search_btn, None),
             "character": (
                 lambda: [view._my_characters_section, view._config_section],
                 lambda: self._handle_palette_command("characters.my"),

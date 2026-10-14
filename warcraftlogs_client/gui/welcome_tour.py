@@ -62,6 +62,13 @@ WELCOME_STEPS: tuple[TourCopy, ...] = (
         "fight. Raid Diff and Reference compare two raids, or yours against a top guild's.",
     ),
     TourCopy(
+        "search",
+        "Find anything",
+        "Search (or Ctrl+F) reaches any page or action by name, and your stored raids. Add a tab to jump straight "
+        "to it: kara healing lists your Karazhan raids, each opening on its Healers tab. A pasted report link works "
+        "too.",
+    ),
+    TourCopy(
         "character",
         "Choose your character",
         "Characters lists everyone in your raids. In My Character, enter your character's name, server and region, "
@@ -82,8 +89,8 @@ WELCOME_STEPS: tuple[TourCopy, ...] = (
     TourCopy(
         "navigate",
         "Get around fast",
-        "Ctrl+1 to Ctrl+5 jump between these sections, and Ctrl+F opens the command palette to reach any page or "
-        "action by name. You can take this tour again from Settings.",
+        "Ctrl+1 to Ctrl+5 jump between these sections. You can take this tour again from Settings, or by searching "
+        "for it.",
     ),
 )
 

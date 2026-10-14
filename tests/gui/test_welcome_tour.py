@@ -192,7 +192,7 @@ class TestWelcomeSteps:
 
     def test_it_covers_the_features_a_new_user_needs(self):
         keys = {step.key for step in WELCOME_STEPS}
-        assert {"welcome", "settings", "download", "character", "profile"} <= keys
+        assert {"welcome", "settings", "download", "search", "character", "profile"} <= keys
         assert WELCOME_STEPS[0].key == "welcome"
 
     def test_the_command_palette_can_start_it(self):
