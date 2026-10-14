@@ -3,7 +3,8 @@
 A new user has two things to find on Warcraft Logs before the app can do anything: an API client (its id and
 secret) and their guild's id. ``OnboardingService`` checks the keys against Warcraft Logs before they are saved, and
 finds the guild from whatever the user has to hand: a link to the guild's page, a link to one of its reports, or its
-name, server and region. Nothing is written until ``save``.
+name, server and region. Nothing is written until ``save``. Once setup is done, the welcome tour is offered once
+(``tour_due``, ``mark_tour_seen``).
 
 The desktop keeps the answers in config.json (``JsonConfigStore``); ``MemoryConfigStore`` is for tests and hosts
 without a config file.
@@ -34,6 +35,7 @@ __all__ = [
     "KEYS_URL",
     "REDIRECT_URL",
     "REGIONS",
+    "TOUR_SEEN_KEY",
     "GuildMatch",
     "JsonConfigStore",
     "MemoryConfigStore",
@@ -47,6 +49,8 @@ KEYS_URL = "https://www.warcraftlogs.com/api/clients/"
 # The redirect URL the client needs for the app's "Authenticate" sign-in (``wcl_core.user_auth``).
 REDIRECT_URL = f"http://localhost:{DEFAULT_REDIRECT_PORT}/callback"
 REGIONS: tuple[str, ...] = ("eu", "us", "kr", "tw", "cn")
+# Set in config once the welcome tour has been offered, taken or skipped, so it is offered only once.
+TOUR_SEEN_KEY = "welcome_tour_seen"
 
 # config.example.json ships "YOUR_CLIENT_ID_HERE" and friends; a first run copies it into place.
 _PLACEHOLDER_PREFIX = "YOUR_"
@@ -202,6 +206,14 @@ class OnboardingService:
         client_id = os.environ.get("WARCRAFTLOGS_CLIENT_ID") or config.get("client_id")
         secret = os.environ.get("WARCRAFTLOGS_CLIENT_SECRET") or config.get("client_secret")
         return is_placeholder(client_id) or is_placeholder(secret)
+
+    def tour_due(self) -> bool:
+        """True until the welcome tour has been offered once."""
+        return self._config().get(TOUR_SEEN_KEY) is not True
+
+    def mark_tour_seen(self) -> None:
+        """Remember the welcome tour was offered, so it is not offered again (Settings can still start it)."""
+        self.store.update({TOUR_SEEN_KEY: True})
 
     def saved_keys(self) -> tuple[str, str]:
         """The client id and secret config holds, blank for the template's stand-ins."""

@@ -5,7 +5,7 @@ import json
 import pytest
 import requests
 from wcl_app import AppContext, GuildMatch, JsonConfigStore, MemoryConfigStore, OnboardingService, SetupError
-from wcl_app.onboarding import KEYS_URL, REDIRECT_URL, is_placeholder
+from wcl_app.onboarding import KEYS_URL, REDIRECT_URL, TOUR_SEEN_KEY, is_placeholder
 from wcl_core.common.errors import ConfigurationError
 from wcl_core.config import load_config
 from wcl_core.testing import FakeWarcraftLogs, status
@@ -281,3 +281,24 @@ class TestReloadConfig:
         ctx = AppContext.headless(client, storage=lambda: None)  # type: ignore[arg-type, return-value]
         ctx.reload_config(str(path))
         assert ctx.wcl_client is client and ctx.config["client_id"] == "abc"
+
+
+class TestWelcomeTour:
+    def test_the_tour_is_due_until_it_has_been_offered(self):
+        service = _service(TEMPLATE)
+        assert service.tour_due()
+        service.mark_tour_seen()
+        assert not service.tour_due()
+        assert service.store.read()[TOUR_SEEN_KEY] is True
+
+    def test_only_a_true_flag_counts_as_seen(self):
+        assert _service({TOUR_SEEN_KEY: "yes"}).tour_due()
+        assert not _service({TOUR_SEEN_KEY: True}).tour_due()
+
+    def test_marking_it_seen_keeps_every_other_setting(self, tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"client_id": "abc", "client_secret": "xyz", "guild_id": 7}))
+        OnboardingService(JsonConfigStore(path)).mark_tour_seen()
+        saved = json.loads(path.read_text())
+        assert saved == {"client_id": "abc", "client_secret": "xyz", "guild_id": 7, TOUR_SEEN_KEY: True}
+        assert load_config(str(path))["client_id"] == "abc"

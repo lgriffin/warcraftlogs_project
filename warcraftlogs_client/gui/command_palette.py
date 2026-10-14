@@ -56,6 +56,7 @@ COMMANDS = [
     {"key": "raid_groups", "label": "Raid Groups", "hint": "Ctrl+5", "desc": "Manage raid groups and members"},
     {"key": "settings", "label": "Settings", "hint": "Ctrl+,", "desc": "Application settings"},
     {"key": "setup", "label": "Run Setup", "hint": "", "desc": "Warcraft Logs API keys and your guild"},
+    {"key": "tour", "label": "Welcome Tour", "hint": "", "desc": "A short walk through the app's main features"},
     {"key": "export.pdf", "label": "Export Page as PDF", "hint": "", "desc": "This page as a PDF report"},
     {
         "key": "export.md",
