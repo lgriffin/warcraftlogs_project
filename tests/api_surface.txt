@@ -279,6 +279,8 @@ wcl_app.OnboardingService: class OnboardingService
 wcl_app.OnboardingService.__init__: def __init__(self, store: ConfigStore) -> None
 wcl_app.OnboardingService.desktop: @classmethod def desktop(cls) -> OnboardingService
 wcl_app.OnboardingService.needs_setup: def needs_setup(self) -> bool
+wcl_app.OnboardingService.tour_due: def tour_due(self) -> bool
+wcl_app.OnboardingService.mark_tour_seen: def mark_tour_seen(self) -> None
 wcl_app.OnboardingService.saved_keys: def saved_keys(self) -> tuple[str, str]
 wcl_app.OnboardingService.site: def site(self) -> str
 wcl_app.OnboardingService.check_keys: def check_keys(self, client_id: str, client_secret: str | SecretStr) -> None

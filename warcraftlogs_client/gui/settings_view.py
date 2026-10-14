@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 class SettingsView(QWidget):
     status_message = Signal(str)
     setup_requested = Signal()  # "Run setup": the window opens the first-run setup
+    tour_requested = Signal()  # "Take the tour": the window starts the welcome tour
 
     from wcl_core import paths as _paths
 
@@ -89,7 +90,8 @@ class SettingsView(QWidget):
         creds_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         setup_note = QLabel(
-            "New here? Setup walks you through creating your Warcraft Logs API keys and finding your guild."
+            "New here? Setup walks you through creating your Warcraft Logs API keys and finding your guild, and the "
+            "tour shows you around the app."
         )
         setup_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
         setup_note.setWordWrap(True)
@@ -105,6 +107,12 @@ class SettingsView(QWidget):
         self.get_keys_btn.setToolTip(KEYS_URL)
         self.get_keys_btn.clicked.connect(lambda: webbrowser.open(KEYS_URL))
         setup_row.addWidget(self.get_keys_btn)
+        self.tour_btn = QPushButton("Take the Tour")
+        self.tour_btn.setProperty("secondary", True)
+        self.tour_btn.setFixedWidth(160)
+        self.tour_btn.setToolTip("A short walk through the app's main features")
+        self.tour_btn.clicked.connect(self.tour_requested)
+        setup_row.addWidget(self.tour_btn)
         setup_row.addStretch()
         creds_layout.addRow(setup_row)
 
