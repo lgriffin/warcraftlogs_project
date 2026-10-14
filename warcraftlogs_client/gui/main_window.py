@@ -630,15 +630,16 @@ class MainWindow(QMainWindow):
             self._load_guild_info()
 
     def offer_setup(self) -> bool:
-        """Open first-run setup when there are no Warcraft Logs API keys yet, then offer the welcome tour once;
-        True when setup opened."""
+        """Open first-run setup when there are no Warcraft Logs API keys yet; True when it opened.
+
+        Saving setup then offers the welcome tour once; "Set up later" leaves the offer for the run that saves it.
+        """
         try:
             needed = OnboardingService.desktop().needs_setup()
         except SetupError as e:  # a broken config.json: Settings says what is wrong with it
             self.status_bar.showMessage(str(e))
             return False
-        if needed:
-            self.open_setup()
+        if needed and self.open_setup():
             self.offer_tour()
         return needed
 
@@ -656,16 +657,26 @@ class MainWindow(QMainWindow):
         return True
 
     def start_tour(self) -> None:
-        """Walk through the main parts of the window; it ends where it started."""
+        """Walk through the main parts of the window; it ends on the section and Raids tab it started on.
+
+        The window's shortcuts are off while it runs, so only the tour's own keys move between its steps.
+        """
         if getattr(self, "_tour", None) is not None:
             return
         row = -1 if self.stack.currentWidget() is self.settings_view else self.nav_list.currentRow()
+        raids_tab = self.raids_hub._tabs.currentIndex()
+        shortcuts = [s for s in self.findChildren(QShortcut) if s.isEnabled()]
+        for shortcut in shortcuts:
+            shortcut.setEnabled(False)
         self._tour = WelcomeTour(self, self._tour_steps())
-        self._tour.finished.connect(lambda _completed: self._end_tour(row))
+        self._tour.finished.connect(lambda _completed: self._end_tour(row, raids_tab, shortcuts))
         self._tour.start()
 
-    def _end_tour(self, row: int) -> None:
+    def _end_tour(self, row: int, raids_tab: int, shortcuts: list[QShortcut]) -> None:
         self._tour = None
+        for shortcut in shortcuts:
+            shortcut.setEnabled(True)
+        self.raids_hub._tabs.setCurrentIndex(raids_tab)
         if row >= 0:
             self.nav_list.setCurrentRow(row)
         else:
@@ -677,7 +688,7 @@ class MainWindow(QMainWindow):
         view = self.characters_hub.character_view
         bindings = {
             "welcome": (None, lambda: self.nav_list.setCurrentRow(0)),
-            "settings": (lambda: self._settings_btn, None),
+            "settings": (lambda: self._settings_btn, self._show_settings),
             "download": (
                 lambda: [download._report_input, download._fetch_btn, download._analyze_new_btn],
                 lambda: self._handle_palette_command("raids.download"),
@@ -693,12 +704,13 @@ class MainWindow(QMainWindow):
         }
         return [TourStep(copy, *bindings[copy.key]) for copy in WELCOME_STEPS]
 
-    def open_setup(self) -> None:
-        """The setup window: API keys, then the guild. Saving reloads config and the guild header."""
+    def open_setup(self) -> bool:
+        """The setup window: API keys, then the guild. Saving reloads config and the guild header; True when saved."""
         wizard = SetupWizard(OnboardingService.desktop(), parent=self)
         wizard.saved.connect(self._on_setup_saved)
-        wizard.exec()
+        saved = wizard.exec() == SetupWizard.DialogCode.Accepted
         wizard.deleteLater()
+        return saved
 
     def _on_setup_saved(self, msg: str) -> None:
         self.settings_view.reload_config()
