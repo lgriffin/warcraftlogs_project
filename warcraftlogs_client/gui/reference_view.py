@@ -1023,6 +1023,13 @@ class _ConsumableComparisonChart(QWidget):
         self.setMinimumHeight(title_h + legend_h + body_h)
         self.setMinimumWidth(600)
 
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """Guild and reference uses of each consumable, for a page's JSON export."""
+        return [
+            (side, [(r.get("name", ""), float(r.get(key, 0) or 0)) for r in self._rows])
+            for side, key in (("Guild", "guild_uses"), ("Reference", "ref_uses"))
+        ]
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

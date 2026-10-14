@@ -189,6 +189,69 @@ class TestCollectReport:
         qtbot.addWidget(pie_view)
         assert export.chart_series(pie_view)[0].points == (("Tanks", 2.0), ("Healers", 5.0))
 
+    def test_text_boxes_never_reach_the_report(self, qtbot):
+        from PySide6.QtWidgets import QFormLayout, QLineEdit
+
+        root = QWidget()
+        form = QFormLayout(root)
+        client_id = QLineEdit("my-client-id")
+        secret = QLineEdit("hunter2")
+        secret.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("Client ID:", client_id)
+        form.addRow("Client Secret:", secret)
+        qtbot.addWidget(root)
+        root.show()
+
+        report, _ = export.collect_report(root, "Settings")
+
+        text = repr(report)
+        assert "hunter2" not in text
+        assert "my-client-id" not in text
+
+    def test_a_collapsed_tree_branch_is_left_out(self, qtbot):
+        tree = QTreeView()
+        model = QStandardItemModel()
+        model.setHorizontalHeaderLabels(["Boss", "Kills"])
+        boss = QStandardItem("Gruul")
+        boss.appendRow([QStandardItem("Trash"), QStandardItem("12")])
+        model.appendRow([boss, QStandardItem("3")])
+        tree.setModel(model)
+        qtbot.addWidget(tree)
+
+        assert export.item_view_table(tree).rows == (("Gruul", "3"),)
+        tree.expandAll()
+        assert export.item_view_table(tree).rows == (("Gruul", "3"), ("  Trash", "12"))
+
+    def test_painted_charts_export_the_values_they_draw(self, qtbot):
+        from warcraftlogs_client.gui.charts import ComparisonSpiderChart, ConsumableHeatmapWidget, SpiderChartWidget
+
+        spider = SpiderChartWidget({"healing": 80, "damage": 20})
+        compare = ComparisonSpiderChart()
+        compare.set_datasets({"Holy": {"healing": 90}, "Resto": {"healing": 70}})
+        heatmap = ConsumableHeatmapWidget(
+            {"characters": [{"name": "Holy"}], "consumables": ["Flask", "Elixir"], "matrix": {"Holy": {"Flask": 1.5}}}
+        )
+        for w in (spider, compare, heatmap):
+            qtbot.addWidget(w)
+
+        assert export.chart_series(spider)[0].points[:3] == (("Healing", 80.0), ("Damage", 20.0), ("Mitigation", 0.0))
+        assert [(s.name, s.points[0]) for s in export.chart_series(compare)] == [
+            ("Holy", ("Healing", 90.0)),
+            ("Resto", ("Healing", 70.0)),
+        ]
+        assert export.chart_series(heatmap)[0].points == (("Flask", 1.5), ("Elixir", 0.0))
+
+    def test_reference_consumable_chart_exports_guild_and_reference(self, qtbot):
+        from warcraftlogs_client.gui.reference_view import _ConsumableComparisonChart
+
+        chart = _ConsumableComparisonChart([{"name": "Flask", "guild_uses": 10, "ref_uses": 14}])
+        qtbot.addWidget(chart)
+
+        assert [(s.name, s.points) for s in export.chart_series(chart)] == [
+            ("Guild", (("Flask", 10.0),)),
+            ("Reference", (("Flask", 14.0),)),
+        ]
+
     def test_a_labelled_filter_reads_as_one_line(self, qtbot):
         from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLineEdit
 
@@ -201,7 +264,7 @@ class TestCollectReport:
         row.addWidget(QLabel("Zone:"))
         row.addWidget(combo)
         row.addWidget(QLabel("Search:"))
-        row.addWidget(QLineEdit())  # empty: left out
+        row.addWidget(QLineEdit("gruul"))  # a text box: left out
         row.addWidget(combo_alone := QComboBox())
         combo_alone.addItem("Unlabelled")
         qtbot.addWidget(root)
@@ -237,7 +300,7 @@ class TestWriteReport:
 
         md = path.read_text(encoding="utf-8")
         assert md.startswith("# History")
-        assert "![Healing Performance](history_charts/01_healing_performance.png)" in md
+        assert "![Healing Performance](<history_charts/01_healing_performance.png>)" in md
         assert "| Holy | 1,234 |" in md
         pngs = sorted(p.name for p in (tmp_path / "history_charts").iterdir())
         assert pngs == ["01_healing_performance.png", "02_raid_attendance.png", "03_attendance.png"]
@@ -269,6 +332,10 @@ class TestWriteReport:
         export.write_report(root, "Plain", tmp_path / "plain.md")
 
         assert not (tmp_path / "plain_charts").exists()
+
+    def test_a_pdf_that_cannot_be_written_fails(self, page, tmp_path):
+        with pytest.raises(OSError):
+            export.write_report(page, "History", tmp_path / "missing" / "history.pdf")
 
     def test_unknown_format_is_refused(self, page, tmp_path):
         with pytest.raises(ValueError, match=r"\.txt"):

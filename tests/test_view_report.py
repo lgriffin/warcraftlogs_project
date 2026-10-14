@@ -44,8 +44,16 @@ def test_markdown_has_title_headings_tables_and_linked_chart_images():
     assert md.startswith("# Raids\n\n*Exported 2026-10-14 19:30*")
     assert "## Karazhan" in md
     assert "**Healers**\n\n| Name | Healing | OH% |\n|---|---|---|\n| Holy\\|Priest | 1,234 | 16.7% |" in md
-    assert "![Healing Performance](raids_charts/01_healing.png)" in md
+    assert "![Healing Performance](<raids_charts/01_healing.png>)" in md
     assert "*Chart: Consumables*" in md  # no image was saved for it
+
+
+def test_markdown_image_links_survive_spaces_and_brackets():
+    report = ViewReport("T", WHEN, (Figure("k", "DPS [top 8]"),))
+
+    md = render_markdown(report, {"k": "Raid Report (1)_charts/k.png"})
+
+    assert "![DPS \\[top 8\\]](<Raid Report (1)_charts/k.png>)" in md
 
 
 def test_markdown_heading_levels_stay_below_the_title():

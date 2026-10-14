@@ -105,7 +105,11 @@ def _md_block(block: Block, images: Mapping[str, str]) -> str:
     if isinstance(block, Table):
         return _md_table(block)
     image = images.get(block.key)
-    return f"![{block.title}]({image})" if image else f"*Chart: {block.title}*"
+    if not image:
+        return f"*Chart: {block.title}*"
+    # Angle brackets let the path hold spaces and parentheses, as a file name the user picked can.
+    alt = block.title.replace("[", "\\[").replace("]", "\\]")
+    return f"![{alt}](<{image}>)"
 
 
 def render_markdown(report: ViewReport, images: Mapping[str, str]) -> str:

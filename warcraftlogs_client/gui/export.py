@@ -165,9 +165,13 @@ def _bar_categories(series) -> list[str]:
 
 
 def chart_series(widget: QWidget) -> tuple[Series, ...]:
-    """The data behind a Qt chart, as series of points; painted charts expose none."""
+    """The data behind a chart, as series of points: a Qt chart's series, or what a painted chart's
+    ``export_series()`` gives; a painted chart without one exposes none."""
     if not isinstance(widget, QChartView):
-        return ()
+        painted = getattr(widget, "export_series", None)
+        if painted is None:
+            return ()
+        return tuple(Series(name, tuple(points)) for name, points in painted())
     out: list[Series] = []
     for series in widget.chart().series():
         if isinstance(series, QXYSeries):
@@ -209,11 +213,17 @@ def _label_block(label: QLabel) -> Block | None:
 
 
 def _control_value(widget: QWidget) -> str | None:
-    """What an input shows, or None when ``widget`` is not an input."""
+    """The choice a combo box or spin box shows, "" for a text box, or None for any other widget.
+
+    A text box's content is never exported, label and all: on Settings they hold the API credentials, which must not
+    land in a report someone shares.
+    """
     if isinstance(widget, QComboBox):
         return widget.currentText().strip()
-    if isinstance(widget, (QLineEdit, QAbstractSpinBox)):
+    if isinstance(widget, QAbstractSpinBox):
         return widget.text().strip()
+    if isinstance(widget, QLineEdit):
+        return ""
     return None
 
 
@@ -262,7 +272,13 @@ def _collect_rows(view, model, parent, depth: int, columns: list[int], rows: lis
         rows.append(tuple(cells))
         first = model.index(r, 0, parent)
         # Only a tree has children; table models often ignore the parent and would repeat their rows forever.
-        if isinstance(view, QTreeView) and depth < _MAX_TREE_DEPTH and model.rowCount(first) > 0:
+        # A collapsed branch is not shown, so it is not exported.
+        if (
+            isinstance(view, QTreeView)
+            and view.isExpanded(first)
+            and depth < _MAX_TREE_DEPTH
+            and model.rowCount(first) > 0
+        ):
             _collect_rows(view, model, first, depth + 1, columns, rows)
 
 
@@ -427,6 +443,10 @@ def _png_bytes(widget: QWidget) -> QByteArray:
 
 
 def _write_pdf(report: ViewReport, charts: dict[str, QWidget], path: Path) -> None:
+    # QPdfWriter fails silently on a file it cannot open (a read-only folder, a PDF open in a viewer): open it first,
+    # which raises OSError, and check the result after.
+    with path.open("wb"):
+        pass
     writer = QPdfWriter(str(path))
     writer.setTitle(report.title)
     writer.setCreator("WarcraftLogs Analyzer")
@@ -449,6 +469,9 @@ def _write_pdf(report: ViewReport, charts: dict[str, QWidget], path: Path) -> No
     widths = {key: widget.width() for key, widget in charts.items()}
     doc.setHtml(render_html(report, images, widths))
     doc.print_(writer)
+    del writer  # finishes the file
+    if path.stat().st_size == 0:
+        raise OSError(f"Could not write {path}")
 
 
 # ── Dialogs ──

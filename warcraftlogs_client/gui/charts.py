@@ -457,6 +457,11 @@ class SpiderChartWidget(QWidget):
         self.setMinimumWidth(280)
         self.setMouseTracking(True)
 
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """The scores drawn, for a page's JSON export."""
+        scores = [(label, float(self._data.get(key) or 0)) for label, key in zip(self.LABELS, self.KEYS, strict=True)]
+        return [("Score", scores)]
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -576,6 +581,13 @@ class ComparisonSpiderChart(QWidget):
     def set_datasets(self, datasets: dict[str, dict]):
         self._datasets = dict(datasets)
         self.update()
+
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """Each character's scores, for a page's JSON export."""
+        return [
+            (name, [(label, float(data.get(key) or 0)) for label, key in zip(self.LABELS, self.KEYS, strict=True)])
+            for name, data in self._datasets.items()
+        ]
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1294,6 +1306,15 @@ class ConsumableHeatmapWidget(QWidget):
         if characters:
             cell_h, gap, header_h = 20, 1, 60
             self.setMinimumHeight(header_h + len(characters) * (cell_h + gap) + 10)
+
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """Each character's average uses per raid of each consumable, for a page's JSON export."""
+        consumables = self._compliance.get("consumables", [])
+        matrix = self._compliance.get("matrix", {})
+        return [
+            (c["name"], [(con, float(matrix.get(c["name"], {}).get(con, 0))) for con in consumables])
+            for c in self._compliance.get("characters", [])
+        ]
 
     def paintEvent(self, event):
         painter = QPainter(self)
