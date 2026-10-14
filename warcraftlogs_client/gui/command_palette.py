@@ -1,5 +1,7 @@
 """
-Command palette — Ctrl+K quick navigation overlay.
+Command palette — Ctrl+F (or Ctrl+K) quick navigation and search overlay.
+
+Besides the views and commands below it searches stored raids, so "kara healing" opens that raid on its Healers tab.
 """
 
 from PySide6.QtCore import Qt, Signal
@@ -14,7 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..services import ReportIndex, SearchHit
 from .styles import COLORS
+
+_REPORT_ROLE = Qt.ItemDataRole.UserRole + 1  # a raid result's SearchHit; commands keep their key in UserRole
 
 COMMANDS = [
     {"key": "home", "label": "Home", "hint": "Ctrl+1", "desc": "Your customisable home page"},
@@ -85,9 +90,12 @@ class _Backdrop(QWidget):
 
 class CommandPalette(QDialog):
     navigate = Signal(str)
+    open_report = Signal(str, str)  # report_id, the label of the tab to show ("" for its default)
+    analyze_report = Signal(str)  # a pasted report code the database does not have yet
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, reports: ReportIndex | None = None):
         super().__init__(parent)
+        self._reports = reports
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
         self.setModal(True)
         self.setFixedWidth(560)
@@ -107,13 +115,13 @@ class CommandPalette(QDialog):
         layout.setContentsMargins(16, 16, 16, 12)
         layout.setSpacing(10)
 
-        title = QLabel("Command Palette")
+        title = QLabel("Search")
         title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {COLORS['text_gold']}; padding: 0 2px;")
         layout.addWidget(title)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Type to search views...")
+        self._input.setPlaceholderText("Search views, raids and tabs, e.g. kara healing, or paste a report link")
         self._input.setFont(QFont("Segoe UI", 14))
         self._input.setStyleSheet(f"""
             QLineEdit {{
@@ -177,17 +185,32 @@ class CommandPalette(QDialog):
             item.setToolTip(cmd["desc"])
             self._list.addItem(item)
 
+        if self._reports is not None:
+            for hit in self._reports.search(query):
+                self._add_report(hit)
+
         if self._list.count() > 0:
             self._list.setCurrentRow(0)
-        self._list.setFixedHeight(min(self._list.count() * 42 + 10, 340))
+        self._list.setFixedHeight(min(self._list.count() * 42 + 10, 420))
         self.adjustSize()
+
+    def _add_report(self, hit: SearchHit):
+        item = QListWidgetItem(f"Raid  >  {hit.label}" if hit.stored else hit.label)
+        item.setData(_REPORT_ROLE, hit)
+        item.setToolTip(f"Open report {hit.report_id}" if hit.stored else "Download and analyze this report")
+        self._list.addItem(item)
 
     def _filter(self, text: str):
         self._populate(text)
 
     def _on_activated(self, item: QListWidgetItem):
-        key = item.data(Qt.ItemDataRole.UserRole)
-        self.navigate.emit(key)
+        hit = item.data(_REPORT_ROLE)
+        if hit is None:
+            self.navigate.emit(item.data(Qt.ItemDataRole.UserRole))
+        elif hit.stored:
+            self.open_report.emit(hit.report_id, hit.tab.label if hit.tab else "")
+        else:
+            self.analyze_report.emit(hit.report_id)
         self.accept()
 
     def showEvent(self, event):

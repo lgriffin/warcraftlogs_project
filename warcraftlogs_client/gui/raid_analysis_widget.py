@@ -384,6 +384,14 @@ class RaidAnalysisWidget(QWidget):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         return table
 
+    def show_tab(self, label: str) -> bool:
+        """Switch to the tab titled ``label``. False when the raid has no such tab, or it is hidden for lack of data."""
+        for index in range(self._tabs.count()):
+            if self._tabs.tabText(index) == label and self._tabs.isTabVisible(index):
+                self._tabs.setCurrentIndex(index)
+                return True
+        return False
+
     def _populate(self, analysis: RaidAnalysis):
         m = analysis.metadata
         comp = analysis.composition

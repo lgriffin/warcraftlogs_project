@@ -398,6 +398,7 @@ wcl_app.ProfileSet.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.ProfileSet.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> ProfileSet
 wcl_app.ProfileSiteUnknown: class ProfileSiteUnknown(ValueError)
 wcl_app.ProgressCallback: ProgressCallback = Callable[[str], None]
+wcl_app.REPORT_TABS: REPORT_TABS: tuple[ReportTab, ...] = (ReportTab('healers', 'Healers', ('healers', 'healing', 'heals', 'overhealing', 'hps')), ReportTab('tanks', 'Tanks', ('tanks', 'tanking', 'mitigation', 'damage taken')), ReportTab('melee', 'Melee DPS', ('melee', 'dps', 'damage done')), ReportTab('ranged', 'Ranged DPS', ('ranged', 'dps', 'casters', 'damage done')), ReportTab('consumables', 'Consumables', ('consumables', 'consumes', 'potions', 'pots', 'flasks', 'elixirs')), ReportTab('interrupts', 'Interrupts', ('interrupts', 'kicks')), ReportTab('cast_efficiency', 'Cast Efficiency', ('cast efficiency', 'casts', 'cooldowns')), ReportTab('debuff_uptime', 'Debuff Uptime', ('debuff uptime', 'debuffs')), ReportTab('totem_uptime', 'Totem Uptime', ('totem uptime', 'totems')), ReportTab('boss_vs_trash', 'Boss vs Trash', ('boss vs trash', 'trash')), ReportTab('engineering', 'Engineering', ('engineering', 'sappers', 'bombs')), ReportTab('timeline', 'Timeline', ('timeline',)), ReportTab('encounters', 'Encounters', ('encounters', 'bosses', 'fights', 'kills', 'wipes')), ReportTab('composition', 'Composition', ('composition', 'comp', 'roster')))
 wcl_app.RaidService: class RaidService
 wcl_app.RaidService.__init__: def __init__(self, ctx: AppContext)
 wcl_app.RaidService.analyze: def analyze(self, report_id: str, *, reference: bool=False, progress: ProgressCallback | None=None) -> RaidAnalysis
@@ -445,12 +446,20 @@ wcl_app.ReferenceService.delete_reference: def delete_reference(self, report: st
 wcl_app.ReferenceService.compare: def compare(self, guild_report: str, reference_report: str) -> ReferenceComparison
 wcl_app.ReferenceService.ctx: set in __init__
 wcl_app.ReferenceService.raids: set in __init__
+wcl_app.ReportIndex: class ReportIndex
+wcl_app.ReportIndex.__init__: def __init__(self, raids: list[dict[str, Any]], error: str | None=None)
+wcl_app.ReportIndex.search: def search(self, query: str, limit: int=20) -> list[SearchHit]
+wcl_app.ReportIndex.error: set in __init__
 wcl_app.ReportRef: @dataclass class ReportRef
 wcl_app.ReportRef.code: str
 wcl_app.ReportRef.title: str
 wcl_app.ReportRef.start_time: int = 0
 wcl_app.ReportRef.zone_name: str = ''
 wcl_app.ReportRef.imported: bool = False
+wcl_app.ReportTab: @dataclass(frozen=True) class ReportTab
+wcl_app.ReportTab.key: str
+wcl_app.ReportTab.label: str
+wcl_app.ReportTab.terms: tuple[str, ...]
 wcl_app.RoleOverrideService: class RoleOverrideService
 wcl_app.RoleOverrideService.__init__: def __init__(self, db: RaidRepository, analyze: AnalyzeFn | None=None)
 wcl_app.RoleOverrideService.from_context: @classmethod def from_context(cls, ctx: AppContext, db: RaidRepository, *, with_api: bool=True) -> RoleOverrideService
@@ -458,6 +467,19 @@ wcl_app.RoleOverrideService.list_overrides: def list_overrides(self, character_n
 wcl_app.RoleOverrideService.set: def set(self, character_name: str, role: str, report_id: str | None=None, *, reanalyze: bool=True, progress: ProgressCallback | None=None) -> list[ReanalysisResult]
 wcl_app.RoleOverrideService.clear: def clear(self, character_name: str, report_id: str | None=None, *, reanalyze: bool=True, progress: ProgressCallback | None=None) -> list[ReanalysisResult]
 wcl_app.RoleOverrideService.db: set in __init__
+wcl_app.SearchHit: @dataclass(frozen=True) class SearchHit
+wcl_app.SearchHit.report_id: str
+wcl_app.SearchHit.title: str
+wcl_app.SearchHit.raid_date: str = ''
+wcl_app.SearchHit.zone: str = ''
+wcl_app.SearchHit.tab: ReportTab | None = None
+wcl_app.SearchHit.stored: bool = True
+wcl_app.SearchHit.label: @property def label(self) -> str
+wcl_app.SearchService: class SearchService
+wcl_app.SearchService.__init__: def __init__(self, ctx: AppContext, max_raids: int=1000)
+wcl_app.SearchService.index: def index(self) -> ReportIndex
+wcl_app.SearchService.ctx: set in __init__
+wcl_app.SearchService.max_raids: set in __init__
 wcl_app.Series: @dataclass class Series
 wcl_app.Series.key: str
 wcl_app.Series.name: str

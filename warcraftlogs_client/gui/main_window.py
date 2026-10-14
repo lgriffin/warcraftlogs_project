@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 from wcl_core.common.errors import ConfigurationError
 
 from ..database import PerformanceDB
-from ..services import AppContext, CharacterService, OnboardingService, ProfileService, SetupError
+from ..services import AppContext, CharacterService, OnboardingService, ProfileService, SearchService, SetupError
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
@@ -213,6 +213,13 @@ class MainWindow(QMainWindow):
         self._guild_name_label.setStyleSheet(f"color: {COLORS['text_gold']}; background: transparent;")
         top_bar_layout.addWidget(self._guild_name_label, 1)
 
+        self._search_btn = QPushButton("Search")
+        self._search_btn.setProperty("secondary", True)
+        self._search_btn.setFixedHeight(32)
+        self._search_btn.setToolTip("Find a view, a raid, or a tab of a raid such as kara healing (Ctrl+F)")
+        self._search_btn.clicked.connect(self._open_command_palette)
+        top_bar_layout.addWidget(self._search_btn)
+
         self._export_btn = QPushButton("Export")
         self._export_btn.setProperty("secondary", True)
         self._export_btn.setFixedHeight(32)
@@ -350,6 +357,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._show_settings)
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self._open_command_palette)
+        QShortcut(QKeySequence("Ctrl+K"), self).activated.connect(self._open_command_palette)
         QShortcut(QKeySequence("Ctrl+`"), self).activated.connect(self._toggle_console)
         QShortcut(QKeySequence("Ctrl+E"), self).activated.connect(self._show_export_menu)
 
@@ -390,9 +398,19 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Exported {len(written)} chart images to {folder}")
 
     def _open_command_palette(self):
-        palette = CommandPalette(self)
+        reports = SearchService(self._ctx).index()
+        if reports.error:
+            self.status_bar.showMessage(f"Raid search unavailable: {reports.error}")
+        palette = CommandPalette(self, reports=reports)
         palette.navigate.connect(self._handle_palette_command)
+        palette.open_report.connect(self._open_report_tab)
+        palette.analyze_report.connect(self._analyze_report)
         palette.exec()
+
+    def _open_report_tab(self, report_id: str, tab: str):
+        widget = self._drill_into_raid(report_id)
+        if widget is not None and tab and not widget.show_tab(tab):
+            self.status_bar.showMessage(f"This raid has no {tab} data")
 
     def _handle_palette_command(self, key: str):
         commands = {
@@ -487,17 +505,17 @@ class MainWindow(QMainWindow):
     def _on_nav_changed(self, index: int):
         self.stack.show_base_page(index)
 
-    def _drill_into_raid(self, report_id: str):
+    def _drill_into_raid(self, report_id: str) -> RaidAnalysisWidget | None:
         try:
             with PerformanceDB() as db:
                 analysis = db.get_raid_analysis(report_id)
         except (sqlite3.Error, OSError) as e:
             self.status_bar.showMessage(f"Failed to load raid: {e}")
-            return
+            return None
 
         if not analysis:
             self.status_bar.showMessage(f"Raid {report_id} not found in database")
-            return
+            return None
 
         widget = RaidAnalysisWidget(analysis)
         widget.status_message.connect(self.status_bar.showMessage)
@@ -508,6 +526,7 @@ class MainWindow(QMainWindow):
         widget.cross_analyze.connect(self._drill_into_cross_analysis)
         widget.deep_dive.connect(self._drill_into_deep_dive)
         self.stack.push_view(widget)
+        return widget
 
     def _drill_into_deep_dive(self, report_id: str, encounter_index: int):
         from .encounter_deep_dive_view import EncounterDeepDiveView
