@@ -34,9 +34,11 @@ from wcl_app.profiles import JsonProfileStore, Profile, ProfileService, ProfileS
 from wcl_app.raids import ProfileSiteUnknown, RaidService, ReferenceAuthRequired, ReportRef
 from wcl_app.reference import ReferenceComparison, ReferenceRequestError, ReferenceService, StoredRaid
 from wcl_app.roles import ReanalysisResult, RoleOverrideService
+from wcl_app.search import REPORT_TABS, ReportIndex, ReportTab, SearchHit, SearchService
 from wcl_app.themes import VANILLA_CLASSES, Palette, build_palette
 
 __all__ = [
+    "REPORT_TABS",
     "VANILLA_CLASSES",
     "AddResult",
     "AnalysisThresholds",
@@ -93,8 +95,12 @@ __all__ = [
     "ReferenceComparison",
     "ReferenceRequestError",
     "ReferenceService",
+    "ReportIndex",
     "ReportRef",
+    "ReportTab",
     "RoleOverrideService",
+    "SearchHit",
+    "SearchService",
     "Series",
     "SetupError",
     "Spread",

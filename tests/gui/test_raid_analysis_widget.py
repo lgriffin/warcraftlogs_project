@@ -98,3 +98,33 @@ class TestRaidAnalysisWidget:
         assert "1H" in title_text
         assert "1M" in title_text
         assert "1R" in title_text
+
+
+@pytest.mark.gui
+class TestShowTab:
+    def test_switches_to_the_named_tab(self, qtbot, sample_analysis):
+        widget = RaidAnalysisWidget(sample_analysis)
+        qtbot.addWidget(widget)
+        assert widget.show_tab("Consumables")
+        assert widget._tabs.tabText(widget._tabs.currentIndex()) == "Consumables"
+
+    def test_refuses_a_tab_it_does_not_have(self, qtbot, sample_analysis):
+        widget = RaidAnalysisWidget(sample_analysis)
+        qtbot.addWidget(widget)
+        before = widget._tabs.currentIndex()
+        assert not widget.show_tab("Nope")
+        assert widget._tabs.currentIndex() == before
+
+    def test_refuses_a_tab_hidden_for_lack_of_data(self, qtbot, sample_analysis):
+        widget = RaidAnalysisWidget(sample_analysis)
+        qtbot.addWidget(widget)
+        assert not widget._tabs.isTabVisible(widget._eng_tab_index)
+        assert not widget.show_tab("Engineering")
+
+    def test_every_searchable_tab_is_a_tab_of_the_raid_page(self, qtbot, sample_analysis):
+        from warcraftlogs_client.services.search import REPORT_TABS
+
+        widget = RaidAnalysisWidget(sample_analysis)
+        qtbot.addWidget(widget)
+        labels = {widget._tabs.tabText(i) for i in range(widget._tabs.count())}
+        assert {tab.label for tab in REPORT_TABS} <= labels
