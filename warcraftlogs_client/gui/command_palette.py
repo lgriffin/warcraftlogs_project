@@ -51,6 +51,15 @@ COMMANDS = [
     {"key": "raid_groups", "label": "Raid Groups", "hint": "Ctrl+5", "desc": "Manage raid groups and members"},
     {"key": "settings", "label": "Settings", "hint": "Ctrl+,", "desc": "Application settings"},
     {"key": "setup", "label": "Run Setup", "hint": "", "desc": "Warcraft Logs API keys and your guild"},
+    {"key": "export.pdf", "label": "Export Page as PDF", "hint": "", "desc": "This page as a PDF report"},
+    {
+        "key": "export.md",
+        "label": "Export Page as Markdown",
+        "hint": "",
+        "desc": "This page as Markdown, charts as PNGs",
+    },
+    {"key": "export.json", "label": "Export Page as JSON", "hint": "", "desc": "This page's tables and chart data"},
+    {"key": "export.charts", "label": "Export Charts", "hint": "", "desc": "Every chart on this page as PNG and SVG"},
     {"key": "toggle_sidebar", "label": "Toggle Sidebar", "hint": "Ctrl+B", "desc": "Expand or collapse the sidebar"},
 ]
 

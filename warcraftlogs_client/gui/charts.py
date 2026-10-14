@@ -435,6 +435,8 @@ def build_consumable_trend_chart(consumable_trend: list[dict]) -> QChartView:
 class SpiderChartWidget(QWidget):
     """Custom-painted radar chart for multi-dimensional character comparison."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     LABELS = ["Healing", "Damage", "Mitigation", "Active Time", "Activity", "Consumables", "Consistency"]
     KEYS = ["healing", "damage", "mitigation", "active_time", "activity", "consumables", "consistency"]
     DESCRIPTIONS = {
@@ -454,6 +456,11 @@ class SpiderChartWidget(QWidget):
         self.setMinimumHeight(280)
         self.setMinimumWidth(280)
         self.setMouseTracking(True)
+
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """The scores drawn, for a page's JSON export."""
+        scores = [(label, float(self._data.get(key) or 0)) for label, key in zip(self.LABELS, self.KEYS, strict=True)]
+        return [("Score", scores)]
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -555,6 +562,8 @@ class SpiderChartWidget(QWidget):
 class ComparisonSpiderChart(QWidget):
     """Radar chart with multiple overlaid character datasets and clickable legend."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     character_removed = Signal(str)
 
     LABELS = SpiderChartWidget.LABELS
@@ -572,6 +581,13 @@ class ComparisonSpiderChart(QWidget):
     def set_datasets(self, datasets: dict[str, dict]):
         self._datasets = dict(datasets)
         self.update()
+
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """Each character's scores, for a page's JSON export."""
+        return [
+            (name, [(label, float(data.get(key) or 0)) for label, key in zip(self.LABELS, self.KEYS, strict=True)])
+            for name, data in self._datasets.items()
+        ]
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -709,6 +725,8 @@ class ComparisonSpiderChart(QWidget):
 
 class CalendarHeatmapWidget(QWidget):
     """GitHub-style contribution heatmap colored by raid performance."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     def __init__(self, raid_data: list[dict], parent=None):
         super().__init__(parent)
@@ -1277,6 +1295,8 @@ def build_tank_mitigation_bar_chart(data: list[dict]) -> QChartView:
 class ConsumableHeatmapWidget(QWidget):
     """Character x consumable grid heatmap colored by avg usage per raid."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     def __init__(self, compliance: dict, parent=None):
         super().__init__(parent)
         self._compliance = compliance
@@ -1286,6 +1306,15 @@ class ConsumableHeatmapWidget(QWidget):
         if characters:
             cell_h, gap, header_h = 20, 1, 60
             self.setMinimumHeight(header_h + len(characters) * (cell_h + gap) + 10)
+
+    def export_series(self) -> list[tuple[str, list[tuple[str, float]]]]:
+        """Each character's average uses per raid of each consumable, for a page's JSON export."""
+        consumables = self._compliance.get("consumables", [])
+        matrix = self._compliance.get("matrix", {})
+        return [
+            (c["name"], [(con, float(matrix.get(c["name"], {}).get(con, 0))) for con in consumables])
+            for c in self._compliance.get("characters", [])
+        ]
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -1376,6 +1405,8 @@ class ConsumableHeatmapWidget(QWidget):
 
 class ConsumableTimelineHeatmap(QWidget):
     """Player x minute heatmap showing when a consumable was used during a raid."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     def __init__(self, heatmap_data: dict, parent=None):
         super().__init__(parent)
@@ -1474,6 +1505,8 @@ class ConsumableTimelineHeatmap(QWidget):
 
 class OverlayTimelineHeatmap(QWidget):
     """Combined heatmap overlaying guild (green) and reference (blue) players."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     def __init__(self, guild_data: dict, ref_data: dict, parent=None):
         super().__init__(parent)
@@ -1627,6 +1660,8 @@ class OverlayTimelineHeatmap(QWidget):
 class DebuffTimelineWidget(QWidget):
     """Horizontal timeline bars showing debuff uptime per boss fight."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._uptimes: list = []
@@ -1742,6 +1777,8 @@ class DebuffTimelineWidget(QWidget):
 
 class CancelledCastTimelineWidget(QWidget):
     """Timeline showing boss ability lanes with cancelled-cast markers overlaid."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     _MARKER_SIZE = 8
     _NAME_COL_W = 160
@@ -1993,6 +2030,8 @@ class CancelledCastTimelineWidget(QWidget):
 class ClassCastTimelineWidget(QWidget):
     """Multi-lane Gantt chart showing spell casts per player."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     _NAME_COL_W = 160
     _PLAYER_HEADER_H = 24
     _SPELL_ROW_H = 18
@@ -2169,6 +2208,8 @@ class ClassCastTimelineWidget(QWidget):
 
 class ResourceTimelineWidget(QWidget):
     """Filled area chart of resource level over time with waste event markers."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     _LEFT_MARGIN = 60
     _RIGHT_MARGIN = 20
@@ -2348,6 +2389,8 @@ class ResourceTimelineWidget(QWidget):
 
 class CooldownSynergyWidget(QWidget):
     """Gantt chart showing cooldown activations relative to Heroism windows."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     _NAME_COL_W = 160
     _SCORE_COL_W = 50
