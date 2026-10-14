@@ -23,6 +23,7 @@ wcl_app.AppContext.desktop: @classmethod def desktop(cls, config_file: str | Non
 wcl_app.AppContext.headless: @classmethod def headless(cls, client: WarcraftLogsClient, storage: StorageFactory, config: dict[str, Any] | None=None, user_client: Callable[[], WarcraftLogsClient | None] | None=None, profile: 'Profile | None'=None) -> 'AppContext'
 wcl_app.AppContext.scope: @property def scope(self) -> RaidScope | None
 wcl_app.AppContext.use_profile: def use_profile(self, profile: 'Profile | None') -> None
+wcl_app.AppContext.reload_config: def reload_config(self, config_file: str | None=None) -> None
 wcl_app.AppContext.guild_id: @property def guild_id(self) -> int | None
 wcl_app.AppContext.api_url: @property def api_url(self) -> str | None
 wcl_app.AppContext.thresholds: @property def thresholds(self) -> AnalysisThresholds
@@ -159,6 +160,14 @@ wcl_app.Chart.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.Chart.from_dict: @classmethod def from_dict(cls, data: dict[str, Any]) -> Chart
 wcl_app.ChartError: class ChartError(ValueError)
 wcl_app.DiscordNotConfigured: class DiscordNotConfigured(Exception)
+wcl_app.GuildMatch: @dataclass(frozen=True) class GuildMatch
+wcl_app.GuildMatch.id: int
+wcl_app.GuildMatch.name: str
+wcl_app.GuildMatch.server: str
+wcl_app.GuildMatch.region: str
+wcl_app.GuildMatch.game_version: str
+wcl_app.GuildMatch.label: @property def label(self) -> str
+wcl_app.GuildMatch.url: @property def url(self) -> str
 wcl_app.HealingService: class HealingService
 wcl_app.HealingService.__init__: def __init__(self, storage: StorageFactory, *, now: Callable[[], datetime]=clock.now, scope: ScopeSource=None)
 wcl_app.HealingService.scope: @property def scope(self) -> RaidScope | None
@@ -229,6 +238,11 @@ wcl_app.IdentityService.link: def link(self, *, open_browser: bool=True, timeout
 wcl_app.IdentityService.unlink: def unlink(self) -> None
 wcl_app.IdentityService.store: set in __init__
 wcl_app.IdentityService.config: set in __init__
+wcl_app.JsonConfigStore: class JsonConfigStore
+wcl_app.JsonConfigStore.__init__: def __init__(self, path: str | Path) -> None
+wcl_app.JsonConfigStore.read: def read(self) -> dict[str, Any]
+wcl_app.JsonConfigStore.update: def update(self, values: dict[str, Any]) -> None
+wcl_app.JsonConfigStore.path: set in __init__
 wcl_app.JsonLayoutStore: class JsonLayoutStore
 wcl_app.JsonLayoutStore.__init__: def __init__(self, path: str | Path)
 wcl_app.JsonLayoutStore.load: def load(self) -> HomeLayout | None
@@ -239,6 +253,11 @@ wcl_app.JsonProfileStore.__init__: def __init__(self, path: str | Path)
 wcl_app.JsonProfileStore.load: def load(self) -> ProfileSet | None
 wcl_app.JsonProfileStore.save: def save(self, profiles: ProfileSet) -> None
 wcl_app.JsonProfileStore.path: set in __init__
+wcl_app.MemoryConfigStore: class MemoryConfigStore
+wcl_app.MemoryConfigStore.__init__: def __init__(self, config: dict[str, Any] | None=None) -> None
+wcl_app.MemoryConfigStore.read: def read(self) -> dict[str, Any]
+wcl_app.MemoryConfigStore.update: def update(self, values: dict[str, Any]) -> None
+wcl_app.MemoryConfigStore.config: dict[str, Any]
 wcl_app.MyCharacters: @dataclass(frozen=True) class MyCharacters
 wcl_app.MyCharacters.main: PlayerRef | None = None
 wcl_app.MyCharacters.alts: tuple[PlayerRef, ...] = ()
@@ -256,6 +275,17 @@ wcl_app.MyCharactersService.store: set in __init__
 wcl_app.MyCharactersService.owner: set in __init__
 wcl_app.MyCharactersService.owner_name: set in __init__
 wcl_app.MyCharactersService.config: set in __init__
+wcl_app.OnboardingService: class OnboardingService
+wcl_app.OnboardingService.__init__: def __init__(self, store: ConfigStore) -> None
+wcl_app.OnboardingService.desktop: @classmethod def desktop(cls) -> OnboardingService
+wcl_app.OnboardingService.needs_setup: def needs_setup(self) -> bool
+wcl_app.OnboardingService.saved_keys: def saved_keys(self) -> tuple[str, str]
+wcl_app.OnboardingService.site: def site(self) -> str
+wcl_app.OnboardingService.check_keys: def check_keys(self, client_id: str, client_secret: str | SecretStr) -> None
+wcl_app.OnboardingService.find_guild: def find_guild(self, text: str, client_id: str, client_secret: str | SecretStr, *, server: str='', region: str='', game_version: str | None=None) -> GuildMatch
+wcl_app.OnboardingService.save: def save(self, client_id: str, client_secret: str | SecretStr, guild: GuildMatch | None=None) -> None
+wcl_app.OnboardingService.guild_settings: def guild_settings(self, guild: GuildMatch) -> dict[str, Any]
+wcl_app.OnboardingService.store: set in __init__
 wcl_app.Palette: @dataclass(frozen=True) class Palette
 wcl_app.Palette.mode: Mode
 wcl_app.Palette.wow_class: str | None
@@ -433,6 +463,7 @@ wcl_app.Series.values: list[float | None]
 wcl_app.Series.display: list[str]
 wcl_app.Series.emphasis: bool = False
 wcl_app.Series.total: @property def total(self) -> float
+wcl_app.SetupError: class SetupError(Exception)
 wcl_app.Spread: @dataclass class Spread
 wcl_app.Spread.name: str
 wcl_app.Spread.min: float

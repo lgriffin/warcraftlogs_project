@@ -120,7 +120,8 @@ class ConfigManager:
     def _parse_config(self, raw_config: dict[str, Any]) -> AppConfig:
         """Parse and validate raw configuration data.
 
-        Credentials are resolved in order: environment variables > config file.
+        Credentials are resolved in order: environment variables > config file. ``report_id`` (the CLI's default
+        report) is optional, so a first-run setup that only saves the API keys and guild gives a loadable config.
         """
         client_id = os.environ.get("WARCRAFTLOGS_CLIENT_ID") or raw_config.get("client_id")
         client_secret = os.environ.get("WARCRAFTLOGS_CLIENT_SECRET") or raw_config.get("client_secret")
@@ -131,8 +132,6 @@ class ConfigManager:
             missing.append("client_id (or WARCRAFTLOGS_CLIENT_ID env var)")
         if not client_secret:
             missing.append("client_secret (or WARCRAFTLOGS_CLIENT_SECRET env var)")
-        if not report_id:
-            missing.append("report_id (or WARCRAFTLOGS_REPORT_ID env var)")
 
         if missing:
             raise ConfigurationError(f"Missing required configuration: {', '.join(missing)}")
@@ -146,7 +145,7 @@ class ConfigManager:
         api_config = ApiConfig(
             client_id=str(client_id),
             client_secret=as_secret(str(client_secret)),
-            report_id=str(report_id),
+            report_id=str(report_id or ""),
             guild_id=guild_id,
         )
 

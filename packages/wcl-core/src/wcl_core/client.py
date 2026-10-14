@@ -58,6 +58,37 @@ query($guildID: Int!, $limit: Int!, $page: Int!) {
 }
 """
 
+_GUILD_FIELDS = "id name server { name slug region { slug } }"
+_GUILD_BY_ID_QUERY = f"""
+query($id: Int!) {{
+  guildData {{
+    guild(id: $id) {{ {_GUILD_FIELDS} }}
+  }}
+}}
+"""
+_GUILD_BY_NAME_QUERY = f"""
+query($name: String!, $serverSlug: String!, $serverRegion: String!) {{
+  guildData {{
+    guild(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {{ {_GUILD_FIELDS} }}
+  }}
+}}
+"""
+
+
+def _guild_match(guild: dict | None) -> dict | None:
+    """``find_guild``'s shape for a GraphQL guild object, or None when there is none."""
+    if not guild or guild.get("id") is None:
+        return None
+    server = guild.get("server") or {}
+    return {
+        "id": int(guild["id"]),
+        "name": guild.get("name") or "",
+        "server": server.get("name") or "",
+        "server_slug": server.get("slug") or "",
+        "region": ((server.get("region") or {}).get("slug") or "").lower(),
+    }
+
+
 # End timestamp used for "whole report" queries (report-relative milliseconds).
 FULL_REPORT_END = 999999999
 # Largest page size the events endpoint accepts; the API default is far smaller.
@@ -318,6 +349,30 @@ class WarcraftLogsClient:
             "name": guild.get("name", ""),
             "server": server.get("name", ""),
         }
+
+    def find_guild(
+        self,
+        guild_id: int | None = None,
+        *,
+        name: str = "",
+        server_slug: str = "",
+        region: str = "",
+    ) -> dict | None:
+        """A guild by its id, or by name, server slug and region (``eu``, ``us``...); None when there is no such guild.
+
+        Returns ``id``, ``name``, ``server``, ``server_slug`` and ``region`` (lower case, like ``eu``).
+        """
+        if guild_id is not None:
+            result = self.run_query(_GUILD_BY_ID_QUERY, use_cache=False, variables={"id": guild_id})
+        else:
+            variables = {"name": name, "serverSlug": server_slug, "serverRegion": region}
+            result = self.run_query(_GUILD_BY_NAME_QUERY, use_cache=False, variables=variables)
+        return _guild_match(((result.get("data") or {}).get("guildData") or {}).get("guild"))
+
+    def get_report_guild(self, report_id: str) -> dict | None:
+        """The guild a report was logged for, shaped like ``find_guild``; None for a personal log."""
+        report = self._query_report(report_id, f"guild {{ {_GUILD_FIELDS} }}")
+        return _guild_match(report.get("guild"))
 
     @property
     def site_url(self) -> str:

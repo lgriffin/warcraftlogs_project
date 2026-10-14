@@ -5,6 +5,7 @@ Application entry point for the WarcraftLogs Analyzer GUI.
 import logging
 import sys
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 from wcl_core import paths
 from wcl_core.common.log import configure_logging, get_logger
@@ -81,6 +82,7 @@ def run():
 
     host = WindowHost(app)
     host.window.show()
+    QTimer.singleShot(0, host.window.offer_setup)  # a first run, with no API keys yet, starts in setup
     sys.exit(app.exec())
 
 

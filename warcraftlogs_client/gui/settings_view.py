@@ -5,6 +5,7 @@ Settings view — configure credentials, thresholds, and database.
 import json
 import os
 import sqlite3
+import webbrowser
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..services.onboarding import KEYS_URL, is_placeholder
 from .appearance_panel import AppearancePanel
 from .hub_panel import HubPanel
 from .identity_panel import IdentityPanel
@@ -35,6 +37,7 @@ if TYPE_CHECKING:
 
 class SettingsView(QWidget):
     status_message = Signal(str)
+    setup_requested = Signal()  # "Run setup": the window opens the first-run setup
 
     from wcl_core import paths as _paths
 
@@ -44,6 +47,8 @@ class SettingsView(QWidget):
         super().__init__(parent)
         # The window's context, so tagging raids reads the configured host and a sign-in sees the Discord app id.
         self._ctx = ctx
+        # A guild found with "Find guild": the config values it implies, saved with the form while its id is kept.
+        self._found_guild: dict | None = None
         self.setStyleSheet(common_styles())
         self._build_ui()
         self._load_current_config()
@@ -83,6 +88,26 @@ class SettingsView(QWidget):
         creds_layout.setSpacing(12)
         creds_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
+        setup_note = QLabel(
+            "New here? Setup walks you through creating your Warcraft Logs API keys and finding your guild."
+        )
+        setup_note.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
+        setup_note.setWordWrap(True)
+        creds_layout.addRow(setup_note)
+        setup_row = QHBoxLayout()
+        self.run_setup_btn = QPushButton("Run Setup")
+        self.run_setup_btn.setFixedWidth(160)
+        self.run_setup_btn.clicked.connect(self.setup_requested)
+        setup_row.addWidget(self.run_setup_btn)
+        self.get_keys_btn = QPushButton("Get API Keys")
+        self.get_keys_btn.setProperty("secondary", True)
+        self.get_keys_btn.setFixedWidth(160)
+        self.get_keys_btn.setToolTip(KEYS_URL)
+        self.get_keys_btn.clicked.connect(lambda: webbrowser.open(KEYS_URL))
+        setup_row.addWidget(self.get_keys_btn)
+        setup_row.addStretch()
+        creds_layout.addRow(setup_row)
+
         self.client_id_input = QLineEdit()
         self.client_id_input.setPlaceholderText("Client ID from WarcraftLogs")
         creds_layout.addRow("Client ID:", self.client_id_input)
@@ -99,7 +124,14 @@ class SettingsView(QWidget):
         self.guild_id_input = QLineEdit()
         self.guild_id_input.setPlaceholderText("e.g. 774065")
         self.guild_id_input.setToolTip("The guild imports use when no profile, or a profile without its own, is on")
-        creds_layout.addRow("Default Guild ID:", self.guild_id_input)
+        guild_row = QHBoxLayout()
+        guild_row.addWidget(self.guild_id_input, 1)
+        self.find_guild_btn = QPushButton("Find Guild...")
+        self.find_guild_btn.setProperty("secondary", True)
+        self.find_guild_btn.setToolTip("Look your guild up on Warcraft Logs from a link or its name")
+        self.find_guild_btn.clicked.connect(self._find_guild)
+        guild_row.addWidget(self.find_guild_btn)
+        creds_layout.addRow("Default Guild ID:", guild_row)
 
         self.guild_name_input = QLineEdit()
         self.guild_name_input.setPlaceholderText("e.g. Amicable")
@@ -382,9 +414,12 @@ class SettingsView(QWidget):
             with open(self.CONFIG_PATH) as f:
                 config = json.load(f)
 
-            self.client_id_input.setText(config.get("client_id", ""))
-            self.client_secret_input.setText(config.get("client_secret", ""))
-            self.report_id_input.setText(config.get("report_id", ""))
+            # The template's YOUR_..._HERE stand-ins show as empty boxes with their hints.
+            self.client_id_input.setText("" if is_placeholder(config.get("client_id")) else config["client_id"])
+            secret = config.get("client_secret")
+            self.client_secret_input.setText("" if is_placeholder(secret) else secret)
+            report_id = config.get("report_id")
+            self.report_id_input.setText("" if is_placeholder(report_id) else report_id)
             self.guild_id_input.setText(str(config.get("guild_id", 774065)))
             self.guild_name_input.setText(config.get("guild_name", ""))
             self.guild_server_input.setText(config.get("guild_server", ""))
@@ -428,6 +463,9 @@ class SettingsView(QWidget):
             config["guild_id"] = 0
         config["guild_name"] = self.guild_name_input.text().strip()
         config["guild_server"] = self.guild_server_input.text().strip()
+        found = self._found_guild
+        if found is not None and found.get("guild_id") == config["guild_id"] and "wcl_api_url" in found:
+            config["wcl_api_url"] = found["wcl_api_url"]  # the guild is on another site: import from there
         config["role_thresholds"] = {
             "healer_min_healing": self.healer_threshold.value(),
             "tank_min_taken": self.tank_min_taken.value(),
@@ -453,6 +491,36 @@ class SettingsView(QWidget):
             self.status_message.emit("Settings saved")
         except (json.JSONDecodeError, OSError) as e:
             QMessageBox.critical(self, "Save Error", f"Could not save config.json:\n{e}")
+
+    def reload_config(self):
+        """Show config.json as first-run setup just saved it."""
+        self._found_guild = None
+        self._load_current_config()
+        try:
+            with open(self.CONFIG_PATH) as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return
+        for name in ("identity_panel", "hub_panel"):
+            panel = getattr(self, name, None)
+            if panel is not None:
+                panel.use_config(config)
+
+    def _find_guild(self):
+        from ..services import OnboardingService
+        from .setup_wizard import GuildFinderDialog
+
+        service = OnboardingService.desktop()
+        keys = (self.client_id_input.text(), self.client_secret_input.text())
+        dlg = GuildFinderDialog(service, lambda: keys, parent=self)
+        if not dlg.exec() or dlg.guild is None:
+            return
+        guild = dlg.guild
+        self.guild_id_input.setText(str(guild.id))
+        self.guild_name_input.setText(guild.name)
+        self.guild_server_input.setText(guild.server)
+        self._found_guild = service.guild_settings(guild)
+        self.status_message.emit(f"Found {guild.label}: Save Settings to keep it")
 
     def _clear_all_data(self):
         from PySide6.QtWidgets import QInputDialog
