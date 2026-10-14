@@ -50,6 +50,7 @@ The foundation layer. Each module has a dedicated test file covering its public 
 | Cache | `test_cache.py` | Safe filenames, JSON roundtrip, corrupt handling |
 | Renderers | `test_renderers.py` | Console output, summary tables |
 | Markdown renderer | `test_markdown_renderer.py` | Markdown structure, file export |
+| Page reports | `test_view_report.py` | A page's report as Markdown, JSON and HTML (for PDF) |
 | Spell manager | `test_spell_manager.py` | ID resolution, aggregation, circular alias detection |
 | Dynamic role parser | `test_dynamic_role_parser.py` | Group-by-class, healer identification |
 | Path resolution | `test_paths.py` | Frozen/dev detection, directory resolution |

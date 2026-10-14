@@ -213,6 +213,14 @@ Create named groups of characters to track your raid roster over time:
 - **Line Charts** — Performance trends over time per character
 - **Compare Overlay** — Multiple characters on a single radar chart for direct comparison
 
+### Exporting
+
+- **Save a chart** — Right-click any chart for **Save image as PNG**, **Save image as SVG** or **Copy image**
+- **Export a page** — The **Export** button in the top bar (Ctrl+E) saves the page you are on, including the tab
+  showing, as a **PDF**, **Markdown** (charts saved as PNGs beside it) or **JSON** report. JSON keeps tables as records
+  with numbers as numbers, plus each chart's data points, for further analysis
+- **Export all charts** — The same menu saves every chart on the page as PNG and SVG into a folder
+
 ### Local Database
 
 All analyzed raids are saved to a local SQLite database (`warcraftlogs_history.db`), enabling:
@@ -339,7 +347,8 @@ Copy `config.example.json` to `config.json` and fill in your Warcraft Logs API c
 
 ## Output
 
-- GUI: Results displayed in interactive tables with sortable columns and charts
+- GUI: Results displayed in interactive tables with sortable columns and charts; any page exports as PDF, Markdown or
+  JSON, and any chart as PNG or SVG
 - CLI: Markdown files saved to `reports/` directory
 - Database: SQLite file at `warcraftlogs_history.db`
 

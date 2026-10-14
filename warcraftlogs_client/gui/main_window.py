@@ -4,15 +4,19 @@ Main application window with sidebar navigation and drill-down support.
 
 import os
 import sqlite3
+from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QCursor, QFont, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QPushButton,
     QStatusBar,
     QVBoxLayout,
@@ -26,6 +30,7 @@ from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
 from .console_widget import ConsoleDock
+from .export import ChartContextMenu, export_report_dialog, report_title, save_all_charts, view_charts
 from .home_view import HomeView, default_home_service, desktop_context
 from .insights_view import InsightsView
 from .nav_stack import NavigationStack
@@ -207,6 +212,19 @@ class MainWindow(QMainWindow):
         self._guild_name_label.setStyleSheet(f"color: {COLORS['text_gold']}; background: transparent;")
         top_bar_layout.addWidget(self._guild_name_label, 1)
 
+        self._export_btn = QPushButton("Export")
+        self._export_btn.setProperty("secondary", True)
+        self._export_btn.setFixedHeight(32)
+        self._export_btn.setToolTip("Export this page as a report, or its charts as images (Ctrl+E)")
+        self._export_menu = QMenu(self._export_btn)
+        self._export_menu.addAction("Report as PDF…", lambda: self.export_report("pdf"))
+        self._export_menu.addAction("Report as Markdown…", lambda: self.export_report("md"))
+        self._export_menu.addAction("Report as JSON…", lambda: self.export_report("json"))
+        self._export_menu.addSeparator()
+        self._export_menu.addAction("Charts as images (PNG + SVG)…", self.export_charts)
+        self._export_btn.setMenu(self._export_menu)
+        top_bar_layout.addWidget(self._export_btn)
+
         self.guild_logo_label = QLabel()
         self.guild_logo_label.setFixedSize(44, 44)
         self.guild_logo_label.setScaledContents(True)
@@ -280,6 +298,12 @@ class MainWindow(QMainWindow):
         self._console_btn.clicked.connect(self._toggle_console)
         self.status_bar.addPermanentWidget(self._console_btn)
 
+        # Right-click any chart, in any view, to save it as PNG or SVG or copy it.
+        self._chart_menu = ChartContextMenu(on_saved=self.status_bar.showMessage, parent=self)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self._chart_menu)
+
         # ── Connect signals ──
         self.nav_list.currentRowChanged.connect(self._on_nav_changed)
         self.nav_list.setCurrentRow(0)
@@ -325,6 +349,43 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+B"), self).activated.connect(self._toggle_sidebar)
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self._open_command_palette)
         QShortcut(QKeySequence("Ctrl+`"), self).activated.connect(self._toggle_console)
+        QShortcut(QKeySequence("Ctrl+E"), self).activated.connect(self._show_export_menu)
+
+    def _show_export_menu(self):
+        self._export_menu.exec(self._export_btn.mapToGlobal(self._export_btn.rect().bottomLeft()))
+
+    def _export_title(self) -> str:
+        """The page's name for a report: the sidebar section, or a drilled-in view's own heading."""
+        view = self.stack.currentWidget()
+        if self.stack.current_depth() == 0:
+            item = self.nav_list.currentItem()
+            return item.text() if item is not None and item.isSelected() else "Settings"
+        return report_title(view, fallback="Report")
+
+    def export_report(self, fmt: str):
+        view = self.stack.currentWidget()
+        try:
+            path = export_report_dialog(self, view, self._export_title(), fmt)
+        except (OSError, ValueError) as e:
+            self.status_bar.showMessage(f"Export failed: {e}")
+            return
+        if path:
+            self.status_bar.showMessage(f"Report exported to {path}")
+
+    def export_charts(self):
+        view = self.stack.currentWidget()
+        if not view_charts(view):
+            self.status_bar.showMessage("This page has no charts to export")
+            return
+        folder = QFileDialog.getExistingDirectory(self, "Export Charts To")
+        if not folder:
+            return
+        try:
+            written = save_all_charts(view, Path(folder))
+        except OSError as e:
+            self.status_bar.showMessage(f"Export failed: {e}")
+            return
+        self.status_bar.showMessage(f"Exported {len(written)} chart images to {folder}")
 
     def _open_command_palette(self):
         palette = CommandPalette(self)
@@ -348,6 +409,10 @@ class MainWindow(QMainWindow):
             "settings": self._show_settings,
             "setup": self.open_setup,
             "toggle_sidebar": self._toggle_sidebar,
+            "export.pdf": lambda: self.export_report("pdf"),
+            "export.md": lambda: self.export_report("md"),
+            "export.json": lambda: self.export_report("json"),
+            "export.charts": self.export_charts,
         }
         action = commands.get(key)
         if action:
@@ -607,6 +672,9 @@ class MainWindow(QMainWindow):
         self._guild_info_worker.start()
 
     def closeEvent(self, event):
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self._chart_menu)
         self._console_dock.cleanup()
         self.profile_switcher.wait_for_counts()
         self.settings_view.identity_panel.wait_for_tagging()

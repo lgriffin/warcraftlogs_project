@@ -435,6 +435,8 @@ def build_consumable_trend_chart(consumable_trend: list[dict]) -> QChartView:
 class SpiderChartWidget(QWidget):
     """Custom-painted radar chart for multi-dimensional character comparison."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     LABELS = ["Healing", "Damage", "Mitigation", "Active Time", "Activity", "Consumables", "Consistency"]
     KEYS = ["healing", "damage", "mitigation", "active_time", "activity", "consumables", "consistency"]
     DESCRIPTIONS = {
@@ -554,6 +556,8 @@ class SpiderChartWidget(QWidget):
 
 class ComparisonSpiderChart(QWidget):
     """Radar chart with multiple overlaid character datasets and clickable legend."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     character_removed = Signal(str)
 
@@ -709,6 +713,8 @@ class ComparisonSpiderChart(QWidget):
 
 class CalendarHeatmapWidget(QWidget):
     """GitHub-style contribution heatmap colored by raid performance."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     def __init__(self, raid_data: list[dict], parent=None):
         super().__init__(parent)
@@ -1277,6 +1283,8 @@ def build_tank_mitigation_bar_chart(data: list[dict]) -> QChartView:
 class ConsumableHeatmapWidget(QWidget):
     """Character x consumable grid heatmap colored by avg usage per raid."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     def __init__(self, compliance: dict, parent=None):
         super().__init__(parent)
         self._compliance = compliance
@@ -1377,6 +1385,8 @@ class ConsumableHeatmapWidget(QWidget):
 class ConsumableTimelineHeatmap(QWidget):
     """Player x minute heatmap showing when a consumable was used during a raid."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     def __init__(self, heatmap_data: dict, parent=None):
         super().__init__(parent)
         self._data = heatmap_data
@@ -1474,6 +1484,8 @@ class ConsumableTimelineHeatmap(QWidget):
 
 class OverlayTimelineHeatmap(QWidget):
     """Combined heatmap overlaying guild (green) and reference (blue) players."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     def __init__(self, guild_data: dict, ref_data: dict, parent=None):
         super().__init__(parent)
@@ -1627,6 +1639,8 @@ class OverlayTimelineHeatmap(QWidget):
 class DebuffTimelineWidget(QWidget):
     """Horizontal timeline bars showing debuff uptime per boss fight."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._uptimes: list = []
@@ -1742,6 +1756,8 @@ class DebuffTimelineWidget(QWidget):
 
 class CancelledCastTimelineWidget(QWidget):
     """Timeline showing boss ability lanes with cancelled-cast markers overlaid."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     _MARKER_SIZE = 8
     _NAME_COL_W = 160
@@ -1993,6 +2009,8 @@ class CancelledCastTimelineWidget(QWidget):
 class ClassCastTimelineWidget(QWidget):
     """Multi-lane Gantt chart showing spell casts per player."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     _NAME_COL_W = 160
     _PLAYER_HEADER_H = 24
     _SPELL_ROW_H = 18
@@ -2169,6 +2187,8 @@ class ClassCastTimelineWidget(QWidget):
 
 class ResourceTimelineWidget(QWidget):
     """Filled area chart of resource level over time with waste event markers."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     _LEFT_MARGIN = 60
     _RIGHT_MARGIN = 20
@@ -2348,6 +2368,8 @@ class ResourceTimelineWidget(QWidget):
 
 class CooldownSynergyWidget(QWidget):
     """Gantt chart showing cooldown activations relative to Heroism windows."""
+
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
 
     _NAME_COL_W = 160
     _SCORE_COL_W = 50

@@ -999,6 +999,8 @@ class _H2HEncounterModel(QAbstractTableModel):
 class _ConsumableComparisonChart(QWidget):
     """Grouped horizontal bar chart comparing guild vs reference consumable usage."""
 
+    exportable_chart = True  # the window's Export finds it; right-click saves it as an image
+
     @property
     def GUILD_COLOR(self) -> QColor:
         return QColor(COLORS["accent"])
