@@ -49,14 +49,15 @@ REPORT_TABS: tuple[ReportTab, ...] = (
 )
 
 # The view names Warcraft Logs puts in a report URL's ``type=``, mapped to the tab that shows the same thing.
+# Damage done is one view there and two tabs here, so it offers both.
 _WCL_VIEW_TABS = {
-    "healing": "healers",
-    "damage-taken": "tanks",
-    "damage-done": "melee",
-    "casts": "cast_efficiency",
-    "interrupts": "interrupts",
-    "debuffs": "debuff_uptime",
-    "summary": "composition",
+    "healing": ("healers",),
+    "damage-taken": ("tanks",),
+    "damage-done": ("melee", "ranged"),
+    "casts": ("cast_efficiency",),
+    "interrupts": ("interrupts",),
+    "debuffs": ("debuff_uptime",),
+    "summary": ("composition",),
 }
 
 _TABS_BY_KEY = {tab.key: tab for tab in REPORT_TABS}
@@ -142,8 +143,8 @@ class ReportIndex:
         if not query:
             return []
         linked = self._linked_report(query)
-        if linked is not None:
-            return [linked]
+        if linked:
+            return linked
 
         raid_words, tab_keys = self._split(query)
         tabs = [tab for tab in REPORT_TABS if tab.key in tab_keys]
@@ -154,22 +155,26 @@ class ReportIndex:
             raids = raids[:_TAB_ONLY_RAIDS]
         if not tabs:
             return [_hit(raid) for raid in raids[:limit]]
-        return [_hit(raid, tab) for raid in raids for tab in tabs][:limit]
+        hits = [_hit(raid, tab) for raid in raids for tab in tabs]
+        # A tab word can also be a raid's own word ("Tim", "trash run"): those raids follow, at their default tab.
+        words = _WORD_RE.findall(query.lower())
+        hits += [_hit(raid) for raid, text in self._raids if all(word in text for word in words)]
+        return hits[:limit]
 
-    def _linked_report(self, query: str) -> SearchHit | None:
-        """A pasted report code or Warcraft Logs URL, opened at the tab its ``type=`` names."""
+    def _linked_report(self, query: str) -> list[SearchHit]:
+        """A pasted report code or Warcraft Logs URL, opened at the tabs its ``type=`` names."""
         if " " in query:
-            return None
+            return []
         code = parse_report_code(query)
         if code is None:
-            return None
-        tab = _url_tab(query)
+            return []
+        tabs = _url_tabs(query) or (None,)
         raid = self._by_code.get(code)
-        if raid is None and "/" not in query and not any(c.isdigit() for c in code):
-            return None  # a sixteen-letter word, not a code: codes we have not stored all carry a digit
+        if raid is None and "/" not in query and code.isalpha() and code.islower():
+            return []  # a sixteen-letter word, not a code: codes mix cases or carry digits
         if raid is None:
-            return SearchHit(report_id=code, title=code, tab=tab, stored=False)
-        return _hit(raid, tab)
+            return [SearchHit(report_id=code, title=code, tab=tab, stored=False) for tab in tabs]
+        return [_hit(raid, tab) for tab in tabs]
 
     @staticmethod
     def _split(query: str) -> tuple[list[str], set[str]]:
@@ -192,14 +197,13 @@ class ReportIndex:
         return raid_words, common or set.union(*named)
 
 
-def _url_tab(text: str) -> ReportTab | None:
+def _url_tabs(text: str) -> tuple[ReportTab, ...]:
     if "://" not in text and "type=" not in text:
-        return None
+        return ()
     parsed = urlparse(text)
     params = parse_qs(parsed.query) | parse_qs(parsed.fragment)
     view = (params.get("type") or [""])[0]
-    key = _WCL_VIEW_TABS.get(view)
-    return _TABS_BY_KEY[key] if key else None
+    return tuple(_TABS_BY_KEY[key] for key in _WCL_VIEW_TABS.get(view, ()))
 
 
 class SearchService:

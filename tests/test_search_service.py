@@ -100,6 +100,27 @@ def test_a_sixteen_letter_word_is_not_a_report_code(index):
     assert index.search("serpentshrinecav") == []
 
 
+def test_an_unstored_code_of_letters_alone_is_still_a_code(index):
+    [hit] = index.search("NewRaidNewRaidAb")
+    assert (hit.report_id, hit.stored) == ("NewRaidNewRaidAb", False)
+
+
+def test_a_damage_done_link_offers_both_damage_tabs(index):
+    url = f"https://fresh.warcraftlogs.com/reports/{KARA}#type=damage-done"
+    assert _found(index.search(url)) == [(KARA, "melee"), (KARA, "ranged")]
+
+
+def test_the_full_boss_vs_trash_name_finds_that_tab(index):
+    assert _found(index.search("kara boss vs trash")) == [(KARA, "boss_vs_trash")]
+
+
+def test_a_raid_named_with_a_tab_word_is_listed_after_the_tab_hits():
+    raids = [*RAIDS, {"report_id": "TimsRaidTimsRai1", "title": "Kara", "owner": "Tim", "raid_date": "2026-09-01"}]
+    found = _found(ReportIndex(raids).search("tim"))
+    assert found[:3] == [(MAG, "timeline"), (GRUUL, "timeline"), (KARA, "timeline")]
+    assert found[-1] == ("TimsRaidTimsRai1", None)
+
+
 def test_the_label_shows_date_title_zone_and_tab(index):
     [hit] = index.search("kara healing")
     assert isinstance(hit, SearchHit)

@@ -40,6 +40,12 @@ class TestCommandPalette:
             qtbot.keyClick(palette, Qt.Key.Key_Return)
         assert signal.args == [KARA, "Consumables"]
 
+    def test_enter_in_the_focused_search_box_opens_the_raid(self, qtbot, palette):
+        qtbot.keyClicks(palette._input, "kara healing")
+        with qtbot.waitSignal(palette.open_report) as signal:
+            qtbot.keyClick(palette._input, Qt.Key.Key_Return)
+        assert signal.args == [KARA, "Healers"]
+
     def test_a_raid_without_a_tab_word_opens_at_its_default_tab(self, qtbot, palette):
         palette._input.setText("karazhan")
         with qtbot.waitSignal(palette.open_report) as signal:
