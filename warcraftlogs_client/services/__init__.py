@@ -61,8 +61,11 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import ReferenceComparison as ReferenceComparison
     from wcl_app import ReferenceRequestError as ReferenceRequestError
     from wcl_app import ReferenceService as ReferenceService
+    from wcl_app import ReportIndex as ReportIndex
     from wcl_app import ReportRef as ReportRef
     from wcl_app import RoleOverrideService as RoleOverrideService
+    from wcl_app import SearchHit as SearchHit
+    from wcl_app import SearchService as SearchService
     from wcl_app import SetupError as SetupError
     from wcl_app import Spread as Spread
     from wcl_app import StoredRaid as StoredRaid
@@ -94,6 +97,7 @@ for _name in (
     "raids",
     "reference",
     "roles",
+    "search",
     "themes",
 ):
     sys.modules[f"{__name__}.{_name}"] = importlib.import_module(f"wcl_app.{_name}")
