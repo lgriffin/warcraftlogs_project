@@ -147,3 +147,12 @@ def test_a_storage_failure_leaves_an_empty_index_that_says_why():
     index = SearchService(AppContext(config={}, storage=Broken)).index()
     assert (len(index), index.error) == (0, "database is locked")
     assert index.search(f"https://fresh.warcraftlogs.com/reports/{KARA}")[0].stored is False
+
+
+def test_punctuation_alone_finds_nothing(index):
+    assert index.search("?!") == []
+
+
+def test_a_raid_without_a_readable_date_is_still_found_by_title():
+    index = ReportIndex([{"report_id": KARA, "title": "Kara", "raid_date": "someday"}, {"title": "no code"}])
+    assert (len(index), _found(index.search("kara"))) == (1, [(KARA, None)])
