@@ -27,6 +27,7 @@ from wcl_app.home import HomeLayout, HomePage, HomeService, HomeWidget, JsonLayo
 from wcl_app.identity import DiscordNotConfigured, IdentityService
 from wcl_app.lineage import CharacterLineage, Spread, character_lineage
 from wcl_app.my_characters import MyCharacters, MyCharactersService
+from wcl_app.onboarding import GuildMatch, JsonConfigStore, MemoryConfigStore, OnboardingService, SetupError
 from wcl_app.player_page import AddResult, PlayerLog, PlayerPageData, PlayerPageService, PlayerRef, parse_report_code
 from wcl_app.players import PlayerService
 from wcl_app.profiles import JsonProfileStore, Profile, ProfileService, ProfileSet
@@ -55,6 +56,7 @@ __all__ = [
     "Chart",
     "ChartError",
     "DiscordNotConfigured",
+    "GuildMatch",
     "HealingService",
     "HomeLayout",
     "HomePage",
@@ -64,10 +66,13 @@ __all__ = [
     "HubMemberMismatch",
     "HubNotLinked",
     "IdentityService",
+    "JsonConfigStore",
     "JsonLayoutStore",
     "JsonProfileStore",
+    "MemoryConfigStore",
     "MyCharacters",
     "MyCharactersService",
+    "OnboardingService",
     "Palette",
     "PlayerBadges",
     "PlayerLog",
@@ -91,6 +96,7 @@ __all__ = [
     "ReportRef",
     "RoleOverrideService",
     "Series",
+    "SetupError",
     "Spread",
     "StoredRaid",
     "Theme",

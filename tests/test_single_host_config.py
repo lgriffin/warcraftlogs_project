@@ -97,6 +97,8 @@ class TestTheAccessors:
         assert configured_guild_id({"guild_id": ""}) is None
         assert configured_guild_id({"guild_id": "toads"}) is None
         assert configured_guild_id({"guild_id": True}) is None
+        assert configured_guild_id({"guild_id": 0}) is None  # the template's and Settings' "no guild"
+        assert configured_guild_id({"guild_id": "-3"}) is None
         assert configured_guild_id({"guild_id": None}) is None
         assert configured_guild_id({}) is None
 

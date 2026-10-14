@@ -98,11 +98,18 @@ python -m warcraftlogs_client.gui.app
 
 ### 5. Configure API Credentials
 
-1. Go to the [WarcraftLogs API Client Management](https://www.warcraftlogs.com/api/clients/) page and create a client
-2. Open the **Settings** tab in the app
-3. Enter your Client ID and Client Secret
-4. Set your Guild ID
-5. Click **Save Settings**
+The first time the app opens without API keys it starts **Setup**, which walks you through it:
+
+1. **API keys.** "Open Warcraft Logs" takes you to the [API client page](https://www.warcraftlogs.com/api/clients/).
+   Create a client with any name, give it the redirect URL Setup shows (`http://localhost:8764/callback`, used by
+   Settings' "Authenticate"), and paste its Client ID and Client Secret back. Setup checks them with Warcraft Logs
+   before going on.
+2. **Your guild.** Paste a link to your guild's Warcraft Logs page or to any report your guild logged, or type the
+   guild's name with its server and region. Setup finds the guild id, name and server for you, and the Warcraft Logs
+   site (Anniversary, Classic Era, Season of Discovery or retail) imports should use. "Skip guild" keeps just the keys.
+
+Run it again from **Settings > Run Setup** or the command palette (Ctrl+F). In Settings, **Find Guild...** looks a
+guild up the same way, and **Get API Keys** opens the client page.
 
 ---
 

@@ -27,6 +27,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import Chart as Chart
     from wcl_app import ChartError as ChartError
     from wcl_app import DiscordNotConfigured as DiscordNotConfigured
+    from wcl_app import GuildMatch as GuildMatch
     from wcl_app import HealingService as HealingService
     from wcl_app import HomeLayout as HomeLayout
     from wcl_app import HomePage as HomePage
@@ -40,6 +41,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import JsonProfileStore as JsonProfileStore
     from wcl_app import MyCharacters as MyCharacters
     from wcl_app import MyCharactersService as MyCharactersService
+    from wcl_app import OnboardingService as OnboardingService
     from wcl_app import Palette as Palette
     from wcl_app import PlayerBadges as PlayerBadges
     from wcl_app import PlayerLog as PlayerLog
@@ -61,6 +63,7 @@ if TYPE_CHECKING:  # the names callers import through this alias
     from wcl_app import ReferenceService as ReferenceService
     from wcl_app import ReportRef as ReportRef
     from wcl_app import RoleOverrideService as RoleOverrideService
+    from wcl_app import SetupError as SetupError
     from wcl_app import Spread as Spread
     from wcl_app import StoredRaid as StoredRaid
     from wcl_app import Theme as Theme
@@ -84,6 +87,7 @@ for _name in (
     "identity",
     "lineage",
     "my_characters",
+    "onboarding",
     "player_page",
     "players",
     "profiles",

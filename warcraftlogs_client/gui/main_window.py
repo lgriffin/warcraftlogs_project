@@ -18,9 +18,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from wcl_core.common.errors import ConfigurationError
 
 from ..database import PerformanceDB
-from ..services import AppContext, CharacterService, ProfileService
+from ..services import AppContext, CharacterService, OnboardingService, ProfileService, SetupError
 from ..version import __version__
 from .characters_hub import CharactersHub
 from .command_palette import CommandPalette
@@ -33,6 +34,7 @@ from .raid_analysis_widget import RaidAnalysisWidget
 from .raid_group_view import RaidGroupView
 from .raids_hub import RaidsHub
 from .settings_view import SettingsView
+from .setup_wizard import SetupWizard
 from .styles import COLORS
 
 
@@ -302,6 +304,7 @@ class MainWindow(QMainWindow):
         self.raid_group_view.open_raid.connect(self._drill_into_raid)
 
         self.settings_view.status_message.connect(self._on_settings_saved)
+        self.settings_view.setup_requested.connect(self.open_setup)
         self.settings_view.appearance_panel.theme_applied.connect(self.theme_changed)
         self.settings_view.identity_panel.eras_changed.connect(self._on_eras_changed)
         self.settings_view.profiles_panel.profiles_changed.connect(self._on_profiles_edited)
@@ -343,6 +346,7 @@ class MainWindow(QMainWindow):
             "insights": lambda: self.nav_list.setCurrentRow(3),
             "raid_groups": lambda: self.nav_list.setCurrentRow(4),
             "settings": self._show_settings,
+            "setup": self.open_setup,
             "toggle_sidebar": self._toggle_sidebar,
         }
         action = commands.get(key)
@@ -554,7 +558,37 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self, msg: str):
         self.status_bar.showMessage(msg)
         if "saved" in msg.lower():
+            self._reload_config()
             self._load_guild_info()
+
+    def offer_setup(self) -> bool:
+        """Open first-run setup when there are no Warcraft Logs API keys yet; True when it opened."""
+        try:
+            needed = OnboardingService.desktop().needs_setup()
+        except SetupError as e:  # a broken config.json: Settings says what is wrong with it
+            self.status_bar.showMessage(str(e))
+            return False
+        if needed:
+            self.open_setup()
+        return needed
+
+    def open_setup(self) -> None:
+        """The setup window: API keys, then the guild. Saving reloads config and the guild header."""
+        wizard = SetupWizard(OnboardingService.desktop(), parent=self)
+        wizard.saved.connect(self._on_setup_saved)
+        wizard.exec()
+        wizard.deleteLater()
+
+    def _on_setup_saved(self, msg: str) -> None:
+        self.settings_view.reload_config()
+        self._on_settings_saved(msg)
+
+    def _reload_config(self) -> None:
+        """Give the window's context the config just saved, so its next Warcraft Logs call uses the new keys."""
+        try:
+            self._ctx.reload_config()
+        except ConfigurationError as e:
+            self.status_bar.showMessage(f"Saved, but config.json does not load: {e}")
 
     def _load_guild_info(self):
         """Show the guild imports come from: the active profile's, else the configured one."""

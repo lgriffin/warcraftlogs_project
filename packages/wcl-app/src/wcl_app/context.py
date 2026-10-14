@@ -172,6 +172,20 @@ class AppContext:
         if self._client is not None and not self._headless and self._client.api_url != wanted:
             self._client = None
 
+    def reload_config(self, config_file: str | None = None) -> None:
+        """Re-read config.json after first-run setup or Settings saved it; the desktop client is rebuilt from it.
+
+        The dict is updated in place, so services that were handed ``ctx.config`` see the new values too. Raises
+        ``ConfigurationError`` when the file does not load, leaving the old config in place.
+        """
+        from wcl_core.config import load_config
+
+        fresh = load_config(config_file)
+        self.config.clear()
+        self.config.update(fresh)
+        if not self._headless:
+            self._client = None
+
     @property
     def guild_id(self) -> int | None:
         """The guild imports come from: the profile's, else the configured one."""

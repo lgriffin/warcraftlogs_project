@@ -50,6 +50,7 @@ COMMANDS = [
     {"key": "insights", "label": "Insights", "hint": "Ctrl+4", "desc": "Performance trends and boss analytics"},
     {"key": "raid_groups", "label": "Raid Groups", "hint": "Ctrl+5", "desc": "Manage raid groups and members"},
     {"key": "settings", "label": "Settings", "hint": "Ctrl+,", "desc": "Application settings"},
+    {"key": "setup", "label": "Run Setup", "hint": "", "desc": "Warcraft Logs API keys and your guild"},
     {"key": "toggle_sidebar", "label": "Toggle Sidebar", "hint": "Ctrl+B", "desc": "Expand or collapse the sidebar"},
 ]
 
