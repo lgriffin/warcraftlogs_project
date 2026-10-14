@@ -513,9 +513,11 @@ class SettingsView(QWidget):
         service = OnboardingService.desktop()
         keys = (self.client_id_input.text(), self.client_secret_input.text())
         dlg = GuildFinderDialog(service, lambda: keys, parent=self)
-        if not dlg.exec() or dlg.guild is None:
-            return
+        accepted = dlg.exec()
         guild = dlg.guild
+        dlg.deleteLater()
+        if not accepted or guild is None:
+            return
         self.guild_id_input.setText(str(guild.id))
         self.guild_name_input.setText(guild.name)
         self.guild_server_input.setText(guild.server)

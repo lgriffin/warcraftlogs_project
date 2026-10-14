@@ -136,6 +136,7 @@ class GuildFinder(QWidget):
         self._keys = keys
         self.guild: GuildMatch | None = None
         self._worker = _Background(self, self._on_found, self._on_failed)
+        self._asked: tuple[str, str, Any, Any] | None = None  # the inputs the running search was asked with
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -188,6 +189,7 @@ class GuildFinder(QWidget):
         region = self.region_combo.currentData()
         site = self.site_combo.currentData()
         client_id, secret = self._keys()
+        self._asked = self._inputs()
 
         def find() -> GuildMatch:
             return self._service.find_guild(text, client_id, secret, server=server, region=region, game_version=site)
@@ -197,8 +199,19 @@ class GuildFinder(QWidget):
             self.find_button.setText(SEARCHING)
             self._say(SEARCHING, "text_dim")
 
+    def _inputs(self) -> tuple[str, str, Any, Any]:
+        return (
+            self.query_input.text(),
+            self.server_input.text(),
+            self.region_combo.currentData(),
+            self.site_combo.currentData(),
+        )
+
     def _on_found(self, guild: GuildMatch) -> None:
         self._idle()
+        if self._inputs() != self._asked:  # edited while Warcraft Logs answered: the answer is for other input
+            self._on_failed("The search changed while it ran. Press Find again.")
+            return
         self.guild = guild
         self._say(found_text(guild), "success")
         self.changed.emit(guild)

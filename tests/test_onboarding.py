@@ -54,9 +54,9 @@ class TestNeedsSetup:
         assert _service(TEMPLATE).saved_keys() == ("", "")
         assert _service({"client_id": " abc ", "client_secret": "xyz"}).saved_keys() == ("abc", "xyz")
 
-    def test_the_site_is_config_s_or_retail_without_one(self):
-        assert _service(TEMPLATE).site() == "fresh"
-        assert _service().site() == "retail"
+    def test_the_site_is_config_s_or_the_loader_s_default(self):
+        assert _service({"wcl_api_url": "https://sod.warcraftlogs.com/api/v2/client"}).site() == "sod"
+        assert _service().site() == "fresh"  # what load_config fills in when config names no site
 
     def test_placeholders(self):
         assert is_placeholder(None) and is_placeholder("") and is_placeholder("your_client_id_here")
@@ -122,6 +122,11 @@ class TestFindGuild:
             guild = _service().find_guild("https://fresh.warcraftlogs.com/reports/aBcD1234eFgH5678#fight=3", "a", "b")
         assert guild.id == 774065 and wcl.queries[0].variables == {"code": "aBcD1234eFgH5678"}
 
+    def test_a_report_on_another_site_says_so(self):
+        wcl = FakeWarcraftLogs().answer("reportData", {"reportData": {"report": None}})
+        with wcl.install(), pytest.raises(SetupError, match="no report aBcD1234eFgH5678 on the fresh site"):
+            _service(TEMPLATE).find_guild("aBcD1234eFgH5678", "a", "b")
+
     def test_a_personal_report_has_no_guild(self):
         wcl = FakeWarcraftLogs().answer("reportData", {"reportData": {"report": {"guild": None}}})
         with wcl.install(), pytest.raises(SetupError, match="personal log"):
@@ -152,6 +157,8 @@ class TestFindGuild:
             ("Amicable", "", "eu", "server and region"),
             ("Amicable", "Gehennas", "mars", "server and region"),
             ("https://fresh.warcraftlogs.com/character/eu/gehennas/toad", "", "", "not a Warcraft Logs guild"),
+            ("https://evil.example/guild/id/123?from=warcraftlogs.com", "", "", "not a Warcraft Logs link"),
+            ("warcraftlogs.com.evil.example/guild/id/123", "", "", "not a Warcraft Logs link"),
         ],
     )
     def test_input_it_cannot_use_is_refused_before_asking(self, text, server, region, message):
@@ -235,10 +242,16 @@ class TestSave:
         service = OnboardingService.desktop()
         assert isinstance(service.store, JsonConfigStore) and service.store.path == tmp_path / "config.json"
 
-    def test_a_config_without_a_site_gets_the_guild_site(self):
-        store = MemoryConfigStore()  # no wcl_api_url: imports would go to the retail site
-        OnboardingService(store).save("abc", "xyz", GuildMatch(774065, "Amicable", "Gehennas", "eu", "fresh"))
-        assert store.config["wcl_api_url"] == FRESH_API
+    def test_a_config_without_a_site_gets_a_retail_guild_site(self):
+        store = MemoryConfigStore()  # no wcl_api_url: imports go to the loader's default, the fresh site
+        OnboardingService(store).save("abc", "xyz", GuildMatch(1, "Method", "Tarren Mill", "eu", "retail"))
+        assert store.config["wcl_api_url"] == "https://www.warcraftlogs.com/api/v2/client"
+
+    def test_skipping_the_guild_on_a_new_config_names_no_guild(self, tmp_path):
+        path = tmp_path / "config.json"
+        OnboardingService(JsonConfigStore(path)).save("abc", "xyz")
+        assert json.loads(path.read_text())["guild_id"] == 0
+        assert AppContext.from_config_file(str(path)).guild_id is None  # not the loader's built-in guild
 
 
 class TestReloadConfig:

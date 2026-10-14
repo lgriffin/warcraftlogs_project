@@ -24,7 +24,7 @@ from pydantic import SecretStr
 from wcl_core.auth import TokenManager
 from wcl_core.client import DEFAULT_API_URL, WarcraftLogsClient
 from wcl_core.common.errors import AuthenticationError, WarcraftLogsError
-from wcl_core.config import as_secret, configured_api_url
+from wcl_core.config import AppConfig, as_secret, configured_api_url
 from wcl_core.game_version import GAME_VERSIONS, api_url_for, game_version_for_url, host_for
 from wcl_core.user_auth import DEFAULT_REDIRECT_PORT
 
@@ -54,6 +54,8 @@ _GUILD_ID_URL_RE = re.compile(r"/guild/(?:[a-z-]+/)?(\d+)(?:[/?#]|$)")
 _GUILD_NAME_URL_RE = re.compile(rf"/guild/({'|'.join(REGIONS)})/([^/?#]+)/([^/?#]+)")
 _REPORT_URL_RE = re.compile(r"/reports/([A-Za-z0-9]{16})(?:[/?#]|$)")
 _REPORT_CODE_RE = re.compile(r"^(?=.*\d)[A-Za-z0-9]{16}$")  # guild names have no digits; report codes do
+# The site imports use when config names none (``wcl_core.config`` fills it in on load).
+_DEFAULT_SITE_API_URL = AppConfig.wcl_api_url
 _API_ERRORS = (WarcraftLogsError, requests.RequestException, KeyError, TypeError, ValueError)
 
 
@@ -152,8 +154,9 @@ def _parse_guild_query(text: str, server: str, region: str) -> _GuildQuery:
     text = (text or "").strip()
     if not text:
         raise SetupError("Paste a link to your guild's Warcraft Logs page, or type its name.")
-    if "warcraftlogs.com" in text.lower():
-        url = text if "://" in text else f"https://{text}"
+    url = text if "://" in text else f"https://{text}"
+    host = (urlparse(url).hostname or "").lower()
+    if host == "warcraftlogs.com" or host.endswith(".warcraftlogs.com"):
         version = game_version_for_url(url)
         path = urlparse(url).path
         if match := _GUILD_ID_URL_RE.search(path):
@@ -169,6 +172,8 @@ def _parse_guild_query(text: str, server: str, region: str) -> _GuildQuery:
         if match := _REPORT_URL_RE.search(path):
             return _GuildQuery(report_code=match.group(1), game_version=version)
         raise SetupError("That link is not a Warcraft Logs guild or report page.")
+    if "/" in text:
+        raise SetupError("That is not a Warcraft Logs link. Paste your guild's page from warcraftlogs.com.")
     if text.isdigit():
         return _GuildQuery(guild_id=int(text))
     if _REPORT_CODE_RE.match(text):
@@ -206,7 +211,7 @@ class OnboardingService:
 
     def site(self) -> str:
         """The game version (Warcraft Logs site) config imports from; a name search looks there."""
-        return game_version_for_url(configured_api_url(self._config()) or DEFAULT_API_URL)
+        return game_version_for_url(configured_api_url(self._config()) or _DEFAULT_SITE_API_URL)
 
     def check_keys(self, client_id: str, client_secret: str | SecretStr) -> None:
         """Ask Warcraft Logs for a token with these keys; raises ``SetupError`` saying why it refused."""
@@ -243,7 +248,7 @@ class OnboardingService:
         )
         try:
             if query.report_code is not None:
-                found = client.get_report_guild(query.report_code)
+                found = self._report_guild(client, query.report_code, version)
                 if found is None:
                     raise SetupError("That report is a personal log, not a guild's. Try one your guild uploaded.")
             elif query.guild_id is not None:
@@ -266,9 +271,11 @@ class OnboardingService:
         """Keep the keys and, when given, the guild: its id, name and server, and its site when config's differs."""
         client_id, secret = self._keys(client_id, client_secret)
         values: dict[str, Any] = {"client_id": client_id, "client_secret": secret.get_secret_value()}
+        config = self._config()
         if guild is not None:
             values.update(self.guild_settings(guild))
-        config = self._config()
+        elif "guild_id" not in config:
+            values.update(guild_id=0)  # no guild yet; without the key the loader's built-in default would apply
         if is_placeholder(config.get("report_id")) and config.get("report_id"):
             values["report_id"] = ""  # the template's stand-in is not a report
         self.store.update(values)
@@ -281,6 +288,16 @@ class OnboardingService:
         if api_url and guild.game_version != self.site():
             values.update(wcl_api_url=api_url)  # a write, not a read of the default
         return values
+
+    @staticmethod
+    def _report_guild(client: WarcraftLogsClient, code: str, version: str) -> dict | None:
+        try:
+            return client.get_report_guild(code)
+        except ValueError as e:  # the report is not on this site, or the code is mistyped
+            raise SetupError(
+                f"Warcraft Logs has no report {code} on the {version} site. Check the code, or paste the report's "
+                "link so its site comes with it."
+            ) from e
 
     def _config(self) -> dict[str, Any]:
         return self.store.read()

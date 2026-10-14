@@ -275,16 +275,18 @@ def configured_api_url(config: Mapping[str, Any] | None = None) -> str | None:
 
 
 def configured_guild_id(config: Mapping[str, Any] | None = None) -> int | None:
-    """The guild id config names, or None when it names none or it is not a number."""
+    """The guild id config names, or None when it names none or it is not a positive number (the template and
+    Settings write 0 for "no guild")."""
     if config is None:
         config = _readable_config()
     value = config.get("guild_id")
     if value is None or isinstance(value, bool):
         return None
     try:
-        return int(value)
+        guild_id = int(value)
     except (TypeError, ValueError):
         return None
+    return guild_id if guild_id > 0 else None
 
 
 def _readable_config() -> dict[str, Any]:

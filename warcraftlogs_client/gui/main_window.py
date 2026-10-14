@@ -577,6 +577,7 @@ class MainWindow(QMainWindow):
         wizard = SetupWizard(OnboardingService.desktop(), parent=self)
         wizard.saved.connect(self._on_setup_saved)
         wizard.exec()
+        wizard.deleteLater()
 
     def _on_setup_saved(self, msg: str) -> None:
         self.settings_view.reload_config()

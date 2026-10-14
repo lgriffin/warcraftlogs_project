@@ -108,6 +108,16 @@ class TestSetupWizard:
         qtbot.waitUntil(lambda: wizard.finder.find_button.isEnabled(), timeout=5000)
         assert "server and region" in wizard.finder.result.text() and not wizard.next_button.isEnabled()
 
+    def test_a_search_edited_while_it_runs_is_not_taken(self, qtbot, wcl):
+        wizard, _ = _wizard(qtbot)
+        _check_keys(qtbot, wizard)
+        wizard.finder.query_input.setText("774065")
+        wizard.finder.find_button.click()
+        wizard.finder.query_input.setText("774066")
+        qtbot.waitUntil(lambda: wizard.finder.find_button.isEnabled(), timeout=5000)
+        assert wizard.finder.guild is None and "Press Find again" in wizard.finder.result.text()
+        assert not wizard.next_button.isEnabled()
+
     def test_skip_keeps_the_keys_without_a_guild(self, qtbot, wcl):
         wizard, store = _wizard(qtbot)
         saved = []
@@ -115,7 +125,7 @@ class TestSetupWizard:
         _check_keys(qtbot, wizard)
         wizard.skip_button.click()
         assert saved == ["Setup saved: API keys kept"]
-        assert store.config["client_id"] == "abc" and "guild_id" not in store.config
+        assert store.config["client_id"] == "abc" and store.config["guild_id"] == 0
 
     def test_back_returns_to_the_keys(self, qtbot, wcl):
         wizard, _ = _wizard(qtbot)

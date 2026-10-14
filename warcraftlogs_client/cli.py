@@ -255,7 +255,10 @@ def run_unified_analysis(args: argparse.Namespace, role: str | None = None) -> i
 
     reset_spell_manager()
     ctx = AppContext.desktop()
-    report_id = args.report_id if hasattr(args, "report_id") and args.report_id else ctx.config["report_id"]
+    report_id = args.report_id if hasattr(args, "report_id") and args.report_id else ctx.config.get("report_id")
+    if not report_id:
+        console.error("No report given: pass a report code, or set report_id in config.json for a default.")
+        return 1
     raids = RaidService(ctx)
 
     analysis = raids.analyze(report_id)

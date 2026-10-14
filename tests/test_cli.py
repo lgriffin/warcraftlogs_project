@@ -225,3 +225,13 @@ class TestRoleDispatch:
         monkeypatch.setattr("sys.argv", ["warcraftlogs", role])
         assert cli.main() == 0
         assert calls == [role]
+
+
+def test_unified_without_a_report_or_a_default_says_what_to_pass(monkeypatch, capsys):
+    from warcraftlogs_client import cli
+    from warcraftlogs_client.services import AppContext
+
+    monkeypatch.setattr(AppContext, "desktop", classmethod(lambda cls: AppContext(config={"report_id": ""})))
+    assert cli.run_unified_analysis(create_parser().parse_args(["unified"])) == 1
+    captured = capsys.readouterr()
+    assert "No report given" in captured.out + captured.err
