@@ -25,7 +25,7 @@ dev = [
     "pytest-bdd>=7.0",
     "hypothesis>=6.0",
     "pytest-xdist>=3.0",
-    "ruff==0.16.10",
+    "ruff==0.17.0",
     "mypy==2.4.0",
     "bandit[toml]==1.9.4",
     "pre-commit>=4.0",
