@@ -9,7 +9,11 @@ VENV_DIR="${WCL_VENV:-$REPO_DIR/.venv}"
 SECONDS_UP="${WCL_SMOKE_SECONDS:-15}"
 
 if ! command -v Xvfb >/dev/null 2>&1; then
-    if [ "$(id -u)" -eq 0 ]; then dnf install -y xorg-x11-server-Xvfb; else sudo dnf install -y xorg-x11-server-Xvfb; fi
+    if [ "$(id -u)" -eq 0 ]; then
+        dnf install -y xorg-x11-server-Xvfb
+    else
+        sudo dnf install -y xorg-x11-server-Xvfb
+    fi
 fi
 
 "$VENV_DIR/bin/warcraftlogs" --version

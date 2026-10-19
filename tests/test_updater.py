@@ -282,3 +282,9 @@ def test_only_windows_updates_itself():
     assert updater.self_update_supported("win32") is True
     assert updater.self_update_supported("linux") is False
     assert updater.self_update_supported("darwin") is False
+
+
+def test_manual_update_steps_name_the_linux_script_only_on_linux():
+    assert "scripts/install_linux.sh" in updater.manual_update_steps("linux")
+    assert "release" in updater.manual_update_steps("linux")  # a release bundle has no .git to pull
+    assert "install_linux" not in updater.manual_update_steps("darwin")

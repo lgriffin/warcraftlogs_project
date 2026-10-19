@@ -10,6 +10,10 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${WCL_VENV:-$REPO_DIR/.venv}"
+case "$VENV_DIR" in
+    /*) ;;
+    *) VENV_DIR="$PWD/$VENV_DIR" ;;  # the launchers and menu entry need an absolute path
+esac
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 DESKTOP_FILE="$APPS_DIR/warcraftlogs-analyzer.desktop"

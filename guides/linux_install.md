@@ -16,7 +16,9 @@ scripts/install_linux.sh
 
 Each release also publishes `WarcraftLogsAnalyzer-<tag>-linux.tar.gz`, the tag's source, listed in the release's
 signed `SHA256SUMS` (check it as the README shows), and released only after it installed and started on AlmaLinux 9.
-Unpack it and run the same script inside it.
+Unpack it and run the same script inside it. To update a bundle install, unpack the newer bundle over the same
+folder (`tar -xzf WarcraftLogsAnalyzer-<tag>-linux.tar.gz --strip-components=1 -C <folder>`), so your data stays, and
+run the script again.
 
 The script:
 
@@ -46,7 +48,8 @@ inside `site-packages`. All of them are in `.gitignore`.
 
 ## Updating
 
-The in-app updater downloads the Windows build, so on Linux it stays off and Settings says how to update instead:
+The in-app updater downloads the Windows build, so on Linux it stays off and Settings says how to update instead. From a
+git checkout:
 
 ```bash
 git pull

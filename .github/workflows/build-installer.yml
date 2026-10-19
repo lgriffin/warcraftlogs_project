@@ -72,7 +72,8 @@ jobs:
       - name: Create portable zip
         run: |
           $ref = "${{ github.ref_name }}" -replace '/', '-'
-          Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath "dist\WarcraftLogsAnalyzer-$ref-portable.zip"
+          $zip = "dist\WarcraftLogsAnalyzer-$ref-portable.zip"
+          Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath $zip
 
       - name: Build installer with Inno Setup
         id: inno

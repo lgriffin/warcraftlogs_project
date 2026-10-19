@@ -369,12 +369,12 @@ class SettingsView(QWidget):
         self.auto_update_check.setChecked(True)
         update_layout.addWidget(self.auto_update_check)
 
-        from ..updater import self_update_supported
+        from ..updater import manual_update_steps, self_update_supported
 
         if not self_update_supported():
-            # The release zip is the Windows build; a source install updates with git pull and the install script.
+            # The release zip is the Windows build; a source install updates itself from source.
             self.auto_update_check.setEnabled(False)
-            manual = QLabel("To update, run git pull and then scripts/install_linux.sh in the app's folder.")
+            manual = QLabel(f"To update, {manual_update_steps()}.")
             manual.setWordWrap(True)
             manual.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 12px;")
             update_layout.addWidget(manual)
@@ -591,7 +591,7 @@ class SettingsView(QWidget):
         self._update_status_label.setVisible(True)
         self._update_status_label.repaint()
 
-        from ..updater import check_for_update, self_update_supported
+        from ..updater import check_for_update, manual_update_steps, self_update_supported
 
         try:
             info = check_for_update(force=True)
@@ -600,7 +600,7 @@ class SettingsView(QWidget):
             return
 
         if info and not self_update_supported():
-            self._update_status_label.setText(f"v{info.version} is out: run git pull and scripts/install_linux.sh")
+            self._update_status_label.setText(f"v{info.version} is out: {manual_update_steps()}")
         elif info:
             self._update_status_label.setVisible(False)
             from .update_dialog import UpdateDialog

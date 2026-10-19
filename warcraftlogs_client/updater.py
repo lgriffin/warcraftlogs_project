@@ -66,6 +66,16 @@ def self_update_supported(platform: str = sys.platform) -> bool:
     return platform == "win32"
 
 
+def manual_update_steps(platform: str = sys.platform) -> str:
+    """How to update where the app cannot update itself (see ``self_update_supported``)."""
+    if platform.startswith("linux"):
+        return (
+            "run git pull in the app's folder (or unpack the newest Linux release over it), "
+            "then scripts/install_linux.sh"
+        )
+    return "run git pull in the app's folder, then pip install -e . again"
+
+
 def _parse_version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.lstrip("v").split("."))
 
