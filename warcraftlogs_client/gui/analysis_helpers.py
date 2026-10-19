@@ -1,23 +1,17 @@
 """Shared analysis helpers used by both the main raid view and Head-to-Head comparison."""
 
-from collections import defaultdict
-
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
 from PySide6.QtGui import QColor
+
+# The boss/trash split and engineering stats moved to the raid pages service, which the Toads Hub's Logs page shares.
+from ..services.raid_pages import ENGINEERING_ITEMS  # noqa: F401
+from ..services.raid_pages import classify_consumable_usage as classify_consumable_usage
+from ..services.raid_pages import compute_engineering_stats as compute_engineering_stats
 
 # The shared-encounter scoping moved to the reference service; the Head to Head view imports it from here.
 from ..services.reference import scope_to_window as scope_analysis_to_window  # noqa: F401
 from ..services.reference import shared_encounter_window as compute_shared_encounter_window  # noqa: F401
 from .styles import COLORS
-
-ENGINEERING_ITEMS = {
-    "Super Sapper Charge",
-    "Goblin Sapper Charge",
-    "Adamantite Grenade",
-    "Gnomish Flame Turret",
-    "Fel Iron Bomb",
-    "Bomb",
-}
 
 
 class NumericSortProxy(QSortFilterProxyModel):
@@ -104,52 +98,6 @@ def build_heatmap_data(analysis, consumable_name):
     grid = {name: player_data[name]["buckets"] for name in sorted_players}
 
     return {"players": sorted_players, "minutes": total_minutes, "grid": grid}
-
-
-def compute_engineering_stats(analysis):
-    """Compute min/median/max avg-damage-per-cast for engineering items."""
-    from statistics import median as stat_median
-
-    item_data = defaultdict(lambda: {"player_avgs": [], "total_casts": 0, "total_damage": 0, "users": 0})
-    all_players = list(analysis.dps or [])
-    for player in all_players:
-        for ability in player.abilities or []:
-            if ability.spell_name not in ENGINEERING_ITEMS:
-                continue
-            if ability.casts <= 0:
-                continue
-            avg_dmg = ability.total_amount / ability.casts
-            entry = item_data[ability.spell_name]
-            entry["player_avgs"].append(avg_dmg)
-            entry["total_casts"] += ability.casts
-            entry["total_damage"] += ability.total_amount
-            entry["users"] += 1
-
-    result = {}
-    for name, data in item_data.items():
-        avgs = sorted(data["player_avgs"])
-        result[name] = {
-            "total_casts": data["total_casts"],
-            "total_damage": data["total_damage"],
-            "users": data["users"],
-            "min_avg": avgs[0] if avgs else 0,
-            "median_avg": stat_median(avgs) if avgs else 0,
-            "max_avg": avgs[-1] if avgs else 0,
-        }
-    return result
-
-
-def classify_consumable_usage(analysis):
-    """Classify each consumable use as boss or trash based on encounter windows."""
-    encounters = analysis.encounters or []
-    intervals = [(e.start_time, e.end_time) for e in encounters]
-
-    by_name = defaultdict(lambda: {"boss": 0, "trash": 0})
-    for cu in analysis.consumables or []:
-        for ts in cu.timestamps:
-            in_boss = any(s <= ts <= e for s, e in intervals)
-            by_name[cu.consumable_name]["boss" if in_boss else "trash"] += 1
-    return dict(by_name)
 
 
 class TimelineTableModel(QAbstractTableModel):

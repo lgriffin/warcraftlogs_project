@@ -91,13 +91,15 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `packages/wcl-store/src/wcl_store/postgres/migrations/` — Alembic migrations for the Postgres schema, numbered
   `0001_…`; `wcl_store.postgres.upgrade(url)` runs them
 - `packages/wcl-app/` — `wcl_app`: the application services (`AppContext`, `RaidService`, `PlayerService`,
-  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, `BridgeService`,
+  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, `RaidPageService`,
+  `BridgeService`,
   lineage); depends only on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it.
   Headless hosts use `AppContext.headless(client, storage)`
 - `guides/` — project documentation; `guides/CHARTER.md` is the engineering charter (requirement IDs and statuses,
   audited by `tests/test_charter.py`; change a status in the pull request that changes the check),
   `guides/home_widgets.md` the Home widget payload contract the Toads Hub shares, `guides/badges.md` the Toads badge
-  payload and its thresholds, `guides/reference_comparison.md` the reference comparison payload, and
+  payload and its thresholds, `guides/reference_comparison.md` the reference comparison payload, `guides/raid_pages.md` the raid list and raid
+  analysis payload the hub's Logs page renders, and
   `guides/linux_install.md` the Linux install (`scripts/install_linux.sh`, checked by CI's `almalinux` job)
 
 ## Conventions

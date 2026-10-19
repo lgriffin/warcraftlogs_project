@@ -31,6 +31,7 @@ from wcl_app.onboarding import GuildMatch, JsonConfigStore, MemoryConfigStore, O
 from wcl_app.player_page import AddResult, PlayerLog, PlayerPageData, PlayerPageService, PlayerRef, parse_report_code
 from wcl_app.players import PlayerService
 from wcl_app.profiles import JsonProfileStore, Profile, ProfileService, ProfileSet
+from wcl_app.raid_pages import RaidPage, RaidPageService, RaidSummary
 from wcl_app.raids import ProfileSiteUnknown, RaidService, ReferenceAuthRequired, ReportRef
 from wcl_app.reference import ReferenceComparison, ReferenceRequestError, ReferenceService, StoredRaid
 from wcl_app.roles import ReanalysisResult, RoleOverrideService
@@ -89,7 +90,10 @@ __all__ = [
     "ProfileSet",
     "ProfileSiteUnknown",
     "ProgressCallback",
+    "RaidPage",
+    "RaidPageService",
     "RaidService",
+    "RaidSummary",
     "ReanalysisResult",
     "ReferenceAuthRequired",
     "ReferenceComparison",
