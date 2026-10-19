@@ -29,7 +29,7 @@ from wcl_core.game_version import RETAIL, game_version_for_url, host_for
 from wcl_core.models import RaidAnalysis
 from wcl_store import StorageError
 
-from wcl_app.context import AppContext, StorageFactory
+from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
 
 RAID_PAGE_VERSION = 1
 
@@ -204,7 +204,9 @@ class BossHistory:
                     "duration_ms": t.duration_ms,
                     "damage": t.damage,
                     "healing": t.healing,
-                    "players": [asdict(p) for p in sorted(t.players.values(), key=lambda p: p.name.casefold())],
+                    "players": [
+                        asdict(p) for p in sorted(t.players.values(), key=lambda p: (p.name.casefold(), p.role))
+                    ],
                 }
                 for day, t in sorted(self.days.items())
             },
@@ -391,7 +393,8 @@ def boss_history(pages: Iterable[RaidPage]) -> list[BossHistory]:
             totals.damage += e.damage
             totals.healing += e.healing
             for p in e.players:
-                mine = totals.players.setdefault(p.name, BossPlayerTotals(p.name, p.player_class, p.role))
+                # One row per character and role, as the desktop breakdown keeps a respec apart.
+                mine = totals.players.setdefault(f"{p.name}|{p.role}", BossPlayerTotals(p.name, p.player_class, p.role))
                 mine.kills += 1
                 mine.damage += p.damage
                 mine.healing += p.healing
@@ -417,25 +420,29 @@ def summary_of(analysis: RaidAnalysis) -> RaidSummary:
 class RaidPageService:
     """Stored guild raids as list rows and pages, read through the repository only."""
 
-    def __init__(self, storage: StorageFactory):
+    def __init__(self, storage: StorageFactory, scope: ScopeSource = None):
         self._storage = storage
+        # A scope, or a callable giving the active profile's at read time; None lists every guild raid.
+        self._scope = scope
 
     @classmethod
     def from_context(cls, ctx: AppContext) -> RaidPageService:
-        return cls(ctx.repository)
+        return cls(ctx.repository, scope=lambda: ctx.scope)
 
     def _rows(self, limit: int) -> list[dict[str, Any]]:
         with self._storage() as db:
-            return db.get_raids_by_source("guild", limit=limit)
+            return db.get_raids_by_source("guild", limit=limit, scope=resolve_scope(self._scope))
 
     def index(self, limit: int = 1000) -> list[RaidSummary]:
         """Every stored guild raid, newest first."""
         return [_summary(r, _report_url(str(r["report_id"]), r.get("game_version"))) for r in self._rows(limit)]
 
     def page(self, report_id: str, summary: RaidSummary | None = None) -> RaidPage | None:
-        """The raid's page, or None when it is not stored or cannot be read back."""
+        """The guild raid's page, or None when it is not a stored guild raid or cannot be read back."""
         try:
             with self._storage() as db:
+                if db.get_raid_source(report_id) != "guild":
+                    return None
                 analysis = db.get_raid_analysis(report_id)
         except StorageError:
             return None

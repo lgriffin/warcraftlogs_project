@@ -15,11 +15,13 @@ when a field changes meaning.
 | `size` | players in the raid |
 | `url` | the report on its Warcraft Logs site |
 
-`index(limit=1000)` lists every stored guild raid, newest first.
+`index(limit=1000)` lists every stored guild raid, newest first, inside the service's scope (`from_context` follows
+the active raid profile).
 
 ## `RaidPage.to_dict()`: one raid's analysis
 
-`page(report_id, summary=None)` returns `None` for a raid that is not stored or cannot be read back. Numbers are raw;
+`page(report_id, summary=None)` returns `None` for a raid that is not a stored guild raid (a reference report included)
+or cannot be read back. Numbers are raw;
 the frontend formats them. Each section matches a tab of the desktop raid view:
 
 | Field | Desktop tab | Rows |
@@ -44,7 +46,8 @@ of the page.
 ## `boss_history(pages)`: each boss across raids, by weekday
 
 The desktop Boss History filters by weekday; the payload keeps each weekday apart so a frontend adds the days it shows
-and divides by the kills. Bosses come most kills first.
+and divides by the kills. Each player row is one character in one role, so a respec keeps its own row. Bosses come most
+kills first.
 
 ```json
 {"encounter_id": 623, "name": "Hydross the Unstable",

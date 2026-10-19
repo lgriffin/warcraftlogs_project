@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import replace
 from datetime import datetime
 
 import pytest
 from wcl_app import AppContext, RaidPage, RaidPageService, RaidSummary
 from wcl_app.raid_pages import (
     RAID_PAGE_VERSION,
+    EncounterPlayer,
     boss_history,
     build_page,
     classify_consumable_usage,
@@ -18,7 +20,7 @@ from wcl_app.raid_pages import (
     summary_of,
     weekday_of,
 )
-from wcl_store import StorageError
+from wcl_store import RaidScope, StorageError
 from wcl_store.sqlite import PerformanceDB
 
 from warcraftlogs_client.models import (
@@ -215,3 +217,30 @@ def test_helpers(build_analysis):
         {"spell_name": "Sunder Armor", "fight_name": "Hydross the Unstable", "uptime_percent": 91.3}
     ]
     assert page.totem_uptimes == []
+
+
+def test_reference_reports_are_not_guild_pages(storage, build_analysis):
+    ref = "ReferenceRaidCCC"
+    with storage() as repo:
+        repo.import_raid(_raid(build_analysis, ref, datetime(2026, 10, 15, 20, 0), 1), source="reference")
+    service = RaidPageService(storage)
+    assert service.index() == []
+    assert service.page(ref) is None
+
+
+def test_the_scope_narrows_the_list(raids, storage):
+    since_sunday = RaidScope(since="2026-10-18 00:00:00")
+    assert [r.report_id for r in RaidPageService(storage, scope=since_sunday).index()] == [SUN]
+    assert [r.report_id for r in RaidPageService(storage, scope=lambda: None).index()] == [SUN, WED]
+
+
+def test_boss_history_keeps_a_respec_apart(raids):
+    page = raids.page(WED)
+    assert page is not None
+    encounter = page.encounters[0]
+    player = encounter.players[0]
+    healer = EncounterPlayer(player.name, player.player_class, "healer", 0, 50, 0, 90.0)
+    respec = replace(page, encounters=[replace(encounter, players=[healer])])
+    rows = boss_history([page, respec])[0].to_dict()["days"]["2"]["players"]
+    mine = [(p["name"], p["role"], p["kills"]) for p in rows if p["name"] == player.name]
+    assert sorted(mine) == sorted([(player.name, player.role, 1), (player.name, "healer", 1)])

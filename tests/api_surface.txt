@@ -420,7 +420,7 @@ wcl_app.RaidPage.warnings: list[str] = field(default_factory=list)
 wcl_app.RaidPage.version: int = RAID_PAGE_VERSION
 wcl_app.RaidPage.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.RaidPageService: class RaidPageService
-wcl_app.RaidPageService.__init__: def __init__(self, storage: StorageFactory)
+wcl_app.RaidPageService.__init__: def __init__(self, storage: StorageFactory, scope: ScopeSource=None)
 wcl_app.RaidPageService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> RaidPageService
 wcl_app.RaidPageService.index: def index(self, limit: int=1000) -> list[RaidSummary]
 wcl_app.RaidPageService.page: def page(self, report_id: str, summary: RaidSummary | None=None) -> RaidPage | None
