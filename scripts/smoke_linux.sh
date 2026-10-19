@@ -24,10 +24,16 @@ trap 'kill "$XVFB_PID" 2>/dev/null || true' EXIT
 sleep 2
 
 # The real X11 (xcb) platform plugin, not offscreen: this is what loads the dnf packages the install script adds.
+# From an unrelated directory: the app must still find its data in the checkout (wcl_core.paths), not the cwd.
+cd "$(mktemp -d)"
 status=0
 DISPLAY=:99 QT_QPA_PLATFORM=xcb timeout "$SECONDS_UP" "$VENV_DIR/bin/warcraftlogs-gui" || status=$?
 if [ "$status" -ne 124 ]; then
     echo "warcraftlogs-gui exited with status $status before $SECONDS_UP seconds were up" >&2
+    exit 1
+fi
+if [ -e config.json ]; then
+    echo "warcraftlogs-gui wrote config.json into the working directory instead of $REPO_DIR" >&2
     exit 1
 fi
 echo "warcraftlogs-gui stayed up for $SECONDS_UP seconds on X11."
