@@ -455,7 +455,9 @@ class MainWindow(QMainWindow):
             self._version_label.setVisible(False)
 
     def _auto_check_updates(self):
-        if not self._ctx.config.get("auto_check_updates", True):
+        from ..updater import self_update_supported
+
+        if not self_update_supported() or not self._ctx.config.get("auto_check_updates", True):
             return
         QTimer.singleShot(3000, self._run_update_check)
 

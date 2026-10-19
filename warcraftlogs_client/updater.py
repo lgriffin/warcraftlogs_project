@@ -19,6 +19,7 @@ import hmac
 import json
 import shutil
 import subprocess
+import sys
 import time
 import zipfile
 from collections.abc import Callable
@@ -54,6 +55,15 @@ class UpdateInfo:
     published_at: str
     asset_name: str = ""
     checksums_url: str = ""
+
+
+def self_update_supported(platform: str = sys.platform) -> bool:
+    """Whether this app can update itself: the release zip and its swap script are Windows-only.
+
+    On Linux and macOS the app runs from a source checkout, so it updates with ``git pull`` and a reinstall
+    (``scripts/install_linux.sh``) instead of offering a Windows download.
+    """
+    return platform == "win32"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:

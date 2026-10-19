@@ -275,3 +275,10 @@ class TestDownloadUpdate:
         ):
             download_update(make_info(), explode)
         assert list(dirs["update"].iterdir()) == []
+
+
+def test_only_windows_updates_itself():
+    """The release zip and its swap script are Windows-only; a Linux source install updates with git pull."""
+    assert updater.self_update_supported("win32") is True
+    assert updater.self_update_supported("linux") is False
+    assert updater.self_update_supported("darwin") is False

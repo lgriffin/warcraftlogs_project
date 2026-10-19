@@ -1,4 +1,4 @@
-name: Build Windows Installer
+name: Build Release
 
 on:
   push:
@@ -10,10 +10,47 @@ permissions:
   id-token: write # Sigstore keyless signing of SHA256SUMS via GitHub OIDC (no private key held by anyone)
 
 jobs:
+  # REL-03: the Linux bundle is this tag's source with the install script, released only after it installs and
+  # starts on AlmaLinux 9. The Windows job checksums and signs it with the Windows files.
+  linux:
+    runs-on: ubuntu-latest
+    container: almalinux:9
+    steps:
+      - name: Install git (checkout falls back to a plain download without it, and git archive needs it)
+        run: dnf install -y git tar gzip
+
+      - uses: actions/checkout@v7
+
+      - name: Install with the Linux install script
+        run: scripts/install_linux.sh --no-desktop
+
+      - name: Start the desktop app on a real X server
+        run: scripts/smoke_linux.sh
+
+      - name: Package the Linux bundle
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p dist
+          name="WarcraftLogsAnalyzer-${{ github.ref_name }}-linux"
+          git archive --format=tar.gz --prefix="$name/" -o "dist/$name.tar.gz" HEAD
+          tar -tzf "dist/$name.tar.gz" "$name/scripts/install_linux.sh"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-bundle
+          path: dist/*.tar.gz
+
   build:
+    needs: linux
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-bundle
+          path: dist
 
       - uses: actions/setup-python@v7
         with:
@@ -53,6 +90,7 @@ jobs:
       - name: Generate SHA256SUMS
         run: |
           $files = @(Get-ChildItem "dist\*.zip" -ErrorAction SilentlyContinue)
+          $files += @(Get-ChildItem "dist\*.tar.gz" -ErrorAction SilentlyContinue)
           if ("${{ steps.inno.outcome }}" -eq "success") {
             $files += @(Get-ChildItem "installer_output\*.exe" -ErrorAction SilentlyContinue)
           }
@@ -87,6 +125,7 @@ jobs:
           path: |
             installer_output/*.exe
             dist/*.zip
+            dist/*.tar.gz
             SHA256SUMS
             SHA256SUMS.sigstore.json
 
@@ -97,6 +136,7 @@ jobs:
           files: |
             installer_output/*.exe
             dist/*.zip
+            dist/*.tar.gz
             SHA256SUMS
             SHA256SUMS.sigstore.json
           generate_release_notes: true

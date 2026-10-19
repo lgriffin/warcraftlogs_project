@@ -28,6 +28,7 @@ JOB_TASKS = {
     "test": {"test", "diffcov"},
     "storage-postgres": {"pgcov"},
     "gui-test": {"gui"},
+    "almalinux": {"gui"},
     "fuzz": {"fuzz"},
     "mutation": {"mutation"},
     "type-check": {"types"},

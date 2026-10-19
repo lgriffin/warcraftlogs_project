@@ -47,7 +47,7 @@ REQUIREMENT_IDS = {
     *(f"GATE-{n:02}" for n in range(1, 6)),
     *(f"SEC-{n:02}" for n in range(1, 6)),
     *(f"DOC-{n:02}" for n in range(1, 3)),
-    *(f"REL-{n:02}" for n in range(1, 3)),
+    *(f"REL-{n:02}" for n in range(1, 4)),
     *(f"PROC-{n:02}" for n in range(1, 3)),
 }
 STRAY_HEADING = re.compile(r"^(#{1,3}|#{5,6})\s+.*\b[A-Z]+-\d+\b")

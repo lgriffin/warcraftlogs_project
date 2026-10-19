@@ -64,6 +64,22 @@ To create the installer `.exe`, install [Inno Setup](https://jrsoftware.org/isin
 
 ---
 
+## Linux (AlmaLinux 9)
+
+On AlmaLinux 9 (and RHEL or Rocky 9), one script installs the system packages, a virtualenv, command-line launchers
+and an applications-menu entry:
+
+```bash
+git clone https://github.com/lgriffin/warcraftlogs_project.git
+cd warcraftlogs_project
+scripts/install_linux.sh
+```
+
+Run it again after `git pull` to update. Options, data locations and troubleshooting are in
+[guides/linux_install.md](guides/linux_install.md).
+
+---
+
 ## Quick Start (From Source)
 
 ### 1. Install Python
