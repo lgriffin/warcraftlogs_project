@@ -91,7 +91,8 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `packages/wcl-store/src/wcl_store/postgres/migrations/` — Alembic migrations for the Postgres schema, numbered
   `0001_…`; `wcl_store.postgres.upgrade(url)` runs them
 - `packages/wcl-app/` — `wcl_app`: the application services (`AppContext`, `RaidService`, `PlayerService`,
-  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, `BridgeService`,
+  `PlayerPageService`, `RoleOverrideService`, `HomeService`, `BadgeService`, `ReferenceService`, `RaidPageService`,
+  `BridgeService`,
   lineage); depends only on wcl-core and wcl-store. `warcraftlogs_client/services/` is an import alias of it.
   Headless hosts use `AppContext.headless(client, storage)`
 - `guides/` — project documentation; `guides/CHARTER.md` is the engineering charter (requirement IDs and statuses,

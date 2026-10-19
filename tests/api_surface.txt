@@ -399,6 +399,31 @@ wcl_app.ProfileSet.from_dict: @classmethod def from_dict(cls, data: dict[str, An
 wcl_app.ProfileSiteUnknown: class ProfileSiteUnknown(ValueError)
 wcl_app.ProgressCallback: ProgressCallback = Callable[[str], None]
 wcl_app.REPORT_TABS: REPORT_TABS: tuple[ReportTab, ...] = (ReportTab('healers', 'Healers', ('healers', 'healing', 'heals', 'overhealing', 'hps')), ReportTab('tanks', 'Tanks', ('tanks', 'tanking', 'mitigation', 'damage taken')), ReportTab('melee', 'Melee DPS', ('melee', 'dps', 'damage done')), ReportTab('ranged', 'Ranged DPS', ('ranged', 'dps', 'casters', 'damage done')), ReportTab('consumables', 'Consumables', ('consumables', 'consumes', 'potions', 'pots', 'flasks', 'elixirs')), ReportTab('interrupts', 'Interrupts', ('interrupts', 'kicks')), ReportTab('cast_efficiency', 'Cast Efficiency', ('cast efficiency', 'casts', 'cooldowns')), ReportTab('debuff_uptime', 'Debuff Uptime', ('debuff uptime', 'debuffs')), ReportTab('totem_uptime', 'Totem Uptime', ('totem uptime', 'totems')), ReportTab('boss_vs_trash', 'Boss vs Trash', ('boss vs trash', 'trash')), ReportTab('engineering', 'Engineering', ('engineering', 'sappers', 'bombs')), ReportTab('timeline', 'Timeline', ('timeline',)), ReportTab('encounters', 'Encounters', ('encounters', 'bosses', 'fights', 'kills', 'wipes')), ReportTab('composition', 'Composition', ('composition', 'comp', 'roster')))
+wcl_app.RaidPage: @dataclass(frozen=True) class RaidPage
+wcl_app.RaidPage.summary: RaidSummary
+wcl_app.RaidPage.duration_ms: int
+wcl_app.RaidPage.composition: dict[str, list[dict[str, str]]]
+wcl_app.RaidPage.healers: list[dict[str, Any]]
+wcl_app.RaidPage.tanks: list[dict[str, Any]]
+wcl_app.RaidPage.melee: list[dict[str, Any]]
+wcl_app.RaidPage.ranged: list[dict[str, Any]]
+wcl_app.RaidPage.consumable_names: list[str]
+wcl_app.RaidPage.consumables: list[dict[str, Any]]
+wcl_app.RaidPage.boss_vs_trash: list[dict[str, Any]]
+wcl_app.RaidPage.interrupts: list[dict[str, Any]]
+wcl_app.RaidPage.cancelled_casts: list[dict[str, Any]]
+wcl_app.RaidPage.debuff_uptimes: list[dict[str, Any]]
+wcl_app.RaidPage.totem_uptimes: list[dict[str, Any]]
+wcl_app.RaidPage.engineering: list[dict[str, Any]]
+wcl_app.RaidPage.encounters: list[Encounter]
+wcl_app.RaidPage.warnings: list[str] = field(default_factory=list)
+wcl_app.RaidPage.version: int = RAID_PAGE_VERSION
+wcl_app.RaidPage.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.RaidPageService: class RaidPageService
+wcl_app.RaidPageService.__init__: def __init__(self, storage: StorageFactory, scope: ScopeSource=None)
+wcl_app.RaidPageService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> RaidPageService
+wcl_app.RaidPageService.index: def index(self, limit: int=1000) -> list[RaidSummary]
+wcl_app.RaidPageService.page: def page(self, report_id: str, summary: RaidSummary | None=None) -> RaidPage | None
 wcl_app.RaidService: class RaidService
 wcl_app.RaidService.__init__: def __init__(self, ctx: AppContext)
 wcl_app.RaidService.analyze: def analyze(self, report_id: str, *, reference: bool=False, progress: ProgressCallback | None=None) -> RaidAnalysis
@@ -416,6 +441,15 @@ wcl_app.RaidService.check_profile_site: def check_profile_site(self) -> None
 wcl_app.RaidService.imported_codes: def imported_codes(self) -> set[str]
 wcl_app.RaidService.import_missing: def import_missing(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
 wcl_app.RaidService.ctx: set in __init__
+wcl_app.RaidSummary: @dataclass(frozen=True) class RaidSummary
+wcl_app.RaidSummary.report_id: str
+wcl_app.RaidSummary.title: str
+wcl_app.RaidSummary.zone: str
+wcl_app.RaidSummary.raid_date: str
+wcl_app.RaidSummary.weekday: int | None
+wcl_app.RaidSummary.size: int
+wcl_app.RaidSummary.url: str
+wcl_app.RaidSummary.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.ReanalysisResult: @dataclass class ReanalysisResult
 wcl_app.ReanalysisResult.report_id: str
 wcl_app.ReanalysisResult.old_role: str

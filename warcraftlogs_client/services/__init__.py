@@ -94,6 +94,7 @@ for _name in (
     "player_page",
     "players",
     "profiles",
+    "raid_pages",
     "raids",
     "reference",
     "roles",
