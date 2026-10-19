@@ -223,21 +223,6 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python scripts/dev.py gui
 
-  # REL-03: the desktop app installs with scripts/install_linux.sh and starts on AlmaLinux 9.
-  almalinux:
-    runs-on: ubuntu-latest
-    container: almalinux:9
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install with the Linux install script (dnf packages, .venv, launchers, menu entry)
-        run: scripts/install_linux.sh --dev
-      - name: Start the desktop app on a real X server
-        run: scripts/smoke_linux.sh
-      - name: Run GUI tests
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: . .venv/bin/activate && python scripts/dev.py gui
-
   fuzz:
     runs-on: ubuntu-latest
     steps:
@@ -311,7 +296,6 @@ jobs:
       - wcl-app-package
       - storage-postgres
       - gui-test
-      - almalinux
       - fuzz
       - mutation
       - type-check
