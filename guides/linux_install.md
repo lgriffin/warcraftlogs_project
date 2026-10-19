@@ -3,8 +3,10 @@
 Implements: REL-03 in [CHARTER.md](CHARTER.md).
 
 The app runs from a source checkout on Linux. `scripts/install_linux.sh` sets it up on AlmaLinux 9 (RHEL 9 and
-Rocky 9 work the same way), and CI's `almalinux` job runs that script in an `almalinux:9` container on every pull
-request, then starts the app on a real X server (`scripts/smoke_linux.sh`) and runs the GUI tests.
+Rocky 9 work the same way). Every tagged release runs that script in an `almalinux:9` container and starts the app on
+a real X server (`scripts/smoke_linux.sh`) before it ships. The AlmaLinux workflow (`.github/workflows/almalinux.yml`,
+started by hand from the Actions tab) does the same and runs the GUI tests; it is off the pull request path because
+the dnf downloads make it slow.
 
 ## Install
 

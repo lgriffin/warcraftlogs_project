@@ -376,8 +376,8 @@ Every release **shall** take its version and changelog from conventional commit 
 The desktop app **shall** install with `scripts/install_linux.sh` and start on AlmaLinux 9.
 
 - **Why:** Linux users run from a checkout, and a Qt system library missing on EL 9 only shows when the app starts.
-- **Verified by:** the `almalinux` job, and the Linux bundle in `.github/workflows/build-installer.yml`
-  (`guides/linux_install.md`).
+- **Verified by:** the Linux bundle in `.github/workflows/build-installer.yml`, and on demand
+  `.github/workflows/almalinux.yml` (`guides/linux_install.md`).
 
 ---
 

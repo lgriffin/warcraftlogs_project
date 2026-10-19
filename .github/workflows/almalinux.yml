@@ -1,0 +1,24 @@
+name: AlmaLinux
+
+# REL-03, on demand: the AlmaLinux 9 install takes minutes of dnf downloads, so it runs off the pull request path.
+# Every tagged release still runs the same install and smoke test before it ships (build-installer.yml).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  almalinux:
+    runs-on: ubuntu-latest
+    container: almalinux:9
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install with the Linux install script (dnf packages, .venv, launchers, menu entry)
+        run: scripts/install_linux.sh --dev
+      - name: Start the desktop app on a real X server
+        run: scripts/smoke_linux.sh
+      - name: Run GUI tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: . .venv/bin/activate && python scripts/dev.py gui

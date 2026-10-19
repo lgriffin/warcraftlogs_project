@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the installed desktop app on a headless X server and fail if it does not stay up, the way a missing Qt
-# system library would make it (CI's `almalinux` job and the release's Linux bundle run this after
+# system library would make it (the AlmaLinux workflow and the release's Linux bundle run this after
 # scripts/install_linux.sh). Installs Xvfb with dnf when it is missing.
 set -euo pipefail
 
