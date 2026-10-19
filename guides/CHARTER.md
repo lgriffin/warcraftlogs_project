@@ -371,6 +371,14 @@ Every release **shall** take its version and changelog from conventional commit 
 - **Why:** `build_release.sh` bumps versions by hand, and the Hub pins those versions.
 - **Verified by:** none yet.
 
+#### REL-03 · Ubiquitous · Enforced
+
+The desktop app **shall** install with `scripts/install_linux.sh` and start on AlmaLinux 9.
+
+- **Why:** Linux users run from a checkout, and a Qt system library missing on EL 9 only shows when the app starts.
+- **Verified by:** the `almalinux` job, and the Linux bundle in `.github/workflows/build-installer.yml`
+  (`guides/linux_install.md`).
+
 ---
 
 ## Part 9 · Process
