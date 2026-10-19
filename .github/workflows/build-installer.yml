@@ -70,7 +70,9 @@ jobs:
         run: pyinstaller warcraftlogs_analyzer.spec
 
       - name: Create portable zip
-        run: Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath "dist\WarcraftLogsAnalyzer-${{ github.ref_name }}-portable.zip"
+        run: |
+          $ref = "${{ github.ref_name }}" -replace '/', '-'
+          Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath "dist\WarcraftLogsAnalyzer-$ref-portable.zip"
 
       - name: Build installer with Inno Setup
         id: inno
