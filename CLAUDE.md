@@ -98,9 +98,9 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
 - `guides/` — project documentation; `guides/CHARTER.md` is the engineering charter (requirement IDs and statuses,
   audited by `tests/test_charter.py`; change a status in the pull request that changes the check),
   `guides/home_widgets.md` the Home widget payload contract the Toads Hub shares, `guides/badges.md` the Toads badge
-  payload and its thresholds, `guides/reference_comparison.md` the reference comparison payload, `guides/raid_pages.md` the raid list and raid
-  analysis payload the hub's Logs page renders, and
-  `guides/linux_install.md` the Linux install (`scripts/install_linux.sh`, checked by CI's `almalinux` job)
+  payload and its thresholds, `guides/reference_comparison.md` the reference comparison payload, and
+  `guides/linux_install.md` the Linux install (`scripts/install_linux.sh`, checked on every release and on demand by
+  `.github/workflows/almalinux.yml`)
 
 ## Conventions
 
