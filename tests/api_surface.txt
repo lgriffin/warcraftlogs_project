@@ -128,6 +128,24 @@ wcl_app.CharacterLineage.metrics: list[Spread] = field(default_factory=list)
 wcl_app.CharacterLineage.casts: list[Spread] = field(default_factory=list)
 wcl_app.CharacterLineage.consumables: list[Spread] = field(default_factory=list)
 wcl_app.CharacterLineage.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.CharacterPage: @dataclass class CharacterPage
+wcl_app.CharacterPage.name: str
+wcl_app.CharacterPage.player_class: str
+wcl_app.CharacterPage.raids: int
+wcl_app.CharacterPage.first_raid: str | None
+wcl_app.CharacterPage.last_raid: str | None
+wcl_app.CharacterPage.role_counts: dict[str, int]
+wcl_app.CharacterPage.recent: list[CharacterRaid] = field(default_factory=list)
+wcl_app.CharacterPage.metrics: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterPage.casts: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterPage.consumables: list[dict[str, Any]] = field(default_factory=list)
+wcl_app.CharacterPage.bests: list[PersonalBest] = field(default_factory=list)
+wcl_app.CharacterPage.charts: list[Chart] = field(default_factory=list)
+wcl_app.CharacterPage.to_dict: def to_dict(self) -> dict[str, Any]
+wcl_app.CharacterPageService: class CharacterPageService
+wcl_app.CharacterPageService.__init__: def __init__(self, storage: StorageFactory, scope: ScopeSource=None)
+wcl_app.CharacterPageService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> CharacterPageService
+wcl_app.CharacterPageService.page: def page(self, name: str) -> CharacterPage | None
 wcl_app.CharacterService: class CharacterService
 wcl_app.CharacterService.__init__: def __init__(self, ctx: AppContext)
 wcl_app.CharacterService.scope: @property def scope(self) -> RaidScope | None
