@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 from wcl_store import RaidRepository, RaidScope, StorageError
+from wcl_store.scope import weekday_of
 from wcl_store.sqlite import PerformanceDB
 
 from warcraftlogs_client.models import (
@@ -367,6 +368,24 @@ def test_scope_filters_raids_by_zone_and_date_window(repo):
     assert _codes(repo.get_raid_list(scope=RaidScope(since=kara, until=kara))) == []
 
 
+def test_scope_filters_raids_by_weekday_counting_from_monday(repo):
+    _eras(repo)
+    day = {r["report_id"]: weekday_of(r["raid_date"]) for r in repo.get_raid_list()}
+    assert sorted(day.values()) == sorted({day[MC], (day[MC] + 1) % 7, (day[MC] + 2) % 7})
+    assert _codes(repo.get_raid_list(scope=RaidScope(weekdays=(day[KARA],)))) == [KARA]
+    assert _codes(repo.get_raid_list(scope=RaidScope(weekdays=(day[MC], day[GRUUL])))) == [GRUUL, MC]
+    assert repo.count_raids(scope=RaidScope(weekdays=(day[GRUUL],))) == 1
+    others = tuple(d for d in range(7) if d not in day.values())
+    assert _codes(repo.get_raid_list(scope=RaidScope(weekdays=others))) == []
+
+
+def test_weekday_of_reads_a_stored_raid_date():
+    assert weekday_of("2026-10-21 20:00:00") == 2  # a Wednesday
+    assert weekday_of("2026-10-25") == 6
+    assert weekday_of("not a date") is None
+    assert weekday_of(None) is None
+
+
 def test_a_scope_admits_exactly_the_raids_the_store_returns_for_it(repo):
     _eras(repo)
     stored = repo.get_raid_list(scope=RaidScope(sources=("guild", "reference"))) + repo.get_raid_list()
@@ -383,6 +402,8 @@ def test_a_scope_admits_exactly_the_raids_the_store_returns_for_it(repo):
         RaidScope(since=kara),
         RaidScope(until=kara),
         RaidScope(since=kara, until=kara),
+        RaidScope(weekdays=(weekday_of(kara) or 0,)),
+        RaidScope(weekdays=tuple(range(7))),
     ]
     for scope in scopes:
         admitted = {

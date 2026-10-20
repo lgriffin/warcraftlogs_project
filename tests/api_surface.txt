@@ -613,6 +613,7 @@ wcl_store.RaidScope.expansions: tuple[str, ...] = ()
 wcl_store.RaidScope.zones: tuple[str, ...] = ()
 wcl_store.RaidScope.since: str | None = None
 wcl_store.RaidScope.until: str | None = None
+wcl_store.RaidScope.weekdays: tuple[int, ...] = ()
 wcl_store.RaidScope.unfiltered: @property def unfiltered(self) -> bool
 wcl_store.RaidScope.admits: def admits(self, *, source: str='guild', game_version: str | None=None, expansion: str | None=None, zone: str | None=None, raid_date: str | None=None) -> bool
 wcl_store.RaidScope.with_sources: def with_sources(self, sources: tuple[str, ...]) -> RaidScope

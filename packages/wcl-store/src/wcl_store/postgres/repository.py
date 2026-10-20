@@ -111,7 +111,16 @@ def _scope_terms(scope: RaidScope | None, sources: tuple[str, ...]) -> list[Any]
         terms.append(_c(r.raid_date) >= scope.since)
     if scope.until:
         terms.append(_c(r.raid_date) < scope.until)
+    if scope.weekdays:
+        terms.append(_weekday(r.raid_date).in_(scope.weekdays))
     return terms
+
+
+def _weekday(raid_date: Any) -> Any:
+    """The weekday of a stored ``raid_date``, 0 for Monday; NULL when the text does not start with a date."""
+    day = func.substr(raid_date, 1, 10)
+    dated = case((day.op("~")(r"^\d{4}-\d{2}-\d{2}$"), func.to_date(day, "YYYY-MM-DD")))
+    return func.extract("isodow", dated) - 1
 
 
 def _raid_date(metadata: RaidMetadata) -> str:
