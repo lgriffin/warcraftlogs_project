@@ -146,6 +146,7 @@ wcl_app.CharacterPageService: class CharacterPageService
 wcl_app.CharacterPageService.__init__: def __init__(self, storage: StorageFactory, scope: ScopeSource=None)
 wcl_app.CharacterPageService.from_context: @classmethod def from_context(cls, ctx: AppContext) -> CharacterPageService
 wcl_app.CharacterPageService.page: def page(self, name: str) -> CharacterPage | None
+wcl_app.CharacterPageService.pages: def pages(self, names: list[str]) -> list[CharacterPage | None]
 wcl_app.CharacterService: class CharacterService
 wcl_app.CharacterService.__init__: def __init__(self, ctx: AppContext)
 wcl_app.CharacterService.scope: @property def scope(self) -> RaidScope | None

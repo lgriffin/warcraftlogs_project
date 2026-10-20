@@ -11,7 +11,7 @@ import pytest
 from wcl_app import CharacterPage, CharacterPageService
 from wcl_app.character_pages import CHARACTER_PAGE_VERSION, MAX_RAIDS
 from wcl_app.charts import Chart
-from wcl_store import RaidScope
+from wcl_store import RaidScope, StorageError
 from wcl_store.sqlite import PerformanceDB
 
 from warcraftlogs_client.models import DPSPerformance, HealerPerformance, PlayerIdentity
@@ -104,13 +104,69 @@ def test_no_page_for_a_character_with_no_raid_or_outside_the_scope(storage, page
     assert CharacterPageService(storage, scope=RaidScope(weekdays=(0,))).page("HolyPriest") is None
 
 
+class _Counting:
+    """A storage factory that counts raid analysis reads and fails the first ``failures`` of them."""
+
+    def __init__(self, storage, failures: int = 0):
+        self.storage, self.failures, self.reads = storage, failures, 0
+
+    def __call__(self):
+        outer = self
+        repo = self.storage()
+
+        class Repo:
+            def __enter__(self):
+                self.db = repo.__enter__()
+                return self
+
+            def __exit__(self, *exc):
+                return repo.__exit__(*exc)
+
+            def __getattr__(self, name):
+                return getattr(self.db, name)
+
+            def get_raid_analysis(self, report_id):
+                outer.reads += 1
+                if outer.failures:
+                    outer.failures -= 1
+                    raise StorageError("down")
+                return self.db.get_raid_analysis(report_id)
+
+        return Repo()
+
+
 def test_each_raid_is_read_once_for_a_roster(storage, build_analysis):
     with storage() as repo:
         repo.import_raid(_raid(build_analysis, "OnlyRaidCCCCCCCC", datetime(2026, 10, 14, 20, 0), 500_000))
+    counting = _Counting(storage)
+    pages = CharacterPageService(counting).pages(["HolyPriest", "BoomMage", "StabbyRogue", "Nobody"])
+    assert [p.name if p else None for p in pages] == ["HolyPriest", "BoomMage", "StabbyRogue", None]
+    assert counting.reads == 1
+
+
+def test_a_reanalysed_raid_shows_its_new_median(storage, build_analysis):
+    start = datetime(2026, 10, 14, 20, 0)
+    with storage() as repo:
+        repo.import_raid(_raid(build_analysis, "OnlyRaidCCCCCCCC", start, 500_000))
     service = CharacterPageService(storage)
-    for name in ("HolyPriest", "BoomMage", "StabbyRogue"):
-        assert service.page(name) is not None
-    assert list(service._analyses) == ["OnlyRaidCCCCCCCC"]
+    assert service.page("HolyPriest").recent[0].median == 400_000
+    with storage() as repo:
+        repo.import_raid(_raid(build_analysis, "OnlyRaidCCCCCCCC", start, 900_000))
+    assert service.page("HolyPriest").recent[0].median == 600_000
+
+
+def test_a_failed_analysis_read_is_tried_again(storage, build_analysis):
+    with storage() as repo:
+        repo.import_raid(_raid(build_analysis, "OnlyRaidCCCCCCCC", datetime(2026, 10, 14, 20, 0), 500_000))
+    service = CharacterPageService(_Counting(storage, failures=1))
+    assert service.page("HolyPriest").recent[0].median is None
+    assert service.page("HolyPriest").recent[0].median == 400_000
+
+
+def test_pages_read_guild_raids_whatever_sources_the_scope_names(pages, storage):
+    scoped = CharacterPageService(storage, scope=RaidScope(sources=("reference",)))
+    page = scoped.page("HolyPriest")
+    assert page is not None and page.raids == len(page.recent) == 2
 
 
 def test_recent_raids_are_capped(storage, build_analysis):

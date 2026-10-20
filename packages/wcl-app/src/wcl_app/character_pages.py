@@ -6,8 +6,8 @@ headline number and where it stood in the raid: the median of the others in the 
 among them. Beside the raids sit the character's lineage (``wcl_app.lineage``: min / mean / max of each metric, their
 casts and consumables), their personal bests and one chart per role played, the character against the raid's median.
 
-Everything is read through ``RaidRepository``, so pages build the same on SQLite and Postgres. Raid analyses read for
-the medians are kept for the service's lifetime, so building pages for a whole roster reads each raid once.
+Everything is read through ``RaidRepository``, so pages build the same on SQLite and Postgres. ``pages(names)`` builds a
+whole roster in one storage session and reads each raid's analysis once; every call reads raids afresh.
 ``guides/character_pages.md`` is the JSON contract.
 """
 
@@ -18,6 +18,7 @@ from statistics import median
 from typing import TYPE_CHECKING, Any
 
 from wcl_store import RaidScope, StorageError
+from wcl_store.scope import narrowed
 
 from wcl_app.charts import LINE, Chart, Series, compact, y_ceiling
 from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
@@ -184,7 +185,8 @@ class CharacterPageService:
         self._storage = storage
         # A scope, or a callable giving the active profile's at read time; None reads every guild raid.
         self._scope = scope
-        self._analyses: dict[str, RaidAnalysis | None] = {}
+        # Raid analyses read for the medians during one pages() call.
+        self._analyses: dict[str, RaidAnalysis] = {}
 
     @classmethod
     def from_context(cls, ctx: AppContext) -> CharacterPageService:
@@ -192,19 +194,30 @@ class CharacterPageService:
 
     def page(self, name: str) -> CharacterPage | None:
         """The character's page, or None when they have no guild raid inside the scope or storage cannot be read."""
-        scope = resolve_scope(self._scope)
+        return self.pages([name])[0]
+
+    def pages(self, names: list[str]) -> list[CharacterPage | None]:
+        """Each named character's page, in order, as ``page`` gives it; each raid's analysis is read once."""
+        # Character pages are the guild's raids, whatever sources the active profile's scope names.
+        scope = narrowed(resolve_scope(self._scope), ("guild",))
+        self._analyses = {}
         try:
             with self._storage() as db:
-                return self._build(db, name, scope)
+                return [self._build(db, name, scope) for name in names]
         except StorageError:
-            return None
+            return [None] * len(names)
+        finally:
+            self._analyses = {}
 
     def _analysis(self, db: RaidRepository, report_id: str) -> RaidAnalysis | None:
         if report_id not in self._analyses:
             try:
-                self._analyses[report_id] = db.get_raid_analysis(report_id)
+                analysis = db.get_raid_analysis(report_id)
             except StorageError:
-                self._analyses[report_id] = None
+                return None
+            if analysis is None:
+                return None
+            self._analyses[report_id] = analysis
         return self._analyses[report_id]
 
     def _build(self, db: RaidRepository, name: str, scope: RaidScope | None) -> CharacterPage | None:
