@@ -1594,6 +1594,11 @@ class PerformanceDB:
         if scope.until:
             terms.append("r.raid_date < ?")
             params.append(scope.until)
+        if scope.weekdays:
+            # strftime's %w counts from Sunday; the scope counts from Monday. An unreadable date gives NULL.
+            marks = ", ".join("?" for _ in scope.weekdays)
+            terms.append(f"(CAST(strftime('%w', substr(r.raid_date, 1, 10)) AS INTEGER) + 6) % 7 IN ({marks})")
+            params.extend(scope.weekdays)
         return " AND ".join(terms), params
 
     def count_raids(self, source: str = "guild", scope: RaidScope | None = None) -> int:

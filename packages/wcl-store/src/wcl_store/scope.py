@@ -1,7 +1,8 @@
 """``RaidScope``: the filter the services hand a ``RaidRepository`` read.
 
 A scope narrows which stored raids a query sees: by source, by game version and expansion (the two era axes
-``wcl_core.game_version`` defines), by zone and by a ``raid_date`` window. An empty tuple on an axis means
+``wcl_core.game_version`` defines), by zone, by a ``raid_date`` window and by the weekday of ``raid_date`` (0 is
+Monday, as ``datetime.weekday``; a raid night such as Wednesday is ``weekdays=(2,)``). An empty tuple on an axis means
 "any". A raid whose ``game_version`` or ``expansion`` is unknown (``NULL``, i.e. stored before they were read
 and not backfilled) matches every scope on that axis, so a report never disappears from every view.
 
@@ -15,7 +16,8 @@ it agrees with both backends.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -26,11 +28,12 @@ class RaidScope:
     zones: tuple[str, ...] = ()  # matched ignoring ASCII case, like character names
     since: str | None = None  # "YYYY-MM-DD HH:MM:SS" on raid_date, inclusive
     until: str | None = None  # exclusive
+    weekdays: tuple[int, ...] = ()  # weekday of raid_date, 0 is Monday
 
     @property
     def unfiltered(self) -> bool:
         """True when the scope only picks sources, which every read already did."""
-        return not (self.game_versions or self.expansions or self.zones or self.since or self.until)
+        return not (self.game_versions or self.expansions or self.zones or self.since or self.until or self.weekdays)
 
     def admits(
         self,
@@ -55,17 +58,12 @@ class RaidScope:
             return False
         if self.since and (raid_date or "") < self.since:
             return False
-        return not (self.until and (raid_date or "") >= self.until)
+        if self.until and (raid_date or "") >= self.until:
+            return False
+        return not (self.weekdays and weekday_of(raid_date) not in self.weekdays)
 
     def with_sources(self, sources: tuple[str, ...]) -> RaidScope:
-        return RaidScope(
-            sources=sources,
-            game_versions=self.game_versions,
-            expansions=self.expansions,
-            zones=self.zones,
-            since=self.since,
-            until=self.until,
-        )
+        return replace(self, sources=sources)
 
 
 GUILD = RaidScope()
@@ -76,6 +74,14 @@ _ASCII_UPPER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrst
 def _ascii_fold(text: str) -> str:
     """Lower-case ASCII letters only, as SQLite's ``NOCASE`` and the Postgres backend compare zones."""
     return text.translate(_ASCII_UPPER)
+
+
+def weekday_of(raid_date: str | None) -> int | None:
+    """The weekday (0 is Monday) of a stored ``raid_date``, or None when it does not start with a date."""
+    try:
+        return datetime.strptime((raid_date or "")[:10], "%Y-%m-%d").weekday()
+    except ValueError:
+        return None
 
 
 def narrowed(scope: RaidScope | None, sources: tuple[str, ...]) -> RaidScope | None:

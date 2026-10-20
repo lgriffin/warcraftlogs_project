@@ -41,7 +41,7 @@ model and a thin vertical slice, then each frontend adapts.
 | --- | --- | --- |
 | **Game version** | Which Warcraft Logs site a report is on: `fresh` (Anniversary realms, Classic through TBC), `classic` (Classic Era and Hardcore), `sod`, `forever` (November 2026, site not announced), `retail`. Derived from the API host the report was fetched through. | `wcl_core.game_version`, stored on `raids.game_version` |
 | **Expansion** | The content era of the report's zone: `Classic`, `The Burning Crusade`, `Wrath of the Lich King`, ... Read from the API's `zone { expansion { name } }`, or from the zone name for raids stored before this change. | `wcl_core.game_version`, stored on `raids.expansion` |
-| **Scope** | The filter the services hand the repository: sources, game versions, expansions, zones, a date window. Empty means everything, which is today's behaviour. | `wcl_store.RaidScope` |
+| **Scope** | The filter the services hand the repository: sources, game versions, expansions, zones, a date window, weekdays (0 is Monday, for a raid night). Empty means everything, which is today's behaviour. | `wcl_store.RaidScope` |
 | **Profile** | A named, user-facing view that produces a scope and picks the Warcraft Logs host and guild to import from: "TBC", "Classic days", "Forever". No active profile means the plain, unfiltered app. | `wcl_app.profiles` |
 | **Identity** | The Discord user this app instance belongs to: id, username, display name, avatar. Linked once with Discord OAuth (PKCE), then stamped on the profiles the user creates. | `wcl_core.discord_auth`, `wcl_app.identity` |
 
@@ -135,6 +135,7 @@ class RaidScope:
     zones: tuple[str, ...] = ()           # () = any, matched ignoring ASCII case
     since: str | None = None              # "YYYY-MM-DD HH:MM:SS" on raid_date, inclusive
     until: str | None = None              # exclusive
+    weekdays: tuple[int, ...] = ()        # () = any; weekday of raid_date, 0 is Monday (a raid night)
 ```
 
 Raids whose `game_version` or `expansion` is `NULL` match every scope on that axis. Each repository read that
