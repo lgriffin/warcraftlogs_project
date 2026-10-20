@@ -19,6 +19,7 @@ from wcl_app.bridge import (
     ProfileNotPublished,
     member_profile,
 )
+from wcl_app.character_pages import CharacterPage, CharacterPageService
 from wcl_app.characters import CharacterComparison, CharacterDossier, CharacterService, CharacterTrends
 from wcl_app.charts import Chart, ChartError, Series
 from wcl_app.context import AnalysisThresholds, AppContext, ProgressCallback, validate_report_code
@@ -54,6 +55,8 @@ __all__ = [
     "CharacterComparison",
     "CharacterDossier",
     "CharacterLineage",
+    "CharacterPage",
+    "CharacterPageService",
     "CharacterService",
     "CharacterTrends",
     "Chart",
