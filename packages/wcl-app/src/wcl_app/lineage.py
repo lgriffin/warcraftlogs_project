@@ -8,6 +8,11 @@ for (a healer's Flash Heal isn't diluted by their dps nights). Consumables are
 averaged over every raid attended, counting a raid where they used none as 0. "Flask or elixir pair" is 1 for a raid
 with a flask or a battle and a guardian elixir and 0 otherwise, so its mean is the share of raids prepared; it only
 appears once the character has a flask or elixir on record.
+
+Characters are stored by name, so two characters sharing one (a priest of one era and a shaman of the next) share their
+raids in storage. Each raid records the class played in it, and a lineage covers only the raids of one class: the
+newest raid's unless asked for another. A raid stored before classes were recorded counts for every class until
+``RaidService.backfill_classes`` fills it in.
 """
 
 from __future__ import annotations
@@ -60,6 +65,8 @@ class CharacterLineage:
     metrics: list[Spread] = field(default_factory=list)
     casts: list[Spread] = field(default_factory=list)
     consumables: list[Spread] = field(default_factory=list)
+    # The class the raids were played as; None when no raid has a class recorded.
+    player_class: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -74,15 +81,33 @@ _ROLE_METRICS: dict[str, list[tuple[str, str]]] = {
 }
 
 
+def played_class(rows: list[dict[str, Any]]) -> str | None:
+    """The class of the newest raid with one recorded, from ``get_character_raid_roles`` rows (oldest first)."""
+    return next((r["player_class"] for r in reversed(rows) if r.get("player_class")), None)
+
+
+def as_class(rows: list[dict[str, Any]], player_class: str | None) -> list[dict[str, Any]]:
+    """The rows played as ``player_class``, and those with no class recorded; every row when it is None."""
+    if player_class is None:
+        return rows
+    return [r for r in rows if r.get("player_class") in (player_class, None)]
+
+
 def character_lineage(
     db: RaidRepository,
     character_name: str,
     sources: tuple[str, ...] = ("guild",),
     scope: RaidScope | None = None,
+    player_class: str | None = None,
 ) -> CharacterLineage | None:
-    """Min / mean / max of a character's numbers over the raids of ``sources``, inside ``scope`` when given."""
+    """Min / mean / max of a character's numbers over the raids of ``sources``, inside ``scope`` when given.
+
+    Only the raids played as ``player_class`` count, by default the class of the character's newest raid.
+    """
     scope = narrowed(scope, sources)
     raids = db.get_character_raid_roles(character_name, sources, scope=scope)
+    player_class = player_class or played_class(raids)
+    raids = as_class(raids, player_class)
     if not raids:
         return None
 
@@ -94,6 +119,7 @@ def character_lineage(
     lineage = CharacterLineage(
         character=character_name,
         raids=len(raids),
+        player_class=player_class,
         role_counts={role: len(ids) for role, ids in sorted(raids_by_role.items())},
         first_raid=raids[0]["raid_date"],
         last_raid=raids[-1]["raid_date"],
@@ -108,7 +134,9 @@ def character_lineage(
                 lineage.metrics.append(Spread.of(label, values, role))
 
     # Casts: total per raid across all spells, then per spell within its role.
-    cast_rows = db.get_character_spell_casts(character_name, sources, scope=scope)
+    cast_rows = [
+        c for c in db.get_character_spell_casts(character_name, sources, scope=scope) if c["raid_id"] in raid_role
+    ]
     per_raid_total: dict[int, float] = dict.fromkeys(raid_role, 0.0)
     per_spell: dict[tuple[str, str], dict[int, float]] = defaultdict(dict)
     for c in cast_rows:

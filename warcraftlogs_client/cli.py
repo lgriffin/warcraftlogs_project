@@ -152,6 +152,10 @@ Examples:
     lineage_parser.add_argument("--include-reference", action="store_true", help="Also count reference raids")
     lineage_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
+    player_sub.add_parser(
+        "classes", help="Read the class each player had in raids stored before classes were kept (Warcraft Logs)"
+    )
+
     list_parser = player_sub.add_parser("list", help="List player pages")
     list_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
@@ -472,8 +476,10 @@ def _run_player_lineage(ctx: "AppContext", db: "PerformanceDB", args: argparse.N
         return 0
 
     roles = ", ".join(f"{n} {r}" for r, n in lineage.role_counts.items())
+    played = f" ({lineage.player_class})" if lineage.player_class else ""
     console.info(
-        f"=== {lineage.character}: {lineage.raids} raids ({roles}), {lineage.first_raid} to {lineage.last_raid} ==="
+        f"=== {lineage.character}{played}: {lineage.raids} raids ({roles}), "
+        f"{lineage.first_raid} to {lineage.last_raid} ==="
     )
 
     def table(title: str, spreads: Sequence["Spread"]) -> None:
@@ -493,6 +499,18 @@ def _run_player_lineage(ctx: "AppContext", db: "PerformanceDB", args: argparse.N
     return 0
 
 
+def _run_player_classes(ctx: "AppContext") -> int:
+    from .services import RaidService
+
+    try:
+        changed = RaidService(ctx).backfill_classes(progress=print)
+    except (WarcraftLogsError, requests.RequestException) as e:
+        console.info(f"Could not read classes: {e}")
+        return 1
+    console.info(f"Recorded the players' classes in {changed} raid(s).")
+    return 0
+
+
 def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
     import json
 
@@ -500,10 +518,12 @@ def run_player_command(args: argparse.Namespace) -> int:  # noqa: C901
 
     action = getattr(args, "player_command", None)
     if not action:
-        console.info("Specify an action: discover, add, show, remove, dismiss, role, lineage or list.")
+        console.info("Specify an action: discover, add, show, remove, dismiss, role, lineage, classes or list.")
         return 1
 
     ctx = AppContext.desktop()
+    if action == "classes":
+        return _run_player_classes(ctx)
     with ctx.db() as db:
         if action == "list":
             pages = PlayerPageService(db).list_pages()

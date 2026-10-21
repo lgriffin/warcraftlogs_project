@@ -18,6 +18,7 @@ expansions, zones and date window to see. ``None`` keeps the method's historic b
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from .scope import RaidScope
@@ -74,6 +75,16 @@ class RaidRepository(Protocol):
         game_version, expansion."""
         ...
 
+    def get_raids_without_classes(self) -> list[dict[str, Any]]:
+        """Raids of any source with a role row whose class is not recorded, oldest first: report_id,
+        game_version."""
+        ...
+
+    def set_raid_classes(self, report_id: str, classes: Mapping[str, str]) -> None:
+        """Record the class each named character (any case) played in a stored raid, on their role rows. An
+        empty or ``"Unknown"`` class and unknown codes are ignored."""
+        ...
+
     def set_raid_label(self, report_id: str, label: str | None) -> None:
         """Label a stored raid, or clear its label with None or ``""``. Unknown codes are ignored."""
 
@@ -112,13 +123,14 @@ class RaidRepository(Protocol):
         self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
         """One row per raid and role, oldest first: raid_id, report_id, title, raid_date, zone, role, healing,
-        overheal_percent, damage, damage_taken, mitigation_percent (None where the role has no such number)."""
+        overheal_percent, damage, damage_taken, mitigation_percent (None where the role has no such number) and
+        player_class, the class played in that raid (None when not recorded)."""
         ...
 
     def get_character_spell_casts(
         self, character_name: str, sources: tuple[str, ...] = ("guild",), scope: RaidScope | None = None
     ) -> list[dict[str, Any]]:
-        """Casts per spell per raid, in no set order: raid_id, role, spell_id, spell_name, casts."""
+        """Casts per spell per raid, in no set order: raid_id, role, spell_id, spell_name, casts, player_class."""
         ...
 
     def get_character_consumable_counts(

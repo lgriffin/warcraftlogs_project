@@ -10,13 +10,18 @@ active raid profile; pages read guild raids only, whatever sources the scope nam
 The name matches case-insensitively; the page carries the stored spelling. `pages(names)` builds a roster's pages in
 one storage session, reading each raid's analysis once; each call reads raids afresh.
 
+Storage keys characters by name, so two characters who shared a name (a classic priest and the TBC shaman who took the
+name later) share their raids there. Each raid records the class played in it, and a page covers only the raids played
+as the class of the character's newest raid. A raid stored before classes were recorded counts for every class until
+`RaidService.backfill_classes()` (`warcraftlogs player classes`) reads the classes from Warcraft Logs.
+
 ## `CharacterPage.to_dict()`
 
 | Field | Meaning |
 | --- | --- |
 | `version` | `CHARACTER_PAGE_VERSION` |
-| `name`, `player_class` | as stored |
-| `raids`, `first_raid`, `last_raid`, `role_counts` | every guild raid the character is in, with `{role: raids}` |
+| `name`, `player_class` | the stored name; the class of the newest raid (the stored class when none is recorded) |
+| `raids`, `first_raid`, `last_raid`, `role_counts` | every guild raid the character played as that class, with `{role: raids}` |
 | `recent` | the newest `MAX_RAIDS` (40) raids, newest first (below) |
 | `metrics` | `wcl_app.lineage` spreads (`name, role, min, mean, max, raids, total, raids_used`) of headline numbers |
 | `casts`, `consumables` | the same spreads for the 10 most cast spells and the 10 most used consumables |

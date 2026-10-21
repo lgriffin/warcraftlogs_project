@@ -21,6 +21,15 @@ def resolve_name(spell_id: int, stored_name: str) -> str:
     return stored_name
 
 
+# The class written for a player the analysis has no class for; never a character's real class.
+UNKNOWN_CLASS = "Unknown"
+
+
+def known_class(player_class: str | None) -> str | None:
+    """The class to store on a role row: None when it is empty or ``UNKNOWN_CLASS``."""
+    return player_class if player_class and player_class != UNKNOWN_CLASS else None
+
+
 def dump_list(values: list[Any]) -> str | None:
     return json.dumps(values) if values else None
 

@@ -9,10 +9,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+import requests
 from wcl_core.analysis import analyze_raid
+from wcl_core.common.errors import WarcraftLogsError
+from wcl_core.common.log import get_logger
 from wcl_core.models import RaidAnalysis
 
 from wcl_app.context import AppContext, ProgressCallback, validate_report_code
+
+logger = get_logger(__name__)
 
 
 class ReferenceAuthRequired(Exception):
@@ -181,6 +186,31 @@ class RaidService:
                 progress(f"Importing {code} ({i}/{len(todo)})...")
             self.analyze_and_save(code, progress=progress)
         return todo
+
+    def backfill_classes(self, *, progress: ProgressCallback | None = None) -> int:
+        """Record the class each player had in raids stored before classes were kept; returns how many raids changed.
+
+        Characters are stored by name, so the class of each raid is what keeps two characters who shared a name
+        apart (``wcl_app.lineage``). It comes from each report's player list on the site the raid was fetched from;
+        a report that cannot be read is skipped and tried again next time.
+        """
+        with self.ctx.repository() as db:
+            todo = db.get_raids_without_classes()
+        changed = 0
+        for i, row in enumerate(todo, 1):
+            code = row["report_id"]
+            if progress:
+                progress(f"Reading classes for {code} ({i}/{len(todo)})...")
+            try:
+                players = self.ctx.client_for(row.get("game_version")).get_master_data(code)
+            except (WarcraftLogsError, requests.RequestException, KeyError, TypeError, ValueError) as e:
+                logger.warning("Could not read the players of %s: %s", code, e)
+                continue
+            classes = {str(p["name"]): str(p.get("subType") or "") for p in players if p.get("name")}
+            with self.ctx.repository() as db:
+                db.set_raid_classes(code, classes)
+            changed += 1
+        return changed
 
 
 def _raid_date(start_ms: Any) -> str | None:
