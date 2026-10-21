@@ -5,6 +5,8 @@ A page holds the character's raids (newest first, at most ``MAX_RAIDS``), each w
 headline number and where it stood in the raid: the median of the others in the same role and the character's place
 among them. Beside the raids sit the character's lineage (``wcl_app.lineage``: min / mean / max of each metric, their
 casts and consumables), their personal bests and one chart per role played, the character against the raid's median.
+A page covers only the raids played as the class of the character's newest raid, so another character who once had
+the same name (a classic priest before a TBC shaman) never adds their raids or spells to it.
 
 Everything is read through ``RaidRepository``, so pages build the same on SQLite and Postgres. ``pages(names)`` builds a
 whole roster in one storage session and reads each raid's analysis once; every call reads raids afresh.
@@ -22,7 +24,7 @@ from wcl_store.scope import narrowed
 
 from wcl_app.charts import LINE, Chart, Series, compact, y_ceiling
 from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
-from wcl_app.lineage import character_lineage
+from wcl_app.lineage import as_class, character_lineage, played_class
 from wcl_app.raid_pages import weekday_of
 
 if TYPE_CHECKING:
@@ -221,11 +223,14 @@ class CharacterPageService:
         return self._analyses[report_id]
 
     def _build(self, db: RaidRepository, name: str, scope: RaidScope | None) -> CharacterPage | None:
+        # Only the raids played as the newest raid's class: another character of the same name is someone else.
+        rows = db.get_character_raid_roles(name, scope=scope)
+        player_class = played_class(rows)
+        rows = as_class(rows, player_class)
         history = db.get_character_history(name, scope=scope)
-        lineage = character_lineage(db, name, scope=scope)
+        lineage = character_lineage(db, name, scope=scope, player_class=player_class)
         if history is None or lineage is None:
             return None
-        rows = db.get_character_raid_roles(name, scope=scope)
         recent: list[CharacterRaid] = []
         for row in reversed(rows[-MAX_RAIDS:]):
             found = _value(row)
@@ -250,7 +255,7 @@ class CharacterPageService:
         roles = [r for r in HEADLINE if any(raid.role == r for raid in recent)]
         return CharacterPage(
             name=history.name,
-            player_class=history.player_class,
+            player_class=player_class or history.player_class,
             raids=lineage.raids,
             first_raid=lineage.first_raid,
             last_raid=lineage.last_raid,

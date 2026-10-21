@@ -107,6 +107,9 @@ healer_performance = Table(
     Column("fear_ward_casts", Integer, nullable=False, server_default="0"),
     Column("total_dispels", Integer, nullable=False, server_default="0"),
     Column("active_time_percent", Float, server_default="0"),
+    # The class played in this raid (on each role table), so characters sharing a name stay apart; NULL for a row
+    # stored before it was recorded, until ``set_raid_classes`` fills it.
+    Column("player_class", Text),
     UniqueConstraint("character_id", "raid_id"),
     Index(None, "raid_id"),
 )
@@ -133,6 +136,7 @@ tank_performance = Table(
     Column("total_mitigated", BigInteger, nullable=False, server_default="0"),
     Column("mitigation_percent", Float, nullable=False, server_default="0"),
     Column("active_time_percent", Float, server_default="0"),
+    Column("player_class", Text),
     UniqueConstraint("character_id", "raid_id"),
     Index(None, "raid_id"),
 )
@@ -168,6 +172,7 @@ dps_performance = Table(
     Column("role", Text, nullable=False),
     Column("total_damage", BigInteger, nullable=False, server_default="0"),
     Column("active_time_percent", Float, server_default="0"),
+    Column("player_class", Text),
     UniqueConstraint("character_id", "raid_id"),
     CheckConstraint("role IN ('melee', 'ranged')", name="role"),
     Index(None, "raid_id"),

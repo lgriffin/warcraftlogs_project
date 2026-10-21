@@ -127,6 +127,7 @@ wcl_app.CharacterLineage.last_raid: str | None = None
 wcl_app.CharacterLineage.metrics: list[Spread] = field(default_factory=list)
 wcl_app.CharacterLineage.casts: list[Spread] = field(default_factory=list)
 wcl_app.CharacterLineage.consumables: list[Spread] = field(default_factory=list)
+wcl_app.CharacterLineage.player_class: str | None = None
 wcl_app.CharacterLineage.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.CharacterPage: @dataclass class CharacterPage
 wcl_app.CharacterPage.name: str
@@ -459,6 +460,7 @@ wcl_app.RaidService.import_new: def import_new(self, guild_id: int | None=None, 
 wcl_app.RaidService.check_profile_site: def check_profile_site(self) -> None
 wcl_app.RaidService.imported_codes: def imported_codes(self) -> set[str]
 wcl_app.RaidService.import_missing: def import_missing(self, codes: list[str], *, progress: ProgressCallback | None=None) -> list[str]
+wcl_app.RaidService.backfill_classes: def backfill_classes(self, *, progress: ProgressCallback | None=None) -> int
 wcl_app.RaidService.ctx: set in __init__
 wcl_app.RaidSummary: @dataclass(frozen=True) class RaidSummary
 wcl_app.RaidSummary.report_id: str
@@ -586,7 +588,7 @@ wcl_app.WidgetSpec.size: str = HALF
 wcl_app.WidgetSpec.default: bool = False
 wcl_app.WidgetSpec.to_dict: def to_dict(self) -> dict[str, Any]
 wcl_app.build_palette: def build_palette(mode: Mode='dark', wow_class: str | None=None) -> Palette
-wcl_app.character_lineage: def character_lineage(db: RaidRepository, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None) -> CharacterLineage | None
+wcl_app.character_lineage: def character_lineage(db: RaidRepository, character_name: str, sources: tuple[str, ...]=('guild',), scope: RaidScope | None=None, player_class: str | None=None) -> CharacterLineage | None
 wcl_app.member_profile: def member_profile(directory: ProfileDirectory, discord_id: str, slug: str | None=None) -> Profile | None
 wcl_app.parse_report_code: def parse_report_code(text: str) -> str | None
 wcl_app.validate_report_code: def validate_report_code(code: str) -> str
@@ -602,6 +604,8 @@ wcl_store.RaidRepository.get_raid_list: def get_raid_list(self, limit: int=50, s
 wcl_store.RaidRepository.get_raids_by_source: def get_raids_by_source(self, source: str='guild', limit: int=50, scope: RaidScope | None=None) -> list[dict[str, Any]]
 wcl_store.RaidRepository.set_raid_era: def set_raid_era(self, report_id: str, game_version: str | None, expansion: str | None) -> None
 wcl_store.RaidRepository.get_raids_without_era: def get_raids_without_era(self) -> list[dict[str, Any]]
+wcl_store.RaidRepository.get_raids_without_classes: def get_raids_without_classes(self) -> list[dict[str, Any]]
+wcl_store.RaidRepository.set_raid_classes: def set_raid_classes(self, report_id: str, classes: Mapping[str, str]) -> None
 wcl_store.RaidRepository.set_raid_label: def set_raid_label(self, report_id: str, label: str | None) -> None
 wcl_store.RaidRepository.get_healing_by_raid: def get_healing_by_raid(self, since: str, scope: RaidScope | None=None) -> list[dict[str, Any]]
 wcl_store.RaidRepository.get_raid_analysis: def get_raid_analysis(self, report_id: str) -> RaidAnalysis | None

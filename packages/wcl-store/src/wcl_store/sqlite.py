@@ -15,7 +15,7 @@ import functools
 import inspect
 import json
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeVar
@@ -42,6 +42,8 @@ from wcl_core.models import (
 )
 
 from . import _codec
+from ._codec import UNKNOWN_CLASS
+from ._codec import known_class as _known_class
 from ._codec import resolve_name as _resolve_name
 from .errors import StorageError
 from .scope import RaidScope
@@ -49,6 +51,9 @@ from .scope import RaidScope
 SCHEMA_VERSION = 2
 
 _T = TypeVar("_T")
+
+# The tables holding one row per character per raid, each with the role and the class played in it.
+_ROLE_TABLES = ("healer_performance", "tank_performance", "dps_performance")
 
 
 class SQLiteStorageError(StorageError, sqlite3.Error):
@@ -111,6 +116,7 @@ CREATE TABLE IF NOT EXISTS healer_performance (
     overheal_percent REAL NOT NULL DEFAULT 0.0,
     fear_ward_casts INTEGER NOT NULL DEFAULT 0,
     total_dispels INTEGER NOT NULL DEFAULT 0,
+    player_class TEXT DEFAULT NULL,
     UNIQUE(character_id, raid_id)
 );
 
@@ -130,6 +136,7 @@ CREATE TABLE IF NOT EXISTS tank_performance (
     total_damage_taken INTEGER NOT NULL DEFAULT 0,
     total_mitigated INTEGER NOT NULL DEFAULT 0,
     mitigation_percent REAL NOT NULL DEFAULT 0.0,
+    player_class TEXT DEFAULT NULL,
     UNIQUE(character_id, raid_id)
 );
 
@@ -155,6 +162,7 @@ CREATE TABLE IF NOT EXISTS dps_performance (
     raid_id INTEGER NOT NULL REFERENCES raids(id),
     role TEXT NOT NULL CHECK(role IN ('melee', 'ranged')),
     total_damage INTEGER NOT NULL DEFAULT 0,
+    player_class TEXT DEFAULT NULL,
     UNIQUE(character_id, raid_id)
 );
 
@@ -392,6 +400,10 @@ class PerformanceDB:
             t_cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
             if "active_time_percent" not in t_cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN active_time_percent REAL DEFAULT 0.0")
+            # The class the character played in that raid, so characters sharing a name stay apart. NULL for a row
+            # stored before it was recorded, until ``set_raid_classes`` fills it.
+            if table != "encounter_performance" and "player_class" not in t_cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN player_class TEXT DEFAULT NULL")
 
         if "interrupt_usage" not in tables:
             conn.executescript("""
@@ -509,12 +521,15 @@ class PerformanceDB:
             (name,),
         ).fetchone()
         if existing:
+            # The class is the newest raid's, so an older raid imported later does not change it.
+            if _known_class(player_class):
+                conn.execute(
+                    "UPDATE characters SET player_class = ? WHERE id = ? AND (? >= last_seen OR player_class = ?)",
+                    (player_class, existing["id"], raid_date, UNKNOWN_CLASS),
+                )
             conn.execute(
-                """UPDATE characters SET
-                       player_class = ?,
-                       last_seen = MAX(last_seen, ?)
-                   WHERE id = ?""",
-                (player_class, raid_date, existing["id"]),
+                "UPDATE characters SET last_seen = MAX(last_seen, ?) WHERE id = ?",
+                (raid_date, existing["id"]),
             )
             return existing["id"]
         conn.execute(
@@ -615,7 +630,7 @@ class PerformanceDB:
 
         for cu in analysis.consumables:
             player = analysis.composition.get_player(cu.player_name)
-            player_class = player.player_class if player else "Unknown"
+            player_class = player.player_class if player else UNKNOWN_CLASS
             char_id = self._upsert_character(cu.player_name, player_class, raid_date)
             ts_json = _codec.dump_list(cu.timestamps)
             conn.execute(
@@ -795,15 +810,16 @@ class PerformanceDB:
         conn.execute(
             """INSERT INTO healer_performance
                (character_id, raid_id, total_healing, total_overhealing, overheal_percent,
-                fear_ward_casts, total_dispels, active_time_percent)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                fear_ward_casts, total_dispels, active_time_percent, player_class)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(character_id, raid_id) DO UPDATE SET
                    total_healing = excluded.total_healing,
                    total_overhealing = excluded.total_overhealing,
                    overheal_percent = excluded.overheal_percent,
                    fear_ward_casts = excluded.fear_ward_casts,
                    total_dispels = excluded.total_dispels,
-                   active_time_percent = excluded.active_time_percent""",
+                   active_time_percent = excluded.active_time_percent,
+                   player_class = excluded.player_class""",
             (
                 char_id,
                 raid_id,
@@ -813,6 +829,7 @@ class PerformanceDB:
                 h.fear_ward_casts,
                 total_dispels,
                 h.active_time_percent,
+                _known_class(h.player_class),
             ),
         )
         perf_id = conn.execute(
@@ -832,14 +849,23 @@ class PerformanceDB:
         conn.execute(
             """INSERT INTO tank_performance
                (character_id, raid_id, total_damage_taken, total_mitigated, mitigation_percent,
-                active_time_percent)
-               VALUES (?, ?, ?, ?, ?, ?)
+                active_time_percent, player_class)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(character_id, raid_id) DO UPDATE SET
                    total_damage_taken = excluded.total_damage_taken,
                    total_mitigated = excluded.total_mitigated,
                    mitigation_percent = excluded.mitigation_percent,
-                   active_time_percent = excluded.active_time_percent""",
-            (char_id, raid_id, t.total_damage_taken, t.total_mitigated, t.mitigation_percent, t.active_time_percent),
+                   active_time_percent = excluded.active_time_percent,
+                   player_class = excluded.player_class""",
+            (
+                char_id,
+                raid_id,
+                t.total_damage_taken,
+                t.total_mitigated,
+                t.mitigation_percent,
+                t.active_time_percent,
+                _known_class(t.player_class),
+            ),
         )
         perf_id = conn.execute(
             "SELECT id FROM tank_performance WHERE character_id = ? AND raid_id = ?",
@@ -865,13 +891,14 @@ class PerformanceDB:
     def _import_dps(self, conn: sqlite3.Connection, char_id: int, raid_id: int, d: DPSPerformance) -> None:
         conn.execute(
             """INSERT INTO dps_performance
-               (character_id, raid_id, role, total_damage, active_time_percent)
-               VALUES (?, ?, ?, ?, ?)
+               (character_id, raid_id, role, total_damage, active_time_percent, player_class)
+               VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(character_id, raid_id) DO UPDATE SET
                    role = excluded.role,
                    total_damage = excluded.total_damage,
-                   active_time_percent = excluded.active_time_percent""",
-            (char_id, raid_id, d.role, d.total_damage, d.active_time_percent),
+                   active_time_percent = excluded.active_time_percent,
+                   player_class = excluded.player_class""",
+            (char_id, raid_id, d.role, d.total_damage, d.active_time_percent, _known_class(d.player_class)),
         )
         perf_id = conn.execute(
             "SELECT id FROM dps_performance WHERE character_id = ? AND raid_id = ?",
@@ -893,7 +920,7 @@ class PerformanceDB:
         raid_id = self._upsert_raid(metadata)
 
         for usage in usage_list:
-            char_id = self._upsert_character(usage.player_name, "Unknown", raid_date)
+            char_id = self._upsert_character(usage.player_name, UNKNOWN_CLASS, raid_date)
             ts_json = _codec.dump_list(usage.timestamps)
             conn.execute(
                 """INSERT INTO consumable_usage (character_id, raid_id, consumable_name, count, timestamps)
@@ -1661,6 +1688,36 @@ class PerformanceDB:
         )
         return [dict(r) for r in rows]
 
+    def get_raids_without_classes(self) -> list[dict]:
+        unknown = " UNION ".join(f"SELECT raid_id FROM {tbl} WHERE player_class IS NULL" for tbl in _ROLE_TABLES)
+        rows = (
+            self._get_conn()
+            .execute(
+                f"""SELECT report_id, game_version FROM raids WHERE id IN ({unknown})
+                   ORDER BY raid_date, report_id"""
+            )
+            .fetchall()
+        )
+        return [dict(r) for r in rows]
+
+    def set_raid_classes(self, report_id: str, classes: Mapping[str, str]) -> None:
+        conn = self._get_conn()
+        raid = conn.execute("SELECT id FROM raids WHERE report_id = ?", (report_id,)).fetchone()
+        if raid is None:
+            return
+        for name, player_class in classes.items():
+            known = _known_class(player_class)
+            if known is None:
+                continue
+            for tbl in _ROLE_TABLES:
+                conn.execute(
+                    f"""UPDATE {tbl} SET player_class = ?
+                       WHERE raid_id = ? AND character_id IN
+                           (SELECT id FROM characters WHERE name = ? COLLATE NOCASE)""",
+                    (known, raid["id"], name),
+                )
+        conn.commit()
+
     def get_guild_raids_for_comparison(self, limit: int = 50) -> list[dict]:
         """Get guild raids with zone and size for comparison dropdowns."""
         conn = self._get_conn()
@@ -1913,21 +1970,21 @@ class PerformanceDB:
             .execute(
                 f"""SELECT r.id AS raid_id, r.report_id, r.title, r.raid_date, r.zone, 'healer' AS role,
                        hp.total_healing AS healing, hp.overheal_percent, NULL AS damage,
-                       NULL AS damage_taken, NULL AS mitigation_percent
+                       NULL AS damage_taken, NULL AS mitigation_percent, hp.player_class
                 FROM healer_performance hp
                 JOIN raids r ON r.id = hp.raid_id
                 JOIN characters c ON c.id = hp.character_id
                 WHERE c.name = ? COLLATE NOCASE AND {src_sql}
                 UNION ALL
                 SELECT r.id, r.report_id, r.title, r.raid_date, r.zone, 'tank',
-                       NULL, NULL, NULL, tp.total_damage_taken, tp.mitigation_percent
+                       NULL, NULL, NULL, tp.total_damage_taken, tp.mitigation_percent, tp.player_class
                 FROM tank_performance tp
                 JOIN raids r ON r.id = tp.raid_id
                 JOIN characters c ON c.id = tp.character_id
                 WHERE c.name = ? COLLATE NOCASE AND {src_sql}
                 UNION ALL
                 SELECT r.id, r.report_id, r.title, r.raid_date, r.zone, dp.role,
-                       NULL, NULL, dp.total_damage, NULL, NULL
+                       NULL, NULL, dp.total_damage, NULL, NULL, dp.player_class
                 FROM dps_performance dp
                 JOIN raids r ON r.id = dp.raid_id
                 JOIN characters c ON c.id = dp.character_id
@@ -1947,21 +2004,21 @@ class PerformanceDB:
         rows = (
             self._get_conn()
             .execute(
-                f"""SELECT hp.raid_id, 'healer' AS role, s.spell_id, s.spell_name, s.casts
+                f"""SELECT hp.raid_id, 'healer' AS role, s.spell_id, s.spell_name, s.casts, hp.player_class
                 FROM healer_spells s
                 JOIN healer_performance hp ON hp.id = s.healer_performance_id
                 JOIN raids r ON r.id = hp.raid_id
                 JOIN characters c ON c.id = hp.character_id
                 WHERE c.name = ? COLLATE NOCASE AND {src_sql}
                 UNION ALL
-                SELECT tp.raid_id, 'tank', a.spell_id, a.spell_name, a.casts
+                SELECT tp.raid_id, 'tank', a.spell_id, a.spell_name, a.casts, tp.player_class
                 FROM tank_abilities a
                 JOIN tank_performance tp ON tp.id = a.tank_performance_id
                 JOIN raids r ON r.id = tp.raid_id
                 JOIN characters c ON c.id = tp.character_id
                 WHERE c.name = ? COLLATE NOCASE AND {src_sql}
                 UNION ALL
-                SELECT dp.raid_id, dp.role, a.spell_id, a.spell_name, a.casts
+                SELECT dp.raid_id, dp.role, a.spell_id, a.spell_name, a.casts, dp.player_class
                 FROM dps_abilities a
                 JOIN dps_performance dp ON dp.id = a.dps_performance_id
                 JOIN raids r ON r.id = dp.raid_id

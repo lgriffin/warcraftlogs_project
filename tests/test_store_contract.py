@@ -744,8 +744,10 @@ def test_character_raid_roles(repo):
         "damage",
         "damage_taken",
         "mitigation_percent",
+        "player_class",
     }
     assert (rows[0]["healing"], rows[0]["damage_taken"], rows[0]["mitigation_percent"]) == (None, None, None)
+    assert {r["player_class"] for r in rows} == {"Rogue"}
 
     (healer,) = repo.get_character_raid_roles("Holy", sources=("reference",))
     assert (healer["report_id"], healer["role"], healer["healing"], healer["overheal_percent"]) == (
@@ -777,6 +779,74 @@ def test_character_spell_casts(repo):
     assert casts("Holy") == [(raid_id, "healer", 139, "Renew", 80), (raid_id, "healer", 2060, "Greater Heal", 50)]
     assert casts("Stab") == [(raid_id, "melee", 26862, "Sinister Strike", 120)]
     assert casts("Stab", ("reference",)) == []
+
+
+def _as_class(analysis: RaidAnalysis, healer_class: str) -> RaidAnalysis:
+    """``analysis`` with its healer playing ``healer_class`` everywhere the raid names a class."""
+    name = analysis.healers[0].name
+
+    def recast(players: list[Any]) -> list[Any]:
+        return [replace(p, player_class=healer_class) if p.name == name else p for p in players]
+
+    return replace(
+        analysis,
+        healers=recast(analysis.healers),
+        composition=replace(analysis.composition, healers=recast(analysis.composition.healers)),
+        encounters=[replace(e, players=recast(e.players)) for e in analysis.encounters],
+    )
+
+
+def test_role_rows_keep_the_class_played_in_each_raid(repo):
+    # Hadur was a priest in Karazhan and a shaman, under the same name, in Gruul's Lair.
+    repo.import_raid(_analysis(KARA, start=T0, healer="Hadur"))
+    repo.import_raid(_as_class(_analysis(GRUUL, start=T0 + DAY, healer="Hadur"), "Shaman"))
+
+    rows = repo.get_character_raid_roles("hadur")
+    assert [(r["report_id"], r["player_class"]) for r in rows] == [(KARA, "Priest"), (GRUUL, "Shaman")]
+    by_raid = {r["raid_id"]: r["report_id"] for r in rows}
+    casts = {
+        (by_raid[c["raid_id"]], c["spell_name"], c["player_class"]) for c in repo.get_character_spell_casts("Hadur")
+    }
+    assert (KARA, "Greater Heal", "Priest") in casts
+    assert (GRUUL, "Greater Heal", "Shaman") in casts
+    assert repo.get_raids_without_classes() == []
+
+    history = repo.get_character_history("Hadur")
+    assert history is not None and history.player_class == "Shaman"
+    # An older raid imported later leaves the character's class at the newest raid's.
+    repo.import_raid(_analysis(REF, start=T0 - DAY, healer="Hadur"))
+    history = repo.get_character_history("Hadur")
+    assert history is not None and history.player_class == "Shaman"
+
+
+def test_unknown_classes_are_listed_and_set_later(repo):
+    repo.import_raid(_as_class(_analysis(KARA, start=T0), "Unknown"))
+    repo.import_raid(_analysis(GRUUL, start=T0 + DAY, game_version="fresh"))
+    repo.import_raid(_as_class(_analysis(REF, start=T0 + 2 * DAY, game_version="fresh"), ""), source="reference")
+
+    assert repo.get_raids_without_classes() == [
+        {"report_id": KARA, "game_version": None},
+        {"report_id": REF, "game_version": "fresh"},
+    ]
+    assert [r["player_class"] for r in repo.get_character_raid_roles("Holy", ("guild", "reference"))] == [
+        None,
+        "Priest",
+        None,
+    ]
+    # An unknown class never replaces a known one on the character.
+    history = repo.get_character_history("Holy")
+    assert history is not None and history.player_class == "Priest"
+
+    repo.set_raid_classes(KARA, {"HOLY": "Priest", "Stab": "Unknown", "Nobody": "Mage"})
+    repo.set_raid_classes(REF, {"Holy": ""})
+    repo.set_raid_classes("unknown0000000000", {"Holy": "Druid"})
+    assert repo.get_raids_without_classes() == [{"report_id": REF, "game_version": "fresh"}]
+    assert [r["player_class"] for r in repo.get_character_raid_roles("Holy", ("guild", "reference"))] == [
+        "Priest",
+        "Priest",
+        None,
+    ]
+    assert {r["player_class"] for r in repo.get_character_raid_roles("Stab")} == {"Rogue"}
 
 
 def test_character_consumable_counts(repo):
@@ -981,6 +1051,7 @@ def _snapshot(repo: RaidRepository) -> dict[str, Any]:
         "by_source": rows(repo.get_raids_by_source("guild")),
         "scoped": rows(repo.get_raid_list(scope=RaidScope(zones=("gruul's lair",), since="2000-01-01 00:00:00"))),
         "without_era": repo.get_raids_without_era(),
+        "without_classes": repo.get_raids_without_classes(),
         "analysis": [asdict(repo.get_raid_analysis(c)) for c in (KARA, GRUUL)],
         "roster": repo.get_raid_roster(GRUUL),
         "sources": [repo.get_raid_source(c) for c in (KARA, GRUUL, REF)],

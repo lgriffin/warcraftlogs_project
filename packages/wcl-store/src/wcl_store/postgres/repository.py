@@ -163,16 +163,16 @@ class PostgresRaidRepository:
     # ── Characters and raids (write helpers) ──
 
     def _upsert_character(self, conn: Connection, name: str, player_class: str, raid_date: str) -> int:
+        c = t.characters.c
         stmt = insert(t.characters).values(
             name=name, player_class=player_class, first_seen=raid_date, last_seen=raid_date
         )
-        upsert = stmt.on_conflict_do_update(
-            index_elements=[nocase(t.characters.c.name)],
-            set_={
-                "player_class": stmt.excluded.player_class,
-                "last_seen": func.greatest(t.characters.c.last_seen, stmt.excluded.last_seen),
-            },
-        ).returning(t.characters.c.id)
+        changes: dict[str, Any] = {"last_seen": func.greatest(c.last_seen, stmt.excluded.last_seen)}
+        # The class is the newest raid's, so an older raid imported later does not change it.
+        if _codec.known_class(player_class):
+            newer = or_(stmt.excluded.last_seen >= c.last_seen, c.player_class == _codec.UNKNOWN_CLASS)
+            changes["player_class"] = case((newer, stmt.excluded.player_class), else_=c.player_class)
+        upsert = stmt.on_conflict_do_update(index_elements=[nocase(c.name)], set_=changes).returning(c.id)
         return conn.execute(upsert).scalar_one()
 
     def _upsert_raid(self, conn: Connection, metadata: RaidMetadata, source: str) -> int:
@@ -263,7 +263,7 @@ class PostgresRaidRepository:
         for cu in analysis.consumables:
             player = analysis.composition.get_player(cu.player_name)
             values = {
-                "character_id": char(cu.player_name, player.player_class if player else "Unknown"),
+                "character_id": char(cu.player_name, player.player_class if player else _codec.UNKNOWN_CLASS),
                 "raid_id": raid_id,
                 "consumable_name": cu.consumable_name,
                 "count": cu.count,
@@ -370,6 +370,7 @@ class PostgresRaidRepository:
             "fear_ward_casts": h.fear_ward_casts,
             "total_dispels": sum(d.casts for d in h.dispels),
             "active_time_percent": h.active_time_percent,
+            "player_class": _codec.known_class(h.player_class),
         }
         perf_id: int = conn.execute(
             _upsert(
@@ -403,6 +404,7 @@ class PostgresRaidRepository:
             "total_mitigated": tank.total_mitigated,
             "mitigation_percent": tank.mitigation_percent,
             "active_time_percent": tank.active_time_percent,
+            "player_class": _codec.known_class(tank.player_class),
         }
         perf_id: int = conn.execute(
             _upsert(
@@ -448,13 +450,14 @@ class PostgresRaidRepository:
             "role": d.role,
             "total_damage": d.total_damage,
             "active_time_percent": d.active_time_percent,
+            "player_class": _codec.known_class(d.player_class),
         }
         perf_id: int = conn.execute(
             _upsert(
                 t.dps_performance,
                 values,
                 ["character_id", "raid_id"],
-                ["role", "total_damage", "active_time_percent"],
+                ["role", "total_damage", "active_time_percent", "player_class"],
             ).returning(t.dps_performance.c.id)
         ).scalar_one()
         conn.execute(delete(t.dps_abilities).where(t.dps_abilities.c.dps_performance_id == perf_id))
@@ -628,6 +631,43 @@ class PostgresRaidRepository:
                     .order_by(_c(r.raid_date), _c(r.report_id))
                 )
             )
+
+    @_storage_errors
+    def get_raids_without_classes(self) -> list[dict[str, Any]]:
+        r = t.raids.c
+        unknown = union(
+            *(
+                select(tbl.c.raid_id).where(tbl.c.player_class.is_(None))
+                for tbl in (t.healer_performance, t.tank_performance, t.dps_performance)
+            )
+        )
+        with self._engine.connect() as conn:
+            return _dicts(
+                conn.execute(
+                    select(r.report_id, r.game_version)
+                    .where(r.id.in_(unknown))
+                    .order_by(_c(r.raid_date), _c(r.report_id))
+                )
+            )
+
+    @_storage_errors
+    def set_raid_classes(self, report_id: str, classes: Mapping[str, str]) -> None:
+        with self._engine.begin() as conn:
+            raid_id = self._raid_id(conn, report_id)
+            if raid_id is None:
+                return
+            c = t.characters.c
+            for name, player_class in classes.items():
+                known = _codec.known_class(player_class)
+                if known is None:
+                    continue
+                ids = select(c.id).where(_nocase_eq(c.name, name))
+                for tbl in (t.healer_performance, t.tank_performance, t.dps_performance):
+                    conn.execute(
+                        update(tbl)
+                        .where(tbl.c.raid_id == raid_id, tbl.c.character_id.in_(ids))
+                        .values(player_class=known)
+                    )
 
     @_storage_errors
     def set_raid_label(self, report_id: str, label: str | None) -> None:
@@ -1053,6 +1093,7 @@ class PostgresRaidRepository:
             null().cast(big).label("damage"),
             null().cast(big).label("damage_taken"),
             null().cast(real).label("mitigation_percent"),
+            hp.c.player_class,
         ).select_from(hp)
         tank = select(
             *base,
@@ -1062,6 +1103,7 @@ class PostgresRaidRepository:
             null().cast(big),
             tp.c.total_damage_taken,
             tp.c.mitigation_percent,
+            tp.c.player_class,
         ).select_from(tp)
         dps = select(
             *base,
@@ -1071,6 +1113,7 @@ class PostgresRaidRepository:
             dp.c.total_damage,
             null().cast(big),
             null().cast(real),
+            dp.c.player_class,
         ).select_from(dp)
         parts = [
             self._for_character(q, tbl, character_name, sources, scope)
@@ -1087,14 +1130,14 @@ class PostgresRaidRepository:
         hp, tp, dp = t.healer_performance, t.tank_performance, t.dps_performance
         hs, ta, da = t.healer_spells, t.tank_abilities, t.dps_abilities
         healer = select(
-            hp.c.raid_id, literal("healer").label("role"), hs.c.spell_id, hs.c.spell_name, hs.c.casts
+            hp.c.raid_id, literal("healer").label("role"), hs.c.spell_id, hs.c.spell_name, hs.c.casts, hp.c.player_class
         ).select_from(hs.join(hp, hp.c.id == hs.c.healer_performance_id))
-        tank = select(tp.c.raid_id, literal("tank"), ta.c.spell_id, ta.c.spell_name, ta.c.casts).select_from(
-            ta.join(tp, tp.c.id == ta.c.tank_performance_id)
-        )
-        dps = select(dp.c.raid_id, dp.c.role, da.c.spell_id, da.c.spell_name, da.c.casts).select_from(
-            da.join(dp, dp.c.id == da.c.dps_performance_id)
-        )
+        tank = select(
+            tp.c.raid_id, literal("tank"), ta.c.spell_id, ta.c.spell_name, ta.c.casts, tp.c.player_class
+        ).select_from(ta.join(tp, tp.c.id == ta.c.tank_performance_id))
+        dps = select(
+            dp.c.raid_id, dp.c.role, da.c.spell_id, da.c.spell_name, da.c.casts, dp.c.player_class
+        ).select_from(da.join(dp, dp.c.id == da.c.dps_performance_id))
         stmt = union_all(
             *(
                 self._for_character(q, tbl, character_name, sources, scope)
