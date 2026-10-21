@@ -1,6 +1,6 @@
 [project]
 name = "wcl-store"
-version = "4.4.0"
+version = "4.5.0"
 description = "Storage for WCL Analyzer raid data: one RaidRepository contract, SQLite and Postgres backends"
 requires-python = ">=3.10"
 license = "MIT"

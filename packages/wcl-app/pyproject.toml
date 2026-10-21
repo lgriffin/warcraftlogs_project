@@ -1,6 +1,6 @@
 [project]
 name = "wcl-app"
-version = "4.4.0"
+version = "4.5.0"
 description = "WCL Analyzer application services: raid, player page and role-override use cases"
 requires-python = ">=3.10"
 license = "MIT"
