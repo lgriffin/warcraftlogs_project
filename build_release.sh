@@ -31,8 +31,11 @@ if [ ! -f "$INSTALLER" ]; then
     exit 1
 fi
 
+# Installed copies refuse an update that SHA256SUMS does not list (warcraftlogs_client/updater.py).
+(cd installer_output && sha256sum "$(basename "$INSTALLER")") > SHA256SUMS
+
 echo "[3/3] Creating GitHub release..."
-gh release create "v${VERSION}" "$INSTALLER" \
+gh release create "v${VERSION}" "$INSTALLER" SHA256SUMS \
     --title "WarcraftLogs Analyzer v${VERSION}" \
     --notes "## WarcraftLogs Analyzer v${VERSION}
 

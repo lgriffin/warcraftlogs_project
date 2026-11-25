@@ -419,3 +419,24 @@ def test_unwritable_script_folder_is_reported_and_unstaged(tmp_path, dirs, monke
         apply_update(str(zip_path), digest)
     assert not dirs["staged"].exists()
     dirs["popen"].assert_not_called()
+
+
+class TestFailedSilentInstall:
+    def test_script_logs_setup_and_keeps_it_when_it_fails(self, dirs):
+        setup = dirs["update"] / SETUP_NAME
+        script = updater.installer_update_script(str(setup), dirs["install"])
+        assert '/LOG="' in script and updater.SETUP_LOG in script
+        assert 'set "rc=%errorlevel%"' in script
+        failed, succeeded = script.split(") else (")
+        assert updater.FAILURE_MARKER in failed and "del" not in failed.split("if not")[-1]
+        assert f'del /f /q "{str(setup).replace("/", chr(92))}"' in succeeded
+
+    def test_failure_is_reported_once(self, dirs):
+        (dirs["update"] / updater.FAILURE_MARKER).write_text("5\n")
+        message = updater.take_update_failure()
+        assert message is not None
+        assert "exit code 5" in message and updater.SETUP_LOG in message
+        assert updater.take_update_failure() is None
+
+    def test_no_marker_means_no_failure(self, dirs):
+        assert updater.take_update_failure() is None

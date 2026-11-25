@@ -63,3 +63,10 @@ def test_release_checksums_and_publishes_the_installer():
     assert "if (" not in sums["run"].split("installer_output")[0].splitlines()[-1]
     release = next(s for s in steps if "action-gh-release" in s.get("uses", ""))
     assert "installer_output/*.exe" in release["with"]["files"]
+
+
+def test_local_release_script_publishes_sha256sums_with_the_installer():
+    """Installed copies refuse a Setup.exe that SHA256SUMS does not list, so a hand-made release needs one too."""
+    script = (ROOT / "build_release.sh").read_text(encoding="utf-8")
+    assert "sha256sum" in script
+    assert '"$INSTALLER" SHA256SUMS' in script

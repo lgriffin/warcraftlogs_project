@@ -338,23 +338,37 @@ def _win(path: Path | str) -> str:
     return str(path).replace("/", "\\")
 
 
+FAILURE_MARKER = "update_failed.txt"
+SETUP_LOG = "setup.log"
+
+
 def installer_update_script(setup_path: str, install_dir: Path) -> str:
     """A batch script that waits for the app to quit, runs the new Setup.exe silently, then relaunches the app.
 
     The installer upgrades the existing install in place (same AppId, its previous folder), keeping the
     uninstaller and the version in "Apps & features" right. User data lives in %APPDATA% and is untouched.
+    If Setup fails, the script keeps the installer and its log and leaves ``FAILURE_MARKER`` with the exit code,
+    so the relaunched app can say so (``take_update_failure``) instead of silently offering the update again.
     """
+    update_dir = Path(setup_path).parent
     setup = _win(setup_path)
+    log = _win(update_dir / SETUP_LOG)
+    marker = _win(update_dir / FAILURE_MARKER)
     exe = _win(install_dir / "WarcraftLogsAnalyzer.exe")
     flags = " ".join(SILENT_INSTALL_FLAGS)
     return f"""@echo off
 echo Updating WarcraftLogs Analyzer...
 timeout /t 2 /nobreak >nul
 
-start "" /wait "{setup}" {flags}
-
-rem Clean up the downloaded installer
-if exist "{setup}" del /f /q "{setup}"
+if exist "{marker}" del /f /q "{marker}"
+start "" /wait "{setup}" {flags} /LOG="{log}"
+set "rc=%errorlevel%"
+if not "%rc%"=="0" (
+    rem Redirect first: "echo 2> file" would redirect stderr instead of writing the code
+    > "{marker}" echo %rc%
+) else (
+    if exist "{setup}" del /f /q "{setup}"
+)
 
 rem Relaunch
 start "" "{exe}"
@@ -362,6 +376,21 @@ start "" "{exe}"
 rem Delete this script
 del "%~f0"
 """
+
+
+def take_update_failure() -> str | None:
+    """The message for a silent install that failed since the last launch, or None; reading it clears it."""
+    update_dir = paths.get_update_dir()
+    marker = update_dir / FAILURE_MARKER
+    try:
+        code = marker.read_text(encoding="utf-8", errors="replace").strip()
+        marker.unlink()
+    except OSError:
+        return None
+    return (
+        f"The last update did not install (Setup exit code {code or 'unknown'}). "
+        f"Details are in {update_dir / SETUP_LOG}; you can retry from Settings or run the installer from that folder."
+    )
 
 
 def _stage_zip(zip_path: str) -> tuple[Path, str]:
