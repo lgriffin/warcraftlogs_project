@@ -215,7 +215,7 @@ class AppContext:
         """A client on the site a raid of *game_version* was fetched from, for reading more of that raid.
 
         The active profile's own host for its own game version (it may name a custom API URL); otherwise the
-        version's site. A raid stored before eras were read, or of a version whose site is not announced yet, came
+        version's site. A raid stored before eras were read, or of a version with no known site, came
         from the configured site. The context's own client is reused when the site is the same, and a headless host
         always gets the client it brought.
         """
@@ -242,15 +242,18 @@ class AppContext:
             raise ConfigurationError(f"Missing config value: {e.args[0]}") from e
 
     def user_client(self) -> WarcraftLogsClient | None:
-        """User-scoped WCL client for reference reports, or None if the user has not signed in."""
+        """User-scoped WCL client for reference reports, or None if the user has not signed in.
+
+        It asks the same site imports use (``api_url``: the active profile's host first), so a Forever profile
+        reads Forever reports even when config.json names another site."""
         if self._headless:
             return self._user_client() if self._user_client is not None else None
-        from wcl_core.user_auth import UserTokenManager, _get_base_url
+        from wcl_core.user_auth import UserTokenManager, user_api_url
 
         user_tm = UserTokenManager()
         if not user_tm.is_authenticated():
             return None
-        return WarcraftLogsClient(user_tm, cache_enabled=False, api_url=f"{_get_base_url()}/api/v2/user")
+        return WarcraftLogsClient(user_tm, cache_enabled=False, api_url=user_api_url(self.api_url or ""))
 
     @contextmanager
     def db(self) -> Iterator["PerformanceDB"]:

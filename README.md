@@ -122,7 +122,7 @@ The first time the app opens without API keys it starts **Setup**, which walks y
    before going on.
 2. **Your guild.** Paste a link to your guild's Warcraft Logs page or to any report your guild logged, or type the
    guild's name with its server and region. Setup finds the guild id, name and server for you, and the Warcraft Logs
-   site (Anniversary, Classic Era, Season of Discovery or retail) imports should use. "Skip guild" keeps just the keys.
+   site (Anniversary, Classic Era, Season of Discovery, WoW Forever or retail) imports should use. "Skip guild" keeps just the keys.
 
 Run it again from **Settings > Run Setup** or the command palette (Ctrl+F). In Settings, **Find Guild...** looks a
 guild up the same way, and **Get API Keys** opens the client page.

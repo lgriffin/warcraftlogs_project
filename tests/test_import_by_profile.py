@@ -2,7 +2,7 @@
 
 The guild list comes from the profile's guild and is cut to its era by ``RaidScope.admits``; every raid an import
 stores is tagged from the site and zone, so the profile lists it without a backfill; and a profile whose site the
-client is not on (Forever, until Warcraft Logs announces it) refuses to import rather than mistag.
+client is not on refuses to import rather than mistag.
 """
 
 from datetime import datetime
@@ -185,9 +185,9 @@ def test_a_raid_imported_under_a_profile_is_listed_by_it_without_a_backfill(wcl,
     assert listed == {KARA: ("fresh", TBC), GRUUL: ("fresh", TBC), TRASH: ("fresh", None)}
 
 
-def test_a_profile_whose_site_is_unknown_refuses_to_import(wcl, tmp_path):
+def test_a_profile_on_another_site_than_the_client_refuses_to_import(wcl, tmp_path):
     forever = Profile("forever", "Forever", game_version="forever")
-    assert forever.api_url is None  # Warcraft Logs has not announced the site, so the configured host stays
+    assert forever.api_url == "https://forever.warcraftlogs.com/api/v2/client"  # but the client stays on fresh
     raids = RaidService(_ctx(wcl, tmp_path, forever))
     with pytest.raises(ProfileSiteUnknown, match="Forever profile is forever, but imports would come from the fresh"):
         raids.guild_reports()
@@ -202,6 +202,8 @@ def test_a_profile_whose_site_is_unknown_refuses_to_import(wcl, tmp_path):
 def test_the_site_check_passes_with_the_profiles_own_url_or_no_game_version(wcl, tmp_path):
     forever = Profile("forever", "Forever", game_version="forever", wcl_api_url="https://forever.warcraftlogs.com/x")
     RaidService(_ctx(wcl, tmp_path, forever, api_url=forever.api_url)).check_profile_site()
+    on_its_site = Profile("forever", "Forever", game_version="forever")
+    RaidService(_ctx(wcl, tmp_path, on_its_site, api_url=on_its_site.api_url)).check_profile_site()
     RaidService(_ctx(wcl, tmp_path, Profile("tbc", "TBC", expansions=(TBC,)))).check_profile_site()
     RaidService(_ctx(wcl, tmp_path)).check_profile_site()
     with patch.object(AppContext, "user_client", return_value=None), pytest.raises(ReferenceAuthRequired):

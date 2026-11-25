@@ -3,9 +3,9 @@
 Two axes, kept apart on purpose (see ``guides/identity_and_profiles.md``):
 
 - a **game version** is a Warcraft Logs site: ``fresh`` (Anniversary realms, which went from Classic into The
-  Burning Crusade), ``classic`` (Classic Era and Hardcore), ``sod`` (Season of Discovery), ``forever`` (the
-  version launching in November 2026; its Warcraft Logs host is not announced yet, so it has no entry in
-  ``HOSTS`` until it is) and ``retail``. It is derived from the API host a report was fetched through.
+  Burning Crusade), ``classic`` (Classic Era and Hardcore), ``sod`` (Season of Discovery), ``forever`` (WoW Forever,
+  released November 2026, on ``forever.warcraftlogs.com``) and ``retail``. It is derived from the API host a
+  report was fetched through.
 - an **expansion** is the content era of a report's zone: ``Classic``, ``The Burning Crusade`` and so on. The
   API reports it as ``zone { expansion { name } }``; raids stored before that was read are backfilled from the
   zone name through ``ZONE_EXPANSIONS``.
@@ -25,12 +25,13 @@ RETAIL = "retail"
 
 GAME_VERSIONS: tuple[str, ...] = (FRESH, CLASSIC, SOD, FOREVER, RETAIL)
 
-# Warcraft Logs site per game version, for building API URLs and report links. A version missing here (forever,
-# until Warcraft Logs announces its site) has no host: imports keep the configured ``wcl_api_url``.
+# Warcraft Logs site per game version, for building API URLs and report links. A version missing here has no host:
+# imports keep the configured ``wcl_api_url``.
 HOSTS: dict[str, str] = {
     FRESH: "https://fresh.warcraftlogs.com",
     CLASSIC: "https://classic.warcraftlogs.com",
     SOD: "https://sod.warcraftlogs.com",
+    FOREVER: "https://forever.warcraftlogs.com",
     RETAIL: "https://www.warcraftlogs.com",
 }
 
@@ -86,7 +87,7 @@ def api_url_for(game_version: str) -> str | None:
 
 
 def host_for(game_version: str) -> str | None:
-    """The site of a game version, or None when Warcraft Logs has not announced one (``forever``, unknown names)."""
+    """The site of a game version, or None for a name this module does not know."""
     return HOSTS.get(game_version)
 
 

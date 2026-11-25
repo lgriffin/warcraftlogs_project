@@ -197,9 +197,15 @@ class UserTokenManager:
 
 
 def user_api_url(api_url: str) -> str:
-    """The user-scoped API next to a client API URL: ``.../api/v2/client`` -> ``.../api/v2/user``."""
-    parsed = urlparse(api_url)
-    host = f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else "https://www.warcraftlogs.com"
+    """The user-scoped API next to a client API URL: ``.../api/v2/client`` -> ``.../api/v2/user``.
+
+    An empty or malformed URL gives the main site's."""
+    try:
+        parsed = urlparse(api_url)
+        hostname = parsed.hostname
+    except ValueError:  # an unclosed [host]
+        hostname = None
+    host = f"{parsed.scheme}://{hostname}" if hostname else "https://www.warcraftlogs.com"
     return f"{host}/api/v2/user"
 
 

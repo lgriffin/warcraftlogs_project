@@ -29,10 +29,15 @@ def test_every_hosted_game_version_round_trips_through_its_api_url():
         assert gv.game_version_for_url(url) == version
 
 
-def test_forever_is_a_game_version_without_a_host_yet():
+def test_forever_is_on_its_own_warcraft_logs_site():
     assert gv.FOREVER in gv.GAME_VERSIONS
-    assert gv.host_for(gv.FOREVER) is None and gv.api_url_for(gv.FOREVER) is None
-    assert gv.host_for("nope") is None
+    assert gv.host_for(gv.FOREVER) == "https://forever.warcraftlogs.com"
+    assert gv.api_url_for(gv.FOREVER) == "https://forever.warcraftlogs.com/api/v2/client"
+
+
+def test_every_game_version_has_a_site_and_an_unknown_name_has_none():
+    assert set(gv.HOSTS) == set(gv.GAME_VERSIONS)
+    assert gv.host_for("nope") is None and gv.api_url_for("nope") is None
 
 
 @pytest.mark.parametrize(
