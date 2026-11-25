@@ -27,7 +27,7 @@ from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
 from wcl_core.common.log import get_logger
-from wcl_core.flasks import FlaskCatalog, load_catalog, preparation
+from wcl_core.flasks import FlaskCatalog, combined_catalog, preparation
 from wcl_store import RaidScope, narrowed
 
 from wcl_app.context import AppContext, ScopeSource, StorageFactory, resolve_scope
@@ -129,7 +129,7 @@ def _items(*names: str) -> frozenset[str]:
     return frozenset(n.lower() for n in names)
 
 
-# Consumable names as ``wcl_core/data/consumes_config.json`` records them.
+# Consumable names as ``wcl_core/data/tbc/consumes_config.json`` records them.
 MANA_POTIONS = _items(
     "Super Mana Potion",
     "Fel Mana Potion",
@@ -175,7 +175,7 @@ WEAPON_ENHANCEMENTS = _items(
 )
 # Flasks and elixirs have their own badge, and a flask's aura can be applied many times a raid, so Well Stocked
 # leaves them out.
-FLASKS_AND_ELIXIRS = _items(*load_catalog().names)
+FLASKS_AND_ELIXIRS = _items(*combined_catalog().names)
 SCROLLS = _items("Scroll of Agility V", "Scroll of Agility IV", "Scroll of Strength V", "Scroll of Strength IV")
 
 DEFAULT_RULES: tuple[BadgeRule, ...] = (
@@ -400,7 +400,7 @@ def character_stats(
     consumables: dict[str, int] = {}
     for row in rows:
         consumables[row["consumable_name"]] = consumables.get(row["consumable_name"], 0) + row["count"]
-    flasked = _prepared_raids((r for r in rows if r["count"] > 0), load_catalog())
+    flasked = _prepared_raids((r for r in rows if r["count"] > 0), combined_catalog())
     return PlayerStats(name, raids=len(raids), consumables=consumables, flasked_raids=flasked)
 
 
@@ -415,7 +415,7 @@ def guild_stats(
     for row in repo.get_consumable_totals(sources, scope=scope):
         player = stats.setdefault(row["name"].lower(), PlayerStats(row["name"]))
         player.consumables[row["consumable_name"]] = row["count"]
-    catalog = load_catalog()
+    catalog = combined_catalog()
     rows_by_name: dict[str, list[dict[str, Any]]] = {}
     for row in repo.get_consumable_raids(catalog.names, sources, scope=scope):
         rows_by_name.setdefault(row["name"].lower(), []).append(row)

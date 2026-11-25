@@ -58,7 +58,7 @@ def test_tampered_download_refused_and_deleted(qtbot, tmp_path, monkeypatch):
     assert finished == []
     assert len(errors) == 1
     assert "does not match the SHA-256" in errors[0]
-    assert not (tmp_path / "WarcraftLogsAnalyzer-v9.9.9.zip").exists()
+    assert not (tmp_path / ZIP_NAME).exists()
 
 
 def test_release_without_sha256sums_refused_before_download(qtbot, tmp_path, monkeypatch):

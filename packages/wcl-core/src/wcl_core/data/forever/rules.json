@@ -1,0 +1,8 @@
+{
+  "_comment": [
+    "WoW Forever ruleset (wcl_core.rules), picked for every report on Forever's Warcraft Logs site. Forever is level 60",
+    "and built on Classic, so it starts as the Classic ruleset and its catalogs; a table set here, or a catalog added",
+    "to this folder, replaces Classic's once real Forever logs show what differs."
+  ],
+  "extends": "classic"
+}

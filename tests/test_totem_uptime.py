@@ -1,8 +1,11 @@
 """Tests for totem uptime analysis and DB persistence."""
 
 import json
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from wcl_core.rules import default_rules
 
 from warcraftlogs_client.analysis import (
     _analyze_totem_uptimes,
@@ -70,20 +73,14 @@ def shaman_composition():
 
 
 class TestLoadTotemConfig:
-    def test_loads_totems(self, totem_config_file, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
-        monkeypatch.setattr(paths, "get_totem_config_path", lambda: totem_config_file)
-        config = _load_totem_config()
+    def test_loads_totems(self, totem_config_file):
+        config = _load_totem_config(replace(default_rules(), data_dir=Path(totem_config_file).parent))
         assert 25587 in config
         assert config[25587]["name"] == "Windfury Totem"
         assert config[25587]["duration"] == 120
 
-    def test_returns_empty_when_missing(self, tmp_path, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
-        monkeypatch.setattr(paths, "get_totem_config_path", lambda: str(tmp_path / "missing.json"))
-        config = _load_totem_config()
+    def test_returns_empty_when_missing(self, tmp_path):
+        config = _load_totem_config(replace(default_rules(), data_dir=tmp_path))
         assert config == {}
 
 
@@ -144,7 +141,7 @@ class TestAnalyzeTotemUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_totem_config",
-            lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
+            lambda _rules=None: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
         mock_client.get_cast_events_paginated.side_effect = [
@@ -171,7 +168,7 @@ class TestAnalyzeTotemUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_totem_config",
-            lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
+            lambda _rules=None: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
         mock_client.get_cast_events_paginated.side_effect = [
@@ -192,7 +189,7 @@ class TestAnalyzeTotemUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_totem_config",
-            lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
+            lambda _rules=None: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
         mock_client.get_cast_events_paginated.side_effect = [
@@ -208,7 +205,7 @@ class TestAnalyzeTotemUptimes:
     def test_empty_config_returns_empty(self, mock_client, shaman_composition, sample_encounters, monkeypatch):
         import warcraftlogs_client.analysis as analysis_mod
 
-        monkeypatch.setattr(analysis_mod, "_load_totem_config", lambda: {})
+        monkeypatch.setattr(analysis_mod, "_load_totem_config", lambda _rules=None: {})
         results, warnings = _analyze_totem_uptimes(mock_client, "test_report", shaman_composition, sample_encounters)
         assert results == []
         assert warnings == []
@@ -219,7 +216,7 @@ class TestAnalyzeTotemUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_totem_config",
-            lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
+            lambda _rules=None: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
         comp = RaidComposition(
             melee=[PlayerIdentity(name="Rogue", player_class="Rogue", source_id=1, role="melee")],
@@ -233,7 +230,7 @@ class TestAnalyzeTotemUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_totem_config",
-            lambda: {25587: {"name": "Windfury Totem", "duration": 10}},
+            lambda _rules=None: {25587: {"name": "Windfury Totem", "duration": 10}},
         )
 
         mock_client.get_cast_events_paginated.side_effect = [
@@ -253,7 +250,7 @@ class TestAnalyzeTotemUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_totem_config",
-            lambda: {25587: {"name": "Windfury Totem", "duration": 120}},
+            lambda _rules=None: {25587: {"name": "Windfury Totem", "duration": 120}},
         )
 
         mock_client.get_cast_events_paginated.side_effect = [

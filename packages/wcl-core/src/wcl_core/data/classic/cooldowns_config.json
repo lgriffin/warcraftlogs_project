@@ -1,0 +1,26 @@
+{
+    "raid_cooldowns": {},
+    "personal_cooldowns": {
+        "12042": {"name": "Arcane Power", "duration": 15, "class": "Mage"},
+        "12043": {"name": "Presence of Mind", "duration": 0, "class": "Mage"},
+        "11129": {"name": "Combustion", "duration": 0, "class": "Mage"},
+        "13750": {"name": "Adrenaline Rush", "duration": 15, "class": "Rogue"},
+        "13877": {"name": "Blade Flurry", "duration": 15, "class": "Rogue"},
+        "3045": {"name": "Rapid Fire", "duration": 15, "class": "Hunter"},
+        "12328": {"name": "Death Wish", "duration": 30, "class": "Warrior"},
+        "1719": {"name": "Recklessness", "duration": 15, "class": "Warrior"},
+        "29166": {"name": "Innervate", "duration": 20, "class": "Druid"},
+        "10060": {"name": "Power Infusion", "duration": 15, "class": "Priest"}
+    },
+    "trinket_buffs": {
+        "28866": {"name": "Kiss of the Spider", "duration": 15},
+        "26480": {"name": "Badge of the Swarmguard", "duration": 30},
+        "25891": {"name": "Earthstrike", "duration": 20},
+        "29604": {"name": "Jom Gabbar", "duration": 20},
+        "24662": {"name": "Zandalarian Hero Medallion", "duration": 20},
+        "24427": {"name": "Diamond Flask", "duration": 60},
+        "23271": {"name": "Talisman of Ephemeral Power", "duration": 15},
+        "23723": {"name": "Mind Quickening Gem", "duration": 20}
+    },
+    "potion_buffs": {}
+}

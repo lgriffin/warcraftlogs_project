@@ -44,6 +44,17 @@ def get_data_dir() -> Path:
     return Path(__file__).resolve().parent / "data"
 
 
+DEFAULT_RULESET = "tbc"
+
+
+def get_ruleset_dir(name: str = DEFAULT_RULESET) -> Path:
+    """The data folder of one game ruleset (``wcl_core.rules``): ``rules.json`` and its ``*_config.json`` files.
+
+    The ``get_*_config_path`` helpers below return the default (The Burning Crusade) ruleset's files.
+    """
+    return get_data_dir() / name
+
+
 def get_user_data_dir() -> Path:
     """Writable user data directory (%APPDATA%/WarcraftLogsAnalyzer)."""
     if not is_frozen():
@@ -120,23 +131,23 @@ def get_appearance_path() -> Path:
 
 
 def get_consumes_config_path() -> Path:
-    return get_data_dir() / "consumes_config.json"
+    return get_ruleset_dir() / "consumes_config.json"
 
 
 def get_interrupt_config_path() -> Path:
-    return get_data_dir() / "interrupt_config.json"
+    return get_ruleset_dir() / "interrupt_config.json"
 
 
 def get_debuff_config_path() -> Path:
-    return get_data_dir() / "debuff_config.json"
+    return get_ruleset_dir() / "debuff_config.json"
 
 
 def get_totem_config_path() -> Path:
-    return get_data_dir() / "totem_config.json"
+    return get_ruleset_dir() / "totem_config.json"
 
 
 def get_cooldowns_config_path() -> Path:
-    return get_data_dir() / "cooldowns_config.json"
+    return get_ruleset_dir() / "cooldowns_config.json"
 
 
 def get_update_dir() -> Path:

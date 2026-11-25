@@ -378,7 +378,7 @@ The CLI provides subcommands: `unified`, `healer`, `tank`, `melee`, `ranged`, `c
 | `consumes_analysis.py` | Multi-raid consumable usage tracking with spike detection |
 | `cache.py` | SHA256-keyed JSON file cache for API query results (`cache/responses/`) |
 | `paths.py` | Path resolution for dev vs PyInstaller frozen environments |
-| `updater.py` | Auto-update checker — polls GitHub Releases, downloads, verifies against the release `SHA256SUMS` and stages updates (no Qt; the GUI's `UpdateDownloader` thread in `gui/update_dialog.py` wraps `download_update`) |
+| `updater.py` | Auto-update checker — polls GitHub Releases, downloads, verifies against the release `SHA256SUMS` and applies updates (the Setup.exe silently for an installed copy, the zip swap for a portable one) (no Qt; the GUI's `UpdateDownloader` thread in `gui/update_dialog.py` wraps `download_update`) |
 | `common/errors.py` | Exception hierarchy: `WarcraftLogsError`, `ApiError`, `ConfigurationError`, `DataProcessingError` |
 | `cli.py` | Argument parser and CLI subcommand dispatch |
 
@@ -554,10 +554,20 @@ Output: `dist/WarcraftLogsAnalyzer/WarcraftLogsAnalyzer.exe`
 Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```bash
-iscc installer.iss
+iscc installer.iss                       # version from the default in installer.iss
+iscc /DAppVersion=4.6.0 installer.iss    # what the release workflow does, with the tag's version
 ```
 
-Output: `installer_output/WarcraftLogsAnalyzer-4.1.0-Setup.exe`
+Output: `installer_output/WarcraftLogsAnalyzer-<version>-Setup.exe`
+
+### Releasing
+
+Run `./build_release.sh <version>` (it sets the version in `version.py`, every `pyproject.toml` and the
+`installer.iss` default), merge that, then push a `v<version>` tag. `.github/workflows/build-installer.yml` refuses a
+tag that does not match `version.py`, and fails if Inno Setup does not produce the Setup.exe: installed copies update by
+running the next release's Setup.exe silently (`updater.installer_update_script`), so every release needs one. Keep
+`AppId` in `installer.iss` unchanged, or an update installs a second copy beside the first
+(`tests/test_windows_release.py`).
 
 ## File Locations
 
@@ -588,7 +598,7 @@ Path resolution is handled by `paths.py`, which detects frozen (PyInstaller) vs 
 
 ### Adding a new consumable
 
-Edit `packages/wcl-core/src/wcl_core/data/consumes_config.json` and add the spell ID and name to either `buff_consumables` or `cast_consumables` depending on how WarcraftLogs tracks it. Multiple spell IDs can map to the same name for variant unification (e.g., all Master Healthstone ranks → "Master Healthstone").
+Edit `packages/wcl-core/src/wcl_core/data/tbc/consumes_config.json` and add the spell ID and name to either `buff_consumables` or `cast_consumables` depending on how WarcraftLogs tracks it. Multiple spell IDs can map to the same name for variant unification (e.g., all Master Healthstone ranks → "Master Healthstone").
 
 ### Adding a new engineering item
 

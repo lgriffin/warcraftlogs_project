@@ -1,0 +1,21 @@
+{
+  "totems": {
+    "10614": {"name": "Windfury Totem", "duration": 120},
+    "10627": {"name": "Grace of Air Totem", "duration": 120},
+    "25359": {"name": "Grace of Air Totem", "duration": 120},
+    "10442": {"name": "Strength of Earth Totem", "duration": 120},
+    "25361": {"name": "Strength of Earth Totem", "duration": 120},
+    "10497": {"name": "Mana Spring Totem", "duration": 60},
+    "10463": {"name": "Healing Stream Totem", "duration": 60},
+    "17359": {"name": "Mana Tide Totem", "duration": 12},
+    "25908": {"name": "Tranquil Air Totem", "duration": 120},
+    "10408": {"name": "Stoneskin Totem", "duration": 120},
+    "10438": {"name": "Searing Totem", "duration": 55},
+    "10587": {"name": "Magma Totem", "duration": 20},
+    "8143":  {"name": "Tremor Totem", "duration": 120},
+    "8177":  {"name": "Grounding Totem", "duration": 45},
+    "10538": {"name": "Fire Resistance Totem", "duration": 120},
+    "10479": {"name": "Frost Resistance Totem", "duration": 120},
+    "10601": {"name": "Nature Resistance Totem", "duration": 120}
+  }
+}
