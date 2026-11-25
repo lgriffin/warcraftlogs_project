@@ -4,7 +4,8 @@ Two axes, kept apart on purpose (see ``guides/identity_and_profiles.md``):
 
 - a **game version** is a Warcraft Logs site: ``fresh`` (Anniversary realms, which went from Classic into The
   Burning Crusade), ``classic`` (Classic Era and Hardcore), ``sod`` (Season of Discovery), ``forever`` (WoW Forever,
-  released November 2026, on ``forever.warcraftlogs.com``) and ``retail``. It is derived from the API host a report was fetched through.
+  released November 2026, on ``forever.warcraftlogs.com``) and ``retail``. It is derived from the API host a
+  report was fetched through.
 - an **expansion** is the content era of a report's zone: ``Classic``, ``The Burning Crusade`` and so on. The
   API reports it as ``zone { expansion { name } }``; raids stored before that was read are backfilled from the
   zone name through ``ZONE_EXPANSIONS``.

@@ -252,3 +252,24 @@ def test_a_malformed_configured_url_signs_in_on_the_main_site(monkeypatch):
     assert user_auth._get_base_url() == "https://www.warcraftlogs.com"
     monkeypatch.setattr(config, "load_config", lambda: {"wcl_api_url": "https://classic.warcraftlogs.com/api"})
     assert user_auth._get_base_url() == "https://classic.warcraftlogs.com"
+    assert user_auth.user_api_url("https://[broken/api/v2/client") == "https://www.warcraftlogs.com/api/v2/user"
+
+
+class TestTheUserClientsSite:
+    def _user_client(self, monkeypatch, profile=None):
+        from wcl_app import AppContext
+        from wcl_core import user_auth
+
+        monkeypatch.setattr(user_auth.UserTokenManager, "is_authenticated", lambda self: True)
+        ctx = AppContext(config={"wcl_api_url": "https://fresh.warcraftlogs.com/api/v2/client"})
+        ctx.profile = profile
+        return ctx.user_client()
+
+    def test_it_asks_the_configured_site_with_no_profile(self, monkeypatch):
+        assert self._user_client(monkeypatch).api_url == "https://fresh.warcraftlogs.com/api/v2/user"
+
+    def test_it_asks_the_active_profiles_site(self, monkeypatch):
+        from wcl_app.profiles import Profile
+
+        forever = Profile("forever", "Forever", game_version="forever")
+        assert self._user_client(monkeypatch, forever).api_url == "https://forever.warcraftlogs.com/api/v2/user"
