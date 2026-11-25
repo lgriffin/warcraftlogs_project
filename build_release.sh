@@ -16,8 +16,7 @@ sed -i "s/^version = .*/version = \"${VERSION}\"/" packages/wcl-app/pyproject.to
 
 # Update version in installer.iss and spec (if present)
 if [ -f installer.iss ]; then
-    sed -i "s/^AppVersion=.*/AppVersion=${VERSION}/" installer.iss
-    sed -i "s/^OutputBaseFilename=.*/OutputBaseFilename=WarcraftLogsAnalyzer-${VERSION}-Setup/" installer.iss
+    sed -i "s/^  #define AppVersion .*/  #define AppVersion \"${VERSION}\"/" installer.iss
 fi
 
 echo "[1/3] Running PyInstaller..."

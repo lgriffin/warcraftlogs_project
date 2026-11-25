@@ -57,6 +57,19 @@ jobs:
         with:
           python-version: "3.10"
 
+      # The in-app updater compares the release tag with the version built into the app: a v4.6.0 tag around a 4.5.0
+      # build would offer the same update forever. The installer takes its version from here too.
+      - name: Read the app version and check it matches the tag
+        id: version
+        shell: bash
+        run: |
+          version=$(python -c "import runpy; print(runpy.run_path('warcraftlogs_client/version.py')['__version__'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the app version $version (run build_release.sh first)"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
@@ -75,29 +88,32 @@ jobs:
           $zip = "dist\WarcraftLogsAnalyzer-$ref-portable.zip"
           Compress-Archive -Path "dist\WarcraftLogsAnalyzer\*" -DestinationPath $zip
 
+      # The Setup.exe is the single install, and installed copies update by running the next one silently, so a
+      # release without it fails here rather than shipping zip-only.
       - name: Build installer with Inno Setup
-        id: inno
-        continue-on-error: true
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: installer.iss
+          options: /O+ /DAppVersion=${{ steps.version.outputs.version }}
 
       - name: Kill orphan ISCC process
         if: always()
         run: Get-Process -Name "ISCC" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
       - name: Wait for file locks to release
-        if: steps.inno.outcome == 'success'
         run: Start-Sleep -Seconds 10
 
-      # REQ-CORE-REL-001: the in-app updater refuses any zip whose SHA-256 is not listed here.
+      - name: Check the installer was built
+        run: |
+          $setup = "installer_output\WarcraftLogsAnalyzer-${{ steps.version.outputs.version }}-Setup.exe"
+          if (-not (Test-Path $setup)) { throw "Inno Setup did not produce $setup" }
+
+      # REQ-CORE-REL-001: the in-app updater refuses any zip or Setup.exe whose SHA-256 is not listed here.
       - name: Generate SHA256SUMS
         run: |
           $files = @(Get-ChildItem "dist\*.zip" -ErrorAction SilentlyContinue)
           $files += @(Get-ChildItem "dist\*.tar.gz" -ErrorAction SilentlyContinue)
-          if ("${{ steps.inno.outcome }}" -eq "success") {
-            $files += @(Get-ChildItem "installer_output\*.exe" -ErrorAction SilentlyContinue)
-          }
+          $files += @(Get-ChildItem "installer_output\*.exe" -ErrorAction SilentlyContinue)
           if ($files.Count -eq 0) { throw "No release files to checksum" }
           $lines = foreach ($f in $files) {
             $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()

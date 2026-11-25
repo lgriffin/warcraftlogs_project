@@ -7,6 +7,13 @@ keyless signing (cosign + GitHub OIDC) and publishes the bundle as
 ``SHA256SUMS.sigstore.json``. The updater refuses to stage a zip unless its digest matches
 the entry in ``SHA256SUMS``; a missing ``SHA256SUMS`` or a missing/mismatched entry is an error.
 
+Two kinds of Windows copy update themselves:
+
+* **Installed** (``WarcraftLogsAnalyzer-<version>-Setup.exe``, Inno Setup leaves ``unins000.exe`` next to the app):
+  the updater downloads the new release's Setup.exe and runs it silently over the old install, so the Start menu
+  entry, the uninstaller and "Apps & features" all show the new version.
+* **Portable** (the ``-portable.zip``): the updater downloads the new zip and swaps the files on restart.
+
 TODO(REQ-CORE-REL-001): verify the Sigstore bundle in-app as well. That needs the
 ``sigstore`` package (plus its TUF/crypto dependency tree) inside the frozen app, so for
 now the trust chain is: CI signs SHA256SUMS keylessly (verifiable offline with
@@ -17,6 +24,7 @@ SHA256SUMS over HTTPS from github.com.
 import hashlib
 import hmac
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +44,10 @@ API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 CHECK_COOLDOWN_SECONDS = 4 * 3600
 CHECKSUMS_ASSET_NAMES = ("SHA256SUMS", "SHA256SUMS.txt")
 _HEX_DIGITS = frozenset("0123456789abcdef")
+SETUP_SUFFIX = "-Setup.exe"
+_VERSION = re.compile(r"v?(\d+(?:\.\d+)*)")
+# Inno Setup flags for an unattended upgrade: no wizard, no prompts, close the app if it is still running.
+SILENT_INSTALL_FLAGS = ("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/SP-")
 
 
 class UpdateVerificationError(RuntimeError):
@@ -76,68 +88,87 @@ def manual_update_steps(platform: str = sys.platform) -> str:
     return "run git pull in the app's folder, then pip install -e . again"
 
 
-def _parse_version(v: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in v.lstrip("v").split("."))
+def _parse_version(v: str) -> tuple[int, ...] | None:
+    """``v4.5.0`` -> (4, 5, 0), padded to three parts; None for a tag that is not a plain release (``v5.0.0-rc1``)."""
+    match = _VERSION.fullmatch(v.strip())
+    if not match:
+        return None
+    parts = tuple(int(x) for x in match.group(1).split("."))
+    return parts + (0,) * (3 - len(parts))
+
+
+def installed_with_setup(install_dir: Path | None = None) -> bool:
+    """Whether this copy came from the Setup.exe installer: Inno Setup leaves its uninstaller next to the app."""
+    folder = install_dir if install_dir is not None else paths.get_install_dir()
+    return any(folder.glob("unins*.exe"))
+
+
+def pick_update_asset(assets: list[dict], installed: bool) -> dict | None:
+    """The release file this copy updates from: the Setup.exe for an installed copy, else the zip.
+
+    An installed copy falls back to the zip when a release has no installer; the zip swap works in its folder too.
+    """
+    names = [(asset.get("name", ""), asset) for asset in assets]
+    if installed:
+        for name, asset in names:
+            if name.endswith(SETUP_SUFFIX):
+                return asset
+    zips = [asset for name, asset in names if name.endswith(".zip")]
+    for asset in zips:
+        if "portable" not in asset.get("name", "").lower():
+            return asset
+    return zips[0] if zips else None
+
+
+def _recently_checked() -> bool:
+    config_path = paths.get_config_path()
+    if not config_path.exists():
+        return False
+    try:
+        with config_path.open() as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    return time.time() - config.get("last_update_check", 0) < CHECK_COOLDOWN_SECONDS
 
 
 def check_for_update(force: bool = False) -> UpdateInfo | None:
     """Check GitHub for a newer release. Returns None if up-to-date or on error."""
-    if not force:
-        config_path = paths.get_config_path()
-        if config_path.exists():
-            try:
-                with config_path.open() as f:
-                    config = json.load(f)
-                last_check = config.get("last_update_check", 0)
-                if time.time() - last_check < CHECK_COOLDOWN_SECONDS:
-                    return None
-            except (json.JSONDecodeError, OSError):
-                pass
+    if not force and _recently_checked():
+        return None
 
     try:
         resp = requests.get(API_URL, timeout=10, headers={"Accept": "application/vnd.github+json"})
         resp.raise_for_status()
-    except (requests.RequestException, OSError):
+        data = resp.json()
+    except (requests.RequestException, OSError, ValueError):
         return None
 
-    data = resp.json()
     tag = data.get("tag_name", "")
-    if not tag:
-        return None
-
     latest = _parse_version(tag)
     current = _parse_version(__version__)
+    if latest is None or current is None:
+        return None
     if latest <= current:
         _save_check_timestamp()
         return None
 
-    zip_asset = None
-    for asset in data.get("assets", []):
-        name = asset.get("name", "")
-        if name.endswith(".zip") and "portable" not in name.lower():
-            zip_asset = asset
-            break
-
-    if not zip_asset:
-        for asset in data.get("assets", []):
-            if asset.get("name", "").endswith(".zip"):
-                zip_asset = asset
-                break
-
-    if not zip_asset:
+    assets = data.get("assets", [])
+    asset = pick_update_asset(assets, installed_with_setup())
+    if not asset:
         return None
 
     _save_check_timestamp()
 
-    checksums_asset = find_checksums_asset(data.get("assets", []))
+    checksums_asset = find_checksums_asset(assets)
 
     return UpdateInfo(
         version=tag.lstrip("v"),
-        download_url=zip_asset["browser_download_url"],
+        download_url=asset["browser_download_url"],
         release_notes=data.get("body", ""),
-        asset_size=zip_asset.get("size", 0),
+        asset_size=asset.get("size", 0),
         published_at=data.get("published_at", ""),
-        asset_name=zip_asset.get("name", ""),
+        asset_name=asset.get("name", ""),
         checksums_url=checksums_asset.get("browser_download_url", "") if checksums_asset else "",
     )
 
@@ -232,8 +263,14 @@ def _save_check_timestamp():
 
 @dataclass
 class DownloadedUpdate:
-    zip_path: str
+    zip_path: str  # the downloaded release file: the portable zip, or the Setup.exe for an installed copy
     expected_sha256: str  # from SHA256SUMS; pass it to apply_update()
+
+
+def _download_path(info: UpdateInfo) -> Path:
+    """Where the release file lands: its own name (only the final part, never a path), else a versioned zip name."""
+    name = Path(info.asset_name).name if info.asset_name else ""
+    return paths.get_update_dir() / (name or f"WarcraftLogsAnalyzer-v{info.version}.zip")
 
 
 def download_update(
@@ -241,12 +278,12 @@ def download_update(
     on_progress: Callable[[int, int], None] = lambda _done, _total: None,
     is_cancelled: Callable[[], bool] = lambda: False,
 ) -> DownloadedUpdate:
-    """Download and verify the update zip, reporting (bytes_done, bytes_total) as it goes.
+    """Download and verify the update file (zip or Setup.exe), reporting (bytes_done, bytes_total) as it goes.
 
     Raises UpdateVerificationError, UpdateDownloadError, requests.RequestException or OSError (or whatever a
     callback raises), and leaves no partial zip behind when it does.
     """
-    zip_path = paths.get_update_dir() / f"WarcraftLogsAnalyzer-v{info.version}.zip"
+    zip_path = _download_path(info)
     try:
         # Resolve the expected digest first: no SHA256SUMS entry means no download at all.
         expected_sha256 = fetch_expected_sha256(info)
@@ -274,13 +311,61 @@ def download_update(
 
 
 def apply_update(zip_path: str, expected_sha256: str) -> bool:
-    """Verify the zip against SHA256SUMS, extract it and write a batch script to swap files on restart.
+    """Verify the download against SHA256SUMS and hand over to a script that updates the app once it quits.
 
-    Raises UpdateVerificationError (a RuntimeError) without staging anything if the digest does not match.
-    Returns True if the script was created and the caller should quit the app.
+    A Setup.exe is run silently over the install; a zip is extracted and its files swapped in. Raises
+    UpdateVerificationError (a RuntimeError) without staging anything if the digest does not match.
+    Returns True if the script was started and the caller should quit the app.
     """
     verify_update_zip(zip_path, expected_sha256)
+    if zip_path.lower().endswith(".exe"):
+        script_path = paths.get_update_dir() / "_update.cmd"
+        script = installer_update_script(zip_path, paths.get_install_dir())
+        _write_script(script_path, script)
+    else:
+        script_path = paths.get_install_dir() / "_update.cmd"
+        staged_dir, script = _stage_zip(zip_path)
+        try:
+            _write_script(script_path, script)
+        except RuntimeError:
+            shutil.rmtree(staged_dir, ignore_errors=True)
+            raise
+    _launch_detached(script_path)
+    return True
 
+
+def _win(path: Path | str) -> str:
+    return str(path).replace("/", "\\")
+
+
+def installer_update_script(setup_path: str, install_dir: Path) -> str:
+    """A batch script that waits for the app to quit, runs the new Setup.exe silently, then relaunches the app.
+
+    The installer upgrades the existing install in place (same AppId, its previous folder), keeping the
+    uninstaller and the version in "Apps & features" right. User data lives in %APPDATA% and is untouched.
+    """
+    setup = _win(setup_path)
+    exe = _win(install_dir / "WarcraftLogsAnalyzer.exe")
+    flags = " ".join(SILENT_INSTALL_FLAGS)
+    return f"""@echo off
+echo Updating WarcraftLogs Analyzer...
+timeout /t 2 /nobreak >nul
+
+start "" /wait "{setup}" {flags}
+
+rem Clean up the downloaded installer
+if exist "{setup}" del /f /q "{setup}"
+
+rem Relaunch
+start "" "{exe}"
+
+rem Delete this script
+del "%~f0"
+"""
+
+
+def _stage_zip(zip_path: str) -> tuple[Path, str]:
+    """Extract the zip into the update folder and return (staged folder, swap script)."""
     install_dir = paths.get_install_dir()
     update_dir = paths.get_update_dir()
     staged_dir = update_dir / "staged"
@@ -313,12 +398,11 @@ def apply_update(zip_path: str, expected_sha256: str) -> bool:
         shutil.rmtree(staged_dir, ignore_errors=True)
         raise RuntimeError("Update zip does not contain WarcraftLogsAnalyzer.exe")
 
-    # Write the swap script
-    script_path = install_dir / "_update.cmd"
-    install_str = str(install_dir).replace("/", "\\")
-    source_str = str(extracted_app_dir).replace("/", "\\")
-    staged_str = str(staged_dir).replace("/", "\\")
-    exe_str = str(install_dir / "WarcraftLogsAnalyzer.exe").replace("/", "\\")
+    install_str = _win(install_dir)
+    source_str = _win(extracted_app_dir)
+    staged_str = _win(staged_dir)
+    exe_str = _win(install_dir / "WarcraftLogsAnalyzer.exe")
+    zip_str = _win(zip_path)
 
     script = f"""@echo off
 echo Updating WarcraftLogs Analyzer...
@@ -335,7 +419,7 @@ rem Clean up staging
 rd /s /q "{staged_str}"
 
 rem Clean up downloaded zip
-if exist "{zip_path.replace("/", chr(92))}" del /f /q "{zip_path.replace("/", chr(92))}"
+if exist "{zip_str}" del /f /q "{zip_str}"
 
 rem Relaunch
 start "" "{exe_str}"
@@ -343,15 +427,18 @@ start "" "{exe_str}"
 rem Delete this script
 del "%~f0"
 """
+    return staged_dir, script
 
+
+def _write_script(script_path: Path, script: str) -> None:
     try:
         with script_path.open("w") as f:
             f.write(script)
     except OSError as e:
-        shutil.rmtree(staged_dir, ignore_errors=True)
         raise RuntimeError(f"Cannot write update script. Is the app in a read-only folder?\n{e}") from e
 
-    # Launch the script detached
+
+def _launch_detached(script_path: Path) -> None:
     CREATE_NEW_PROCESS_GROUP = 0x00000200
     DETACHED_PROCESS = 0x00000008
     subprocess.Popen(
@@ -361,5 +448,3 @@ del "%~f0"
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-
-    return True
