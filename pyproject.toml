@@ -52,7 +52,7 @@ where = [".", "packages/wcl-core/src", "packages/wcl-store/src", "packages/wcl-a
 include = ["warcraftlogs_client*", "wcl_core*", "wcl_store*", "wcl_app*"]
 
 [tool.setuptools.package-data]
-wcl_core = ["py.typed", "data/*.json", "data/spell_data/*.json"]
+wcl_core = ["py.typed", "data/*/*.json"]
 wcl_store = ["py.typed"]
 wcl_app = ["py.typed"]
 "wcl_store.postgres" = ["migrations/*.py", "migrations/script.py.mako", "migrations/versions/*.py"]

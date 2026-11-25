@@ -10,7 +10,6 @@ import contextlib
 import json
 from collections import defaultdict
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from .common.log import get_logger
@@ -21,6 +20,7 @@ import requests
 
 from .client import WarcraftLogsClient
 from .flasks import BossPull, FlaskCatalog, boss_pulls, flask_coverage, pull_starts_for
+from .game_version import expansion_for_zone
 from .models import (
     RESOURCE_TYPES,
     AuraBand,
@@ -54,6 +54,7 @@ from .models import (
     SpellUsage,
     TankPerformance,
 )
+from .rules import GameRules, default_rules, rules_for
 from .spell_manager import SpellBreakdown, SpellManager, get_spell_manager
 
 # Breakdown bucket for damage events that carry no abilityGameID (their amount still counts in the totals).
@@ -90,11 +91,15 @@ def analyze_raid(
     tank_min_taken_10: int = 300000,
     progress_callback: Callable[[str], None] | None = None,
     role_overrides: dict[str, str] | None = None,
+    rules: GameRules | None = None,
 ) -> RaidAnalysis:
     """Run a full raid analysis and return structured results.
 
     ``role_overrides`` maps character name (any case) to a forced role:
     healer, tank, melee, ranged, or dps (melee/ranged picked by class and damage profile).
+
+    ``rules`` is the game ruleset to analyse with (``wcl_core.rules``); by default it is picked from the report's
+    expansion, or its zone's.
     """
     logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.api_url)
 
@@ -105,6 +110,8 @@ def analyze_raid(
     _progress("Fetching report metadata...")
     metadata = client.get_report_metadata(report_id)
     logger.info("  metadata: title=%s zone=%s", metadata.title, metadata.zone)
+    rules = rules or rules_for(metadata.expansion or expansion_for_zone(metadata.zone))
+    logger.info("  ruleset: %s", rules.name)
 
     _progress("Fetching master data...")
     master_actors = client.get_master_data(report_id)
@@ -129,6 +136,7 @@ def analyze_raid(
         healer_threshold,
         tank_min_taken,
         tank_min_mitigation,
+        rules,
     )
     override_notes: list[str] = []
     overrides_applied: dict[str, str] = {}
@@ -138,6 +146,7 @@ def analyze_raid(
             composition,
             role_overrides,
             classify_dps=lambda p: _classify_hybrid_role(client, report_id, p.source_id, p.player_class),
+            rules=rules,
         )
         for note in override_notes:
             logger.info("  %s", note)
@@ -152,7 +161,7 @@ def analyze_raid(
 
     all_warnings: list[str] = list(override_notes)
 
-    healers, healer_warns = _analyze_healers(client, report_id, composition.healers, progress_callback)
+    healers, healer_warns = _analyze_healers(client, report_id, composition.healers, progress_callback, rules)
     all_warnings.extend(healer_warns)
     logger.info("  healers analyzed: %d", len(healers))
     tanks, tank_warns = _analyze_tanks(client, report_id, composition.tanks, progress_callback)
@@ -169,12 +178,12 @@ def analyze_raid(
         # Retry now rather than in encounter analysis, so flask coverage gets the pulls too.
         fights = _retry_fights(client, report_id, all_warnings)
     consumables, flask_cov, consume_warns = _analyze_consumables_and_flasks(
-        client, report_id, composition, boss_pulls(fights or [])
+        client, report_id, composition, boss_pulls(fights or []), rules
     )
     all_warnings.extend(consume_warns)
 
     _progress("Analyzing interrupts...")
-    interrupts, interrupt_warns = _analyze_interrupts(client, report_id, composition)
+    interrupts, interrupt_warns = _analyze_interrupts(client, report_id, composition, rules)
     all_warnings.extend(interrupt_warns)
     logger.info("  interrupts analyzed: %d entries", len(interrupts))
 
@@ -210,7 +219,7 @@ def analyze_raid(
 
     try:
         _progress("Analyzing aura uptimes...")
-        aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters)
+        aura_uptimes, aura_warns = _analyze_aura_uptimes(client, report_id, encounters, rules)
         all_warnings.extend(aura_warns)
         logger.info("  aura uptimes analyzed: %d entries", len(aura_uptimes))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
@@ -220,7 +229,7 @@ def analyze_raid(
 
     try:
         _progress("Analyzing totem uptimes...")
-        totem_uptimes, totem_warns = _analyze_totem_uptimes(client, report_id, composition, encounters)
+        totem_uptimes, totem_warns = _analyze_totem_uptimes(client, report_id, composition, encounters, rules)
         all_warnings.extend(totem_warns)
         logger.info("  totem uptimes analyzed: %d entries", len(totem_uptimes))
     except (requests.RequestException, KeyError, TypeError, ValueError) as e:
@@ -250,8 +259,6 @@ def analyze_raid(
     )
 
 
-_ALWAYS_RANGED = {"Mage", "Warlock", "Hunter"}
-_ALWAYS_MELEE = {"Rogue", "Warrior"}
 OVERRIDE_ROLES = ("healer", "tank", "melee", "ranged", "dps")
 
 
@@ -259,14 +266,16 @@ def apply_role_overrides(
     composition: RaidComposition,
     overrides: dict[str, str],
     classify_dps: Callable[[PlayerIdentity], str] | None = None,
+    rules: GameRules | None = None,
 ) -> tuple[RaidComposition, list[str]]:
     """Move players whose role was set by hand into that role.
 
     ``overrides`` maps character name (any case) to one of OVERRIDE_ROLES. "dps"
     keeps an existing melee/ranged guess, otherwise picks by class, asking
     ``classify_dps`` for hybrids. Returns the new composition and one note per
-    player actually moved.
+    player actually moved. ``rules`` says which classes are always ranged or melee (the default ruleset if None).
     """
+    rules = rules or default_rules()
     wanted = {name.lower(): role for name, role in overrides.items() if role in OVERRIDE_ROLES}
     buckets: dict[str, list[PlayerIdentity]] = {
         "tank": list(composition.tanks),
@@ -283,9 +292,9 @@ def apply_role_overrides(
             if target == "dps":
                 if current in ("melee", "ranged"):
                     continue
-                if player.player_class in _ALWAYS_RANGED:
+                if player.player_class in rules.always_ranged:
                     target = "ranged"
-                elif player.player_class in _ALWAYS_MELEE or classify_dps is None:
+                elif player.player_class in rules.always_melee or classify_dps is None:
                     target = "melee"
                 else:
                     target = classify_dps(player)
@@ -313,20 +322,24 @@ def _identify_composition(
     healer_threshold: int,
     tank_min_taken: int,
     tank_min_mitigation: int,
+    rules: GameRules | None = None,
 ) -> RaidComposition:
     """Dynamically identify roles for all players."""
-    tanks = _identify_tanks(client, report_id, master_actors, tank_min_taken, tank_min_mitigation)
+    rules = rules or default_rules()
+    tanks = _identify_tanks(client, report_id, master_actors, tank_min_taken, tank_min_mitigation, rules)
     tank_names = {t.name for t in tanks}
 
     healers = [
-        h for h in _identify_healers(client, report_id, master_actors, healer_threshold) if h.name not in tank_names
+        h
+        for h in _identify_healers(client, report_id, master_actors, healer_threshold, rules)
+        if h.name not in tank_names
     ]
     healer_names = {h.name for h in healers}
 
     excluded = tank_names | healer_names
-    always_ranged = _ALWAYS_RANGED
-    always_melee = _ALWAYS_MELEE
-    hybrid_classes = {"Paladin", "Druid", "Shaman", "Priest"}
+    always_ranged = rules.always_ranged
+    always_melee = rules.always_melee
+    hybrid_classes = rules.hybrid_classes
 
     melee = []
     ranged = []
@@ -355,33 +368,6 @@ def _identify_composition(
 
 # Auto-attack / melee swing ability IDs in WarcraftLogs
 _MELEE_ABILITY_IDS = {1, -4, -32}
-
-# Spells that are strong indicators of a ranged spec
-_RANGED_SPEC_SPELLS = {
-    # Shadow Priest
-    "Shadow Bolt",
-    "Mind Blast",
-    "Mind Flay",
-    "Shadow Word: Pain",
-    "Vampiric Embrace",
-    "Devouring Plague",
-    "Shadow Word: Death",
-    # Balance Druid
-    "Wrath",
-    "Starfire",
-    "Moonfire",
-    "Insect Swarm",
-    "Hurricane",
-    # Elemental Shaman
-    "Lightning Bolt",
-    "Chain Lightning",
-    "Earth Shock",
-    "Flame Shock",
-    "Frost Shock",
-    # Holy/Disc Priest doing damage (Smite)
-    "Smite",
-    "Holy Fire",
-}
 
 
 def _classify_hybrid_role(
@@ -433,10 +419,12 @@ def _identify_tanks(
     master_actors: list[dict],
     min_taken: int,
     min_mitigation: int,
+    rules: GameRules | None = None,
 ) -> list[PlayerIdentity]:
+    tank_classes = (rules or default_rules()).tank_classes
     tanks = []
     for actor in master_actors:
-        if actor["subType"] not in {"Warrior", "Druid", "Paladin"}:
+        if actor["subType"] not in tank_classes:
             continue
         try:
             events = client.get_damage_taken_data(report_id, actor["id"])
@@ -465,8 +453,9 @@ def _identify_healers(
     report_id: str,
     master_actors: list[dict],
     threshold: int,
+    rules: GameRules | None = None,
 ) -> list[PlayerIdentity]:
-    healing_classes = {"Priest", "Paladin", "Druid", "Shaman"}
+    healing_classes = (rules or default_rules()).healer_classes
     healers = []
     for actor in master_actors:
         if actor["subType"] not in healing_classes:
@@ -488,28 +477,23 @@ def _identify_healers(
     return healers
 
 
-_RESOURCE_SPELL_IDS = {
-    28499: "Super Mana Potion",
-    27869: "Dark Rune",
-    16666: "Demonic Rune",
-}
-
-
 def _get_resources_from_events(
     client: WarcraftLogsClient,
     report_id: str,
     source_id: int,
+    rules: GameRules | None = None,
 ) -> dict[str, int]:
     """Count consumable usage from cast events."""
+    resource_spells = (rules or default_rules()).resource_spells
     try:
         cast_events = client.get_cast_events_paginated(report_id, source_id)
         resources: dict[str, int] = defaultdict(int)
         for e in cast_events:
             if e.get("type") == "begincast":
                 continue
-            aid = e.get("abilityGameID")
-            if aid in _RESOURCE_SPELL_IDS:
-                resources[_RESOURCE_SPELL_IDS[aid]] += 1
+            name = resource_spells.get(e.get("abilityGameID", 0))
+            if name:
+                resources[name] += 1
         if resources.get("Demonic Rune") and not resources.get("Dark Rune"):
             resources["Dark Rune"] = resources.pop("Demonic Rune")
         elif resources.get("Demonic Rune"):
@@ -524,6 +508,7 @@ def _analyze_healers(
     report_id: str,
     healer_ids: list[PlayerIdentity],
     progress_callback: Callable[[str], None] | None = None,
+    rules: GameRules | None = None,
 ) -> tuple[list[HealerPerformance], list[str]]:
     results = []
     warnings = []
@@ -559,7 +544,7 @@ def _analyze_healers(
 
             resource_data = SpellBreakdown.get_resources_used(cast_entries)
             if not any(resource_data.values()):
-                resource_data = _get_resources_from_events(client, report_id, player.source_id)
+                resource_data = _get_resources_from_events(client, report_id, player.source_id, rules)
             resources = [ResourceUsage(name=k, count=v) for k, v in resource_data.items()]
 
             fear_ward = SpellBreakdown.get_fear_ward_usage(cast_entries)
@@ -753,10 +738,8 @@ def _analyze_dps(
     return results, warnings
 
 
-def _load_consumes_config() -> dict:
-    from . import paths
-
-    config_path = Path(paths.get_consumes_config_path())
+def _load_consumes_config(rules: GameRules | None = None) -> dict:
+    config_path = (rules or default_rules()).config_path("consumes_config.json")
     if not config_path.exists():
         return {"buff_consumables": {}, "cast_consumables": {}}
     with config_path.open(encoding="utf-8") as f:
@@ -790,13 +773,14 @@ def _analyze_consumables_and_flasks(
     report_id: str,
     composition: RaidComposition,
     pulls: list[BossPull],
+    rules: GameRules | None = None,
 ) -> tuple[list[ConsumableUsage], list[FlaskCoverage], list[str]]:
     """Consumables per player, and which of the boss ``pulls`` they were in each had a flask or elixir pair for.
 
     Flasks and elixirs are auras, so they are read from the same buffs table as ``buff_consumables`` and recorded
     as consumables too; coverage is only worked out when there are boss pulls.
     """
-    config = _load_consumes_config()
+    config = _load_consumes_config(rules)
     catalog = FlaskCatalog.from_config(config)
     buff_ids: dict[int, str] = {int(sid): name for sid, name in config.get("buff_consumables", {}).items()}
     buff_ids.update({aura_id: name for aura_id, (name, _kind) in catalog.auras.items()})
@@ -881,10 +865,8 @@ def _cast_consumables(
     ]
 
 
-def _load_interrupt_config() -> dict[int, str]:
-    from . import paths
-
-    config_path = Path(paths.get_interrupt_config_path())
+def _load_interrupt_config(rules: GameRules | None = None) -> dict[int, str]:
+    config_path = (rules or default_rules()).config_path("interrupt_config.json")
     if not config_path.exists():
         return {}
     with config_path.open(encoding="utf-8") as f:
@@ -896,8 +878,9 @@ def _analyze_interrupts(
     client: WarcraftLogsClient,
     report_id: str,
     composition: RaidComposition,
+    rules: GameRules | None = None,
 ) -> tuple[list[InterruptUsage], list[str]]:
-    interrupt_ids = _load_interrupt_config()
+    interrupt_ids = _load_interrupt_config(rules)
     if not interrupt_ids:
         return [], []
 
@@ -1172,10 +1155,8 @@ def _correlate_cancelled_casts(
                         )
 
 
-def _load_debuff_config() -> dict[int, str]:
-    from . import paths
-
-    config_path = Path(paths.get_debuff_config_path())
+def _load_debuff_config(rules: GameRules | None = None) -> dict[int, str]:
+    config_path = (rules or default_rules()).config_path("debuff_config.json")
     if not config_path.exists():
         return {}
     with config_path.open(encoding="utf-8") as f:
@@ -1188,8 +1169,9 @@ def _analyze_aura_uptimes(
     client: WarcraftLogsClient,
     report_id: str,
     encounters: list[EncounterSummary],
+    rules: GameRules | None = None,
 ) -> tuple[list[AuraUptime], list[str]]:
-    debuff_ids = _load_debuff_config()
+    debuff_ids = _load_debuff_config(rules)
     if not debuff_ids:
         return [], []
 
@@ -1247,10 +1229,8 @@ def _analyze_aura_uptimes(
     return results, warnings
 
 
-def _load_totem_config() -> dict[int, dict]:
-    from . import paths
-
-    config_path = Path(paths.get_totem_config_path())
+def _load_totem_config(rules: GameRules | None = None) -> dict[int, dict]:
+    config_path = (rules or default_rules()).config_path("totem_config.json")
     if not config_path.exists():
         return {}
     with config_path.open(encoding="utf-8") as f:
@@ -1277,8 +1257,9 @@ def _analyze_totem_uptimes(
     report_id: str,
     composition: RaidComposition,
     encounters: list[EncounterSummary],
+    rules: GameRules | None = None,
 ) -> tuple[list[AuraUptime], list[str]]:
-    totem_config = _load_totem_config()
+    totem_config = _load_totem_config(rules)
     if not totem_config:
         return [], []
 
@@ -1547,29 +1528,12 @@ def analyze_resource_waste(  # noqa: C901
     composition: RaidComposition,
     consumable_usage: list,  # list[ConsumableUsage]
     progress_callback: Callable[[str], None] | None = None,
+    rules: GameRules | None = None,
 ) -> list[PlayerResourceAnalysis]:
     """Detect resource waste patterns for each player in an encounter."""
+    rules = rules or default_rules()
     # Primary resource type by class
-    _CLASS_RESOURCE = {
-        "Priest": 0,
-        "Paladin": 0,
-        "Druid": 0,
-        "Shaman": 0,
-        "Mage": 0,
-        "Warlock": 0,
-        "Hunter": 0,
-        "Warrior": 1,
-        "Rogue": 3,
-    }
-
-    _ROGUE_FINISHERS = {
-        26865: "Eviscerate",
-        26867: "Rupture",
-        6774: "Slice and Dice",
-        26866: "Expose Armor",
-        8643: "Kidney Shot",
-        32684: "Envenom",
-    }
+    class_resource = rules.class_resources
 
     results: list[PlayerResourceAnalysis] = []
     all_players = composition.all_players
@@ -1583,7 +1547,7 @@ def analyze_resource_waste(  # noqa: C901
         if progress_callback:
             progress_callback(f"Analyzing resources for {player.name}...")
 
-        resource_type = _CLASS_RESOURCE.get(player.player_class)
+        resource_type = class_resource.get(player.player_class)
         if resource_type is None:
             continue
 
@@ -1698,11 +1662,11 @@ def analyze_cooldown_synergy(  # noqa: C901
     encounter: EncounterSummary,
     composition: RaidComposition,
     progress_callback: Callable[[str], None] | None = None,
+    rules: GameRules | None = None,
 ) -> CooldownSynergyAnalysis:
     """Analyze how well players align personal cooldowns with Heroism/Bloodlust."""
-    from .paths import get_cooldowns_config_path
-
-    config_path = Path(get_cooldowns_config_path())
+    rules = rules or default_rules()
+    config_path = rules.config_path("cooldowns_config.json")
     try:
         with config_path.open(encoding="utf-8") as f:
             cd_config = json.load(f)
@@ -1729,7 +1693,7 @@ def analyze_cooldown_synergy(  # noqa: C901
     for spell_id_str, info in cd_config.get("potion_buffs", {}).items():
         potion_lookup[int(spell_id_str)] = (info["name"], info.get("duration", 0))
 
-    heroism_ids = {32182, 2825}
+    heroism_ids = rules.heroism_ids
 
     # --- Find Heroism/Bloodlust windows using targetID (buffs received) ---
     heroism_windows: list[HeroismWindow] = []

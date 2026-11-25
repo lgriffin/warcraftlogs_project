@@ -1,8 +1,11 @@
 """Tests for interrupt tracking analysis."""
 
 import json
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from wcl_core.rules import default_rules
 
 from warcraftlogs_client.analysis import _analyze_interrupts, _load_interrupt_config
 from warcraftlogs_client.models import PlayerIdentity, RaidComposition
@@ -32,18 +35,12 @@ def sample_composition():
 
 
 class TestLoadInterruptConfig:
-    def test_loads_config(self, interrupt_config_file, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
-        monkeypatch.setattr(paths, "get_interrupt_config_path", lambda: interrupt_config_file)
-        config = _load_interrupt_config()
+    def test_loads_config(self, interrupt_config_file):
+        config = _load_interrupt_config(replace(default_rules(), data_dir=Path(interrupt_config_file).parent))
         assert config == {1766: "Kick", 6552: "Pummel", 2139: "Counterspell"}
 
-    def test_returns_empty_when_missing(self, tmp_path, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
-        monkeypatch.setattr(paths, "get_interrupt_config_path", lambda: str(tmp_path / "missing.json"))
-        config = _load_interrupt_config()
+    def test_returns_empty_when_missing(self, tmp_path):
+        config = _load_interrupt_config(replace(default_rules(), data_dir=tmp_path))
         assert config == {}
 
 
@@ -52,7 +49,7 @@ class TestAnalyzeInterrupts:
         import warcraftlogs_client.analysis as analysis_mod
 
         config = {1766: "Kick", 6552: "Pummel", 2139: "Counterspell"}
-        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda: config)
+        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda _rules=None: config)
 
         mock_client.get_cast_events_paginated.side_effect = [
             [
@@ -86,7 +83,7 @@ class TestAnalyzeInterrupts:
     def test_empty_config_returns_empty(self, mock_client, sample_composition, monkeypatch):
         import warcraftlogs_client.analysis as analysis_mod
 
-        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda: {})
+        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda _rules=None: {})
         results, warnings = _analyze_interrupts(mock_client, "test_report", sample_composition)
         assert results == []
         assert warnings == []
@@ -97,7 +94,7 @@ class TestAnalyzeInterrupts:
         import warcraftlogs_client.analysis as analysis_mod
 
         config = {1766: "Kick"}
-        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda: config)
+        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda _rules=None: config)
         mock_client.get_cast_events_paginated.side_effect = requests.RequestException("timeout")
 
         _results, warnings = _analyze_interrupts(mock_client, "test_report", sample_composition)
@@ -108,7 +105,7 @@ class TestAnalyzeInterrupts:
         import warcraftlogs_client.analysis as analysis_mod
 
         config = {1766: "Kick"}
-        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda: config)
+        monkeypatch.setattr(analysis_mod, "_load_interrupt_config", lambda _rules=None: config)
 
         comp = RaidComposition(
             melee=[PlayerIdentity(name="Rogue", player_class="Rogue", source_id=1, role="melee")],

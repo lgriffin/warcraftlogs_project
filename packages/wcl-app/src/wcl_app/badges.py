@@ -129,7 +129,7 @@ def _items(*names: str) -> frozenset[str]:
     return frozenset(n.lower() for n in names)
 
 
-# Consumable names as ``wcl_core/data/consumes_config.json`` records them.
+# Consumable names as ``wcl_core/data/tbc/consumes_config.json`` records them.
 MANA_POTIONS = _items(
     "Super Mana Potion",
     "Fel Mana Potion",

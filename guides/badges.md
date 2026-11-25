@@ -58,7 +58,7 @@ as "x20".
 | `scrolls`             | Scholar        | Scrolls of Agility and Strength                   | 5, 20, 50, 120    |
 | `flasked`             | Flask Bearer   | raids with a flask or an elixir pair (below)      | 5, 15, 40, 100    |
 
-Consumable names are those `wcl_core/data/consumes_config.json` records, matched ignoring case. Flask Bearer's
+Consumable names are those `wcl_core/data/tbc/consumes_config.json` records, matched ignoring case. Flask Bearer's
 catalogue entry is `{"id": "flasked", "name": "Flask Bearer", "icon": "flask", "glyph": "⚗️", "unit": "raids"}`
 plus its tiers.
 

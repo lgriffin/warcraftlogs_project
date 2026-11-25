@@ -84,7 +84,9 @@ codespell warcraftlogs_client/ packages/wcl-core/src/ packages/wcl-store/src/ pa
   aliases. All its HTTP goes through `wcl_core.http`; tests fake it with `wcl_core.testing` (`FakeWarcraftLogs`,
   `FakeDiscord`, `FakeHub`), not `unittest.mock`. The shared packages read the time only through `wcl_core.clock`
   (`tests/test_clock.py`); tests use `FakeClock`. `wcl_core.hub` is the Toads Hub client (`guides/hub_bridge.md`)
-- `packages/wcl-core/src/wcl_core/data/` — spell name mappings and consumes/interrupt/debuff/totem/cooldown configs
+- `packages/wcl-core/src/wcl_core/data/` — spell name mappings (`spell_data/`) and one folder per game ruleset
+  (`tbc/`: `rules.json` plus the consumes/interrupt/debuff/totem/cooldown configs). `wcl_core.rules` loads them and
+  picks a raid's ruleset from its expansion; new game rules go into a ruleset, not into analysis code
 - `packages/wcl-store/` — `wcl_store`: the `RaidRepository` protocol and `StorageError`, the SQLite backend
   (`wcl_store.sqlite.PerformanceDB`, formerly `database.py`, which stays as an import alias) and the Postgres backend
   (`wcl_store.postgres`, SQLAlchemy Core + psycopg 3, `postgres` extra)
