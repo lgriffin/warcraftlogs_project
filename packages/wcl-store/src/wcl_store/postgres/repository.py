@@ -1024,7 +1024,7 @@ class PostgresRaidRepository:
                 select(func.coalesce(func.sum(cu.c["count"]), 0))
                 .select_from(cu.join(r, r.c.id == cu.c.raid_id))
                 .where(cu.c.character_id == char.id, *terms)
-            ).scalar()
+            ).scalar_one()
             active = union_all(
                 *(scoped(tbl, tbl.c.active_time_percent).where(tbl.c.active_time_percent > 0) for tbl in roles)
             ).subquery()

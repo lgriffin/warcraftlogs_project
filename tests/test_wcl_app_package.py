@@ -231,7 +231,7 @@ def test_wcl_app_depends_only_on_core_store_and_requests():
     text = (ROOT / "packages/wcl-app/pyproject.toml").read_text(encoding="utf-8")
     deps = re.search(r"^dependencies = \[(.*?)\]", text, re.M | re.S)
     assert deps
-    assert re.findall(r'"([^"]+)"', deps.group(1)) == ["wcl-core", "wcl-store", "requests>=2.31.0"]
+    assert re.findall(r'"([^"]+)"', deps.group(1)) == ["wcl-core", "wcl-store", "requests>=2.32.4"]
 
 
 def test_release_script_bumps_the_wcl_app_version():

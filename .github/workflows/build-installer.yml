@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: linux-bundle
           path: dist
@@ -91,7 +91,7 @@ jobs:
       # The Setup.exe is the single install, and installed copies update by running the next one silently, so a
       # release without it fails here rather than shipping zip-only.
       - name: Build installer with Inno Setup
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
+        uses: Minionguyjpro/Inno-Setup-Action@v1.3.0
         with:
           path: installer.iss
           options: /O+ /DAppVersion=${{ steps.version.outputs.version }}
