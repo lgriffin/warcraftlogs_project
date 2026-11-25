@@ -379,6 +379,15 @@ The desktop app **shall** install with `scripts/install_linux.sh` and start on A
 - **Verified by:** the Linux bundle in `.github/workflows/build-installer.yml`, and on demand
   `.github/workflows/almalinux.yml` (`guides/linux_install.md`).
 
+#### REL-04 · Ubiquitous · Enforced
+
+Every release **shall** ship one Windows Setup.exe that upgrades an earlier install in place and that installed copies
+download, verify against `SHA256SUMS` and run silently to update.
+
+- **Why:** players install once; a zip-only release or a new AppId leaves them on an old build or with two copies.
+- **Verified by:** `tests/test_windows_release.py`, `tests/test_updater.py` and the Windows job of
+  `.github/workflows/build-installer.yml`.
+
 ---
 
 ## Part 9 · Process

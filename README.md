@@ -24,8 +24,8 @@ graph LR
 
 A standalone Windows installer is available that bundles everything — no Python installation required.
 
-1. Download `WarcraftLogsAnalyzer-4.5.0-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
-2. Run the installer and follow the prompts
+1. Download the latest `WarcraftLogsAnalyzer-<version>-Setup.exe` from the [Releases](https://github.com/lgriffin/warcraftlogs_project/releases) page
+2. Run the installer and follow the prompts (it installs for your user only, so no administrator prompt)
 3. Launch **WarcraftLogs Analyzer** from the Start Menu or desktop shortcut
 
 On first launch the app copies a default config and creates a local SQLite database. All user data is stored separately from the application:
@@ -38,7 +38,7 @@ On first launch the app copies a default config and creates a local SQLite datab
 
 Uninstalling the app does not remove user data — delete the folders above manually if needed.
 
-The app checks for updates automatically on launch via GitHub Releases. When a new version is available, a notification dialog offers to download and apply it.
+You only install once. The app checks GitHub Releases on launch (at most every four hours, or on demand from **Settings**), and when a new version is out the status bar offers it. **Install & Restart** downloads the new release's Setup.exe, checks it against `SHA256SUMS`, runs it silently over your install and reopens the app, so the Start Menu entry, the uninstaller and *Apps & features* always show the current version. A copy unpacked from the `-portable.zip` updates the same way from the next portable zip.
 
 Each release publishes a `SHA256SUMS` file, signed in CI with [Sigstore](https://www.sigstore.dev/) keyless signing (bundle: `SHA256SUMS.sigstore.json`). The updater refuses to install a download whose SHA-256 is not listed in `SHA256SUMS`, or when the release has no `SHA256SUMS`. To check a release by hand:
 

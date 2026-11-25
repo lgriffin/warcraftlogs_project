@@ -16,8 +16,7 @@ sed -i "s/^version = .*/version = \"${VERSION}\"/" packages/wcl-app/pyproject.to
 
 # Update version in installer.iss and spec (if present)
 if [ -f installer.iss ]; then
-    sed -i "s/^AppVersion=.*/AppVersion=${VERSION}/" installer.iss
-    sed -i "s/^OutputBaseFilename=.*/OutputBaseFilename=WarcraftLogsAnalyzer-${VERSION}-Setup/" installer.iss
+    sed -i "s/^  #define AppVersion .*/  #define AppVersion \"${VERSION}\"/" installer.iss
 fi
 
 echo "[1/3] Running PyInstaller..."
@@ -32,8 +31,11 @@ if [ ! -f "$INSTALLER" ]; then
     exit 1
 fi
 
+# Installed copies refuse an update that SHA256SUMS does not list (warcraftlogs_client/updater.py).
+(cd installer_output && sha256sum "$(basename "$INSTALLER")") > SHA256SUMS
+
 echo "[3/3] Creating GitHub release..."
-gh release create "v${VERSION}" "$INSTALLER" \
+gh release create "v${VERSION}" "$INSTALLER" SHA256SUMS \
     --title "WarcraftLogs Analyzer v${VERSION}" \
     --notes "## WarcraftLogs Analyzer v${VERSION}
 
