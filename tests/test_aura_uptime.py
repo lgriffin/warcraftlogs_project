@@ -1,8 +1,11 @@
 """Tests for aura (debuff) uptime analysis and DB persistence."""
 
 import json
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from wcl_core.rules import default_rules
 
 from warcraftlogs_client.analysis import _analyze_aura_uptimes, _load_debuff_config
 from warcraftlogs_client.models import (
@@ -52,27 +55,18 @@ def sample_encounters():
 
 
 class TestLoadDebuffConfig:
-    def test_loads_boss_debuffs(self, debuff_config_file, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
-        monkeypatch.setattr(paths, "get_debuff_config_path", lambda: debuff_config_file)
-        config = _load_debuff_config()
+    def test_loads_boss_debuffs(self, debuff_config_file):
+        config = _load_debuff_config(replace(default_rules(), data_dir=Path(debuff_config_file).parent))
         assert config == {11597: "Sunder Armor", 22959: "Fire Vulnerability"}
 
-    def test_returns_empty_when_missing(self, tmp_path, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
-        monkeypatch.setattr(paths, "get_debuff_config_path", lambda: str(tmp_path / "missing.json"))
-        config = _load_debuff_config()
+    def test_returns_empty_when_missing(self, tmp_path):
+        config = _load_debuff_config(replace(default_rules(), data_dir=tmp_path))
         assert config == {}
 
-    def test_returns_empty_when_no_boss_debuffs_key(self, tmp_path, monkeypatch):
-        import warcraftlogs_client.paths as paths
-
+    def test_returns_empty_when_no_boss_debuffs_key(self, tmp_path):
         path = tmp_path / "debuff_config.json"
         path.write_text(json.dumps({"some_other_key": {}}))
-        monkeypatch.setattr(paths, "get_debuff_config_path", lambda: str(path))
-        config = _load_debuff_config()
+        config = _load_debuff_config(replace(default_rules(), data_dir=tmp_path))
         assert config == {}
 
 
@@ -83,7 +77,7 @@ class TestAnalyzeAuraUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_debuff_config",
-            lambda: {11597: "Sunder Armor", 22959: "Fire Vulnerability"},
+            lambda _rules=None: {11597: "Sunder Armor", 22959: "Fire Vulnerability"},
         )
 
         mock_client.get_debuffs_table.return_value = {
@@ -117,7 +111,7 @@ class TestAnalyzeAuraUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_debuff_config",
-            lambda: {11597: "Sunder Armor"},
+            lambda _rules=None: {11597: "Sunder Armor"},
         )
 
         mock_client.get_debuffs_table.return_value = {
@@ -146,7 +140,7 @@ class TestAnalyzeAuraUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_debuff_config",
-            lambda: {11597: "Sunder Armor"},
+            lambda _rules=None: {11597: "Sunder Armor"},
         )
 
         mock_client.get_debuffs_table.return_value = {
@@ -173,7 +167,7 @@ class TestAnalyzeAuraUptimes:
     def test_empty_config_returns_empty(self, mock_client, sample_encounters, monkeypatch):
         import warcraftlogs_client.analysis as analysis_mod
 
-        monkeypatch.setattr(analysis_mod, "_load_debuff_config", lambda: {})
+        monkeypatch.setattr(analysis_mod, "_load_debuff_config", lambda _rules=None: {})
         results, warnings = _analyze_aura_uptimes(mock_client, "test_report", sample_encounters)
         assert results == []
         assert warnings == []
@@ -186,7 +180,7 @@ class TestAnalyzeAuraUptimes:
         monkeypatch.setattr(
             analysis_mod,
             "_load_debuff_config",
-            lambda: {11597: "Sunder Armor"},
+            lambda _rules=None: {11597: "Sunder Armor"},
         )
         mock_client.get_debuffs_table.side_effect = requests.RequestException("timeout")
 

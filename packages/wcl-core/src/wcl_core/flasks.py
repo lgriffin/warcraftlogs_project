@@ -3,7 +3,7 @@ Flasks and elixirs: which consumable is which, and whether a player came prepare
 
 In TBC a flask counts as both a battle and a guardian elixir, so a player is *prepared* with a flask, or with one
 battle elixir and one guardian elixir together. The aura ids and names are the ``flasks``, ``battle_elixirs`` and
-``guardian_elixirs`` sections of ``data/consumes_config.json``.
+``guardian_elixirs`` sections of a ruleset's ``consumes_config.json`` (``data/tbc/`` for TBC).
 
 Flasks and elixirs are drunk before the pull and last one to two hours, so they never show in cast events and are read
 from the buffs table instead: each aura there has ``bands`` (``startTime``/``endTime``, report-relative ms), and WCL
@@ -17,12 +17,12 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from functools import cached_property, lru_cache
-from pathlib import Path
+from functools import cache, cached_property
 from typing import Any
 
 from .common.log import get_logger
 from .models import FlaskCoverage, PlayerIdentity
+from .rules import DEFAULT_RULESET, bundled_rulesets, load_ruleset
 
 logger = get_logger(__name__)
 
@@ -77,18 +77,29 @@ class FlaskCatalog:
         return {name.lower(): kind for name, kind in self.auras.values()}
 
 
-@lru_cache(maxsize=1)
-def load_catalog() -> FlaskCatalog:
-    """The catalogue from the bundled ``consumes_config.json``; empty if it is missing or unreadable."""
-    from . import paths
-
-    path = Path(paths.get_consumes_config_path())
+@cache
+def load_catalog(ruleset: str = DEFAULT_RULESET) -> FlaskCatalog:
+    """The catalogue from a bundled ruleset's ``consumes_config.json`` (``wcl_core.rules``; The Burning Crusade's
+    by default); empty if it is missing or unreadable."""
     try:
+        path = load_ruleset(ruleset).config_path("consumes_config.json")
         with path.open(encoding="utf-8") as f:
             return FlaskCatalog.from_config(json.load(f))
-    except (OSError, ValueError) as e:
-        logger.warning("Could not read flasks and elixirs from %s: %s", path, e)
+    except (OSError, ValueError, KeyError) as e:
+        logger.warning("Could not read flasks and elixirs of the %s ruleset: %s", ruleset, e)
         return FlaskCatalog()
+
+
+@cache
+def combined_catalog() -> FlaskCatalog:
+    """Every bundled ruleset's flasks and elixirs together, for views over raids of more than one era.
+
+    Storage records consumables by name, and a name is the same flask or elixir in every ruleset that has it.
+    """
+    auras: dict[int, tuple[str, str]] = {}
+    for name in bundled_rulesets():
+        auras.update(load_catalog(name).auras)
+    return FlaskCatalog(auras)
 
 
 def preparation(names: Iterable[str], catalog: FlaskCatalog) -> str:

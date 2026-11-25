@@ -598,7 +598,7 @@ Path resolution is handled by `paths.py`, which detects frozen (PyInstaller) vs 
 
 ### Adding a new consumable
 
-Edit `packages/wcl-core/src/wcl_core/data/consumes_config.json` and add the spell ID and name to either `buff_consumables` or `cast_consumables` depending on how WarcraftLogs tracks it. Multiple spell IDs can map to the same name for variant unification (e.g., all Master Healthstone ranks → "Master Healthstone").
+Edit `packages/wcl-core/src/wcl_core/data/tbc/consumes_config.json` and add the spell ID and name to either `buff_consumables` or `cast_consumables` depending on how WarcraftLogs tracks it. Multiple spell IDs can map to the same name for variant unification (e.g., all Master Healthstone ranks → "Master Healthstone").
 
 ### Adding a new engineering item
 

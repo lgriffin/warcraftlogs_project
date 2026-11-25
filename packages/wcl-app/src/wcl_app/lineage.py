@@ -21,7 +21,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from wcl_core.flasks import load_catalog, preparation
+from wcl_core.flasks import combined_catalog, preparation
 from wcl_store import RaidScope, narrowed
 
 if TYPE_CHECKING:
@@ -174,7 +174,7 @@ FLASK_METRIC = "Flask or elixir pair"
 
 def _add_flask_metric(lineage: CharacterLineage, per_item: dict[str, dict[int, float]], raid_ids: list[int]) -> None:
     """1 per raid with a flask or an elixir pair, else 0; left out when no flask or elixir was ever recorded."""
-    catalog = load_catalog()
+    catalog = combined_catalog()
     used = {item: by_raid for item, by_raid in per_item.items() if catalog.kind_of(item)}
     if not used:
         return

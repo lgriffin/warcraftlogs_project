@@ -176,7 +176,7 @@ Tracks consumable usage per player per raid:
   - Flasks and battle/guardian elixirs, read from the buffs table; a player with a flask or an elixir pair counts
     as prepared (Home `flasks` widget, Flask Bearer badge)
 
-Consumables to track are configured in `packages/wcl-core/src/wcl_core/data/consumes_config.json`.
+Consumables to track are configured in `packages/wcl-core/src/wcl_core/data/tbc/consumes_config.json`.
 
 ### Raid Filtering
 
@@ -353,7 +353,7 @@ is a public client with PKCE, so no secret is stored.
 | `config.example.json` | Template for local setup (committed) |
 | `config.json` | Local API credentials and settings (**gitignored** — copy from example) |
 | `user_token.json` | OAuth user token for reference reports (**gitignored**) |
-| `packages/wcl-core/src/wcl_core/data/consumes_config.json` | Consumable spell IDs: buffs, casts, flasks, elixirs |
+| `packages/wcl-core/src/wcl_core/data/tbc/consumes_config.json` | Consumable spell IDs: buffs, casts, flasks, elixirs |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_names.json` | Spell ID to name mappings by category |
 | `packages/wcl-core/src/wcl_core/data/spell_data/spell_aliases.json` | Spell rank/variant merging rules |
 

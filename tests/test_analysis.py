@@ -1,9 +1,11 @@
 """Tests for the analysis pipeline — role detection and data processing."""
 
 import json
+from dataclasses import replace
 
 import pytest
 import requests
+from wcl_core.rules import default_rules
 
 from warcraftlogs_client.analysis import (
     _analyze_consumables,
@@ -166,12 +168,8 @@ class TestIdentifyComposition:
 
 
 class TestLoadConsumesConfig:
-    def test_missing_file_returns_defaults(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(
-            "warcraftlogs_client.paths.get_consumes_config_path",
-            lambda: tmp_path / "nonexistent_consumes_config.json",
-        )
-        result = _load_consumes_config()
+    def test_missing_file_returns_defaults(self, tmp_path):
+        result = _load_consumes_config(replace(default_rules(), data_dir=tmp_path))
         assert result == {"buff_consumables": {}, "cast_consumables": {}}
 
 
@@ -185,7 +183,7 @@ class TestAnalyzeConsumables:
         config_path.write_text(json.dumps(config))
         monkeypatch.setattr(
             "warcraftlogs_client.analysis._load_consumes_config",
-            lambda: config,
+            lambda _rules=None: config,
         )
 
         mock_client.get_buffs_table.return_value = {
@@ -216,7 +214,7 @@ class TestAnalyzeConsumables:
         }
         monkeypatch.setattr(
             "warcraftlogs_client.analysis._load_consumes_config",
-            lambda: config,
+            lambda _rules=None: config,
         )
 
         mock_client.get_buffs_table.return_value = {"data": {"auras": []}}
@@ -234,7 +232,7 @@ class TestAnalyzeConsumables:
     def test_warnings_on_api_failure(self, mock_client, sample_composition, monkeypatch):
         monkeypatch.setattr(
             "warcraftlogs_client.analysis._load_consumes_config",
-            lambda: {"buff_consumables": {"12345": "Flask"}, "cast_consumables": {}},
+            lambda _rules=None: {"buff_consumables": {"12345": "Flask"}, "cast_consumables": {}},
         )
         mock_client.get_buffs_table.side_effect = requests.RequestException("timeout")
         mock_client.get_cast_events_paginated.return_value = []
@@ -274,7 +272,7 @@ class TestAnalyzeRaid:
 
         monkeypatch.setattr(
             "warcraftlogs_client.analysis._load_consumes_config",
-            lambda: {"buff_consumables": {}, "cast_consumables": {}},
+            lambda _rules=None: {"buff_consumables": {}, "cast_consumables": {}},
         )
 
         analysis = analyze_raid(mock_client, "r1")
@@ -306,7 +304,7 @@ class TestAnalyzeRaid:
 
         monkeypatch.setattr(
             "warcraftlogs_client.analysis._load_consumes_config",
-            lambda: {"buff_consumables": {}, "cast_consumables": {}},
+            lambda _rules=None: {"buff_consumables": {}, "cast_consumables": {}},
         )
 
         analysis = analyze_raid(mock_client, "r1")

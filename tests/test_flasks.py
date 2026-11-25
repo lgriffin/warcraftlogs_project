@@ -152,7 +152,7 @@ class TestCoverage:
 class TestAnalysis:
     @pytest.fixture(autouse=True)
     def config(self, monkeypatch):
-        monkeypatch.setattr("warcraftlogs_client.analysis._load_consumes_config", lambda: CONFIG)
+        monkeypatch.setattr("warcraftlogs_client.analysis._load_consumes_config", lambda _rules=None: CONFIG)
 
     def test_flasks_and_elixirs_are_recorded_as_consumables_with_coverage(self, mock_client, sample_composition):
         mock_client.get_buffs_table.return_value = {

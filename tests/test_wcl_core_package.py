@@ -39,6 +39,7 @@ def test_old_import_path_is_the_same_module(name):
     [
         paths.get_spell_data_dir() / "spell_names.json",
         paths.get_spell_data_dir() / "spell_aliases.json",
+        paths.get_ruleset_dir() / "rules.json",
         paths.get_consumes_config_path(),
         paths.get_interrupt_config_path(),
         paths.get_debuff_config_path(),

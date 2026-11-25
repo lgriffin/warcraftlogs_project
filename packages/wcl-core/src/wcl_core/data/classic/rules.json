@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Classic (level 60) ruleset (wcl_core.rules). Class names are as Warcraft Logs reports them (actor subType);",
+    "ids are spell or aura ids as Warcraft Logs reports them. The *_config.json files beside this one are part of",
+    "the same ruleset. Classic has no Heroism or Bloodlust, so heroism_ids is empty."
+  ],
+  "expansion": "Classic",
+  "classes": {
+    "tank": ["Warrior", "Druid", "Paladin"],
+    "healer": ["Priest", "Paladin", "Druid", "Shaman"],
+    "hybrid": ["Paladin", "Druid", "Shaman", "Priest"],
+    "always_ranged": ["Mage", "Warlock", "Hunter"],
+    "always_melee": ["Rogue", "Warrior"]
+  },
+  "resource_spells": {
+    "17531": "Major Mana Potion",
+    "27869": "Dark Rune",
+    "16666": "Demonic Rune"
+  },
+  "class_resources": {
+    "Priest": 0, "Paladin": 0, "Druid": 0, "Shaman": 0, "Mage": 0, "Warlock": 0, "Hunter": 0,
+    "Warrior": 1,
+    "Rogue": 3
+  },
+  "heroism_ids": []
+}
