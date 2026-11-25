@@ -477,6 +477,15 @@ def _identify_healers(
     return healers
 
 
+def _runes_as_one(resources: dict[str, int]) -> dict[str, int]:
+    """Count Demonic Runes as Dark Runes: they are the same mana-for-health rune."""
+    merged = dict(resources)
+    demonic = merged.pop("Demonic Rune", 0)
+    if demonic:
+        merged["Dark Rune"] = merged.get("Dark Rune", 0) + demonic
+    return merged
+
+
 def _get_resources_from_events(
     client: WarcraftLogsClient,
     report_id: str,
@@ -494,11 +503,7 @@ def _get_resources_from_events(
             name = resource_spells.get(e.get("abilityGameID", 0))
             if name:
                 resources[name] += 1
-        if resources.get("Demonic Rune") and not resources.get("Dark Rune"):
-            resources["Dark Rune"] = resources.pop("Demonic Rune")
-        elif resources.get("Demonic Rune"):
-            resources["Dark Rune"] += resources.pop("Demonic Rune")
-        return dict(resources)
+        return _runes_as_one(resources)
     except (requests.RequestException, KeyError, TypeError, ValueError):
         return {}
 
@@ -510,6 +515,7 @@ def _analyze_healers(
     progress_callback: Callable[[str], None] | None = None,
     rules: GameRules | None = None,
 ) -> tuple[list[HealerPerformance], list[str]]:
+    resource_spells = (rules or default_rules()).resource_spells
     results = []
     warnings = []
     alias_map = get_spell_manager().get_legacy_aliases()
@@ -542,7 +548,7 @@ def _analyze_healers(
             dispel_data = SpellBreakdown.calculate_dispels(cast_entries, player.player_class)
             dispels = [DispelUsage(spell_name=k, casts=v) for k, v in dispel_data.items() if v > 0]
 
-            resource_data = SpellBreakdown.get_resources_used(cast_entries)
+            resource_data = _runes_as_one(SpellBreakdown.get_resources_used(cast_entries, resource_spells))
             if not any(resource_data.values()):
                 resource_data = _get_resources_from_events(client, report_id, player.source_id, rules)
             resources = [ResourceUsage(name=k, count=v) for k, v in resource_data.items()]

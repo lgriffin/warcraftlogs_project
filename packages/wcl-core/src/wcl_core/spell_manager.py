@@ -8,6 +8,7 @@ by editing JSON configuration files.
 
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -240,17 +241,20 @@ class SpellManager:
 
         return dict(id_to_name), dict(id_to_casts)
 
-    def get_resources_used(self, cast_entries: list) -> dict[str, int]:
+    def get_resources_used(self, cast_entries: list, resource_ids: Mapping[int, str] | None = None) -> dict[str, int]:
         """
         Extract resource usage (potions, etc.) from cast entries.
 
         Args:
             cast_entries: Cast table entries from API
+            resource_ids: Spell id to resource name (a ruleset's ``resource_spells``); TBC's mana potion and
+                Dark Rune when None
 
         Returns:
             Dictionary mapping resource names to usage counts
         """
-        resource_ids = {28499: "Super Mana Potion", 27869: "Dark Rune"}
+        if resource_ids is None:
+            resource_ids = {28499: "Super Mana Potion", 27869: "Dark Rune"}
 
         resources_used = {}
         for entry in cast_entries:
@@ -449,9 +453,9 @@ class SpellBreakdown:
         return complete_spell_map, id_to_casts, entries
 
     @staticmethod
-    def get_resources_used(cast_entries: list) -> dict[str, int]:
+    def get_resources_used(cast_entries: list, resource_ids: Mapping[int, str] | None = None) -> dict[str, int]:
         """Legacy method for resource usage."""
-        return get_spell_manager().get_resources_used(cast_entries)
+        return get_spell_manager().get_resources_used(cast_entries, resource_ids)
 
     @staticmethod
     def get_fear_ward_usage(cast_entries: list) -> dict[str, Any] | None:

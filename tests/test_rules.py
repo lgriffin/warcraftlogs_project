@@ -8,6 +8,7 @@ from dataclasses import replace
 import pytest
 from wcl_core import paths
 from wcl_core.analysis import (
+    _analyze_healers,
     _get_resources_from_events,
     _identify_healers,
     _identify_tanks,
@@ -225,3 +226,26 @@ class TestExtendingARuleset:
         assert rules.expansion == classic.expansion
         assert rules.config_path("interrupt_config.json") == child / "interrupt_config.json"
         assert rules.config_path("debuff_config.json") == classic.config_path("debuff_config.json")
+
+
+class TestRulesetResources:
+    def test_healer_resources_from_the_cast_table_are_the_rulesets(self, mock_client):
+        healer = PlayerIdentity(name="Mend", player_class="Priest", source_id=3, role="healer")
+        entries = [
+            {"guid": 17531, "name": "Major Mana Potion", "hitCount": 2},
+            {"guid": 16666, "name": "Demonic Rune", "hitCount": 1},
+            {"guid": 27869, "name": "Dark Rune", "hitCount": 1},
+        ]
+        mock_client.run_query.return_value = {
+            "data": {"reportData": {"report": {"table": {"data": {"entries": entries}}}}}
+        }
+
+        def resources(rules=None):
+            healers, _ = _analyze_healers(mock_client, "r1", [healer], None, rules)
+            return {r.name: r.count for r in healers[0].resources}
+
+        assert resources(load_ruleset(CLASSIC)) == {"Major Mana Potion": 2, "Dark Rune": 2}
+        assert resources() == {"Dark Rune": 2}
+
+    def test_an_unreadable_ruleset_gives_an_empty_flask_catalog(self):
+        assert load_catalog("no-such-ruleset").names == ()

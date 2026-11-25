@@ -81,12 +81,12 @@ class FlaskCatalog:
 def load_catalog(ruleset: str = DEFAULT_RULESET) -> FlaskCatalog:
     """The catalogue from a bundled ruleset's ``consumes_config.json`` (``wcl_core.rules``; The Burning Crusade's
     by default); empty if it is missing or unreadable."""
-    path = load_ruleset(ruleset).config_path("consumes_config.json")
     try:
+        path = load_ruleset(ruleset).config_path("consumes_config.json")
         with path.open(encoding="utf-8") as f:
             return FlaskCatalog.from_config(json.load(f))
-    except (OSError, ValueError) as e:
-        logger.warning("Could not read flasks and elixirs from %s: %s", path, e)
+    except (OSError, ValueError, KeyError) as e:
+        logger.warning("Could not read flasks and elixirs of the %s ruleset: %s", ruleset, e)
         return FlaskCatalog()
 
 
