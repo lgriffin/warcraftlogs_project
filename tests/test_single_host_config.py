@@ -146,11 +146,14 @@ class TestReportLinks:
         )
         assert self._raid().url == "https://sod.warcraftlogs.com/reports/abc123"
 
-    def test_a_site_not_announced_yet_links_to_the_main_site(self, monkeypatch):
+    def test_a_forever_raid_links_to_the_forever_site(self):
+        assert self._raid("forever").url == "https://forever.warcraftlogs.com/reports/abc123"
+
+    def test_an_unknown_site_links_to_the_main_site(self, monkeypatch):
         from wcl_core import config
 
         monkeypatch.setattr(config, "load_config", lambda: {})
-        assert self._raid("forever").url == "https://www.warcraftlogs.com/reports/abc123"
+        assert self._raid("mists").url == "https://www.warcraftlogs.com/reports/abc123"
         assert self._raid().url == "https://www.warcraftlogs.com/reports/abc123"
 
 
@@ -181,7 +184,8 @@ class TestAClientForARaidsSite:
 
         ctx = AppContext(config=dict(self.CONFIG))
         assert ctx.client_for(None) is ctx.wcl_client
-        assert ctx.client_for("forever") is ctx.wcl_client
+        assert ctx.client_for("mists") is ctx.wcl_client
+        assert ctx.client_for("forever").api_url == "https://forever.warcraftlogs.com/api/v2/client"
 
     def test_a_headless_host_always_gets_its_own_client(self):
         from contextlib import nullcontext
@@ -220,7 +224,7 @@ class TestTheSiteARaidCameFrom:
         ctx.use_profile(Profile("era", "Era", game_version="classic"))
         assert ctx.wcl_client.api_url == "https://classic.warcraftlogs.com/api/v2/client"
         assert ctx.client_for(None).api_url == "https://fresh.warcraftlogs.com/api/v2/client"
-        assert ctx.client_for("forever").api_url == "https://fresh.warcraftlogs.com/api/v2/client"
+        assert ctx.client_for("mists").api_url == "https://fresh.warcraftlogs.com/api/v2/client"
         assert ctx.client_for("classic") is ctx.wcl_client
 
     def test_the_profiles_own_host_serves_its_own_game_version(self):

@@ -41,7 +41,7 @@ def slugify(name: str) -> str:
 class Profile:
     slug: str
     name: str
-    game_version: str | None = None  # fresh | classic | sod | retail; None = the configured host
+    game_version: str | None = None  # fresh | classic | sod | forever | retail; None = the configured host
     expansions: tuple[str, ...] = ()
     zones: tuple[str, ...] = ()
     since: str | None = None  # "YYYY-MM-DD HH:MM:SS" on raid_date, inclusive
@@ -67,7 +67,7 @@ class Profile:
     @property
     def api_url(self) -> str | None:
         """The client API URL imports should use, or None to keep the configured one (also when the game
-        version's site is not announced yet, as for ``forever``)."""
+        version has no known site)."""
         if self.wcl_api_url:
             return self.wcl_api_url
         return api_url_for(self.game_version) if self.game_version else None

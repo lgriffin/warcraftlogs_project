@@ -215,7 +215,7 @@ class AppContext:
         """A client on the site a raid of *game_version* was fetched from, for reading more of that raid.
 
         The active profile's own host for its own game version (it may name a custom API URL); otherwise the
-        version's site. A raid stored before eras were read, or of a version whose site is not announced yet, came
+        version's site. A raid stored before eras were read, or of a version with no known site, came
         from the configured site. The context's own client is reused when the site is the same, and a headless host
         always gets the client it brought.
         """

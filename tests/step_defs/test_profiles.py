@@ -138,6 +138,16 @@ def activate_version(world, version):
     ctx.use_profile(Profile(version, version, game_version=version))
 
 
+@when("a profile with no game version is activated")
+def activate_any_version(world):
+    world["ctx"].use_profile(Profile("all", "All"))
+
+
+@when(parsers.parse('a "{version}" profile that imports from "{url}" is activated'))
+def activate_version_on_another_site(world, version, url):
+    world["ctx"].use_profile(Profile(version, version, game_version=version, wcl_api_url=url))
+
+
 @then(parsers.parse('imports should come from "{url}"'))
 def imports_from(world, url):
     assert world["ctx"].api_url == world["ctx"].wcl_client.api_url == url

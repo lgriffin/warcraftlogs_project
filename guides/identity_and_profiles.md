@@ -1,15 +1,15 @@
 # Discord identity and raid profiles
 
-Plan revision 5, 2026-10-03. Every phase built here is merged (PRs #144 to #161). What is left waits outside this
-repo: Forever's Warcraft Logs site (3.3) and the Toads Hub and bot port (4.2).
+Plan revision 5, 2026-10-03. Every phase built here is merged (PRs #144 to #161). 3.3, Forever's Warcraft Logs
+site, landed 2026-11-25. What is left waits outside this repo: the Toads Hub and bot port (4.2).
 Status: **experimental**. Order of precedence, as in ESI.ts: running code and CI are the fact, the requirements
 below are the intent, this guide is the how, the phase map is the order.
 
 ## Decisions
 
-- Decided 2026-10-03: **Forever is its own game version** (`forever`). It launches in November 2026; Warcraft Logs
-  has not announced its site, so `wcl_core.game_version.HOSTS` has no entry for it yet and a Forever profile keeps
-  the configured host for imports until one is added. Classic Era and Hardcore stay `classic`.
+- Decided 2026-10-03: **Forever is its own game version** (`forever`). It launched in November 2026 and its site is
+  `https://forever.warcraftlogs.com` (in `wcl_core.game_version.HOSTS` since 2026-11-25), so a Forever profile
+  imports from there. Classic Era and Hardcore stay `classic`.
 - Decided 2026-10-03: **Reuse the Toads Hub's Discord application.** The desktop is a public client with PKCE on a
   loopback redirect; the Hub owner adds `http://127.0.0.1:8765/callback` as a redirect and enables the public client.
   The code needs only the application id (`discord_client_id` or `DISCORD_CLIENT_ID`).
@@ -39,7 +39,7 @@ model and a thin vertical slice, then each frontend adapts.
 
 | Term | Meaning | Where it lives |
 | --- | --- | --- |
-| **Game version** | Which Warcraft Logs site a report is on: `fresh` (Anniversary realms, Classic through TBC), `classic` (Classic Era and Hardcore), `sod`, `forever` (November 2026, site not announced), `retail`. Derived from the API host the report was fetched through. | `wcl_core.game_version`, stored on `raids.game_version` |
+| **Game version** | Which Warcraft Logs site a report is on: `fresh` (Anniversary realms, Classic through TBC), `classic` (Classic Era and Hardcore), `sod`, `forever` (WoW Forever, `forever.warcraftlogs.com`), `retail`. Derived from the API host the report was fetched through. | `wcl_core.game_version`, stored on `raids.game_version` |
 | **Expansion** | The content era of the report's zone: `Classic`, `The Burning Crusade`, `Wrath of the Lich King`, ... Read from the API's `zone { expansion { name } }`, or from the zone name for raids stored before this change. | `wcl_core.game_version`, stored on `raids.expansion` |
 | **Scope** | The filter the services hand the repository: sources, game versions, expansions, zones, a date window, weekdays (0 is Monday, for a raid night). Empty means everything, which is today's behaviour. | `wcl_store.RaidScope` |
 | **Profile** | A named, user-facing view that produces a scope and picks the Warcraft Logs host and guild to import from: "TBC", "Classic days", "Forever". No active profile means the plain, unfiltered app. | `wcl_app.profiles` |
@@ -84,7 +84,7 @@ contract tests on both backends.
 PROF-10 evidence: `tests/test_import_by_profile.py` and
 `test_a_scope_admits_exactly_the_raids_the_store_returns_for_it` on both backends. PROF-11 evidence:
 `test_a_raid_imported_under_a_profile_is_listed_by_it_without_a_backfill`. PROF-12 evidence:
-`test_a_profile_whose_site_is_unknown_refuses_to_import`.
+`test_a_profile_on_another_site_than_the_client_refuses_to_import`.
 PROF-13 evidence: `TestAClientForARaidsSite`; the desktop's encounter deep dive reads through `client_for`.
 PROF-08 evidence: `test_the_desktop_context_starts_in_the_saved_profile`. PROF-09 evidence:
 `tests/gui/test_profile_switcher.py`, `test_the_home_page_follows_a_later_profile_switch` and
@@ -213,7 +213,7 @@ ESI.ts's one-runtime-many-identities model: one pipeline and one database, a per
 | --- | --- | --- | --- |
 | 1 | Foundation: vocabulary, columns, scope, profiles, identity, CLI | Merged | PR #144 |
 | 2 | Scoped services and frontends | Merged (#145 to #149, 2.4 in #161) | PROF-07 to PROF-09 |
-| 3 | Import by profile | 3.1 and 3.2 merged (#159); 3.3 waits on Warcraft Logs | PROF-10 to PROF-12 |
+| 3 | Import by profile | 3.1 and 3.2 merged (#159); 3.3 (Forever's site) added 2026-11-25 | PROF-10 to PROF-12 |
 | 4 | Bridge to the Toads Hub and bot | 4.1 merged (#160); 4.2 is the Toads port | IDENT-05 to IDENT-07 |
 | 5 | Retire the single-host config | Merged (#161) | PROF-13, ARCH-P3 |
 | Q | Quality bar: the ESI.ts gates in Python | Merged (#150 to #158) | section below, `guides/CHARTER.md` |
@@ -275,8 +275,8 @@ Order:
    An import, a guild list or a guild analysis under a profile whose game version is not the client's site raises
    `ProfileSiteUnknown` before any request, rather than filing Forever raids under `fresh`. `profile create
    --api-url` gives a profile its own site.
-3. `HOSTS` gains `forever` when Warcraft Logs announces its site; a Forever profile then imports from it with no
-   other change. Until then a Forever profile can read but not import.
+3. `HOSTS` has `forever` (`https://forever.warcraftlogs.com`, added 2026-11-25); a Forever profile imports from it
+   with no other change.
 Definition of done: a profile with its own guild id imports only that guild's reports; a raid imported under a
 profile is listed by it without a backfill.
 
@@ -393,5 +393,5 @@ lint (done); the charter (done). What is left of the gap table is the charter's 
 
 ## Open questions
 
-- Which Warcraft Logs site Forever will use. Until known, `forever` profiles keep the configured host.
+- Resolved 2026-11-25: Forever uses `https://forever.warcraftlogs.com`.
 - Resolved 2026-10-03: the Hub registers apps per Discord account, through a code the bot issues to that account.

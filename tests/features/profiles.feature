@@ -31,6 +31,8 @@ Feature: Raid profiles and Discord identity
     When a profile on "classic" is activated
     Then imports should come from "https://classic.warcraftlogs.com/api/v2/client"
     When a profile on "forever" is activated
+    Then imports should come from "https://forever.warcraftlogs.com/api/v2/client"
+    When a profile with no game version is activated
     Then imports should come from "https://fresh.warcraftlogs.com/api/v2/client"
 
   @ears_event_driven @auth
@@ -79,7 +81,7 @@ Feature: Raid profiles and Discord identity
   @ears_unwanted_behavior
   Scenario: PROF-12 If a profile's site is not the client's, then the service shall import nothing
     Given Warcraft Logs lists Molten Core, Karazhan and Nowhere Keep for guild 9
-    When a profile on "forever" is activated
+    When a "forever" profile that imports from "https://fresh.warcraftlogs.com/api/v2/client" is activated
     Then importing the guild's new reports should fail without asking Warcraft Logs anything
 
   @ears_event_driven @database

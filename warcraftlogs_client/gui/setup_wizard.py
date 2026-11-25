@@ -43,6 +43,7 @@ SITES: tuple[tuple[str, str], ...] = (
     ("fresh", "Anniversary (fresh.warcraftlogs.com)"),
     ("classic", "Classic Era (classic.warcraftlogs.com)"),
     ("sod", "Season of Discovery (sod.warcraftlogs.com)"),
+    ("forever", "WoW Forever (forever.warcraftlogs.com)"),
     ("retail", "Retail (www.warcraftlogs.com)"),
 )
 
