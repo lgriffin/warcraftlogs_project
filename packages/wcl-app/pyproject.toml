@@ -8,7 +8,7 @@ dependencies = [
     "wcl-core",
     "wcl-store",
     # player_page catches requests.RequestException directly (wcl-core pins the same)
-    "requests>=2.31.0",
+    "requests>=2.32.4",
 ]
 
 [build-system]

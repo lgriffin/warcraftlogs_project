@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: linux-bundle
           path: dist
@@ -78,7 +78,7 @@ jobs:
       - name: Build installer with Inno Setup
         id: inno
         continue-on-error: true
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
+        uses: Minionguyjpro/Inno-Setup-Action@v1.3.0
         with:
           path: installer.iss
 
