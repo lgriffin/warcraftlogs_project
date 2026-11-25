@@ -14,10 +14,20 @@ from wcl_core.analysis import (
     analyze_raid,
     apply_role_overrides,
 )
-from wcl_core.flasks import load_catalog
-from wcl_core.game_version import BURNING_CRUSADE, CLASSIC_ERA, WRATH
+from wcl_core.flasks import FLASK, GUARDIAN_ELIXIR, combined_catalog, load_catalog
+from wcl_core.game_version import BURNING_CRUSADE, CLASSIC_ERA, FOREVER, FRESH, WRATH
 from wcl_core.models import PlayerIdentity, RaidComposition, RaidMetadata
-from wcl_core.rules import DEFAULT_RULESET, RULESETS, TBC, GameRules, default_rules, load_ruleset, rules_for
+from wcl_core.rules import (
+    CLASSIC,
+    FOREVER_RULES,
+    RULESETS,
+    TBC,
+    GameRules,
+    bundled_rulesets,
+    default_rules,
+    load_ruleset,
+    rules_for,
+)
 
 CATALOGS = (
     "consumes_config.json",
@@ -29,13 +39,32 @@ CATALOGS = (
 
 
 class TestBundledRulesets:
-    @pytest.mark.parametrize("name", sorted(set(RULESETS.values()) | {DEFAULT_RULESET}))
+    def test_the_bundled_rulesets_are_tbc_classic_and_forever(self):
+        assert bundled_rulesets() == (TBC, CLASSIC, FOREVER_RULES)
+
+    @pytest.mark.parametrize("name", bundled_rulesets())
     def test_each_ruleset_ships_its_rules_and_every_catalog(self, name):
-        folder = paths.get_ruleset_dir(name)
-        assert (folder / "rules.json").is_file()
+        rules = load_ruleset(name)
+        assert (paths.get_ruleset_dir(name) / "rules.json").is_file()
         for catalog in CATALOGS:
-            assert (folder / catalog).is_file(), catalog
-            json.loads((folder / catalog).read_text(encoding="utf-8"))
+            path = rules.config_path(catalog)
+            assert path.is_file(), catalog
+            json.loads(path.read_text(encoding="utf-8"))
+
+    def test_classic_has_no_heroism_and_its_own_mana_potion(self):
+        rules = load_ruleset(CLASSIC)
+        assert rules.heroism_ids == frozenset()
+        assert rules.resource_spells[17531] == "Major Mana Potion"
+        assert rules.config_path("consumes_config.json").parent.name == CLASSIC
+
+    def test_forever_starts_as_classic(self):
+        forever, classic = load_ruleset(FOREVER_RULES), load_ruleset(CLASSIC)
+        assert forever.extends is classic
+        assert forever.expansion == classic.expansion
+        assert forever.tank_classes == classic.tank_classes
+        assert forever.heroism_ids == classic.heroism_ids
+        for catalog in CATALOGS:
+            assert forever.config_path(catalog) == classic.config_path(catalog)
 
     @pytest.mark.parametrize(("expansion", "name"), sorted(RULESETS.items()))
     def test_each_ruleset_is_for_the_expansion_it_is_filed_under(self, expansion, name):
@@ -74,7 +103,16 @@ class TestPickingARuleset:
     def test_tbc_raids_get_the_tbc_ruleset(self):
         assert rules_for(BURNING_CRUSADE).name == TBC
 
-    @pytest.mark.parametrize("expansion", [None, "", CLASSIC_ERA, WRATH, "Some Future Expansion"])
+    def test_classic_raids_get_the_classic_ruleset(self):
+        assert rules_for(CLASSIC_ERA).name == CLASSIC
+        assert rules_for(CLASSIC_ERA, FRESH).name == CLASSIC
+
+    @pytest.mark.parametrize("expansion", [None, CLASSIC_ERA, BURNING_CRUSADE])
+    def test_forever_reports_get_the_forever_ruleset_whatever_the_zone(self, expansion):
+        # Forever's Hyjal Summit is filed under The Burning Crusade by zone name; the site wins.
+        assert rules_for(expansion, FOREVER).name == FOREVER_RULES
+
+    @pytest.mark.parametrize("expansion", [None, "", WRATH, "Some Future Expansion"])
     def test_an_expansion_without_a_ruleset_gets_the_default_one(self, expansion):
         assert rules_for(expansion) is default_rules()
 
@@ -126,10 +164,10 @@ class TestAnalysisFollowsTheRuleset:
     def test_analyze_raid_picks_the_ruleset_from_the_reports_expansion(self, mock_client, monkeypatch):
         import wcl_core.analysis as analysis_mod
 
-        picked: list[str | None] = []
+        picked: list[tuple[str | None, str | None]] = []
 
-        def spy(expansion):
-            picked.append(expansion)
+        def spy(expansion, game_version=None):
+            picked.append((expansion, game_version))
             return default_rules()
 
         monkeypatch.setattr(analysis_mod, "rules_for", spy)
@@ -139,7 +177,11 @@ class TestAnalysisFollowsTheRuleset:
         mock_client.get_master_data.return_value = []
         mock_client.get_fights.return_value = []
         analyze_raid(mock_client, "r1")
-        assert picked == [BURNING_CRUSADE]
+        mock_client.get_report_metadata.return_value = RaidMetadata(
+            report_id="r2", title="T", owner="o", start_time=0, zone="Hyjal Summit", game_version=FOREVER
+        )
+        analyze_raid(mock_client, "r2")
+        assert picked == [(BURNING_CRUSADE, None), (BURNING_CRUSADE, FOREVER)]
 
     def test_the_flask_catalog_is_read_from_a_ruleset(self):
         assert load_catalog(TBC) == load_catalog()
@@ -155,3 +197,31 @@ class TestAnalysisFollowsTheRuleset:
 
         classic = replace(default_rules(), resource_spells={17531: "Major Mana Potion"})
         assert _get_resources_from_events(mock_client, "r1", 1, classic) == {"Major Mana Potion": 1}
+
+    def test_the_combined_catalog_knows_every_rulesets_flasks_and_elixirs(self):
+        catalog = combined_catalog()
+        assert catalog.kind_of("Flask of Relentless Assault") == FLASK
+        assert catalog.kind_of("Flask of the Titans") == FLASK
+        assert catalog.kind_of("Elixir of Superior Defense") == GUARDIAN_ELIXIR
+        for name in bundled_rulesets():
+            assert set(load_catalog(name).names) <= set(catalog.names)
+
+
+class TestExtendingARuleset:
+    def test_an_extending_ruleset_keeps_what_it_does_not_set(self, tmp_path):
+        child = tmp_path / "child"
+        child.mkdir()
+        (child / "rules.json").write_text(
+            json.dumps({"extends": CLASSIC, "classes": {"tank": ["Shaman"]}, "heroism_ids": [99]}), encoding="utf-8"
+        )
+        (child / "interrupt_config.json").write_text("{}", encoding="utf-8")
+        rules = GameRules.from_dir(child)
+        classic = load_ruleset(CLASSIC)
+        assert rules.name == "child"
+        assert rules.tank_classes == {"Shaman"}
+        assert rules.heroism_ids == {99}
+        assert rules.healer_classes == classic.healer_classes
+        assert rules.resource_spells == classic.resource_spells
+        assert rules.expansion == classic.expansion
+        assert rules.config_path("interrupt_config.json") == child / "interrupt_config.json"
+        assert rules.config_path("debuff_config.json") == classic.config_path("debuff_config.json")

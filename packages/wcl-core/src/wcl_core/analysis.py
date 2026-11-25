@@ -99,7 +99,7 @@ def analyze_raid(
     healer, tank, melee, ranged, or dps (melee/ranged picked by class and damage profile).
 
     ``rules`` is the game ruleset to analyse with (``wcl_core.rules``); by default it is picked from the report's
-    expansion, or its zone's.
+    site and expansion (or its zone's).
     """
     logger.info("analyze_raid: starting for report %s (API_URL=%s)", report_id, client.api_url)
 
@@ -110,7 +110,7 @@ def analyze_raid(
     _progress("Fetching report metadata...")
     metadata = client.get_report_metadata(report_id)
     logger.info("  metadata: title=%s zone=%s", metadata.title, metadata.zone)
-    rules = rules or rules_for(metadata.expansion or expansion_for_zone(metadata.zone))
+    rules = rules or rules_for(metadata.expansion or expansion_for_zone(metadata.zone), metadata.game_version)
     logger.info("  ruleset: %s", rules.name)
 
     _progress("Fetching master data...")

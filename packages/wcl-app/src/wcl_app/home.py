@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from wcl_core import clock
-from wcl_core.flasks import NOT_PREPARED, PREPARED_ELIXIRS, PREPARED_FLASK, load_catalog, preparation
+from wcl_core.flasks import NOT_PREPARED, PREPARED_ELIXIRS, PREPARED_FLASK, combined_catalog, preparation
 from wcl_core.models import RaidAnalysis
 from wcl_store import RaidRepository, RaidScope, StorageError
 
@@ -764,7 +764,7 @@ class HomeService:
 
     def _consumables(self, s: _Snapshot, w: HomeWidget) -> None:
         a = s.last_analysis
-        catalog = load_catalog()
+        catalog = combined_catalog()
         counts: Counter = Counter()
         roles: dict[str, str] = {}
         for c in a.consumables if a else []:
@@ -789,7 +789,7 @@ class HomeService:
 
     def _flasks(self, s: _Snapshot, w: HomeWidget) -> None:
         a = s.last_analysis
-        catalog = load_catalog()
+        catalog = combined_catalog()
         using: dict[str, set[str]] = {}
         for c in a.consumables if a else []:
             if c.count > 0 and catalog.kind_of(c.consumable_name):

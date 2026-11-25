@@ -147,7 +147,7 @@ exclude_lines = [
 
 [tool.codespell]
 skip = ".git,.venv,.mypy_cache,.ruff_cache,.pytest_cache,*.egg-info,build,dist,*.db,*.ico,*.png,*.csv,spell_data,reports,*.spec"
-ignore-words-list = "casted,hist,sting,datas,levae"
+ignore-words-list = "casted,hist,sting,datas,levae,runn"
 count = true
 quiet-level = 3
 

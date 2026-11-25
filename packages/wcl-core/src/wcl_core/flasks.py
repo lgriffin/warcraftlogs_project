@@ -22,7 +22,7 @@ from typing import Any
 
 from .common.log import get_logger
 from .models import FlaskCoverage, PlayerIdentity
-from .rules import DEFAULT_RULESET, load_ruleset
+from .rules import DEFAULT_RULESET, bundled_rulesets, load_ruleset
 
 logger = get_logger(__name__)
 
@@ -88,6 +88,18 @@ def load_catalog(ruleset: str = DEFAULT_RULESET) -> FlaskCatalog:
     except (OSError, ValueError) as e:
         logger.warning("Could not read flasks and elixirs from %s: %s", path, e)
         return FlaskCatalog()
+
+
+@cache
+def combined_catalog() -> FlaskCatalog:
+    """Every bundled ruleset's flasks and elixirs together, for views over raids of more than one era.
+
+    Storage records consumables by name, and a name is the same flask or elixir in every ruleset that has it.
+    """
+    auras: dict[int, tuple[str, str]] = {}
+    for name in bundled_rulesets():
+        auras.update(load_catalog(name).auras)
+    return FlaskCatalog(auras)
 
 
 def preparation(names: Iterable[str], catalog: FlaskCatalog) -> str:

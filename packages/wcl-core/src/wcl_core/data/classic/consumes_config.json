@@ -1,0 +1,77 @@
+{
+  "_comment": [
+    "Classic (level 60) consumables. Aura/spell ids as WarcraftLogs reports them (the buff's spell id, not the item id).",
+    "Classic has no battle/guardian elixir split; battle_elixirs holds the offensive elixirs and guardian_elixirs the",
+    "defensive and mana ones, so a flask, or one of each, counts as prepared (wcl_core.flasks)."
+  ],
+  "buff_consumables": {
+    "17540": "Greater Stoneshield Potion",
+    "3169": "Limited Invulnerability Potion",
+    "6615": "Free Action Potion",
+    "24364": "Living Action Potion",
+    "17543": "Greater Fire Protection Potion",
+    "17544": "Greater Frost Protection Potion",
+    "17545": "Greater Holy Protection Potion",
+    "17546": "Greater Nature Protection Potion",
+    "17548": "Greater Shadow Protection Potion",
+    "17549": "Greater Arcane Protection Potion",
+    "17528": "Mighty Rage Potion",
+    "16323": "Juju Power",
+    "16329": "Juju Might",
+    "15852": "Dragonbreath Chili",
+    "22730": "Runn Tum Tuber Surprise",
+    "24799": "Smoked Desert Dumplings",
+    "18194": "Nightfin Soup",
+    "25661": "Dirge's Kickin' Chimaerok Chops",
+    "17038": "Winterfall Firewater",
+    "10667": "R.O.I.D.S.",
+    "10669": "Ground Scorpok Assay",
+    "24382": "Spirit of Zanza",
+    "25804": "Rumsey Rum Black Label"
+  },
+  "cast_consumables": {
+    "17531": "Major Mana Potion",
+    "17534": "Major Healing Potion",
+    "22729": "Major Rejuvenation Potion",
+    "27869": "Dark Rune",
+    "16666": "Demonic Rune",
+    "15700": "Whipper Root Tuber",
+    "15701": "Night Dragon's Breath",
+    "25122": "Brilliant Wizard Oil",
+    "25123": "Brilliant Mana Oil",
+    "16138": "Dense Sharpening Stone",
+    "16622": "Dense Weightstone",
+    "22756": "Elemental Sharpening Stone",
+    "13241": "Goblin Sapper Charge",
+    "23063": "Dense Dynamite",
+    "19769": "Thorium Grenade",
+    "4068": "Iron Grenade",
+    "23476": "Major Healthstone",
+    "23477": "Major Healthstone",
+    "11732": "Major Healthstone"
+  },
+  "flasks": {
+    "17626": "Flask of the Titans",
+    "17627": "Flask of Distilled Wisdom",
+    "17628": "Flask of Supreme Power",
+    "17629": "Flask of Chromatic Resistance"
+  },
+  "battle_elixirs": {
+    "17538": "Elixir of the Mongoose",
+    "11405": "Elixir of Giants",
+    "11334": "Elixir of Greater Agility",
+    "26276": "Elixir of Greater Firepower",
+    "7844": "Elixir of Firepower",
+    "11474": "Elixir of Shadow Power",
+    "21920": "Elixir of Frost Power",
+    "17539": "Greater Arcane Elixir",
+    "11390": "Arcane Elixir"
+  },
+  "guardian_elixirs": {
+    "11348": "Elixir of Superior Defense",
+    "3593": "Elixir of Fortitude",
+    "24363": "Mageblood Potion",
+    "11371": "Gift of Arthas",
+    "17537": "Elixir of Brute Force"
+  }
+}
